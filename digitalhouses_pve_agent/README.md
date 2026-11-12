@@ -8,20 +8,25 @@ Native Linux agent for **Proxmox VE 8.x** that publishes host, CPU, memory, stor
 
 ## Native CLI and unattended installation (development source)
 
-The source tree implements the [DigitalHouses Linux Agent Management Standard](../docs/standards/DH_LINUX_AGENT_MANAGEMENT_STANDARD.md). Version 0.5.84 adds these changes; production installation requires the canonical released tag.
+The source tree implements the [DigitalHouses Linux Agent Management Standard](../docs/standards/DH_LINUX_AGENT_MANAGEMENT_STANDARD.md). Version 0.5.85 adds these changes; production installation requires the canonical released tag.
 
 Root/admin commands after installing a release that includes the feature:
 
 ```bash
 /usr/local/bin/dh-pve-agent status
 /usr/local/bin/dh-pve-agent restart
+/usr/local/bin/dh-pve-agent update
 /usr/local/bin/dh-pve-agent set mqtt_ip=192.168.11.242 mqtt_port=1883
 /usr/local/bin/dh-pve-agent set mqtt_password  # hidden terminal prompt
 /usr/local/bin/dh-pve-agent help
 cat /root/dh-pve-agent.txt
 ```
 
-UPS installation rule (v0.5.84): NUT may be disconnected or not yet configured. The installer and HA update runner print a warning and proceed, so the installed agent can report the unavailable UPS. A live unsafe UPS status (battery, low-battery, FSD or discharging), an already committed shutdown, and invalid shutdown evidence still block installation. The manual `dh-pve-agent restart` command continues to deny restarts when NUT status cannot be verified. This is an explicit availability tradeoff during installation; do not use the installer during a suspected power outage.
+UPS installation rule (v0.5.85): NUT may be disconnected or not yet configured. The installer and HA update runner print a warning and proceed, so the installed agent can report the unavailable UPS. A live unsafe UPS status (battery, low-battery, FSD or discharging), an already committed shutdown, and invalid shutdown evidence still block installation. The manual `dh-pve-agent restart` command continues to deny restarts when NUT status cannot be verified. This is an explicit availability tradeoff during installation; do not use the installer during a suspected power outage.
+
+The update command uses GitHub Releases and the already-shipped independent update service. It does not depend on MQTT and waits for installation verification/rollback; when up to date it prints UP_TO_DATE.
+
+During installation/update, if the selected UPS is served by local NUT, the installer binds the Agent's NUT connection to 127.0.0.1:3493. On a verified NUT netserver host, exactly one obsolete same-subnet LAN LISTEN entry may be corrected using the current vmbr0 IPv4, with a NUT config backup and safety validation before/after restart. Remote-only NUT and nonstandard binding arrangements are unchanged. The long-running Agent never edits NUT configuration.
 
 The CLI reads the single existing INI at `/etc/digitalhouses_pve_agent/digitalhouses_pve_agent.conf`. Batch updates validate the entire effective config, preserve unrelated settings and metadata, and restart an active agent at most once. UPS safety denies unsafe restarts. The password value must not appear in process arguments. To send it from automation, use `mqtt_password=-` with redirected stdin and Ansible `no_log: true`.
 
@@ -40,7 +45,7 @@ The installed `/root/dh-pve-agent.txt` guide is mode `0600`. The existing MQTT D
 
 The canonical product and runtime identity is **DigitalHouses PVE Agent** / `digitalhouses_pve_agent`: systemd service `digitalhouses_pve_agent.service`, filesystem roots under `/opt/digitalhouses/digitalhouses_pve_agent`, `/etc/digitalhouses_pve_agent` and `/var/lib/digitalhouses_pve_agent`, MQTT base `DigitalHouses/Global/digitalhouses_pve_agent/<instance>`, and Home Assistant entity prefix `dh_pve_agent_*`. Version 0.5.30 performs the corrected one-time controlled migration from the former `dh_pve_app` / `dh_app_pve_*` runtime, including deterministic cleanup of retained data owned by the legacy MQTT instance namespace.
 
-Current source version: `VERSION` is `0.5.84`.
+Current source version: `VERSION` is `0.5.85`.
 
 UPS Debug logging: `switch.dh_pve_agent_ups_debug` (MQTT Discovery, default OFF)
 records raw NUT observations every 2 seconds when enabled. It disables itself
@@ -454,7 +459,7 @@ Production install/update is release-tag only. Version 0.5.30 is the corrected c
 For the canonical runtime, install/update/reinstall never clears the current canonical MQTT namespace. Canonical retained MQTT cleanup is owned exclusively by the supported uninstaller.
 
 ```bash
-TAG=digitalhouses_pve_agent-v0.5.84
+TAG=digitalhouses_pve_agent-v0.5.85
 DIGITALHOUSES_SOURCE_REF="$TAG" \
   bash <(curl -fsSL "https://raw.githubusercontent.com/DigitalHouses/home-assistant-apps/$TAG/digitalhouses_pve_agent/install.sh")
 ```

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import configparser
 from dataclasses import fields
+from datetime import datetime, timezone
 import fcntl
 import getpass
 import json
@@ -27,6 +28,8 @@ DEFAULT_CONFIG = Path('/etc/digitalhouses_pve_agent/digitalhouses_pve_agent.conf
 RUNTIME_STATUS = Path('/run/digitalhouses_pve_agent/runtime_status.json')
 SERVICE = 'digitalhouses_pve_agent.service'
 REFERENCE = 'https://github.com/DigitalHouses/home-assistant-apps/tree/main/digitalhouses_pve_agent'
+UPDATE_SERVICE = 'digitalhouses_pve_agent-update.service'
+STATE_DIR = Path('/var/lib/digitalhouses_pve_agent')
 
 class CliError(ValueError):
     """An administrator-facing error containing no untrusted input."""
@@ -382,9 +385,60 @@ def print_status(path: Path, runtime_path: Path = RUNTIME_STATUS) -> None:
 
 
 
+def update_agent(*, state_dir: Path = STATE_DIR, app_dir: Path = APP_ROOT) -> None:
+    """Install the newest published stable release via the existing updater.
+
+    Works without MQTT. The independent updater owns safety, backup, rollback,
+    and service replacement; the CLI only checks and submits the request.
+    """
+    from .state_store import StateStore
+    from .update_manager import latest_release, stable_version
+
+    if service_info().get('ActiveState') != 'active':
+        raise CliError('agent service is not running; update requires an active agent')
+    try:
+        current = (app_dir / 'VERSION').read_text(encoding='utf-8').strip()
+        tag, version = latest_release()
+        if stable_version(version) <= stable_version(current):
+            print(f'UP_TO_DATE {current}')
+            return
+    except (OSError, ValueError) as exc:
+        raise CliError('unable to verify latest stable GitHub Release') from exc
+
+    # An active worker must not have its request overwritten.
+    active = subprocess.run(
+        ['systemctl', 'is-active', '--quiet', UPDATE_SERVICE],
+        capture_output=True, timeout=5,
+    )
+    if active.returncode == 0:
+        raise CliError('update already running')
+    request = StateStore(state_dir / 'update_request.json')
+    worker = StateStore(state_dir / 'update_worker.json')
+    if worker.load().get('state') in {'queued', 'downloading', 'installing', 'verifying', 'rolling_back'}:
+        raise CliError('previous update still pending; check update service status')
+    request.save({'tag': tag, 'version': version,
+                  'requested_at': datetime.now(timezone.utc).isoformat()})
+    worker.save({'state': 'queued', 'error': None,
+                 'updated_at': datetime.now(timezone.utc).isoformat()})
+    print(f'UPDATING {current} -> {version}', flush=True)
+    # oneshot service blocks until verification/rollback is complete.
+    try:
+        result = subprocess.run(['systemctl', 'start', UPDATE_SERVICE],
+                                capture_output=True, timeout=950)
+    except subprocess.TimeoutExpired as exc:
+        raise RuntimeError('update is still running; check systemctl status ' + UPDATE_SERVICE) from exc
+    outcome = worker.load()
+    if result.returncode or outcome.get('state') != 'completed':
+        raise RuntimeError('update failed or rolled back; inspect systemctl status ' + UPDATE_SERVICE)
+    actual = (app_dir / 'VERSION').read_text(encoding='utf-8').strip()
+    if actual != version:
+        raise RuntimeError('updater finished but installed version differs')
+    print(f'UPDATED {actual}')
+
+
 def print_help() -> None:
-    print('Usage: /usr/local/bin/dh-pve-agent status | restart | help | set key=value [key=value ...]')
-    print('Run status/restart/set as root or through sudo. Config: ' + str(DEFAULT_CONFIG))
+    print('Usage: /usr/local/bin/dh-pve-agent status | update | restart | help | set key=value [key=value ...]')
+    print('Run status/update/restart/set as root or through sudo. Config: ' + str(DEFAULT_CONFIG))
     print('set validates the entire batch, updates atomically, and restarts once only when running.')
     print('Keys (native INI mapping):')
     for key, (section, field) in KEYS.items():
@@ -410,6 +464,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             return 0
         if args == ['status']:
             print_status(DEFAULT_CONFIG)
+        elif args == ['update']:
+            update_agent()
         elif args == ['restart']:
             if service_info().get('ActiveState') != 'active':
                 raise CliError('service is not running; restart never starts an inactive service')

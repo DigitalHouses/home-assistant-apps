@@ -186,6 +186,10 @@ PREPARE_FLAGS=()
 PYTHONPATH="${SOURCE_APP}" python3 -m app.install_config \
     "${PREPARED_CONFIG}" "${PREPARE_FLAGS[@]}" "${CONFIG_SETTINGS[@]}"
 
+# On a locally managed UPS, prefer the loopback NUT server and repair
+# a stale PVE IPv4 netserver listener (only with confirmed utility power).
+PYTHONPATH="${SOURCE_APP}" python3 -m app.nut_local_setup --prepared "${PREPARED_CONFIG}" --state-dir "${STATE_DIR}"
+
 if [[ -f "${CONFIG_FILE}" ]]; then
     PYTHONPATH="${SOURCE_APP}" python3 -c \
         'import sys; from pathlib import Path; from app.config import load_config; from app.restart_safety import guard_restart; guard_restart(load_config(Path(sys.argv[1])), state_dir=Path(sys.argv[2]), allow_nut_unavailable=True)' \
