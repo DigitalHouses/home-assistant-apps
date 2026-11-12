@@ -336,14 +336,10 @@ sections:
         secondary: >-
           {% set api = states('sensor.dh_plex_agent_api_status') %}
           {% set playing = is_state('binary_sensor.dh_plex_agent_playback_active', 'on') %}
-          {% set transcode = is_state('binary_sensor.dh_plex_agent_video_transcoding_active', 'on')
-             or is_state('binary_sensor.dh_plex_agent_audio_transcoding_active', 'on') %}
           {% if is_state('binary_sensor.dh_plex_agent_server_running', 'off') %}
             Остановлен
           {% elif api != 'ok' %}
             Данные Plex API недоступны
-          {% elif playing and transcode %}
-            Транскодирование
           {% elif playing %}
             Воспроизведение
           {% elif is_state('binary_sensor.dh_plex_agent_audio_analysis_running', 'on') %}
@@ -355,14 +351,10 @@ sections:
           {% endif %}
         icon: >-
           {% set playing = is_state('binary_sensor.dh_plex_agent_playback_active', 'on') %}
-          {% set transcode = is_state('binary_sensor.dh_plex_agent_video_transcoding_active', 'on')
-             or is_state('binary_sensor.dh_plex_agent_audio_transcoding_active', 'on') %}
           {% if is_state('binary_sensor.dh_plex_agent_server_running', 'off') %}
             mdi:plex
           {% elif states('sensor.dh_plex_agent_api_status') != 'ok' %}
             mdi:help-circle-outline
-          {% elif playing and transcode %}
-            mdi:movie-cog
           {% elif playing %}
             mdi:play-circle
           {% elif is_state('binary_sensor.dh_plex_agent_audio_analysis_running', 'on') %}
@@ -374,14 +366,10 @@ sections:
           {% endif %}
         icon_color: >-
           {% set playing = is_state('binary_sensor.dh_plex_agent_playback_active', 'on') %}
-          {% set transcode = is_state('binary_sensor.dh_plex_agent_video_transcoding_active', 'on')
-             or is_state('binary_sensor.dh_plex_agent_audio_transcoding_active', 'on') %}
           {% if is_state('binary_sensor.dh_plex_agent_server_running', 'off') %}
             red
           {% elif states('sensor.dh_plex_agent_api_status') != 'ok' %}
             grey
-          {% elif playing and transcode %}
-            orange
           {% elif playing %}
             green
           {% elif is_state('binary_sensor.dh_plex_agent_audio_analysis_running', 'on')
@@ -392,6 +380,56 @@ sections:
           {% endif %}
         tap_action:
           action: more-info
+      - type: grid
+        columns: 2
+        square: false
+        cards:
+          - type: custom:mushroom-template-card
+            entity: binary_sensor.dh_plex_agent_video_transcoding_active
+            primary: Video Transcoding
+            secondary: >-
+              {% if states('sensor.dh_plex_agent_api_status') != 'ok' %}
+                Недоступно
+              {% elif is_state('binary_sensor.dh_plex_agent_video_transcoding_active', 'on') %}
+                Active
+              {% else %}
+                Idle
+              {% endif %}
+            icon: mdi:video
+            icon_color: >-
+              {% if states('sensor.dh_plex_agent_api_status') != 'ok' %}
+                grey
+              {% elif is_state('binary_sensor.dh_plex_agent_video_transcoding_active', 'on') %}
+                orange
+              {% else %}
+                grey
+              {% endif %}
+            tap_action:
+              action: more-info
+          - type: custom:mushroom-template-card
+            entity: binary_sensor.dh_plex_agent_audio_transcoding_active
+            primary: Audio Transcoding
+            secondary: >-
+              {% if states('sensor.dh_plex_agent_api_status') != 'ok' %}
+                Недоступно
+              {% elif is_state('binary_sensor.dh_plex_agent_audio_transcoding_active', 'on') %}
+                Active
+              {% else %}
+                Idle
+              {% endif %}
+            icon: mdi:waveform
+            icon_color: >-
+              {% if states('sensor.dh_plex_agent_api_status') != 'ok' %}
+                grey
+              {% elif is_state('binary_sensor.dh_plex_agent_audio_transcoding_active', 'on') %}
+                orange
+              {% else %}
+                grey
+              {% endif %}
+            tap_action:
+              action: more-info
+        grid_options:
+          columns: 12
       - type: custom:mushroom-template-card
         entity: button.dh_plex_agent_refresh
         primary: Обновить

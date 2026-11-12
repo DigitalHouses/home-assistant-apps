@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.8.13
+
+- Split the Dashboard transcoding status into independent Video Transcoding and Audio Transcoding Mushroom cards. Each reads its existing Plex API binary sensor, shows Active/Idle or unavailable, and handles audio-only Direct Stream.
+- Keep the Work tile generic (Playback, Audio Analysis, other Background, Idle) without conflating stream transcoding or Linux process counts. Preserve GPU, System/Media storage bars and background card width.
+- Dashboard YAML only; manually configured Lovelace dashboards must be updated separately.
+
 ## 0.8.12
 
 - Fix the Plex Work Mushroom tile to derive active playback/transcoding exclusively from Plex API session sensors rather than a Linux Transcoder process that may remain after a viewer disconnects. Show background audio analysis or other background jobs independently and fall back to Waiting when Plex has no session/task. Handle unavailable Plex API without falsely reporting idle.
