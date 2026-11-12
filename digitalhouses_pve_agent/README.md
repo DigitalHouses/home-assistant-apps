@@ -6,6 +6,16 @@
 
 Native Linux agent for **Proxmox VE 8.x** that publishes host, CPU, memory, storage, disk/SMART, GPU, fan, VM/LXC and optional NUT/UPS observability to Home Assistant through MQTT Discovery.
 
+## Mandatory Linux Agent Management Standard (implementation requirement)
+
+**REQUIRED for this agent and all future Linux DH agents:** [DigitalHouses Linux Agent Management Standard](../docs/standards/DH_LINUX_AGENT_MANAGEMENT_STANDARD.md). This is an implementation/release acceptance requirement, **not a claim that the current installed release already supports it**.
+
+The PVE Agent MUST implement the canonical CLI `/usr/local/bin/dh-pve-agent status|restart|help` and batch `set key=value [key=value ...]`, supporting all native config keys with atomic validation, idempotent edits and one systemd restart only when a running service's config changes. Its existing `/etc/digitalhouses_pve_agent/digitalhouses_pve_agent.conf` remains the single config source; direct INI editing and CLI `set` are equally supported (including Ansible). Secrets must use a safe non-argument input method; no extra management daemon or installer-only config interface.
+
+Every install/update MUST place a short copy/paste reference at `/root/dh-pve-agent.txt` with absolute command paths, a `cat` config command, a few key `set` examples and a link back to this GitHub README. Its existing Home Assistant MQTT Discovery device MUST expose the real hosting Linux server as diagnostic `sensor.dh_pve_agent_hostname` and `sensor.dh_pve_agent_ip`, also shown in `status`. Preserve existing HA device identity and entity IDs. **Release is not compliant until the linked standard's tests pass.**
+
+
+
 [Installation / update](#installation--update) · [Changelog](CHANGELOG.md) · [Engineering docs](../docs/digitalhouses_pve_agent/) · [Issues](https://github.com/DigitalHouses/home-assistant-apps/issues)
 
 The canonical product and runtime identity is **DigitalHouses PVE Agent** / `digitalhouses_pve_agent`: systemd service `digitalhouses_pve_agent.service`, filesystem roots under `/opt/digitalhouses/digitalhouses_pve_agent`, `/etc/digitalhouses_pve_agent` and `/var/lib/digitalhouses_pve_agent`, MQTT base `DigitalHouses/Global/digitalhouses_pve_agent/<instance>`, and Home Assistant entity prefix `dh_pve_agent_*`. Version 0.5.30 performs the corrected one-time controlled migration from the former `dh_pve_app` / `dh_app_pve_*` runtime, including deterministic cleanup of retained data owned by the legacy MQTT instance namespace.
