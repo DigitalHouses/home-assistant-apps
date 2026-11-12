@@ -158,6 +158,42 @@ class OfflineRuntimeTests(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             guard_restart(config, state_dir=self.root)
 
+    def test_installer_tolerates_missing_nut_but_cli_rejects_it(self):
+        from app.ups_nut import NutReadError
+        config_path = self.root / 'config'
+        config_path.write_text('[mqtt]\nhost=broker\n[ups]\nenabled=true\nhost=192.0.2.222\n')
+        config = load_config(config_path)
+        (self.root / 'ups_selection.json').write_text('{"selected_name":"ups"}')
+        with patch('app.restart_safety.read_ups', side_effect=NutReadError('Connection refused')):
+            with self.assertRaisesRegex(RuntimeError, 'Unable to read fresh UPS'):
+                guard_restart(config, state_dir=self.root)
+            with patch('sys.stderr') as stderr:
+                guard_restart(config, state_dir=self.root, allow_nut_unavailable=True)
+                self.assertTrue(stderr.write.called)
+
+    def test_installer_never_ignores_battery_or_committed_shutdown(self):
+        config_path = self.root / 'config'
+        config_path.write_text('[mqtt]\nhost=broker\n')
+        config = load_config(config_path)
+        (self.root / 'ups_selection.json').write_text('{"selected_name":"ups"}')
+        for status in ('OB', 'OL LB', 'OL FSD', 'OL DISCHRG', ''):
+            with self.subTest(status=status), patch('app.restart_safety.read_ups', return_value=parse_upsc_output('ups.status: ' + status)):
+                with self.assertRaisesRegex(RuntimeError, 'UPS power not confirmed safe'):
+                    guard_restart(config, state_dir=self.root, allow_nut_unavailable=True)
+        (self.root / 'shutdown_history.json').write_text('{"current_boot":{"fsd_at":"now"}}')
+        with patch('app.restart_safety.read_ups', side_effect=AssertionError('no NUT read after commit')):
+            with self.assertRaisesRegex(RuntimeError, 'UPS shutdown already committed'):
+                guard_restart(config, state_dir=self.root, allow_nut_unavailable=True)
+
+    def test_install_allows_missing_selection_but_cli_does_not(self):
+        config_path = self.root / 'config'
+        config_path.write_text('[mqtt]\nhost=broker\n[ups]\nenabled=true\n')
+        config = load_config(config_path)
+        with self.assertRaisesRegex(RuntimeError, 'selection unknown'):
+            guard_restart(config, state_dir=self.root)
+        with patch('sys.stderr'):
+            guard_restart(config, state_dir=self.root, allow_nut_unavailable=True)
+
     def test_nvme_namespace_uses_nvme_controller(self):
         sensor = self.root / 'class/nvme/nvme0/device/hwmon/hwmon1/temp1_input'
         sensor.parent.mkdir(parents=True)

@@ -66,6 +66,13 @@ class InstallerManagementTests(unittest.TestCase):
         self.assertIn('/root/dh-pve-agent.txt', script)
         self.assertNotIn('IFS= read -r -s mqtt_password', script)
 
+    def test_installer_uses_missing_nut_tolerance_only_for_install_preflight(self):
+        script = (ROOT / 'install.sh').read_text()
+        self.assertEqual(script.count('allow_nut_unavailable=True'), 3)
+        cli = (ROOT / 'app/cli.py').read_text()
+        self.assertIn('guard_restart(load_config(DEFAULT_CONFIG))', cli)
+        self.assertNotIn('allow_nut_unavailable=True', cli)
+
     def test_guide_and_updater_artifacts(self):
         guide = (ROOT / 'dh-pve-agent.txt').read_text()
         for command in ('status', 'restart', 'help', 'set mqtt_ip='):

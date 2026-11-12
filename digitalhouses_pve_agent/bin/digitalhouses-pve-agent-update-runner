@@ -76,7 +76,7 @@ def read_json(path: Path) -> dict:
 
 
 def guard_ups() -> None:
-    """Recheck NUT directly; unknown/battery power fails closed."""
+    """Block observed unsafe power and committed shutdown, not unavailable NUT."""
     for filename in ('shutdown_history.json', 'ups_shutdown_commit.json'):
         path = STATE / filename
         if path.exists():
@@ -101,7 +101,11 @@ def guard_ups() -> None:
         raise RuntimeError("PVE agent configuration unavailable")
     host = parser.get("ups", "host", fallback="127.0.0.1")
     port = parser.getint("ups", "port", fallback=3493)
-    result = run(["upsc", f"{selected}@{host}:{port}"], timeout=7)
+    try:
+        result = run(["upsc", f"{selected}@{host}:{port}"], timeout=7)
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired, FileNotFoundError, OSError):
+        print("WARNING: NUT/UPS unavailable; update continues so monitoring can be repaired", file=sys.stderr)
+        return
     lines = dict(line.split(":", 1) for line in result.stdout.splitlines() if ":" in line)
     tokens = set(lines.get("ups.status", "").strip().split())
     charger = lines.get("battery.charger.status", "").strip().lower()

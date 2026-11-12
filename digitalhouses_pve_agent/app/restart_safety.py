@@ -3,9 +3,10 @@ from dataclasses import replace
 import json
 from pathlib import Path
 import re
+import sys
 
 from .config import AppConfig
-from .ups_nut import read_ups
+from .ups_nut import NutReadError, read_ups
 
 STATE_DIR = Path('/var/lib/digitalhouses_pve_agent')
 
@@ -22,7 +23,15 @@ def _object(path: Path) -> dict:
         raise RuntimeError('UPS safety evidence unavailable or invalid; restart denied') from exc
 
 
-def guard_restart(config: AppConfig, *, state_dir: Path = STATE_DIR) -> None:
+def guard_restart(
+    config: AppConfig, *, state_dir: Path = STATE_DIR, allow_nut_unavailable: bool = False,
+) -> None:
+    """Require safe power for CLI restart; installer may tolerate missing NUT.
+
+    Committed shutdown and an observed unsafe UPS status ALWAYS deny the restart.
+    Only a nonresponsive NUT endpoint / absent selection may be tolerated by
+    installation so that the agent can diagnose/configure UPS monitoring.
+    """
     # History persists an accepted FSD even if the process exits before any
     # subsequent runtime status write. Previous boots are not active commitments.
     history = _object(state_dir / 'shutdown_history.json')
@@ -48,13 +57,19 @@ def guard_restart(config: AppConfig, *, state_dir: Path = STATE_DIR) -> None:
     name = selection.get('selected_name')
     if name is None or name == '':
         if config.ups.enabled:
+            if allow_nut_unavailable:
+                print('WARNING: UPS is enabled but not selected; installation continues for UPS diagnosis', file=sys.stderr)
+                return
             raise RuntimeError('UPS enabled but selection unknown; restart denied')
         return
     if not isinstance(name, str) or re.fullmatch(r'[a-zA-Z0-9_.-]+', name) is None:
         raise RuntimeError('Invalid selected UPS name; restart denied')
     try:
         snapshot = read_ups(replace(config.ups, enabled=True, name=name))
-    except Exception as exc:
+    except NutReadError as exc:
+        if allow_nut_unavailable:
+            print('WARNING: NUT/UPS unavailable; installation continues, UPS monitoring needs attention', file=sys.stderr)
+            return
         raise RuntimeError('Unable to read fresh UPS state; restart denied') from exc
     if (snapshot is None or not snapshot.line_power or snapshot.on_battery
             or snapshot.low_battery or snapshot.discharging or 'FSD' in snapshot.status_tokens):
