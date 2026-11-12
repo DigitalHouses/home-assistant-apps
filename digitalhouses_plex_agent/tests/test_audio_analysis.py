@@ -101,7 +101,7 @@ class AudioAnalysisTests(unittest.TestCase):
         self.assertIn('above: 0', section)
         self.assertIn("state_attr('sensor.dh_plex_agent_background_processes', 'processes')", section)
         self.assertNotIn('state_attr(entity', section)
-        self.assertIn("'audio_analysis': 'Анализ аудио'", text)
+        self.assertIn("is_state('binary_sensor.dh_plex_agent_audio_analysis_running', 'on')", text)
         self.assertIn("plex_section') == 'library_storage'", text)
         self.assertIn('custom:entity-progress-card-template', text)
         self.assertIn('sensor.dh_plex_agent_library_storage_', text)

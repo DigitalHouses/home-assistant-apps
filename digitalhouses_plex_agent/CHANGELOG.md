@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.8.12
+
+- Fix the Plex Work Mushroom tile to derive active playback/transcoding exclusively from Plex API session sensors rather than a Linux Transcoder process that may remain after a viewer disconnects. Show background audio analysis or other background jobs independently and fall back to Waiting when Plex has no session/task. Handle unavailable Plex API without falsely reporting idle.
+- Place System/Media progress bars in a dedicated row **below** full-width free-space text using the supported entity-progress-card-template `bar_position: below` setting. Preserve sensor IDs, backend collectors, MQTT Discovery, CPU/GPU graphs and all other dashboard cards.
+- Dashboard-only change: Home Assistant Lovelace YAML is applied manually; installing the updated agent alone will not replace the dashboard.
+
 ## 0.8.11
 
 - Persist acknowledged Device Discovery component manifests atomically across restarts. Reconcile confirmed library and mount inventories with platform-only removal tombstones followed by the final payload; selectively clear only removed, unshared agent state topics.
