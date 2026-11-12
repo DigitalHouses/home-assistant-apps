@@ -27,7 +27,7 @@ class DashboardPlexApiContractTests(unittest.TestCase):
 
     def test_gpu_diagnostics_use_approved_mushroom_templates(self):
         section = DASHBOARD.split("primary: Intel GPU · Драйвер", 1)[1].split(
-            "      - type: logbook", 1
+            "      - type: grid", 1
         )[0]
         # Two independent Mushroom cards retain Plex Agent's canonical
         # stream of truth: bound kernel driver != operational GPU.

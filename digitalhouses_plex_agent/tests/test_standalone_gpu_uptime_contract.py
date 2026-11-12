@@ -154,7 +154,7 @@ def test_runtime_publishes_gpu_group_and_server_boot_timestamp():
     assert published["diagnostics"]["server_boot_time"] == "2026-09-20T01:05:32+00:00"
 
 
-def test_deployed_dashboard_shows_gpu_load_history_and_agent_uptime():
+def test_deployed_dashboard_shows_gpu_load_history_and_server_status():
     # The operator's deployed dashboard selects active GPU utilization rather
     # than the full set of available diagnostic entities. Discovery tests above
     # still enforce the complete standalone GPU and server-boot contract.
@@ -164,7 +164,6 @@ def test_deployed_dashboard_shows_gpu_load_history_and_agent_uptime():
         "sensor.dh_plex_agent_gpu_video_enhance",
         "sensor.dh_plex_agent_cpu",
         "sensor.dh_plex_agent_transcoder_cpu",
-        "sensor.dh_plex_agent_uptime",
         "binary_sensor.dh_plex_agent_server_running",
     ):
         assert entity_id in DASHBOARD

@@ -1,7 +1,7 @@
 type: sections
 max_columns: 4
 title: Plex
-path: plex-agent
+path: dh-plex-agent
 icon: mdi:plex
 sections:
   - type: grid
@@ -11,54 +11,49 @@ sections:
         heading_style: title
         icon: mdi:plex
       - type: custom:mushroom-template-card
-        entity: sensor.dh_plex_agent_hostname
-        primary: >-
-          {% set hostname = states('sensor.dh_plex_agent_hostname') %}
-          {{ hostname if hostname not in ['unknown', 'unavailable', 'none', ''] else 'Медиасервер' }}
-        secondary: >-
-          {% set ip = states('sensor.dh_plex_agent_ip') %}
-          IP: {{ ip if ip not in ['unknown', 'unavailable', 'none', ''] else 'Недоступен' }}
-        icon: mdi:server-network
-        icon_color: blue
-        tap_action:
-          action: more-info
-        grid_options:
-          columns: 12
-          rows: 1
-      - type: custom:mushroom-template-card
         entity: sensor.dh_plex_agent_card
-        primary: |-
+        primary: >-
           {% set s = states(entity) %}
+
           {% set issue = state_attr(entity, 'problem_code') %}
-          {% if s in ['unknown', 'unavailable', 'none', ''] or 'problem_code' not in states[entity].attributes %}
+
+          {% if s in ['unknown', 'unavailable', 'none', ''] or 'problem_code'
+          not in states[entity].attributes %}
             Нет данных о проблемах
           {% elif issue %}
             Обнаружено проблем: 1
           {% else %}
             Проблем не обнаружено
           {% endif %}
-        secondary: |-
+        secondary: >-
           {% set s = states(entity) %}
+
           {% set issue = state_attr(entity, 'problem_code') %}
-          {% if s in ['unknown', 'unavailable', 'none', ''] or 'problem_code' not in states[entity].attributes %}
+
+          {% if s in ['unknown', 'unavailable', 'none', ''] or 'problem_code'
+          not in states[entity].attributes %}
             Состояние мониторинга недоступно.
           {% elif issue %}
             • {{ state_attr(entity, 'problem_message') or 'Intel GPU — требуется диагностика' }}
           {% else %}
             Система работает штатно.
           {% endif %}
-        icon: |-
+        icon: >-
           {% set s = states(entity) %}
-          {% if s in ['unknown', 'unavailable', 'none', ''] or 'problem_code' not in states[entity].attributes %}
+
+          {% if s in ['unknown', 'unavailable', 'none', ''] or 'problem_code'
+          not in states[entity].attributes %}
             mdi:help-circle-outline
           {% elif state_attr(entity, 'problem_code') %}
             mdi:alert-circle
           {% else %}
             mdi:check-circle
           {% endif %}
-        icon_color: |-
+        icon_color: >-
           {% set s = states(entity) %}
-          {% if s in ['unknown', 'unavailable', 'none', ''] or 'problem_code' not in states[entity].attributes %}
+
+          {% if s in ['unknown', 'unavailable', 'none', ''] or 'problem_code'
+          not in states[entity].attributes %}
             grey
           {% elif state_attr(entity, 'problem_code') %}
             red
@@ -288,40 +283,6 @@ sections:
         grid_options:
           columns: 12
       - type: custom:mushroom-template-card
-        entity: sensor.dh_plex_agent_uptime
-        primary: >-
-          Время работа (DH Plex Agent {{ states('sensor.dh_plex_agent_version')
-          }})
-        secondary: >-
-          {% set value = states(entity) %} {% if value not in ['unknown',
-          'unavailable', 'none', ''] %}
-            {% set sec = value | float(0) | int %}
-            {% set days = sec // 86400 %}
-            {% set hours = (sec % 86400) // 3600 %}
-            {% set minutes = (sec % 3600) // 60 %}
-
-            {% if days > 0 %}
-              {{ days }} д. {{ '%02d:%02d' | format(hours, minutes) }}
-            {% else %}
-              {{ '%02d:%02d' | format(hours, minutes) }}
-            {% endif %}
-          {% else %}
-            Нет данных
-          {% endif %}
-        icon: mdi:timer-outline
-        tap_action:
-          action: more-info
-        grid_options:
-          columns: 12
-          rows: 1
-        color: |-
-          {% if states(entity) not in ['unknown', 'unavailable', 'none', ''] %}
-            green
-          {% else %}
-            grey
-          {% endif %}
-        features_position: bottom
-      - type: custom:mushroom-template-card
         entity: binary_sensor.dh_plex_agent_server_running
         primary: Plex Media Server
         secondary: >-
@@ -345,13 +306,16 @@ sections:
           {% endif %}
         tap_action:
           action: more-info
+        grid_options:
+          columns: 6
       - type: custom:mushroom-template-card
         entity: binary_sensor.dh_plex_agent_playback_active
         primary: Работа Plex
         secondary: >-
-          {% set api = states('sensor.dh_plex_agent_api_status') %}
-          {% set playing = is_state('binary_sensor.dh_plex_agent_playback_active', 'on') %}
-          {% if is_state('binary_sensor.dh_plex_agent_server_running', 'off') %}
+          {% set api = states('sensor.dh_plex_agent_api_status') %} {% set
+          playing = is_state('binary_sensor.dh_plex_agent_playback_active',
+          'on') %} {% if is_state('binary_sensor.dh_plex_agent_server_running',
+          'off') %}
             Остановлен
           {% elif api != 'ok' %}
             Данные Plex API недоступны
@@ -366,37 +330,44 @@ sections:
               {% endif %}
             {% endfor %}
             {{ ns.modes | join(' · ') if ns.modes else 'Воспроизведение' }}
-          {% elif is_state('binary_sensor.dh_plex_agent_audio_analysis_running', 'on') %}
+          {% elif is_state('binary_sensor.dh_plex_agent_audio_analysis_running',
+          'on') %}
             Анализ аудио
-          {% elif states('sensor.dh_plex_agent_background_processes') | int(0) > 0 %}
+          {% elif states('sensor.dh_plex_agent_background_processes') | int(0) >
+          0 %}
             Фоновые задачи
           {% else %}
             Ожидание
           {% endif %}
         icon: >-
-          {% set playing = is_state('binary_sensor.dh_plex_agent_playback_active', 'on') %}
-          {% if is_state('binary_sensor.dh_plex_agent_server_running', 'off') %}
+          {% set playing =
+          is_state('binary_sensor.dh_plex_agent_playback_active', 'on') %} {% if
+          is_state('binary_sensor.dh_plex_agent_server_running', 'off') %}
             mdi:plex
           {% elif states('sensor.dh_plex_agent_api_status') != 'ok' %}
             mdi:help-circle-outline
           {% elif playing %}
             mdi:play-circle
-          {% elif is_state('binary_sensor.dh_plex_agent_audio_analysis_running', 'on') %}
+          {% elif is_state('binary_sensor.dh_plex_agent_audio_analysis_running',
+          'on') %}
             mdi:waveform
-          {% elif states('sensor.dh_plex_agent_background_processes') | int(0) > 0 %}
+          {% elif states('sensor.dh_plex_agent_background_processes') | int(0) >
+          0 %}
             mdi:cog-sync
           {% else %}
             mdi:sleep
           {% endif %}
         icon_color: >-
-          {% set playing = is_state('binary_sensor.dh_plex_agent_playback_active', 'on') %}
-          {% if is_state('binary_sensor.dh_plex_agent_server_running', 'off') %}
+          {% set playing =
+          is_state('binary_sensor.dh_plex_agent_playback_active', 'on') %} {% if
+          is_state('binary_sensor.dh_plex_agent_server_running', 'off') %}
             red
           {% elif states('sensor.dh_plex_agent_api_status') != 'ok' %}
             grey
           {% elif playing %}
             green
-          {% elif is_state('binary_sensor.dh_plex_agent_audio_analysis_running', 'on')
+          {% elif is_state('binary_sensor.dh_plex_agent_audio_analysis_running',
+          'on')
              or states('sensor.dh_plex_agent_background_processes') | int(0) > 0 %}
             blue
           {% else %}
@@ -405,7 +376,7 @@ sections:
         tap_action:
           action: more-info
         grid_options:
-          columns: 12
+          columns: 6
           rows: 1
       - type: grid
         columns: 2
@@ -417,7 +388,9 @@ sections:
             secondary: >-
               {% if states('sensor.dh_plex_agent_api_status') != 'ok' %}
                 Недоступно
-              {% elif is_state('binary_sensor.dh_plex_agent_video_transcoding_active', 'on') %}
+              {% elif
+              is_state('binary_sensor.dh_plex_agent_video_transcoding_active',
+              'on') %}
                 Active
               {% else %}
                 Idle
@@ -426,7 +399,9 @@ sections:
             icon_color: >-
               {% if states('sensor.dh_plex_agent_api_status') != 'ok' %}
                 grey
-              {% elif is_state('binary_sensor.dh_plex_agent_video_transcoding_active', 'on') %}
+              {% elif
+              is_state('binary_sensor.dh_plex_agent_video_transcoding_active',
+              'on') %}
                 orange
               {% else %}
                 grey
@@ -439,7 +414,9 @@ sections:
             secondary: >-
               {% if states('sensor.dh_plex_agent_api_status') != 'ok' %}
                 Недоступно
-              {% elif is_state('binary_sensor.dh_plex_agent_audio_transcoding_active', 'on') %}
+              {% elif
+              is_state('binary_sensor.dh_plex_agent_audio_transcoding_active',
+              'on') %}
                 Active
               {% else %}
                 Idle
@@ -448,7 +425,9 @@ sections:
             icon_color: >-
               {% if states('sensor.dh_plex_agent_api_status') != 'ok' %}
                 grey
-              {% elif is_state('binary_sensor.dh_plex_agent_audio_transcoding_active', 'on') %}
+              {% elif
+              is_state('binary_sensor.dh_plex_agent_audio_transcoding_active',
+              'on') %}
                 orange
               {% else %}
                 grey
@@ -457,46 +436,6 @@ sections:
               action: more-info
         grid_options:
           columns: 12
-      - type: custom:mushroom-template-card
-        entity: button.dh_plex_agent_refresh
-        primary: Обновить
-        secondary: >-
-          {% set v = states('sensor.dh_plex_agent_last_refresh') %} {% if v in
-          ['unknown', 'unavailable', 'none', ''] %}
-            Ещё не выполнялось
-          {% else %}
-            {{ as_timestamp(v) | timestamp_custom('%d.%m.%Y %H:%M:%S', true) }}
-          {% endif %}
-        icon: mdi:refresh
-        icon_color: blue
-        tap_action:
-          action: perform-action
-          perform_action: button.press
-          target:
-            entity_id: button.dh_plex_agent_refresh
-        grid_options:
-          columns: 6
-          rows: 1
-      - type: custom:mushroom-template-card
-        entity: button.dh_plex_agent_refresh
-        primary: Последняя публикация
-        secondary: >-
-          {% set v = states('sensor.dh_plex_agent_last_publication') %} {% if v
-          in ['unknown', 'unavailable', 'none', ''] %}
-            Ещё не выполнялось
-          {% else %}
-            {{ as_timestamp(v) | timestamp_custom('%d.%m.%Y %H:%M:%S', true) }}
-          {% endif %}
-        icon: mdi:information
-        icon_color: blue
-        tap_action:
-          action: perform-action
-          perform_action: button.press
-          target:
-            entity_id: button.dh_plex_agent_refresh
-        grid_options:
-          columns: 6
-          rows: 1
       - type: heading
         heading_style: title
         icon: mdi:history
@@ -684,83 +623,6 @@ sections:
               - type: trend-graph
                 hours_to_show: 3
                 detail: true
-      - type: grid
-        columns: 2
-        square: false
-        cards:
-          - type: custom:mushroom-template-card
-            entity: sensor.dh_plex_agent_gpu_driver_status
-            primary: Intel GPU · Драйвер
-            secondary: >-
-              {% set status = states(entity) %}
-              {% set driver = state_attr(entity, 'driver_name') %}
-              {% set pci = state_attr(entity, 'pci_address') %}
-              {% if status == 'bound' %}
-                {{ driver or 'Драйвер неизвестен' }} · подключён{% if pci %} · PCI {{ pci }}{% endif %}
-              {% elif status == 'not_bound' %}
-                Не подключён{% if pci %} · PCI {{ pci }}{% endif %}
-              {% elif status == 'not_detected' %}
-                Intel GPU не обнаружен
-              {% else %}
-                Нет данных о драйвере
-              {% endif %}
-            icon: mdi:chip
-            icon_color: >-
-              {% set status = states(entity) %}
-              {% if status == 'bound' %}
-                green
-              {% elif status == 'not_bound' %}
-                red
-              {% else %}
-                grey
-              {% endif %}
-            multiline_secondary: true
-            tap_action:
-              action: more-info
-          - type: custom:mushroom-template-card
-            entity: sensor.dh_plex_agent_gpu_status
-            primary: Intel GPU · Работа
-            secondary: >-
-              {% set status = states(entity) %}
-              {% set available = state_attr(entity, 'available') %}
-              {% set labels = {
-                'ok': 'Работает',
-                'error': 'Ошибка работы',
-                'tool_missing': 'Отсутствует intel_gpu_top',
-                'helper_unavailable': 'GPU Helper недоступен',
-                'helper_error': 'Ошибка GPU Helper',
-                'stale': 'Данные устарели',
-                'starting': 'Инициализация',
-                'unsupported': 'Не поддерживается'
-              } %}
-              {{ labels.get(status, 'Нет данных') }}
-              {% if available is sameas true %} · метрики доступны
-              {% elif available is sameas false and status != 'unsupported' %} · метрики недоступны
-              {% endif %}
-            icon: mdi:expansion-card
-            icon_color: >-
-              {% set status = states(entity) %}
-              {% if status == 'ok' %}
-                green
-              {% elif status in ['error', 'helper_error'] %}
-                red
-              {% elif status in ['tool_missing', 'helper_unavailable', 'stale'] %}
-                orange
-              {% else %}
-                grey
-              {% endif %}
-            multiline_secondary: true
-            tap_action:
-              action: more-info
-        grid_options:
-          columns: 12
-      - type: logbook
-        title: Plex Activity History (24 hr)
-        hours_to_show: 24
-        target:
-          entity_id:
-            - sensor.dh_plex_agent_activity
-        name_detail: auto
   - type: grid
     visibility:
       - condition: numeric_state
@@ -775,15 +637,15 @@ sections:
         entity: sensor.dh_plex_agent_background_processes
         primary: Фоновые задачи
         secondary: >-
-          {% set ns = namespace(lines=[]) -%}
-          {% for process in state_attr('sensor.dh_plex_agent_background_processes', 'processes') or [] -%}
+          {% set ns = namespace(lines=[]) -%} {% for process in
+          state_attr('sensor.dh_plex_agent_background_processes', 'processes')
+          or [] -%}
             {% set line = process.label ~ ' · PID ' ~ process.pid -%}
             {% if process.current_item -%}
               {% set line = line ~ ' · ' ~ process.current_item -%}
             {% endif -%}
             {% set ns.lines = ns.lines + [line] -%}
-          {% endfor -%}
-          {{ ns.lines | join('\n') }}
+          {% endfor -%} {{ ns.lines | join('\n') }}
         icon: mdi:cog-play
         icon_color: blue
         multiline_secondary: true
@@ -799,23 +661,26 @@ sections:
         heading: Библиотеки
         heading_style: title
         icon: mdi:folder-multiple-play
-      - type: custom:mushroom-template-card
-        entity: sensor.dh_plex_agent_libraries
-        primary: Библиотеки Plex
-        secondary: >-
-          {% set n = states('sensor.dh_plex_agent_libraries') %} {% if n in
-          ['unknown', 'unavailable', 'none', ''] %}
-            Недоступно
-          {% else %}
-            {{ n }} библиотек
-          {% endif %}
+      - type: custom:auto-entities
+        card:
+          type: entities
+          state_color: true
+          title: Библиотеки Plex
+          show_header_toggle: false
+        filter:
+          include:
+            - entity_id: sensor.dh_plex_agent_library_*
+              options:
+                secondary_info: last-changed
+          exclude:
+            - entity_id: sensor.dh_plex_agent_library_storage_*
+        sort:
+          method: entity_id
+        show_empty: true
+      - type: heading
+        heading_style: title
         icon: mdi:folder-multiple-play
-        icon_color: blue
-        tap_action:
-          action: more-info
-        grid_options:
-          columns: 12
-          rows: 1
+        heading: Дисковое пространство
       - type: custom:auto-entities
         show_empty: false
         unique: true
@@ -860,34 +725,125 @@ sections:
           method: entity_id
         grid_options:
           columns: 12
-      - type: custom:auto-entities
-        card:
-          type: entities
-          state_color: true
-          title: Библиотеки Plex
-          show_header_toggle: false
-        filter:
-          include:
-            - entity_id: sensor.dh_plex_agent_library_*
-              options:
-                secondary_info: last-changed
-          exclude:
-            - entity_id: sensor.dh_plex_agent_library_storage_*
-        sort:
-          method: entity_id
-        show_empty: true
       - type: heading
         heading: Диагностика
         heading_style: title
         icon: mdi:stethoscope
-      - color: state
-        type: entities
-        show_header_toggle: false
-        entities:
-          - entity: sensor.dh_plex_agent_api_status
-            name: Plex API
-          - entity: sensor.dh_plex_agent_collector_status
-            name: Process Collector
+      - type: custom:mushroom-template-card
+        entity: sensor.dh_plex_agent_hostname
+        primary: '{{ states(''sensor.dh_plex_agent_hostname'') }}'
+        secondary: 'IP: {{ states(''sensor.dh_plex_agent_ip'') }}'
+        icon: mdi:server-network
+        icon_color: blue
+        tap_action:
+          action: more-info
+        grid_options:
+          columns: 12
+          rows: 1
+      - type: grid
+        columns: 2
+        square: false
+        cards:
+          - type: custom:mushroom-template-card
+            entity: sensor.dh_plex_agent_gpu_driver_status
+            primary: Intel GPU · Драйвер
+            secondary: >-
+              {% set status = states(entity) %} {% set driver =
+              state_attr(entity, 'driver_name') %} {% set pci =
+              state_attr(entity, 'pci_address') %} {% if status == 'bound' %}
+                {{ driver or 'Драйвер неизвестен' }} · подключён{% if pci %} · PCI {{ pci }}{% endif %}
+              {% elif status == 'not_bound' %}
+                Не подключён{% if pci %} · PCI {{ pci }}{% endif %}
+              {% elif status == 'not_detected' %}
+                Intel GPU не обнаружен
+              {% else %}
+                Нет данных о драйвере
+              {% endif %}
+            icon: mdi:chip
+            icon_color: |-
+              {% set status = states(entity) %} {% if status == 'bound' %}
+                green
+              {% elif status == 'not_bound' %}
+                red
+              {% else %}
+                grey
+              {% endif %}
+            multiline_secondary: true
+            tap_action:
+              action: more-info
+          - type: custom:mushroom-template-card
+            entity: sensor.dh_plex_agent_gpu_status
+            primary: Intel GPU · Работа
+            secondary: >-
+              {% set status = states(entity) %} {% set available =
+              state_attr(entity, 'available') %} {% set labels = {
+                'ok': 'Работает',
+                'error': 'Ошибка работы',
+                'tool_missing': 'Отсутствует intel_gpu_top',
+                'helper_unavailable': 'GPU Helper недоступен',
+                'helper_error': 'Ошибка GPU Helper',
+                'stale': 'Данные устарели',
+                'starting': 'Инициализация',
+                'unsupported': 'Не поддерживается'
+              } %} {{ labels.get(status, 'Нет данных') }} {% if available is
+              sameas true %} · метрики доступны {% elif available is sameas
+              false and status != 'unsupported' %} · метрики недоступны {% endif
+              %}
+            icon: mdi:expansion-card
+            icon_color: >-
+              {% set status = states(entity) %} {% if status == 'ok' %}
+                green
+              {% elif status in ['error', 'helper_error'] %}
+                red
+              {% elif status in ['tool_missing', 'helper_unavailable', 'stale']
+              %}
+                orange
+              {% else %}
+                grey
+              {% endif %}
+            multiline_secondary: true
+            tap_action:
+              action: more-info
+        grid_options:
+          columns: 12
+      - type: grid
+        columns: 2
+        square: false
+        cards:
+          - type: custom:mushroom-template-card
+            entity: sensor.dh_plex_agent_api_status
+            primary: Plex API
+            secondary: '{{ states(''sensor.dh_plex_agent_api_status'') }}'
+            icon: mdi:api
+            icon_color: >-
+              {% set s = states('sensor.dh_plex_agent_api_status') %} {% if s ==
+              'ok' %}
+                green
+              {% elif s in ['unknown', 'unavailable'] %}
+                grey
+              {% else %}
+                red
+              {% endif %}
+            tap_action:
+              action: more-info
+          - type: custom:mushroom-template-card
+            entity: sensor.dh_plex_agent_collector_status
+            primary: Process Collector
+            secondary: '{{ states(''sensor.dh_plex_agent_collector_status'') }}'
+            icon: mdi:cog
+            icon_color: >-
+              {% set s = states('sensor.dh_plex_agent_collector_status') %} {%
+              if s in ['ok', 'running', 'healthy'] %}
+                green
+              {% elif s in ['unknown', 'unavailable'] %}
+                grey
+              {% else %}
+                red
+              {% endif %}
+            tap_action:
+              action: more-info
+        grid_options:
+          columns: 12
 badges: []
 header: {}
 cards: []

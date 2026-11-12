@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Synchronize the operator-supplied current Plex Lovelace Dashboard as the canonical example, preserving its exact YAML, path `dh-plex-agent`, card positions, responsive grid settings and diagnostic layout. Update UI regression expectations without altering Linux agent functionality.
+
 ## 0.8.16
 
 - Add a compact full-width Mushroom card directly under the Plex heading to display the Linux media server hostname and IPv4 from existing MQTT host sensors. Show clear unavailable fallbacks instead of raw unknown states. No new entities or backend changes.

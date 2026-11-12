@@ -10,16 +10,16 @@ DASHBOARD = (
 
 class PlaybackAndStorageDashboardTests(unittest.TestCase):
     def test_server_identity_is_compact_and_uses_existing_sensors(self):
-        section = DASHBOARD.split("heading: Plex Media Server", 1)[1].split(
-            "entity: sensor.dh_plex_agent_card", 1
+        section = DASHBOARD.split("heading: Диагностика", 1)[1].split(
+            "      - type: grid", 1
         )[0]
         self.assertIn("entity: sensor.dh_plex_agent_hostname", section)
         self.assertIn("sensor.dh_plex_agent_ip", section)
         self.assertIn("mdi:server-network", section)
         self.assertIn("grid_options:\n          columns: 12\n          rows: 1", section)
-        self.assertIn("Недоступен", section)
+        self.assertIn("secondary: 'IP: ", section)
 
-    def test_plex_work_reports_full_width_playback_mode(self):
+    def test_plex_work_uses_deployed_layout_and_playback_mode(self):
         card = DASHBOARD.split("        primary: Работа Plex\n", 1)[1].split(
             "      - type: grid\n        columns: 2", 1
         )[0]
@@ -29,7 +29,7 @@ class PlaybackAndStorageDashboardTests(unittest.TestCase):
         self.assertIn("state_attr('sensor.dh_plex_agent_playback_sessions', 'sessions')", card)
         self.assertIn("'Transcoding' if raw == 'Transcode' else raw", card)
         self.assertIn("ns.modes | join(' · ')", card)
-        self.assertIn("grid_options:\n          columns: 12\n          rows: 1", card)
+        self.assertIn("grid_options:\n          columns: 6\n          rows: 1", card)
         self.assertIn("binary_sensor.dh_plex_agent_audio_analysis_running", card)
         self.assertIn("sensor.dh_plex_agent_background_processes", card)
         self.assertIn("Ожидание", card)
@@ -38,7 +38,7 @@ class PlaybackAndStorageDashboardTests(unittest.TestCase):
 
     def test_two_independent_transcoding_cards(self):
         section = DASHBOARD.split("      - type: grid\n        columns: 2", 1)[1].split(
-            "      - type: custom:mushroom-template-card\n        entity: button.dh_plex_agent_refresh", 1
+            "      - type: heading", 1
         )[0]
         self.assertIn("square: false", section)
         self.assertEqual(section.count("type: custom:mushroom-template-card"), 2)
