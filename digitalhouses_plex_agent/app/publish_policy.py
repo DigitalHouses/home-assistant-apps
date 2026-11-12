@@ -42,6 +42,9 @@ class PublishPolicy:
             a.current_items,
             a.transcoder_count,
             a.scanner_count,
+            a.audio_analysis_running,
+            a.audio_analysis_count,
+            a.background_processes,
             snapshot.collector_status,
         )
 

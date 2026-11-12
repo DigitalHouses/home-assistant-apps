@@ -342,6 +342,7 @@ sections:
             'intro_detection': 'Поиск заставок',
             'thumbnail_generation': 'Создание миниатюр',
             'transcoding': 'Транскодирование',
+            'audio_analysis': 'Анализ аудио',
             'multiple': 'Несколько задач',
             'plex_not_running': 'Plex не запущен'
           } %}
@@ -358,6 +359,8 @@ sections:
             mdi:movie-filter
           {% elif s == 'thumbnail_generation' %}
             mdi:image-multiple
+          {% elif s == 'audio_analysis' %}
+            mdi:waveform
           {% elif s == 'transcoding' %}
             mdi:movie-cog
           {% elif s == 'multiple' %}
@@ -371,7 +374,7 @@ sections:
           {% if s == 'idle' %}
             green
           {% elif s in ['scanner', 'credits_detection', 'intro_detection',
-          'thumbnail_generation'] %}
+          'thumbnail_generation', 'audio_analysis'] %}
             blue
           {% elif s == 'transcoding' %}
             orange
@@ -687,35 +690,37 @@ sections:
             - sensor.dh_plex_agent_activity
         name_detail: auto
   - type: grid
+    visibility:
+      - condition: numeric_state
+        entity: sensor.dh_plex_agent_background_processes
+        above: 0
     cards:
       - type: heading
         heading: Фоновые задачи
         heading_style: title
         icon: mdi:cog-play
-      - type: entities
-        state_color: true
-        show_header_toggle: false
-        entities:
-          - entity: binary_sensor.dh_plex_agent_scanner_running
-            name: Media Scanner
-          - entity: binary_sensor.dh_plex_agent_credits_detection
-            name: Credits Detection
-          - entity: binary_sensor.dh_plex_agent_intro_detection
-            name: Intro Detection
-          - entity: binary_sensor.dh_plex_agent_thumbnail_generation
-            name: Thumbnail Generation
-          - entity: binary_sensor.dh_plex_agent_transcoder_running
-            name: Transcoder
-          - entity: sensor.dh_plex_agent_transcoder_count
-            name: Transcoder Processes
-      - type: entities
-        title: Process Details
-        show_header_toggle: false
-        entities:
-          - entity: sensor.dh_plex_agent_scanner_actions
-            name: Scanner Actions
-          - entity: sensor.dh_plex_agent_process_count
-            name: Plex Processes
+      - type: custom:mushroom-template-card
+        entity: sensor.dh_plex_agent_background_processes
+        primary: Фоновые задачи
+        secondary: >-
+          {% set ns = namespace(lines=[]) -%}
+          {% for process in state_attr('sensor.dh_plex_agent_background_processes', 'processes') or [] -%}
+            {% set line = process.label ~ ' · PID ' ~ process.pid -%}
+            {% if process.current_item -%}
+              {% set line = line ~ ' · ' ~ process.current_item -%}
+            {% endif -%}
+            {% set ns.lines = ns.lines + [line] -%}
+          {% endfor -%}
+          {{ ns.lines | join('\n') }}
+        icon: mdi:cog-play
+        icon_color: blue
+        multiline_secondary: true
+        tap_action:
+          action: more-info
+        visibility:
+          - condition: numeric_state
+            entity: sensor.dh_plex_agent_background_processes
+            above: 0
   - type: grid
     cards:
       - type: heading
@@ -741,6 +746,46 @@ sections:
           rows: 1
       - type: custom:auto-entities
         card:
+          type: grid
+          columns: 1
+          square: false
+        card_param: cards
+        filter:
+          template: |-
+            {% set ns = namespace(items=[]) %}
+            {% for storage in states.sensor | sort(attribute='entity_id') %}
+              {% set entity_id = storage.entity_id %}
+              {% set mount = state_attr(entity_id, 'mountpoint') %}
+              {% set total = state_attr(entity_id, 'total_gib') %}
+              {% set free = state_attr(entity_id, 'available_gib') %}
+              {% if state_attr(entity_id, 'plex_integration') == 'digitalhouses_plex_agent'
+                    and state_attr(entity_id, 'plex_section') == 'library_storage'
+                    and is_number(storage.state) and total is number and free is number
+                    and total > 0 %}
+                {% set name = 'System' if mount == '/' else (state_attr(entity_id, 'storage_display_name') or mount or 'Media') %}
+                {% set unit = 'TiB' if total >= 1024 else 'GiB' %}
+                {% set divisor = 1024 if total >= 1024 else 1 %}
+                {% set digits = 2 if total >= 1024 else 0 %}
+                {% set free_text = ('%.*f' | format(digits, free / divisor)) %}
+                {% set total_text = ('%.*f' | format(digits, total / divisor)) %}
+                {% set ns.items = ns.items + [{
+                  'type': 'custom:entity-progress-card-template',
+                  'entity': entity_id,
+                  'name': name ~ ' · ' ~ ('%.1f' | format(storage.state | float)) ~ '%',
+                  'secondary': 'Свободно ' ~ free_text ~ ' / ' ~ total_text ~ ' ' ~ unit,
+                  'percent': storage.state | float,
+                  'icon': 'mdi:harddisk',
+                  'color': 'green',
+                  'bar_color': 'green',
+                  'bar_size': 'medium',
+                  'tap_action': {'action': 'more-info'}
+                }] %}
+              {% endif %}
+            {% endfor %}
+            {{ ns.items | tojson }}
+        show_empty: false
+      - type: custom:auto-entities
+        card:
           type: entities
           state_color: true
           title: Библиотеки Plex
@@ -750,6 +795,8 @@ sections:
             - entity_id: sensor.dh_plex_agent_library_*
               options:
                 secondary_info: last-changed
+          exclude:
+            - entity_id: sensor.dh_plex_agent_library_storage_*
         sort:
           method: entity_id
         show_empty: true

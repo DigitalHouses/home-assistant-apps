@@ -18,6 +18,7 @@ from .api_runtime import PlexApiRuntime
 from .build_info import load_build_info
 from .config import AppConfig, load_config
 from .discovery import build_discovery_payload, build_topics
+from .library_storage import LibraryStorageRuntime
 from .gpu_collector import GpuStateReader, gpu_driver_info, gpu_operational_problem
 from .gpu_events import GpuEventTracker
 from .metrics import RollingCpuMetrics, group_current_cpu
@@ -136,6 +137,7 @@ def run(config: AppConfig) -> int:
         config.plex_api,
         playback_state_path=PLAYBACK_STATE_PATH,
     )
+    library_storage = LibraryStorageRuntime()
     gpu_collector = GpuStateReader()
     gpu_events = GpuEventTracker()
     server_boot_time = datetime.fromtimestamp(
@@ -208,6 +210,7 @@ def run(config: AppConfig) -> int:
     paused = False
     has_connected = False
     host_pending = True
+    storage_discovery_pending = False
 
     def write_status(*, force: bool = False) -> None:
         runtime_status.update(mqtt.diagnostics(), api_runtime.status, identity.value, force=force)
@@ -426,15 +429,26 @@ def run(config: AppConfig) -> int:
                         ),
                     )
 
-                if api_result.libraries_changed:
+                mounts_changed = library_storage.collect(
+                    api_runtime.libraries, now=time.monotonic(),
+                    force=refresh or republish or api_result.libraries_changed,
+                    online=mqtt.connected.is_set(),
+                )
+                if api_result.libraries_changed or mounts_changed:
                     discovery = build_discovery_payload(
                         config,
                         build,
                         api_runtime.libraries,
+                        library_storage.mounts,
                     )
                     mqtt.set_discovery_payload(discovery)
-                    if mqtt.connected.is_set():
-                        mqtt.publish_discovery()
+                    storage_discovery_pending = True
+
+            if storage_discovery_pending and mqtt.connected.is_set():
+                storage_discovery_pending = not mqtt.publish_discovery()
+
+            if mqtt.connected.is_set():
+                library_storage.publish(mqtt.publish_state_group, force=republish)
 
             if host_pending and mqtt.connected.is_set():
                 if mqtt.publish_state_group("host", identity.value):

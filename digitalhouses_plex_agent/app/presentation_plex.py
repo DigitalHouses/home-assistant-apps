@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import copy
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from typing import Mapping
 
 from .models import MonitorSnapshot
@@ -73,6 +73,10 @@ def _activity_payload(snapshot: MonitorSnapshot) -> dict[str, object]:
         "current_item_count": len(current_items),
         "transcoder_count": activity.transcoder_count,
         "scanner_count": activity.scanner_count,
+        "audio_analysis_running": activity.audio_analysis_running,
+        "audio_analysis_count": activity.audio_analysis_count,
+        "background_process_count": len(activity.background_processes),
+        "background_processes": [asdict(process) for process in activity.background_processes],
         "server_running": activity.plex_server_running,
         "scanner_running": activity.scanner_running,
         "credits_detection": activity.credits_detection,

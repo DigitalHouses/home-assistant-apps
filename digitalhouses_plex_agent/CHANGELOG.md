@@ -2,6 +2,29 @@
 
 ## Unreleased
 
+## 0.8.10
+
+- Add the Linux system root filesystem to the existing media capacity sensors, so the dashboard shows both independent VM system and media storage. Never use root filesystem statistics to disguise an unmounted media library.
+- Compact storage progress card titles to System / Media and short free-versus-total capacity labels; ignore obsolete unavailable storage sensors left in Home Assistant by old Discovery revisions. Existing MQTT and library identities are preserved.
+
+## 0.8.9
+
+- Fix library storage capacity detection when the unprivileged Plex Agent cannot traverse protected media-library folders. Permission denial on child directory metadata no longer masks a healthy mounted filesystem; the agent checks the actual mount and reads statvfs without gaining access to media files.
+- Keep missing/unmounted media locations unavailable, preserve existing storage entity IDs and 0.8.8 Audio Analysis / Playback behavior. No Plex/Jellyfin/ZFS changes or new permissions.
+
+## 0.8.8
+
+- Recognize Plex Transcoder audio loudness analysis from audio loudnorm filters and null output, separately from playback transcoding. Keep legacy transcoder process diagnostics and API playback sensors unchanged.
+- Publish audio-analysis running state and a bounded, PID-ordered background process list (scanners and audio analysis only, filenames without paths).
+- Replace idle background task rows with one Mushroom card visible only while background processes run. Preserve v0.8.7 library storage progress bars.
+- Source changes only; no deployment or release publication performed.
+
+## 0.8.7
+
+- Add one library filesystem capacity sensor and dashboard progress bar per actual media mount, shared by libraries on the same filesystem.
+- Collect with statvfs at startup/reconnect, library changes, manual refresh and every 60 seconds while MQTT is online. Use df-style used plus user-available capacity; missing mounts and unknown capacity remain unavailable.
+- Preserve existing CPU charts, playback classification, MQTT identities and Recorder configuration. Source changes only; no deployment or published-release acceptance is implied.
+
 ## 0.8.6
 
 - Fix the MQTT-offline overdue-heartbeat busy loop. Suspend foreground process, GPU and Plex API collection in `MQTT_PAUSED`, keep the existing systemd service alive, and collect a fresh snapshot when the broker reconnects.

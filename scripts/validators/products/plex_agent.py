@@ -23,6 +23,8 @@ EXPECTED_ENTITY_IDS = {
     "thumbnail_generation": "binary_sensor.dh_plex_agent_thumbnail_generation",
     "transcoder_running": "binary_sensor.dh_plex_agent_transcoder_running",
     "transcoder_count": "sensor.dh_plex_agent_transcoder_count",
+    "audio_analysis_running": "binary_sensor.dh_plex_agent_audio_analysis_running",
+    "background_processes": "sensor.dh_plex_agent_background_processes",
     "cpu": "sensor.dh_plex_agent_cpu",
     "scanner_cpu": "sensor.dh_plex_agent_scanner_cpu",
     "transcoder_cpu": "sensor.dh_plex_agent_transcoder_cpu",
@@ -130,6 +132,7 @@ def validate_plex_agent(
             app / "app/discovery.py",
             app / "app/plex_api.py",
             app / "app/api_runtime.py",
+            app / "app/library_storage.py",
             app / "app/build_info.py",
             app / "app/state_store.py",
             app / "app/agent_card.py",
@@ -309,6 +312,24 @@ def validate_plex_agent(
         fail("Plex Agent dynamic library discovery is missing")
     if library_component.get("default_entity_id") != "sensor.dh_plex_agent_library_3":
         fail("Plex Agent dynamic library entity ID must use section ID")
+
+    storage_payload = discovery_module.build_discovery_payload(
+        config, build, (sample_library,), ("/serzhan-pool/media",),
+    )
+    storage_components = storage_payload["components"]
+    storage_key = "library_storage_" + discovery_module.storage_id("/serzhan-pool/media") + "_percent_used"
+    storage = storage_components.get(storage_key, {})
+    if set(storage_components) != set(library_payload["components"]) | {storage_key}:
+        fail("Plex Agent storage discovery changed legacy components")
+    if storage.get("default_entity_id") != f"sensor.dh_plex_agent_{storage_key}":
+        fail("Plex Agent storage entity ID must use stable mount hash")
+    for field in ("state_topic", "json_attributes_topic"):
+        if storage.get(field) != topics.state + "/library_storage":
+            fail("Plex Agent storage must use grouped retained state")
+    if storage.get("unit_of_measurement") != "%" or storage.get("state_class") != "measurement":
+        fail("Plex Agent storage must be a numeric percentage measurement")
+    if storage.get("availability") == components["libraries"].get("availability"):
+        fail("Plex Agent storage needs independent per-mount availability")
 
     example = (
         app / "examples/digitalhouses_plex_agent.conf.example"

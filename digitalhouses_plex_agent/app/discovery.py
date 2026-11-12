@@ -7,6 +7,7 @@ from typing import Any
 from .config import AppConfig, entity_prefix
 from .models import BuildInfo
 from .plex_api import LibraryInfo
+from .library_storage import storage_id
 
 
 @dataclass(frozen=True)
@@ -125,6 +126,8 @@ def _route_grouped_components(
         "intro_detection": "activity",
         "thumbnail_generation": "activity",
         "transcoder_running": "activity",
+        "audio_analysis_running": "activity",
+        "background_processes": "activity",
         "transcoder_count": "activity",
         "scanner_actions": "activity",
         "cpu": "cpu",
@@ -176,6 +179,7 @@ def build_discovery_payload(
     config: AppConfig,
     build: BuildInfo,
     libraries: tuple[LibraryInfo, ...] = (),
+    storage_mounts: tuple[str, ...] = (),
 ) -> dict[str, Any]:
     topics = build_topics(config)
     prefix = entity_prefix(config.general.instance_id)
@@ -293,6 +297,16 @@ def build_discovery_payload(
         "transcoder_running": binary(
             "transcoder_running", "Plex transcoder running",
             "transcoder_running", "mdi:movie-cog",
+        ),
+        "audio_analysis_running": binary(
+            "audio_analysis_running", "Plex audio analysis running",
+            "audio_analysis_running", "mdi:waveform",
+        ),
+        "background_processes": sensor(
+            "background_processes", "Plex background processes",
+            "background_process_count", icon="mdi:cog-play",
+            json_attributes_topic=topics.state,
+            json_attributes_template="{{ dict(processes=value_json.background_processes) | tojson }}",
         ),
         "transcoder_count": sensor(
             "transcoder_count", "Plex transcoder count",
@@ -443,6 +457,29 @@ def build_discovery_payload(
                 + library_id
                 + "'] | tojson }}"
             ),
+        )
+
+    storage_topic = state_group_topic(topics, "library_storage")
+    for mount in sorted(set(storage_mounts)):
+        mount_id = storage_id(mount)
+        component = f"library_storage_{mount_id}_percent_used"
+        entry = "value_json['" + mount_id + "']"
+        components[component] = _component(
+            platform="sensor", name=f"Plex library storage · {mount}",
+            key=uid(component), entity_id=f"sensor.{prefix}_{component}",
+            state_topic=storage_topic,
+            value_template="{{ " + entry + ".percent | default(none) }}",
+            app_availability=topics.app_availability,
+            availability=[
+                _availability(topics.app_availability),
+                {"topic": storage_topic,
+                 "value_template": "{{ 'online' if (" + entry +
+                     ".percent | default(none)) is number else 'offline' }}",
+                 "payload_available": "online", "payload_not_available": "offline"},
+            ],
+            json_attributes_topic=storage_topic,
+            json_attributes_template="{{ " + entry + " | default({}) | tojson }}",
+            icon="mdi:database", **cpu_extra,
         )
 
     gpu_topic = state_group_topic(topics, "gpu")
