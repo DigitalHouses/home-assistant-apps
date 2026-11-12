@@ -1,5 +1,6 @@
 DIGITALHOUSES PVE AGENT
 /usr/local/bin/dh-pve-agent status
+# UPS section includes NUT endpoint, selected SNMP UPS address, status, runtime and load.
 /usr/local/bin/dh-pve-agent restart
 /usr/local/bin/dh-pve-agent update
 /usr/local/bin/dh-pve-agent help
