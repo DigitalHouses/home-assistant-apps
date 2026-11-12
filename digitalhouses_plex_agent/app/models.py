@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 
 
 @dataclass(frozen=True)
@@ -22,6 +22,14 @@ class ProcessSample:
 
 
 @dataclass(frozen=True)
+class BackgroundProcess:
+    pid: int
+    kind: str
+    label: str
+    current_item: str | None
+
+
+@dataclass(frozen=True)
 class ActivityState:
     plex_server_running: bool
     scanner_running: bool
@@ -35,6 +43,9 @@ class ActivityState:
     current_items: tuple[str, ...] = ()
     transcoder_count: int = 0
     scanner_count: int = 0
+    audio_analysis_running: bool = False
+    audio_analysis_count: int = 0
+    background_processes: tuple[BackgroundProcess, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -101,6 +112,10 @@ def build_state_payload(
         "current_item_count": len(current_items),
         "transcoder_count": activity.transcoder_count,
         "scanner_count": activity.scanner_count,
+        "audio_analysis_running": activity.audio_analysis_running,
+        "audio_analysis_count": activity.audio_analysis_count,
+        "background_process_count": len(activity.background_processes),
+        "background_processes": [asdict(process) for process in activity.background_processes],
         "server_running": activity.plex_server_running,
         "scanner_running": activity.scanner_running,
         "credits_detection": activity.credits_detection,

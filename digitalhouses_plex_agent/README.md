@@ -6,7 +6,7 @@
 
 Native Linux agent for Plex Media Server workload, playback, transcoding and library observability in Home Assistant through MQTT Discovery.
 
-Version **0.8.7** adds media-library filesystem capacity monitoring and progress bars. Version 0.8.6 introduced the native root/admin CLI, Linux host diagnostics and an event-blocked `MQTT_PAUSED` failure mode. It follows the [DigitalHouses Linux Agent Management Standard](../docs/standards/DH_LINUX_AGENT_MANAGEMENT_STANDARD.md); live VM acceptance and release publication remain separate release checks.
+Version **0.8.8** distinguishes background loudnorm audio analysis from playback transcoding and shows active scanners/audio analysis in one compact Mushroom card. Version 0.8.7 adds media-library filesystem capacity monitoring and progress bars. Version 0.8.6 introduced the native root/admin CLI, Linux host diagnostics and an event-blocked `MQTT_PAUSED` failure mode. It follows the [DigitalHouses Linux Agent Management Standard](../docs/standards/DH_LINUX_AGENT_MANAGEMENT_STANDARD.md); live VM acceptance and release publication remain separate release checks.
 
 [Install / update](#install--update) · [Changelog](CHANGELOG.md) · [Engineering docs](../docs/digitalhouses_plex_agent/) · [Issues](https://github.com/DigitalHouses/home-assistant-apps/issues)
 
@@ -28,6 +28,10 @@ It runs beside Plex in the same VM, LXC, or Debian/Ubuntu Linux host. The Linux 
 
 Lovelace example: [plex-dashboard.yaml](examples/lovelace/plex-dashboard.yaml)
 
+
+### Background processes (0.8.8)
+
+`sensor.dh_plex_agent_background_processes` reports the number of listed Linux background processes; its `processes` attribute includes up to 24 records ordered by PID, with kind, label and filename (no per-process CPU updates). Only scanners and loudnorm audio analysis appear. The card hides at zero. `binary_sensor.dh_plex_agent_audio_analysis_running` carries no attributes. Legacy Transcoder running/count/CPU still include all Plex Transcoder processes; Video/Audio Transcoding sensors remain sourced from Plex API playback sessions.
 
 ### Library filesystem capacity (0.8.7)
 

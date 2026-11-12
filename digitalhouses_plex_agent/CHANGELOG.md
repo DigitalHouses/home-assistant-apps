@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 0.8.8
+
+- Recognize Plex Transcoder audio loudness analysis from audio loudnorm filters and null output, separately from playback transcoding. Keep legacy transcoder process diagnostics and API playback sensors unchanged.
+- Publish audio-analysis running state and a bounded, PID-ordered background process list (scanners and audio analysis only, filenames without paths).
+- Replace idle background task rows with one Mushroom card visible only while background processes run. Preserve v0.8.7 library storage progress bars.
+- Source changes only; no deployment or release publication performed.
+
 ## 0.8.7
 
 - Add one library filesystem capacity sensor and dashboard progress bar per actual media mount, shared by libraries on the same filesystem.
