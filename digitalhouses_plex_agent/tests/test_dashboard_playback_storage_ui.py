@@ -9,6 +9,16 @@ DASHBOARD = (
 
 
 class PlaybackAndStorageDashboardTests(unittest.TestCase):
+    def test_server_identity_is_compact_and_uses_existing_sensors(self):
+        section = DASHBOARD.split("heading: Plex Media Server", 1)[1].split(
+            "entity: sensor.dh_plex_agent_card", 1
+        )[0]
+        self.assertIn("entity: sensor.dh_plex_agent_hostname", section)
+        self.assertIn("sensor.dh_plex_agent_ip", section)
+        self.assertIn("mdi:server-network", section)
+        self.assertIn("grid_options:\n          columns: 12\n          rows: 1", section)
+        self.assertIn("Недоступен", section)
+
     def test_plex_work_reports_full_width_playback_mode(self):
         card = DASHBOARD.split("        primary: Работа Plex\n", 1)[1].split(
             "      - type: grid\n        columns: 2", 1

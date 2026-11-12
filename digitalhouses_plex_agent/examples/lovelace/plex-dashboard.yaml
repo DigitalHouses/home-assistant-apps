@@ -11,6 +11,21 @@ sections:
         heading_style: title
         icon: mdi:plex
       - type: custom:mushroom-template-card
+        entity: sensor.dh_plex_agent_hostname
+        primary: >-
+          {% set hostname = states('sensor.dh_plex_agent_hostname') %}
+          {{ hostname if hostname not in ['unknown', 'unavailable', 'none', ''] else 'Медиасервер' }}
+        secondary: >-
+          {% set ip = states('sensor.dh_plex_agent_ip') %}
+          IP: {{ ip if ip not in ['unknown', 'unavailable', 'none', ''] else 'Недоступен' }}
+        icon: mdi:server-network
+        icon_color: blue
+        tap_action:
+          action: more-info
+        grid_options:
+          columns: 12
+          rows: 1
+      - type: custom:mushroom-template-card
         entity: sensor.dh_plex_agent_card
         primary: |-
           {% set s = states(entity) %}
