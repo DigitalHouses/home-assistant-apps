@@ -9,19 +9,35 @@ DASHBOARD = (
 
 
 class PlaybackAndStorageDashboardTests(unittest.TestCase):
-    def test_plex_work_uses_api_playback_not_linux_transcoder_process(self):
+    def test_plex_work_reports_generic_playback_not_transcoding(self):
         card = DASHBOARD.split("        primary: Работа Plex\n", 1)[1].split(
-            "      - type: custom:mushroom-template-card", 1
+            "      - type: grid\n        columns: 2", 1
         )[0]
         self.assertIn("entity: binary_sensor.dh_plex_agent_playback_active", DASHBOARD)
-        self.assertIn("playing and transcode", card)
-        self.assertIn("binary_sensor.dh_plex_agent_video_transcoding_active", card)
-        self.assertIn("binary_sensor.dh_plex_agent_audio_transcoding_active", card)
+        self.assertIn("elif playing", card)
+        self.assertIn("Воспроизведение", card)
         self.assertIn("binary_sensor.dh_plex_agent_audio_analysis_running", card)
         self.assertIn("sensor.dh_plex_agent_background_processes", card)
         self.assertIn("Ожидание", card)
-        self.assertNotIn("sensor.dh_plex_agent_activity", card)
+        self.assertNotIn("Транскодирование", card)
         self.assertNotIn("binary_sensor.dh_plex_agent_transcoder_running", card)
+        self.assertNotIn("sensor.dh_plex_agent_activity", card)
+
+    def test_two_independent_transcoding_cards(self):
+        section = DASHBOARD.split("      - type: grid\n        columns: 2", 1)[1].split(
+            "      - type: custom:mushroom-template-card\n        entity: button.dh_plex_agent_refresh", 1
+        )[0]
+        self.assertIn("square: false", section)
+        self.assertEqual(section.count("type: custom:mushroom-template-card"), 2)
+        self.assertIn("primary: Video Transcoding", section)
+        self.assertIn("primary: Audio Transcoding", section)
+        self.assertIn("entity: binary_sensor.dh_plex_agent_video_transcoding_active", section)
+        self.assertIn("entity: binary_sensor.dh_plex_agent_audio_transcoding_active", section)
+        self.assertEqual(section.count("Active"), 2)
+        self.assertEqual(section.count("Idle"), 2)
+        self.assertEqual(section.count("Недоступно"), 2)
+        self.assertNotIn("sensor.dh_plex_agent_activity", section)
+        self.assertNotIn("binary_sensor.dh_plex_agent_transcoder_running", section)
 
     def test_storage_progress_bars_below_full_width_text(self):
         section = DASHBOARD.split("'plex_section') == 'library_storage'", 1)[1].split(
