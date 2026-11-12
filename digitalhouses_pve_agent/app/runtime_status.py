@@ -105,10 +105,10 @@ def read_status(path: Path, service: dict) -> tuple[dict, bool]:
 FIELDS = {
     'cpu': ('usage_percent', 'temperature_c', 'frequency_mhz', 'load_1m', 'load_5m', 'load_15m'),
     'memory': ('total_gib', 'used_gib', 'available_gib', 'usage_percent', 'swap_used_gib'),
-    'disk_temperature': ('disk_id', 'device_path', 'model', 'temperature_c', 'source', 'source_type', 'source_guest_id', 'health_state', 'available'),
+    'disk_temperature': ('disk_id', 'device_path', 'model', 'temperature_c', 'source', 'source_type', 'source_guest_id', 'source_device_path', 'passthrough_hostpci', 'passthrough_pci_address', 'health_state', 'available'),
     'smart': ('disk_id', 'device_path', 'model', 'temperature_c', 'health_state', 'health_reasons', 'recommendation', 'source_type', 'source_guest_id', 'smart_passed', 'available', 'last_success_at'),
     'fans': ('fan_id', 'label', 'name', 'rpm', 'available'),
-    'gpu': ('gpu_id', 'name', 'model', 'temperature_c', 'available', 'source_type'),
+    'gpu': ('gpu_id', 'name', 'model', 'temperature_c', 'available', 'source_type', 'source_id', 'connection', 'pci_address', 'kernel_driver'),
     'ups': ('manufacturer', 'model', 'driver_name', 'primary_status', 'status_raw', 'line_power', 'on_battery', 'low_battery', 'discharging', 'battery_charge_percent', 'runtime_seconds', 'load_percent'),
 }
 
