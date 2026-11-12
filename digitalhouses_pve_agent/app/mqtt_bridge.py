@@ -313,7 +313,7 @@ class MqttBridge(MqttEvents):
         with self._diagnostic_lock:
             if self._diagnostic['last_connected']:
                 self._diagnostic['last_reconnect'] = stamp
-            self._diagnostic.update(state='CONNECTED', last_connected=stamp)
+            self._diagnostic.update(state='CONNECTED', last_connected=stamp, last_error=None)
         self.log.info('MQTT connected')
         self.connected.set()
         client.subscribe(self.topics.ha_status, qos=1)
@@ -380,7 +380,7 @@ class MqttBridge(MqttEvents):
                 self._rejected_ack.add(mid)
                 self._diagnostic.update(publication_state='failed', last_error='PUBACK rejected')
                 return
-            self._diagnostic.update(last_ack=datetime.now(timezone.utc).isoformat(), publication_state='acknowledged')
+            self._diagnostic.update(last_ack=datetime.now(timezone.utc).isoformat(), publication_state='acknowledged', last_error=None)
 
     def _setting_key(self, topic: str) -> str | None:
         prefix = f"{self.topics.settings_prefix}/"
@@ -483,7 +483,7 @@ class MqttBridge(MqttEvents):
                         self._rejected_ack.discard(mid)
                         return False
                     self._pending_ack.pop(mid, None)
-                    self._diagnostic.update(last_ack=datetime.now(timezone.utc).isoformat(), publication_state='acknowledged')
+                    self._diagnostic.update(last_ack=datetime.now(timezone.utc).isoformat(), publication_state='acknowledged', last_error=None)
             else:
                 with self._diagnostic_lock:
                     self._diagnostic.update(publication_state='awaiting PUBACK', last_error='PUBACK timeout')

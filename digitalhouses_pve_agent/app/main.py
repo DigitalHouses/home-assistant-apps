@@ -553,6 +553,11 @@ def run(config: AppConfig, *, state_dir: Path = DEFAULT_STATE_DIR) -> int:
                 ups_startup_attempted = True
                 if ups_ok:
                     log.info("Первичная публикация DH PVE UPS завершена")
+                elif getattr(ups_runtime, "nut_available", False):
+                    log.warning(
+                        "Первичная MQTT-публикация UPS не завершена; "
+                        "локальный контроль NUT продолжает работать"
+                    )
                 else:
                     log.warning(
                         "UPS через NUT пока недоступен; мониторинг PVE продолжает работать"

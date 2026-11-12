@@ -2,6 +2,8 @@
 
 ## Unreleased (development)
 
+- Clear stale MQTT errors after reconnection or a confirmed PUBACK; distinguish NUT sampling failure from a temporarily incomplete MQTT publication at UPS startup.
+
 - Replace NUT UPS test/beeper `upscmd -p PASSWORD` command execution with bounded native NUT socket requests; credentials no longer appear in process arguments, and hardware-changing calls remain restricted to existing allowed actions.
 - Add root-only DH PVE Agent CLI with fast offline status (CPU, memory, disks/SMART, fans RPM, GPU if available, UPS and MQTT), native batch INI editing, strict secret input, idempotent changes, and UPS-gated service restarts.
 - Add unattended installer flags and preprovisioned-INI bootstrap with shared config validation, guarded updates, local root quick reference, and updater backup/rollback of CLI and guide.

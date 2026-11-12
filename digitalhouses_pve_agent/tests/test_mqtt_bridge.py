@@ -205,6 +205,9 @@ def test_mqtt_connection_subscribes_to_restart_command():
 
     client = Client()
     bridge = MqttBridge(_mqtt(), topics, RuntimeSettings(), {}, client=client)
+    bridge._connection_error("connection failed")
+    assert bridge.diagnostics()["last_error"] == "connection failed"
     bridge._on_connect(client, None, None, SimpleNamespace(is_failure=False), None)
 
+    assert bridge.diagnostics()["last_error"] is None
     assert (topics.restart_agent, 1) in client.subscriptions
