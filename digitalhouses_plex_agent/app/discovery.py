@@ -7,6 +7,7 @@ from typing import Any
 from .config import AppConfig, entity_prefix
 from .models import BuildInfo
 from .plex_api import LibraryInfo
+from .library_storage import storage_id
 
 
 @dataclass(frozen=True)
@@ -176,6 +177,7 @@ def build_discovery_payload(
     config: AppConfig,
     build: BuildInfo,
     libraries: tuple[LibraryInfo, ...] = (),
+    storage_mounts: tuple[str, ...] = (),
 ) -> dict[str, Any]:
     topics = build_topics(config)
     prefix = entity_prefix(config.general.instance_id)
@@ -443,6 +445,29 @@ def build_discovery_payload(
                 + library_id
                 + "'] | tojson }}"
             ),
+        )
+
+    storage_topic = state_group_topic(topics, "library_storage")
+    for mount in sorted(set(storage_mounts)):
+        mount_id = storage_id(mount)
+        component = f"library_storage_{mount_id}_percent_used"
+        entry = "value_json['" + mount_id + "']"
+        components[component] = _component(
+            platform="sensor", name=f"Plex library storage · {mount}",
+            key=uid(component), entity_id=f"sensor.{prefix}_{component}",
+            state_topic=storage_topic,
+            value_template="{{ " + entry + ".percent | default(none) }}",
+            app_availability=topics.app_availability,
+            availability=[
+                _availability(topics.app_availability),
+                {"topic": storage_topic,
+                 "value_template": "{{ 'online' if (" + entry +
+                     ".percent | default(none)) is number else 'offline' }}",
+                 "payload_available": "online", "payload_not_available": "offline"},
+            ],
+            json_attributes_topic=storage_topic,
+            json_attributes_template="{{ " + entry + " | default({}) | tojson }}",
+            icon="mdi:database", **cpu_extra,
         )
 
     gpu_topic = state_group_topic(topics, "gpu")

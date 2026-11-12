@@ -6,7 +6,7 @@
 
 Native Linux agent for Plex Media Server workload, playback, transcoding and library observability in Home Assistant through MQTT Discovery.
 
-Version **0.8.6** adds the native root/admin CLI, Linux host diagnostics and an event-blocked `MQTT_PAUSED` failure mode. It follows the [DigitalHouses Linux Agent Management Standard](../docs/standards/DH_LINUX_AGENT_MANAGEMENT_STANDARD.md); live VM acceptance and release publication remain separate release checks.
+Version **0.8.7** adds media-library filesystem capacity monitoring and progress bars. Version 0.8.6 introduced the native root/admin CLI, Linux host diagnostics and an event-blocked `MQTT_PAUSED` failure mode. It follows the [DigitalHouses Linux Agent Management Standard](../docs/standards/DH_LINUX_AGENT_MANAGEMENT_STANDARD.md); live VM acceptance and release publication remain separate release checks.
 
 [Install / update](#install--update) · [Changelog](CHANGELOG.md) · [Engineering docs](../docs/digitalhouses_plex_agent/) · [Issues](https://github.com/DigitalHouses/home-assistant-apps/issues)
 
@@ -27,6 +27,25 @@ It runs beside Plex in the same VM, LXC, or Debian/Ubuntu Linux host. The Linux 
 ![Plex Monitoring dashboard](images/plex-dashboard.png)
 
 Lovelace example: [plex-dashboard.yaml](examples/lovelace/plex-dashboard.yaml)
+
+
+### Library filesystem capacity (0.8.7)
+
+The «Библиотеки» dashboard uses `auto-entities` and `entity-progress-card-template`
+for one bar per media mount, grouping Plex API library paths that share it.
+`sensor.dh_plex_agent_library_storage_<stablehash>_percent_used` exposes percent,
+available/used/total GiB, mountpoint, library names and Plex storage provenance
+on the existing device; retained JSON uses `state/library_storage`.
+Local `os.statvfs` uses `used=(f_blocks-f_bfree)*f_frsize`,
+`available=f_bavail*f_frsize`, `total=used+available`, matching df's user-available
+capacity (reserved blocks excluded). No recursive scan or ZFS commands are used.
+Collection runs about every 60 seconds, plus library changes, manual refresh and
+reconnect, and pauses with MQTT. Failed publications retry the latest snapshot.
+Missing paths, changed/unmounted previous mounts, permission errors and zero
+capacity show unavailable, never 0% used. Paths resolving only to `/` are
+conservatively unavailable to avoid substituting the root disk for a missing
+media mount. Mount identity is remembered for the lifetime of the agent.
+
 
 ## Install / update
 
