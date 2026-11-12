@@ -14,7 +14,7 @@ UPS -> NUT driver -> upsd -> upsmon PRIMARY -> Proxmox shutdown
                                       +-> DigitalHouses PVE Agent -> MQTT -> Home Assistant
 ```
 
-Home Assistant is not part of the safety path. The long-running `digitalhouses_pve_agent.service` observes NUT and PVE state but does not rewrite `/etc/nut`.
+Home Assistant is not part of the safety path. The long-running Agent observes NUT and PVE state but does not rewrite /etc/nut. During installation only, the installer may repair a single obsolete LAN LISTEN address on an existing local NUT netserver after a confirmed safe UPS status, preserving a backup and local 127.0.0.1 listener. It does not modify UPS driver, primary monitor, or UPS credentials.
 
 The helper scripts in `tools/ups/` are commissioning tools. Commands in this guide execute them directly from GitHub, so they do not depend on a local Agent installation:
 

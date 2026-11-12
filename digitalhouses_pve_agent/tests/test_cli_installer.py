@@ -63,6 +63,7 @@ class InstallerManagementTests(unittest.TestCase):
         self.assertLess(script.index('-m app.install_config'), script.index('systemctl stop'))
         self.assertIn('bin/dh-pve-agent', script)
         self.assertIn('-m 0750', script)
+        self.assertIn('-m app.nut_local_setup', script)
         self.assertIn('/root/dh-pve-agent.txt', script)
         self.assertNotIn('IFS= read -r -s mqtt_password', script)
 
@@ -75,7 +76,7 @@ class InstallerManagementTests(unittest.TestCase):
 
     def test_guide_and_updater_artifacts(self):
         guide = (ROOT / 'dh-pve-agent.txt').read_text()
-        for command in ('status', 'restart', 'help', 'set mqtt_ip='):
+        for command in ('status', 'restart', 'update', 'help', 'set mqtt_ip='):
             self.assertIn('/usr/local/bin/dh-pve-agent ' + command, guide)
         self.assertIn('secrets', guide)
         updater = (ROOT / 'bin/digitalhouses-pve-agent-update-runner').read_text()

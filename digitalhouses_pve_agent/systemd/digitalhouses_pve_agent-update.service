@@ -12,5 +12,6 @@ ExecStart=/usr/bin/python3 /usr/local/libexec/digitalhouses-pve-agent-update-run
 TimeoutStartSec=0
 PrivateTmp=true
 NoNewPrivileges=true
-# This service changes the agent installation and systemd units only.
-# It does not change PVE, VM/LXC or NUT configuration.
+# The independent runner only updates the agent. The release installer may
+# repair an obsolete local NUT netserver bind after an explicit UPS safety check.
+# PVE and guest configuration are never changed.

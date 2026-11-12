@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.85
+
+- Add root-only CLI command dh-pve-agent update: check the newest published stable GitHub Release and use the existing independent systemd updater for a guarded backup, installation, verification, and rollback without MQTT. An already current release is a no-op.
+- For a PVE-owned NUT server, point the agent at 127.0.0.1:3493 instead of a stale remote endpoint during installation/update, preserving existing credentials and UPS selection. Do not touch remote-only NUT installations.
+- When an existing NUT netserver has exactly one obsolete same-subnet LISTEN IP, replace it with the live vmbr0 PVE IPv4, retaining localhost, ownership and a timestamped backup. Only run under confirmed local UPS line power, with shutdown safety preflight and rollback if NUT restart/validation fails. Leave nonstandard NUT layouts untouched.
+
 ## 0.5.84
 
 - Permit first-time installation and updates with NUT/UPS unreachable or not yet selected, so the PVE Agent can diagnose and commission UPS monitoring. Emit an explicit warning rather than reject the entire installation.

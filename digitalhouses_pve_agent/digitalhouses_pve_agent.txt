@@ -15,7 +15,7 @@ Installer добавляет выше этой памятки фактическ
 
 Production установка выполняется только из canonical release tag:
 
-  TAG=digitalhouses_pve_agent-v0.5.84
+  TAG=digitalhouses_pve_agent-v0.5.85
   DIGITALHOUSES_SOURCE_REF="$TAG" bash <(curl -fsSL "https://raw.githubusercontent.com/DigitalHouses/home-assistant-apps/$TAG/digitalhouses_pve_agent/install.sh")
 
 При первой установке installer запросит MQTT-параметры.
@@ -30,10 +30,18 @@ Branch/main/arbitrary SHA не являются production-путём. Они д
 Обновление
 ----------
 
-Production обновление выполняется тем же install.sh из canonical release tag.
+После установки 0.5.85 используйте команду без указания номера версии:
+
+  dh-pve-agent update
+
+Она проверяет последний опубликованный GitHub Release и выполняет обновление
+через штатный отдельный сервис с резервной копией и откатом. MQTT не требуется.
+Если новой версии нет, команда ничего не меняет.
+
+Ручное обновление конкретным release tag также поддерживается.
 Существующие config/state сохраняются.
 
-  TAG=digitalhouses_pve_agent-v0.5.84
+  TAG=digitalhouses_pve_agent-v0.5.85
   DIGITALHOUSES_SOURCE_REF="$TAG" bash <(curl -fsSL "https://raw.githubusercontent.com/DigitalHouses/home-assistant-apps/$TAG/digitalhouses_pve_agent/install.sh")
 
 После обновления проверить:
