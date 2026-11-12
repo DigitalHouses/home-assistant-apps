@@ -23,6 +23,8 @@ EXPECTED_ENTITY_IDS = {
     "thumbnail_generation": "binary_sensor.dh_plex_agent_thumbnail_generation",
     "transcoder_running": "binary_sensor.dh_plex_agent_transcoder_running",
     "transcoder_count": "sensor.dh_plex_agent_transcoder_count",
+    "audio_analysis_running": "binary_sensor.dh_plex_agent_audio_analysis_running",
+    "background_processes": "sensor.dh_plex_agent_background_processes",
     "cpu": "sensor.dh_plex_agent_cpu",
     "scanner_cpu": "sensor.dh_plex_agent_scanner_cpu",
     "transcoder_cpu": "sensor.dh_plex_agent_transcoder_cpu",

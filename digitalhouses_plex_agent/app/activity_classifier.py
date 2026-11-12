@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 from pathlib import Path
+import re
 from typing import Sequence
 
-from .models import ActivityState, ProcessSample
+from .models import ActivityState, BackgroundProcess, ProcessSample
 from .process_identity import process_role
 
 MEDIA_EXTENSIONS = {
@@ -103,6 +104,58 @@ def _thumbnail_signature(
     )
 
 
+def _has_loudnorm_filter(value: str) -> bool:
+    # Split only real chain separators; quoted/escaped commas belong to values.
+    entries: list[str] = []
+    start = 0
+    quote = None
+    escaped = False
+    for index, char in enumerate(value):
+        if escaped:
+            escaped = False
+        elif char == "\\":
+            escaped = True
+        elif quote:
+            if char == quote:
+                quote = None
+        elif char in "\"'":
+            quote = char
+        elif char == ",":
+            entries.append(value[start:index])
+            start = index + 1
+    entries.append(value[start:])
+    return any(re.fullmatch(r"\s*loudnorm(?:\s*=.*)?\s*", entry) for entry in entries)
+
+
+def _audio_analysis_signature(cmdline: Sequence[str]) -> bool:
+    # Read option values, never search filenames or unrelated arguments.
+    audio_filters: list[str] = []
+    null_format_index = -1
+    last_input_index = -1
+    index = 1
+    while index < len(cmdline):
+        option, separator, inline = cmdline[index].partition("=")
+        if option == "-i":
+            last_input_index = index
+        is_audio = bool(re.fullmatch(r"-(?:af|filter:a)(?::[0-9]+)?", option))
+        is_format = option == "-f"
+        if is_audio or is_format:
+            value = inline if separator else (
+                cmdline[index + 1] if index + 1 < len(cmdline) else ""
+            )
+            if is_audio:
+                audio_filters.append(value)
+            else:
+                null_format_index = index if value == "null" else -1
+            if not separator:
+                index += 1
+        index += 1
+    # An input format before -i does not describe the output.
+    return null_format_index > last_input_index and any(
+        _has_loudnorm_filter(value) for value in audio_filters
+    )
+
+
 def classify_activity(
     processes: Sequence[ProcessSample],
 ) -> ActivityState:
@@ -112,6 +165,8 @@ def classify_activity(
     intro = False
     thumbnails = False
     transcoder_count = 0
+    audio_analysis_count = 0
+    background: list[BackgroundProcess] = []
     actions: list[str] = []
     items: list[str] = []
 
@@ -142,9 +197,26 @@ def classify_activity(
             item = extract_current_item(process.cmdline)
             if item and item not in items:
                 items.append(item)
+            if _credits_signature(process.cmdline, process_actions):
+                kind, label = "credits_detection", "Credits Detection"
+            elif _intro_signature(process_actions):
+                kind, label = "intro_detection", "Intro Detection"
+            elif _thumbnail_signature(process.cmdline, process_actions):
+                kind, label = "thumbnail_generation", "Thumbnail Generation"
+            else:
+                kind, label = "scanner", "Media Scanner"
+            background.append(BackgroundProcess(
+                process.pid, kind, label, item,
+            ))
 
         if role == "transcoder":
             transcoder_count += 1
+            if _audio_analysis_signature(process.cmdline):
+                audio_analysis_count += 1
+                background.append(BackgroundProcess(
+                    process.pid, "audio_analysis", "Audio Analysis",
+                    extract_current_item(process.cmdline),
+                ))
 
             item = extract_current_item(process.cmdline)
             if item and item not in items:
@@ -160,7 +232,9 @@ def classify_activity(
     else:
         current_item = None
 
-    specific = [credits, intro, thumbnails, transcoder]
+    regular_transcoder = transcoder_count > audio_analysis_count
+    audio_analysis = audio_analysis_count > 0
+    specific = [credits, intro, thumbnails, regular_transcoder, audio_analysis]
 
     if not server_running and not scanner_running and not transcoder:
         activity = "plex_not_running"
@@ -174,7 +248,9 @@ def classify_activity(
         activity = "intro_detection"
     elif thumbnails:
         activity = "thumbnail_generation"
-    elif transcoder:
+    elif audio_analysis:
+        activity = "audio_analysis"
+    elif regular_transcoder:
         activity = "transcoding"
     elif scanner_running:
         activity = "scanner"
@@ -194,4 +270,7 @@ def classify_activity(
         current_items=tuple(items),
         transcoder_count=transcoder_count,
         scanner_count=scanner_count,
+        audio_analysis_running=audio_analysis,
+        audio_analysis_count=audio_analysis_count,
+        background_processes=tuple(sorted(background, key=lambda process: process.pid)[:24]),
     )
