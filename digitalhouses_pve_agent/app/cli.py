@@ -239,6 +239,42 @@ def set_config(path: Path, pairs: Sequence[str], *, prepare: bool = False,
         return True
 
 
+def ups_connection_details(
+    config, *, nut_path: Path = Path('/etc/nut/ups.conf'),
+    selection_path: Path = STATE_DIR / 'ups_selection.json',
+) -> tuple[str, str | None]:
+    """Read local config only. Never connect to NUT or output credentials."""
+    name = config.ups.name
+    try:
+        selected = json.loads(selection_path.read_text(encoding='utf-8')).get('selected_name')
+        if isinstance(selected, str) and re.fullmatch(r'[a-zA-Z0-9_.-]+', selected):
+            name = selected
+    except (OSError, ValueError, AttributeError):
+        pass
+    target = f'{name}@{config.ups.host}:{config.ups.port}'
+    if config.ups.host not in {'127.0.0.1', '::1', 'localhost'}:
+        return target, None
+    try:
+        parser = configparser.ConfigParser(interpolation=None)
+        parser.read(nut_path, encoding='utf-8')
+        if not parser.has_section(name):
+            return target, None
+        driver = parser.get(name, 'driver', fallback='').strip()
+        address = parser.get(name, 'port', fallback='').strip()
+        if driver == 'snmp-ups':
+            # Only a literal IP is shown, never credentials, URLs or commands.
+            import ipaddress
+            ip = ipaddress.ip_address(address)
+            version = parser.get(name, 'snmp_version', fallback='').strip()
+            version = version if version in {'v1', 'v2c', 'v3'} else ''
+            return target, f'SNMP {version} -> {ip} (configured)'.replace('  ', ' ')
+        if driver:
+            return target, f'Driver: {driver}' if re.fullmatch(r'[a-zA-Z0-9_.-]+', driver) else None
+    except (OSError, ValueError, configparser.Error):
+        pass
+    return target, None
+
+
 def print_status(path: Path, runtime_path: Path = RUNTIME_STATUS) -> None:
     """Compact human-readable local summary, never a live hardware probe."""
     from .runtime_status import host_identity, read_status, sample_live, timestamp
@@ -357,9 +393,30 @@ def print_status(path: Path, runtime_path: Path = RUNTIME_STATUS) -> None:
     print('UPS')
     ups, ups_ok = sample('ups')
     ups_data = ups.get('data') if ups_ok else None
+    if config.ups.enabled or ups_ok:
+        nut_target, ups_link = ups_connection_details(config)
+        print(f'  NUT:       {nut_target}')
+        if ups_link:
+            print(f'  Link:      {ups_link}')
     if ups_ok and isinstance(ups_data, dict):
-        print(f'  Status:    {ups_data.get("primary_status") or "unknown"}')
-        print(f'  Battery:   {percent(ups_data.get("battery_charge_percent"))} | runtime {metric(ups_data.get("runtime_seconds"), "s")}')
+        # Cached and fresh NUT snapshot only; no network reads by status CLI.
+        identity = []
+        for field in ('manufacturer', 'model'):
+            value = ups_data.get(field)
+            if isinstance(value, str) and value.strip():
+                identity.append(' '.join(value.split())[:80])
+        if identity:
+            print('  Device:    ' + ' '.join(identity))
+        source_status = ups_data.get('status_raw')
+        display_status = str(ups_data.get('primary_status') or 'unknown')
+        if isinstance(source_status, str) and re.fullmatch(r'[A-Z0-9 ]{1,40}', source_status):
+            display_status += ' (' + source_status + ')'
+        print(f'  Status:    {display_status}')
+        remaining = ups_data.get('runtime_seconds')
+        minutes = f'{round(remaining / 60):g} min' if isinstance(remaining, (int, float)) and not isinstance(remaining, bool) and math.isfinite(remaining) and remaining >= 0 else 'unavailable'
+        print(f'  Battery:   {percent(ups_data.get("battery_charge_percent"))} | runtime {minutes}')
+        if ups_data.get('load_percent') is not None:
+            print(f'  Load:      {percent(ups_data.get("load_percent"))}')
     elif live and runtime.get('ups_configured') is False:
         print('  Not configured')
     else:

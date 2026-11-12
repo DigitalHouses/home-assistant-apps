@@ -109,7 +109,7 @@ FIELDS = {
     'smart': ('disk_id', 'device_path', 'model', 'temperature_c', 'health_state', 'health_reasons', 'recommendation', 'source_type', 'source_guest_id', 'smart_passed', 'available', 'last_success_at'),
     'fans': ('fan_id', 'label', 'name', 'rpm', 'available'),
     'gpu': ('gpu_id', 'name', 'model', 'temperature_c', 'available', 'source_type'),
-    'ups': ('primary_status', 'status_raw', 'line_power', 'on_battery', 'low_battery', 'discharging', 'battery_charge_percent', 'runtime_seconds', 'load_percent'),
+    'ups': ('manufacturer', 'model', 'driver_name', 'primary_status', 'status_raw', 'line_power', 'on_battery', 'low_battery', 'discharging', 'battery_charge_percent', 'runtime_seconds', 'load_percent'),
 }
 
 

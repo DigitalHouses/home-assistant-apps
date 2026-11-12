@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.86
+
+- Expand offline dh-pve-agent status UPS section with the configured NUT target, read-only SNMP protocol/version and physical UPS address from the locally selected NUT ups.conf, and live manufacturer/model when provided by the existing UPS sample.
+- Show native NUT status tokens, battery runtime in minutes, and observed UPS load. No additional NUT/SNMP/MQTT calls, MQTT sensors, or UPS configuration changes; stale hardware telemetry remains unavailable and credentials are never printed.
+
 ## 0.5.85
 
 - Add root-only CLI command dh-pve-agent update: check the newest published stable GitHub Release and use the existing independent systemd updater for a guarded backup, installation, verification, and rollback without MQTT. An already current release is a no-op.
