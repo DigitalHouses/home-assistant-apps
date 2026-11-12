@@ -802,6 +802,8 @@ sections:
           columns: 12
           rows: 1
       - type: custom:auto-entities
+        show_empty: false
+        unique: true
         card:
           type: grid
           columns: 1
@@ -811,37 +813,38 @@ sections:
           template: |-
             {% set ns = namespace(items=[]) %}
             {% for storage in states.sensor | sort(attribute='entity_id') %}
-              {% set entity_id = storage.entity_id %}
-              {% set mount = state_attr(entity_id, 'mountpoint') %}
-              {% set total = state_attr(entity_id, 'total_gib') %}
-              {% set free = state_attr(entity_id, 'available_gib') %}
-              {% if state_attr(entity_id, 'plex_integration') == 'digitalhouses_plex_agent'
-                    and state_attr(entity_id, 'plex_section') == 'library_storage'
-                    and is_number(storage.state) and total is number and free is number
-                    and total > 0 %}
-                {% set name = 'System' if mount == '/' else (state_attr(entity_id, 'storage_display_name') or mount or 'Media') %}
-                {% set unit = 'TiB' if total >= 1024 else 'GiB' %}
+              {% set id = storage.entity_id %}
+              {% set total = state_attr(id, 'total_gib') %}
+              {% set used = state_attr(id, 'used_gib') %}
+              {% if state_attr(id, 'plex_integration') == 'digitalhouses_plex_agent'
+                    and state_attr(id, 'plex_section') == 'library_storage'
+                    and is_number(storage.state)
+                    and total is number and used is number and total > 0 %}
+                {% set name = 'System' if state_attr(id, 'mountpoint') == '/'
+                    else (state_attr(id, 'storage_display_name') or 'Media') %}
+                {% set percent = storage.state | float %}
                 {% set divisor = 1024 if total >= 1024 else 1 %}
-                {% set digits = 2 if total >= 1024 else 0 %}
-                {% set free_text = ('%.*f' | format(digits, free / divisor)) %}
-                {% set total_text = ('%.*f' | format(digits, total / divisor)) %}
+                {% set unit = 'TiB' if total >= 1024 else 'GiB' %}
                 {% set ns.items = ns.items + [{
                   'type': 'custom:entity-progress-card-template',
-                  'entity': entity_id,
-                  'name': name ~ ' · ' ~ ('%.1f' | format(storage.state | float)) ~ '%',
-                  'secondary': 'Свободно ' ~ free_text ~ ' / ' ~ total_text ~ ' ' ~ unit,
-                  'percent': storage.state | float,
-                  'icon': 'mdi:harddisk',
+                  'entity': id,
+                  'name': name ~ ' · занято ' ~ ('%.1f' | format(percent)) ~ '%',
+                  'secondary': 'Занято ' ~ ('%.2f' | format(used / divisor))
+                    ~ ' / ' ~ ('%.2f' | format(total / divisor)) ~ ' ' ~ unit,
+                  'percent': '%.2f' | format(percent),
+                  'icon': 'mdi:database-check',
                   'color': 'green',
                   'bar_color': 'green',
                   'bar_size': 'medium',
-                  'bar_position': 'below',
                   'tap_action': {'action': 'more-info'}
                 }] %}
               {% endif %}
             {% endfor %}
             {{ ns.items | tojson }}
-        show_empty: false
+        sort:
+          method: entity_id
+        grid_options:
+          columns: 12
       - type: custom:auto-entities
         card:
           type: entities

@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.8.15
+
+- Restore compact Plex System/Media storage progress cards matching the approved DH PVE Agent layout: progress bar to the right, not in a dedicated row below the text.
+- Show concise `Занято used / total` in GiB or TiB under short `System` and `Media` labels, with used percentage in the title. Keep automatic deduplication of actual filesystem mounts, exclude stale/unavailable sensors, and preserve existing entities and all other Dashboard sections.
+- Dashboard YAML only: users with manually configured Lovelace panels must apply the updated card.
+
 ## 0.8.14
 
 - Make the Plex Work Mushroom card span the entire first dashboard column (`grid_options.columns: 12`) and show the actual Plex API playback session mode: Direct Play, Direct Stream or Transcoding. Concurrent different modes are listed without guessing; no session falls back to general playback, and idle/background states remain unchanged.
