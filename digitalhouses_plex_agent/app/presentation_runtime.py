@@ -170,6 +170,10 @@ class PlexPublicationRuntime:
             self._plex_api_status,
         )
 
+        if force:
+            # Reconnect/manual full publication uses this newly collected
+            # snapshot. Never send an older pending value ahead of it.
+            self._pending_groups.clear()
         pending_ok, retried = self._retry_pending_data()
         publications = list(
             self.router.route(

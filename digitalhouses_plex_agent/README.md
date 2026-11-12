@@ -6,15 +6,7 @@
 
 Native Linux agent for Plex Media Server workload, playback, transcoding and library observability in Home Assistant through MQTT Discovery.
 
-## Mandatory Linux Agent Management Standard (implementation requirement)
-
-**REQUIRED for this agent and all future Linux DH agents:** [DigitalHouses Linux Agent Management Standard](../docs/standards/DH_LINUX_AGENT_MANAGEMENT_STANDARD.md). This is an implementation/release acceptance requirement, **not a claim that the current installed release already supports it**.
-
-The Plex Agent MUST implement the canonical CLI `/usr/local/bin/dh-plex-agent status|restart|help` and batch `set key=value [key=value ...]`, supporting all native config keys with atomic validation, idempotent edits and one systemd restart only when a running service's config changes. Its existing `/etc/digitalhouses_plex_agent/digitalhouses_plex_agent.conf` remains the single config source; direct INI editing and CLI `set` are equally supported (including Ansible). Secrets must use a safe non-argument input method; no extra management daemon or installer-only config interface.
-
-Every install/update MUST place a short copy/paste reference at `/root/dh-plex-agent.txt` with absolute command paths, a `cat` config command, a few key `set` examples and a link back to this GitHub README. Its existing Home Assistant MQTT Discovery device MUST expose the real hosting Linux server as diagnostic `sensor.dh_plex_agent_hostname` and `sensor.dh_plex_agent_ip`, also shown in `status`. Preserve existing HA device identity and entity IDs. **Release is not compliant until the linked standard's tests pass.**
-
-
+Version **0.8.6** adds the native root/admin CLI, Linux host diagnostics and an event-blocked `MQTT_PAUSED` failure mode. It follows the [DigitalHouses Linux Agent Management Standard](../docs/standards/DH_LINUX_AGENT_MANAGEMENT_STANDARD.md); live VM acceptance and release publication remain separate release checks.
 
 [Install / update](#install--update) · [Changelog](CHANGELOG.md) · [Engineering docs](../docs/digitalhouses_plex_agent/) · [Issues](https://github.com/DigitalHouses/home-assistant-apps/issues)
 
@@ -38,16 +30,16 @@ Lovelace example: [plex-dashboard.yaml](examples/lovelace/plex-dashboard.yaml)
 
 ## Install / update
 
-Production install/update is pinned to the canonical release tag. Current release:
+Production install/update is pinned to a published canonical release tag. The 0.8.6 source uses the following tag in install examples; these commands become available after that release is published:
 
 ```text
-digitalhouses_plex_agent-v0.8.5
+digitalhouses_plex_agent-v0.8.6
 ```
 
 From a root shell:
 
 ```bash
-RELEASE_TAG="digitalhouses_plex_agent-v0.8.5"
+RELEASE_TAG="digitalhouses_plex_agent-v0.8.6"
 curl -fsSL "https://raw.githubusercontent.com/DigitalHouses/home-assistant-apps/${RELEASE_TAG}/digitalhouses_plex_agent/install.sh" \
   | DIGITALHOUSES_SOURCE_REF="${RELEASE_TAG}" bash
 ```
@@ -55,12 +47,16 @@ curl -fsSL "https://raw.githubusercontent.com/DigitalHouses/home-assistant-apps/
 From a sudo-capable user:
 
 ```bash
-RELEASE_TAG="digitalhouses_plex_agent-v0.8.5"
+RELEASE_TAG="digitalhouses_plex_agent-v0.8.6"
 curl -fsSL "https://raw.githubusercontent.com/DigitalHouses/home-assistant-apps/${RELEASE_TAG}/digitalhouses_plex_agent/install.sh" \
   | sudo env DIGITALHOUSES_SOURCE_REF="${RELEASE_TAG}" bash
 ```
 
 Run the same release-tag command to reinstall that exact release. To update, change `RELEASE_TAG` to a newer published DigitalHouses Plex Agent release. Existing configuration is preserved.
+
+For unattended first installation, provision the **native INI** at `/etc/digitalhouses_plex_agent/digitalhouses_plex_agent.conf` before running the same installer. Use the complete [example INI](examples/digitalhouses_plex_agent.conf.example), set `[mqtt] host` to your broker, and protect credentials (root owner, mode `0600` before installation). Ansible can manage that same file with `become: true`, `mode: "0600"`, and **`no_log: true`** for tasks carrying secrets. The installer grants the existing service group read access and validates the INI before activating the agent. No installer-specific MQTT variable schema is needed. Existing config is preserved, including on unattended updates. Without an existing native config or a terminal for first-time prompts, installation fails before changing services; it never starts an unconfigured agent.
+
+Every successful install/update adds `/usr/local/bin/dh-plex-agent` (root/admin executable) and the short `/root/dh-plex-agent.txt` reference. The CLI uses the installed virtualenv and works from any working directory.
 
 The installer records the deployed product version, source tag/ref, and exact resolved commit SHA in:
 
@@ -157,6 +153,63 @@ token_file = /etc/digitalhouses_plex_agent/plex_local_admin_token
 timeout_seconds = 3
 library_refresh_seconds = 3600
 ```
+
+### Native CLI
+
+Run as root (or through `sudo`):
+
+```bash
+/usr/local/bin/dh-plex-agent status
+/usr/local/bin/dh-plex-agent restart
+/usr/local/bin/dh-plex-agent help
+/usr/local/bin/dh-plex-agent set mqtt_ip=192.0.2.10 mqtt_port=1883
+/usr/local/bin/dh-plex-agent set log_level=info
+/usr/local/bin/dh-plex-agent set mqtt_password
+# Automation: send a single password line over protected stdin:
+/usr/local/bin/dh-plex-agent set mqtt_password=- < /root/protected-mqtt-password
+```
+
+`status` works with MQTT unavailable and with the service stopped. It shows version/commit, systemd state and uptime, real Linux hostname and route-selected host IPv4, configured broker, MQTT state, last connection/error, publication diagnostics and Plex API status. A runtime snapshot is identified as stale when it cannot be matched to the currently running service; historical `CONNECTED` must not be read as live broker health. Runtime status is written atomically without credentials to `/var/lib/digitalhouses_plex_agent/runtime_status.json` at transitions and a moderate heartbeat cadence. QoS 0 local publication success is **not a broker ACK**; a QoS 1 ACK is reported only when known.
+
+`restart` affects only `digitalhouses_plex_agent.service`. `set` uses the existing INI as the only source, validates the entire batch (including cross-field constraints) before writing, preserves unrelated values/comments and owner/mode, and atomically replaces the file. Effective unchanged values print `UNCHANGED` with no restart. Changed values restart the agent exactly once if running; an inactive agent stays inactive. Failures print `ERROR` and exit nonzero; a failed restart rolls the config back and reports the failure. Direct INI edits remain supported; restart the agent after direct edits to apply them.
+
+Never put passwords in arguments: `mqtt_password=value` is rejected. Bare `mqtt_password` uses hidden interactive input; `mqtt_password=-` reads stdin. Keep secret automation tasks `no_log: true`; never share config output. Values must be single-line; duplicate aliases for the same INI key in one batch are rejected.
+
+All **21** native settings are supported (the host has two aliases):
+
+| CLI key | Native INI key | Default / validation |
+| --- | --- | --- |
+| `instance_id` | `[general] instance_id` | `plex`; `^[a-z0-9][a-z0-9_]*$`; changing it changes the existing instance namespace |
+| `instance_name` | `[general] instance_name` | `DH Plex`; display name |
+| `poll_interval` | `[general] poll_interval_seconds` | `10`; 2–300 seconds |
+| `cpu_window` | `[general] cpu_window_seconds` | `60`; at least poll interval, at most 3600 seconds |
+| `log_level` | `[general] log_level` | `info`; debug/info/warning/error |
+| `telemetry_enabled` | `[telemetry] enabled` | `false`; boolean |
+| `cpu_change_threshold` | `[telemetry] cpu_change_threshold` | `5`; greater than zero |
+| `high_load_threshold` | `[telemetry] high_load_threshold` | `80`; greater than zero |
+| `high_load_interval` | `[telemetry] high_load_publish_interval_seconds` | `60`; at least poll interval |
+| `plex_api_enabled` | `[plex_api] enabled` | `true`; boolean |
+| `plex_api_url` | `[plex_api] base_url` | `http://127.0.0.1:32400`; nonempty when enabled |
+| `plex_api_token_file` | `[plex_api] token_file` | `/etc/digitalhouses_plex_agent/plex_local_admin_token`; native file path |
+| `plex_api_timeout` | `[plex_api] timeout_seconds` | `3`; 0.5–30 seconds |
+| `library_refresh` | `[plex_api] library_refresh_seconds` | `3600`; 60–86400 seconds |
+| `mqtt_ip` / `mqtt_host` | `[mqtt] host` | Required; broker IP or DNS host |
+| `mqtt_port` | `[mqtt] port` | `1883`; integer 1–65535 |
+| `mqtt_username` | `[mqtt] username` | Empty; optional |
+| `mqtt_password` | `[mqtt] password` | Empty; hidden prompt or `=-` stdin only |
+| `mqtt_topic_prefix` | `[mqtt] topic_prefix` | `DigitalHouses/Global/digitalhouses_plex_agent`; nonempty |
+| `mqtt_discovery_prefix` | `[mqtt] discovery_prefix` | `homeassistant`; nonempty |
+| `mqtt_keepalive` | `[mqtt] keepalive_seconds` | `60`; integer 10–3600 seconds |
+
+Boolean values follow native INI syntax (`true/false`, `yes/no`, `on/off`, `1/0`). Numeric values must be finite. Batch related fields together, for example `set poll_interval=90 cpu_window=180 high_load_interval=90`, so cross-field validation sees the complete intended configuration.
+
+### MQTT outage and host identity
+
+At startup without a broker, or after connection loss, the existing service remains alive in **`MQTT_PAUSED`**. Foreground process sampling, GPU state reading, Plex API calls and state publication suspend in a blocking event wait. The separate GPU helper keeps running; optional product telemetry has its own background runner. Paho's background network loop reconnects with a fixed **60-second retry delay** and **5-second connect timeout**; starts are not guaranteed exactly 60 seconds apart. Reconnection wakes foreground work promptly, restores control subscriptions and Discovery, and collects a **fresh snapshot** before current-state republishing.
+
+New publications are never enqueued while disconnected. Semantic state groups retain their latest values, not an unbounded history. Pending QoS 1 messages are limited; GPU diagnostic events remain in their persistent outbox until PUBACK, with bounded foreground waits. The outbox keeps at most **32** events and drops the **oldest** on overflow, retaining the newest diagnostics. QoS 1 retries can produce duplicates after an uncertain disconnect; event IDs allow consumers to deduplicate. Broker acknowledgement does not prove Home Assistant consumed an event.
+
+The existing MQTT Discovery device adds diagnostic `sensor.dh_plex_agent_hostname` and `sensor.dh_plex_agent_ip`. Hostname is the actual hosting Linux machine's hostname. IPv4 is the local source address selected for the route to the configured MQTT broker, or unknown if undetermined; a Plex VM reports its own address. Identity refreshes at startup, on reconnect and on detected network changes, with a moderate network check cadence rather than every 10-second collection. Existing device IDs, topics and entity IDs stay stable. No Recorder configuration is changed by these additions.
 
 ### Usage telemetry
 
@@ -321,8 +374,8 @@ startup is not an error. Driver disconnect and GPU unavailability in the same
 snapshot are coalesced into one event. The last confirmed state and a small
 pending-event outbox are persisted in
 `/var/lib/digitalhouses_plex_agent/gpu_events.json`, so restarts and
-temporary MQTT outages do not cause duplicate notifications. Events publish
-QoS 1, `retain: false` (unlike the retained status sensors).
+temporary MQTT outages retain pending events. Events publish
+QoS 1, `retain: false` (unlike the retained status sensors), and leave the outbox only after broker PUBACK. The outbox is bounded to 32 events (drop oldest on overflow). Uncertain delivery can be retried with the same event ID; consumers can deduplicate.
 
 For HA automation, use a **state trigger** on
 `event.dh_plex_agent_gpu_diagnostic` (the state changes to an event timestamp).
@@ -372,7 +425,7 @@ Continuous CPU and GPU samples use adaptive Recorder-facing presentation windows
 
 Entering or leaving `PLAYBACK` publishes CPU and GPU immediately. Activity, playback and library semantic changes also publish immediately and do not wait for an averaging window.
 
-Manual Refresh publishes a current snapshot of all groups. MQTT/Home Assistant reconnect republishes the retained group cache without forcing a new collection. Failed group publications are retried independently.
+Manual Refresh publishes a current snapshot of all groups. MQTT reconnect collects a fresh snapshot promptly and restores current groups and Discovery. Home Assistant reconnect also restores Discovery and current states. Failed group publications are retried independently while connected; foreground monitoring pauses while MQTT is unavailable.
 
 The diagnostics group publishes a lightweight uptime heartbeat once per minute when no other publication refreshes diagnostics. Playback bandwidth alone does not trigger a playback publication. Playback position is deliberately not published, avoiding high-frequency Recorder writes.
 

@@ -115,6 +115,8 @@ def _route_grouped_components(
     topics: Topics,
 ) -> None:
     groups = {
+        "hostname": "host",
+        "ip": "host",
         "activity": "activity",
         "current_item": "activity",
         "server_running": "activity",
@@ -246,6 +248,10 @@ def build_discovery_payload(
     }
 
     components: dict[str, Any] = {
+        "hostname": sensor("hostname", "Linux hostname", "hostname", diagnostic=True, collector=False,
+                           icon="mdi:server"),
+        "ip": sensor("ip", "Linux IPv4", "ip", diagnostic=True, collector=False,
+                     icon="mdi:ip-network"),
         "activity": sensor(
             "activity", "Plex activity", "activity", collector=True,
             icon="mdi:plex",
