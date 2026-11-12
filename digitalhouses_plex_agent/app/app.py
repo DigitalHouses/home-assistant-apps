@@ -18,6 +18,7 @@ from .api_runtime import PlexApiRuntime
 from .build_info import load_build_info
 from .config import AppConfig, load_config
 from .discovery import build_discovery_payload, build_topics
+from .discovery_lifecycle import DiscoveryLifecycle
 from .library_storage import LibraryStorageRuntime
 from .gpu_collector import GpuStateReader, gpu_driver_info, gpu_operational_problem
 from .gpu_events import GpuEventTracker
@@ -146,6 +147,9 @@ def run(config: AppConfig) -> int:
     ).isoformat()
     discovery = build_discovery_payload(config, build)
     mqtt = MqttBridge(config, topics, discovery)
+    discovery_lifecycle = DiscoveryLifecycle(
+        mqtt, StateStore(CONTROL_STATE_DIR / "discovery_manifest.json"), topics.base,
+    )
     sampler = CpuSampler()
     rolling = RollingCpuMetrics(config.general.cpu_window_seconds)
     publication = PlexPublicationRuntime(
@@ -210,7 +214,7 @@ def run(config: AppConfig) -> int:
     paused = False
     has_connected = False
     host_pending = True
-    storage_discovery_pending = False
+    discovery_force = True
 
     def write_status(*, force: bool = False) -> None:
         runtime_status.update(mqtt.diagnostics(), api_runtime.status, identity.value, force=force)
@@ -278,13 +282,20 @@ def run(config: AppConfig) -> int:
                 # A new Refresh command never takes over an active operation.
                 mqtt.refresh_requested.clear()
                 refresh = False
+            inventory_confirmed = (
+                (api_runtime.inventory_confirmed or not config.plex_api.enabled)
+                and library_storage.observed
+            )
+            discovery_deadline = discovery_lifecycle.deadline if inventory_confirmed else float("inf")
             republish = mqtt.republish_requested.is_set() or resumed
+            discovery_due = now >= discovery_deadline
             due = now >= next_poll or resumed
             uptime_due = now >= next_uptime_heartbeat
 
-            if not (refresh or republish or due or uptime_due):
+            if not (refresh or republish or due or uptime_due or discovery_due):
                 wait_for = min(
                     max(0.0, next_poll - now),
+                    max(0.0, discovery_deadline - now),
                     max(0.0, next_uptime_heartbeat - now),
                     config.general.poll_interval_seconds,
                     STATUS_INTERVAL,
@@ -296,7 +307,7 @@ def run(config: AppConfig) -> int:
             if republish:
                 mqtt.republish_requested.clear()
                 if mqtt.connected.is_set():
-                    mqtt.publish_discovery()
+                    discovery_force = True
                     if not legacy_state_cleared:
                         legacy_state_cleared = mqtt.clear_legacy_state()
                     mqtt.set_collector_available(
@@ -429,23 +440,24 @@ def run(config: AppConfig) -> int:
                         ),
                     )
 
-                mounts_changed = library_storage.collect(
+                library_storage.collect(
                     api_runtime.libraries, now=time.monotonic(),
                     force=refresh or republish or api_result.libraries_changed,
                     online=mqtt.connected.is_set(),
                 )
-                if api_result.libraries_changed or mounts_changed:
-                    discovery = build_discovery_payload(
-                        config,
-                        build,
-                        api_runtime.libraries,
-                        library_storage.mounts,
-                    )
-                    mqtt.set_discovery_payload(discovery)
-                    storage_discovery_pending = True
-
-            if storage_discovery_pending and mqtt.connected.is_set():
-                storage_discovery_pending = not mqtt.publish_discovery()
+            discovery = build_discovery_payload(
+                config, build, api_runtime.libraries, library_storage.mounts,
+            )
+            discovery_lifecycle.sync(
+                discovery, now=time.monotonic(),
+                confirmed=(api_runtime.inventory_confirmed or not config.plex_api.enabled)
+                          and library_storage.observed,
+                online=mqtt.connected.is_set(), force=discovery_force,
+            )
+            discovery_force = False
+            # Discovery is an independent control-plane publication. Failure
+            # must never stop Plex, CPU/GPU or storage state telemetry. Its own
+            # retry deadline bounds work without blocking the foreground loop.
 
             if mqtt.connected.is_set():
                 library_storage.publish(mqtt.publish_state_group, force=republish)

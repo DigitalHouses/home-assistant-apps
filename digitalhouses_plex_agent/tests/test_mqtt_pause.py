@@ -28,7 +28,7 @@ def import_runtime():
 
 
 class PauseTests(unittest.TestCase):
-    def exercise(self, *, initially_online, fail_first_collection=False, disconnect_during_flush=False, poll_interval=10):
+    def exercise(self, *, initially_online, fail_first_collection=False, disconnect_during_flush=False, poll_interval=10, authoritative=False):
         app = import_runtime()
         clock = [0.0]
         bridge = MagicMock()
@@ -79,9 +79,27 @@ class PauseTests(unittest.TestCase):
             return True
         publication.publish_snapshot.side_effect = publish
         api = MagicMock(status='disabled')
+        api.inventory_confirmed = authoritative
+        api.libraries = ()
         api.poll.return_value = None
         api.collect.return_value = SimpleNamespace(failure_transition=False, recovered=False, libraries_changed=False)
         api.payload.return_value = {'plex_api_status':'disabled'}
+        if authoritative:
+            api.status = 'ok'
+            def discovery_publish():
+                self.assertGreater(api.collect.call_count, 0)
+                current = bridge.set_discovery_payload.call_args.args[0]
+                self.assertIn('library_test', current['components'])
+                return True
+            bridge.publish_discovery.side_effect = discovery_publish
+        def discovery_builder(*args):
+            if len(args) < 3:
+                return {'components': {}}
+            self.assertIn('/', args[3])
+            return {'components': {'library_test': {
+                'platform': 'sensor', 'state_topic': 'plex/state/libraries',
+                'unique_id': 'unchanged',
+            }}}
         gpu_reader = MagicMock()
         card = MagicMock(state='idle', operation=None)
         updates = MagicMock()
@@ -103,7 +121,9 @@ class PauseTests(unittest.TestCase):
             GpuEventTracker=MagicMock(return_value=events), GpuStateReader=MagicMock(return_value=gpu_reader), gpu_driver_info=MagicMock(return_value={}),
             gpu_operational_problem=MagicMock(return_value=(None,None)),
             PlexPublicationRuntime=MagicMock(return_value=publication),
-            collect_raw_processes=raw, build_topics=MagicMock(), build_discovery_payload=MagicMock(),
+            collect_raw_processes=raw,
+            build_topics=MagicMock(return_value=SimpleNamespace(base='plex')),
+            build_discovery_payload=MagicMock(side_effect=discovery_builder),
         ), patch.object(app.time,'monotonic',side_effect=mono), patch.object(
             app.signal,'signal',side_effect=lambda sig, fn: handlers.update({sig:fn})
         ), patch.object(app.psutil,'boot_time',return_value=0,create=True), patch.object(
@@ -121,6 +141,12 @@ class PauseTests(unittest.TestCase):
         self.assertIn(30.0, waits)
         self.assertLessEqual(max(waits), 30.0)
         return bridge
+
+    def test_authoritative_discovery_after_inventory_and_mount_observation(self):
+        bridge = self.exercise(initially_online=True, authoritative=True)
+        self.assertEqual(bridge.publish_discovery.call_count, 2)
+        self.assertEqual(bridge.set_discovery_payload.call_count, 2)
+        bridge.clear_legacy_state.assert_called_once()
 
     def test_loss_of_mqtt_past_heartbeat_blocks_then_collects_fresh(self):
         self.exercise(initially_online=True)

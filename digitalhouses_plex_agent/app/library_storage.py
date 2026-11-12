@@ -25,6 +25,7 @@ class LibraryStorageRuntime:
     def __init__(self) -> None:
         self.payload: dict[str, dict[str, object]] = {}
         self.mounts: tuple[str, ...] = ()
+        self.observed = False
         self._paths: dict[str, str] = {}
         self._libraries: tuple[tuple[str, str], ...] = ()
         self._next_collect = 0.0
@@ -99,6 +100,7 @@ class LibraryStorageRuntime:
             payload[storage_id(mount)] = entry
         changed_mounts = tuple(sorted(groups)) != self.mounts
         self.mounts = tuple(sorted(groups))
+        self.observed = True
         self._paths = paths
         self.payload = payload
         return changed_mounts
