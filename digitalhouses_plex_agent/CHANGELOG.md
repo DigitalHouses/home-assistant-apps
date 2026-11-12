@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 0.8.11
+
+- Persist acknowledged Device Discovery component manifests atomically across restarts. Reconcile confirmed library and mount inventories with platform-only removal tombstones followed by the final payload; selectively clear only removed, unshared agent state topics.
+- Publish Discovery with retained QoS1 and bounded PUBACK waits, reusing a single pending receipt across reconnects. Preserve QoS0 metrics and the existing GPU event transport.
+- Replace early skeleton republishing with authoritative synchronization after collection on startup, HA birth and reconnect; repair broker config loss every 1800 seconds online. Retry failures at 10-second cadence without pruning during API outages or unconfirmed inventory.
+- Preserve MQTT identities, System / Media bars, Audio Analysis and MQTT_PAUSED low CPU behavior. Local source changes only; no deployment or release publication.
+
 ## 0.8.10
 
 - Add the Linux system root filesystem to the existing media capacity sensors, so the dashboard shows both independent VM system and media storage. Never use root filesystem statistics to disguise an unmounted media library.

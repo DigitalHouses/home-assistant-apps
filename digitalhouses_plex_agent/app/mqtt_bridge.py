@@ -42,6 +42,9 @@ class MqttBridge:
         # Keep timed-out QoS1 receipts: Paho retransmits the same packet on
         # reconnect. A later foreground flush must not enqueue a duplicate.
         self._pending_events: dict[str, Any] = {}
+        # Discovery is serialized by the foreground lifecycle controller.
+        self._pending_discovery: tuple[str, Any] | None = None
+        self._pending_discovery_cleanup: tuple[str, Any] | None = None
         self._collector_available: bool | None = None
         self._plex_api_available: bool | None = None
 
@@ -228,7 +231,77 @@ class MqttBridge:
     def publish_discovery(self) -> bool:
         with self._lock:
             payload = self.discovery_payload
-        return self._publish_json(self.topics.discovery, payload)
+        if not self.connected.is_set():
+            return False
+        raw = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+        pending = getattr(self, "_pending_discovery", None)
+        if pending is not None:
+            pending_raw, info = pending
+            if not self._receipt_acknowledged(info):
+                try:
+                    info.wait_for_publish(timeout=2.0)
+                except (RuntimeError, ValueError):
+                    pass
+            if not self._receipt_acknowledged(info):
+                return False
+            self._pending_discovery = None
+            if pending_raw == raw:
+                with self._lock:
+                    self._diagnostics.update(last_ack=self._now(), publication_state="qos1_acked")
+                return True
+        info = self._publish(self.topics.discovery, raw, qos=1, retain=True)
+        if info is None:
+            return False
+        self._pending_discovery = (raw, info)
+        if not self._receipt_acknowledged(info):
+            try:
+                info.wait_for_publish(timeout=2.0)
+            except (RuntimeError, ValueError):
+                pass
+        if not self._receipt_acknowledged(info):
+            return False
+        self._pending_discovery = None
+        with self._lock:
+            self._diagnostics.update(last_ack=self._now(), publication_state="qos1_acked")
+        return True
+
+    def clear_discovery_state(self, topic: str) -> bool:
+        # Defense in depth: only agent state topics may be selectively cleared.
+        base = self.topics.base.rstrip("/")
+        if not topic.startswith(base + "/") or any(c in topic for c in "+#\x00"):
+            return False
+        suffix = topic[len(base) + 1:]
+        if not (suffix == "state" or suffix.startswith("state/")
+                or suffix in {"update/state", "agent/card"}):
+            return False
+        if not self.connected.is_set():
+            return False
+        pending = getattr(self, "_pending_discovery_cleanup", None)
+        if pending is not None:
+            pending_topic, receipt = pending
+            if not self._receipt_acknowledged(receipt):
+                try:
+                    receipt.wait_for_publish(timeout=2.0)
+                except (RuntimeError, ValueError):
+                    pass
+            if not self._receipt_acknowledged(receipt):
+                return False
+            self._pending_discovery_cleanup = None
+            if pending_topic == topic:
+                return True
+        receipt = self._publish(topic, "", qos=1, retain=True)
+        if receipt is None:
+            return False
+        self._pending_discovery_cleanup = (topic, receipt)
+        if not self._receipt_acknowledged(receipt):
+            try:
+                receipt.wait_for_publish(timeout=2.0)
+            except (RuntimeError, ValueError):
+                pass
+        if not self._receipt_acknowledged(receipt):
+            return False
+        self._pending_discovery_cleanup = None
+        return True
 
     def publish_diagnostic_event(self, payload: dict[str, object]) -> bool:
         """Return true only after PUBACK; called by foreground, never callbacks.

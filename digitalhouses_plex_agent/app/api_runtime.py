@@ -124,6 +124,10 @@ class PlexApiRuntime:
         payload["playback_started_at"] = self.playback_started_at
         return payload
 
+    @property
+    def inventory_confirmed(self) -> bool:
+        return self.status == "ok" and self._libraries_initialized
+
     def collect(
         self,
         *,

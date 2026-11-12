@@ -9,7 +9,7 @@ class AppPlexApiContractTests(unittest.TestCase):
         self.assertIn("PlexApiRuntime", APP)
         self.assertIn("api_runtime.collect", APP)
         self.assertIn("mqtt.set_plex_api_available", APP)
-        self.assertIn("mqtt.set_discovery_payload", APP)
+        self.assertIn("discovery_lifecycle.sync", APP)
         self.assertIn("collect_raw_processes", APP)
         self.assertIn("PlexPublicationRuntime", APP)
         self.assertIn("publication.publish_snapshot", APP)

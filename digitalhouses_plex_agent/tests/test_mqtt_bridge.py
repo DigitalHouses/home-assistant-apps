@@ -79,6 +79,87 @@ class MqttReliabilityTests(unittest.TestCase):
         b._plex_api_available = None
         return b
 
+    def test_discovery_waits_for_ack_and_reuses_single_receipt(self):
+        b = self.bridge()
+        info = Mock(rc=4)
+        info.is_published.return_value = False
+        b.client.publish = Mock(return_value=info)
+        self.assertFalse(b.publish_discovery())
+        self.assertFalse(b.publish_discovery())
+        b.set_discovery_payload({'components': {'new': {}}})
+        self.assertFalse(b.publish_discovery())
+        self.assertEqual(b.client.publish.call_count, 1)
+        info.is_published.return_value = True
+        self.assertTrue(b.publish_discovery())
+        self.assertEqual(b.client.publish.call_count, 2)
+        self.assertEqual(b.client.publish.call_args.kwargs['qos'], 1)
+        self.assertTrue(b.client.publish.call_args.kwargs['retain'])
+        info.wait_for_publish.assert_called_with(timeout=2.0)
+
+    def test_discovery_receipt_survives_disconnect_without_duplicate(self):
+        b = self.bridge()
+        info = Mock(rc=4)
+        info.is_published.return_value = False
+        b.client.publish = Mock(return_value=info)
+        self.assertFalse(b.publish_discovery())
+        b.connected.clear()
+        self.assertFalse(b.publish_discovery())
+        b.connected.set()
+        info.is_published.return_value = True
+        self.assertTrue(b.publish_discovery())
+        self.assertEqual(b.client.publish.call_count, 1)
+
+    def test_discovery_calls_paho_and_wait_without_locks(self):
+        b = self.bridge()
+        info = Mock(rc=0)
+        ack = [False]
+        def check_locks(*args, **kwargs):
+            self.assertFalse(b._lock._is_owned())
+            self.assertFalse(b._event_lock.locked())
+        def publish(*args, **kwargs):
+            check_locks()
+            return info
+        def wait(**kwargs):
+            check_locks()
+            ack[0] = True
+        info.is_published.side_effect = lambda: ack[0]
+        info.wait_for_publish.side_effect = wait
+        b.client.publish = publish
+        self.assertTrue(b.publish_discovery())
+
+    def test_owned_cleanup_requires_ack_and_reuses_receipt(self):
+        b = self.bridge()
+        b.topics.base = 'plex'
+        info = Mock(rc=0)
+        info.is_published.return_value = False
+        b.client.publish = Mock(return_value=info)
+        self.assertFalse(b.clear_discovery_state('plex/state/obsolete'))
+        self.assertFalse(b.clear_discovery_state('plex/state/obsolete'))
+        self.assertEqual(b.client.publish.call_count, 1)
+        info.is_published.return_value = True
+        self.assertTrue(b.clear_discovery_state('plex/state/obsolete'))
+        self.assertEqual(b.client.publish.call_count, 1)
+        self.assertEqual(b.client.publish.call_args.kwargs['qos'], 1)
+        self.assertTrue(b.client.publish.call_args.kwargs['retain'])
+        self.assertEqual(b.client.publish.call_args.kwargs['payload'], '')
+
+    def test_cleanup_rejects_foreign_discovery_and_availability_topics(self):
+        b = self.bridge()
+        b.topics.base = 'plex'
+        for topic in ('plex-other/state/a', 'other/state/a', 'plex/availability',
+                      'ha/discovery', 'plex/state/#', 'plex/events/diagnostic'):
+            self.assertFalse(b.clear_discovery_state(topic))
+        self.assertEqual(b.client.calls, [])
+        self.assertTrue(b.clear_discovery_state('plex/state/removed'))
+        self.assertEqual(b.client.calls, [('plex/state/removed', '', 1, True)])
+
+    def test_discovery_queue_full_retries_without_caching_rejected_receipt(self):
+        b = self.bridge()
+        b.client.publish = Mock(side_effect=[Mock(rc=15), PublishInfo()])
+        self.assertFalse(b.publish_discovery())
+        self.assertTrue(b.publish_discovery())
+        self.assertEqual(b.client.publish.call_count, 2)
+
     def test_all_publications_skip_disconnected_client(self):
         b = self.bridge()
         b.connected.clear()

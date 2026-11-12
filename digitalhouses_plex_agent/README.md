@@ -6,7 +6,7 @@
 
 Native Linux agent for Plex Media Server workload, playback, transcoding and library observability in Home Assistant through MQTT Discovery.
 
-Version **0.8.10** adds the VM system volume to the library storage progress bars and hides obsolete unavailable capacity entities. Version 0.8.9 fixes library storage visibility for restricted media folders without expanding agent permissions. Version 0.8.8 distinguishes background loudnorm audio analysis from playback transcoding and shows active scanners/audio analysis in one compact Mushroom card. Version 0.8.7 adds media-library filesystem capacity monitoring and progress bars. Version 0.8.6 introduced the native root/admin CLI, Linux host diagnostics and an event-blocked `MQTT_PAUSED` failure mode. It follows the [DigitalHouses Linux Agent Management Standard](../docs/standards/DH_LINUX_AGENT_MANAGEMENT_STANDARD.md); live VM acceptance and release publication remain separate release checks.
+Version **0.8.11** adds persistent, acknowledged Discovery lifecycle reconciliation and online recovery every 1800 seconds. Version 0.8.10 adds the VM system volume to the library storage progress bars and hides obsolete unavailable capacity entities. Version 0.8.9 fixes library storage visibility for restricted media folders without expanding agent permissions. Version 0.8.8 distinguishes background loudnorm audio analysis from playback transcoding and shows active scanners/audio analysis in one compact Mushroom card. Version 0.8.7 adds media-library filesystem capacity monitoring and progress bars. Version 0.8.6 introduced the native root/admin CLI, Linux host diagnostics and an event-blocked `MQTT_PAUSED` failure mode. It follows the [DigitalHouses Linux Agent Management Standard](../docs/standards/DH_LINUX_AGENT_MANAGEMENT_STANDARD.md); live VM acceptance and release publication remain separate release checks.
 
 [Install / update](#install--update) · [Changelog](CHANGELOG.md) · [Engineering docs](../docs/digitalhouses_plex_agent/) · [Issues](https://github.com/DigitalHouses/home-assistant-apps/issues)
 
@@ -21,6 +21,12 @@ The agent answers two related questions:
 > What content is Plex actually playing, on which client, and is it Direct Play, Direct Stream, or Transcode?
 
 It runs beside Plex in the same VM, LXC, or Debian/Ubuntu Linux host. The Linux collector inspects local Plex processes; the local Plex API collector reads playback sessions and library counters. No Proxmox API or Plex account credentials are required.
+
+## Discovery lifecycle (0.8.11)
+
+The agent stores successfully acknowledged Device Discovery components and owned state topic references in `/var/lib/digitalhouses_plex_agent/discovery_manifest.json` using atomic StateStore writes. After a successful Plex library inventory and mount observation, startup, HA birth and MQTT reconnect synchronize one authoritative payload before monitoring states. Removed components first receive exact platform-only tombstones alongside all current components, then a clean final payload. API outages and unconfirmed inventories preserve the stored manifest; an invalid manifest pauses reconciliation and cleanup until repaired.
+
+Discovery alone uses retained QoS1 with a bounded two-second PUBACK wait and one pending receipt reused across reconnects. Failures retry at ten-second intervals. Every 1800 seconds online, the agent republishes Discovery to repair deleted broker configuration. Ordinary metrics remain QoS0 and MQTT_PAUSED still blocks foreground collection while disconnected. Cleanup only clears removed state topics under the agent base plus slash when no remaining component references them; it never wipes MQTT, Discovery or availability. Entity IDs, System / Media storage bars and Audio Analysis are preserved.
 
 ## Dashboard
 
