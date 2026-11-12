@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.8.7
+
+- Add one library filesystem capacity sensor and dashboard progress bar per actual media mount, shared by libraries on the same filesystem.
+- Collect with statvfs at startup/reconnect, library changes, manual refresh and every 60 seconds while MQTT is online. Use df-style used plus user-available capacity; missing mounts and unknown capacity remain unavailable.
+- Preserve existing CPU charts, playback classification, MQTT identities and Recorder configuration. Source changes only; no deployment or published-release acceptance is implied.
+
 ## 0.8.6
 
 - Fix the MQTT-offline overdue-heartbeat busy loop. Suspend foreground process, GPU and Plex API collection in `MQTT_PAUSED`, keep the existing systemd service alive, and collect a fresh snapshot when the broker reconnects.
