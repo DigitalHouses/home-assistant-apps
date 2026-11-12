@@ -6,6 +6,16 @@
 
 Native Linux agent for Plex Media Server workload, playback, transcoding and library observability in Home Assistant through MQTT Discovery.
 
+## Mandatory Linux Agent Management Standard (implementation requirement)
+
+**REQUIRED for this agent and all future Linux DH agents:** [DigitalHouses Linux Agent Management Standard](../docs/standards/DH_LINUX_AGENT_MANAGEMENT_STANDARD.md). This is an implementation/release acceptance requirement, **not a claim that the current installed release already supports it**.
+
+The Plex Agent MUST implement the canonical CLI `/usr/local/bin/dh-plex-agent status|restart|help` and batch `set key=value [key=value ...]`, supporting all native config keys with atomic validation, idempotent edits and one systemd restart only when a running service's config changes. Its existing `/etc/digitalhouses_plex_agent/digitalhouses_plex_agent.conf` remains the single config source; direct INI editing and CLI `set` are equally supported (including Ansible). Secrets must use a safe non-argument input method; no extra management daemon or installer-only config interface.
+
+Every install/update MUST place a short copy/paste reference at `/root/dh-plex-agent.txt` with absolute command paths, a `cat` config command, a few key `set` examples and a link back to this GitHub README. Its existing Home Assistant MQTT Discovery device MUST expose the real hosting Linux server as diagnostic `sensor.dh_plex_agent_hostname` and `sensor.dh_plex_agent_ip`, also shown in `status`. Preserve existing HA device identity and entity IDs. **Release is not compliant until the linked standard's tests pass.**
+
+
+
 [Install / update](#install--update) · [Changelog](CHANGELOG.md) · [Engineering docs](../docs/digitalhouses_plex_agent/) · [Issues](https://github.com/DigitalHouses/home-assistant-apps/issues)
 
 The public product name, repository directory, release identifier, installed Linux runtime, MQTT identity, telemetry product and Home Assistant entity namespace are **DigitalHouses Plex Agent** / `digitalhouses_plex_agent`. Version `0.7.0` completed the canonical identity migration that began with the Linux runtime cutover in `0.6.0`; `0.7.1` fixes the first-update installer path for that migration.
