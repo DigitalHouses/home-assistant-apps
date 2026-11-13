@@ -66,7 +66,8 @@ class SelfCpuTests(TestCase):
             writer=RuntimeStatus(status,BuildInfo("0.8.17","release","abcd"))
             writer.update({"state":"CONNECTED"},"ok",{"hostname":"plex","ip":"192.0.2.3"},
                           agent_cpu={"usage_percent":93.2,"overloaded":True})
-            uptime=time.monotonic()-30
+            # Stable synthetic boot-relative clock: CI runners can have uptime <30s.
+            uptime=90.0
             service={"ActiveState":"active","SubState":"running",
                      "MainPID":str(os.getpid()),
                      "ExecMainStartTimestampMonotonic":str(int(uptime*1e6)),
@@ -74,7 +75,7 @@ class SelfCpuTests(TestCase):
             with patch.object(cli,"service_info",return_value=service), patch(
                 "app.runtime_status.host_identity",
                 return_value={"hostname":"plex","ip":"192.0.2.3"}
-            ),contextlib.redirect_stdout(io.StringIO()) as output:
+            ),patch.object(cli.time,"monotonic",return_value=100.0),contextlib.redirect_stdout(io.StringIO()) as output:
                 cli.print_status(cfg,runtime_path=status)
             self.assertIn("Agent CPU: 93% | overload ON",output.getvalue())
 
