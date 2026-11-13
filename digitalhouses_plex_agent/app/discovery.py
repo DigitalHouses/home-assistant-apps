@@ -24,6 +24,7 @@ class Topics:
     restart_agent: str
     agent_card_state: str
     diagnostic_event: str
+    cpu_diagnostic_event: str
     discovery: str
     ha_status: str
     device_id: str
@@ -60,6 +61,7 @@ def build_topics(config: AppConfig) -> Topics:
         restart_agent=f"{base}/restart",
         agent_card_state=f"{base}/agent/card",
         diagnostic_event=f"{base}/events/diagnostic",
+        cpu_diagnostic_event=f"{base}/events/agent_cpu",
         discovery=(
             f"{config.mqtt.discovery_prefix.strip('/')}/device/{device_id}/config"
         ),
@@ -606,6 +608,52 @@ def build_discovery_payload(
         "availability_mode": "all",
         "entity_category": "diagnostic",
         "icon": "mdi:alert-decagram-outline",
+    }
+
+    # This measures the entire Plex Agent process, not Plex Server workload.
+    # Independent from the Plex collector and Plex API availability.
+    agent_cpu_topic = state_group_topic(topics, "agent/process_cpu")
+    components["agent_process_cpu_usage"] = _component(
+        platform="sensor",
+        name="Plex Agent CPU usage",
+        key=uid("agent_process_cpu_usage"),
+        entity_id=f"sensor.{prefix}_process_cpu_usage",
+        state_topic=agent_cpu_topic,
+        value_template="{{ value_json.usage_percent | default(none) }}",
+        app_availability=topics.app_availability,
+        diagnostic=True,
+        unit_of_measurement="%",
+        state_class="measurement",
+        icon="mdi:cpu-64-bit",
+    )
+    components["agent_cpu_overload"] = _component(
+        platform="binary_sensor",
+        name="Plex Agent CPU overload",
+        key=uid("agent_cpu_overload"),
+        entity_id=f"binary_sensor.{prefix}_cpu_overload",
+        state_topic=agent_cpu_topic,
+        value_template="{{ 'ON' if value_json.overloaded else 'OFF' }}",
+        app_availability=topics.app_availability,
+        diagnostic=True,
+        device_class="problem",
+        payload_on="ON",
+        payload_off="OFF",
+        icon="mdi:alert-circle-outline",
+    )
+    # CPU transitions have their own event identity. The existing GPU event
+    # remains unchanged for backward-compatible GPU notification rules.
+    components["agent_cpu_diagnostic_event"] = {
+        "platform": "event",
+        "name": "Agent CPU diagnostic",
+        "unique_id": uid("agent_cpu_diagnostic_event"),
+        "default_entity_id": f"event.{prefix}_cpu_diagnostic",
+        "state_topic": topics.cpu_diagnostic_event,
+        "event_types": ["agent_cpu_overload_started", "agent_cpu_overload_cleared"],
+        "qos": 1,
+        "availability": [_availability(topics.app_availability)],
+        "availability_mode": "all",
+        "entity_category": "diagnostic",
+        "icon": "mdi:alert-circle-outline",
     }
 
     components["last_boot"] = _component(

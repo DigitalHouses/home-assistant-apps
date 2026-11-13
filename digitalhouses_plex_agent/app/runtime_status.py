@@ -67,10 +67,11 @@ class RuntimeStatus:
         self._transition: object = None
         self._failed = False
 
-    def update(self, mqtt: dict, plex_api_status: str, identity: dict, *, force: bool = False) -> None:
+    def update(self, mqtt: dict, plex_api_status: str, identity: dict, *, force: bool = False, agent_cpu: dict | None = None) -> None:
         now = time.monotonic()
+        cpu = agent_cpu if agent_cpu is not None else {}
         transition = (mqtt.get('state'), plex_api_status, identity.get('hostname'), identity.get('ip'),
-                      mqtt.get('last_connected'), mqtt.get('last_error'))
+                      mqtt.get('last_connected'), mqtt.get('last_error'), cpu.get('overloaded'))
         if not force and now < self._next_write and transition == self._transition:
             return
         # Only the explicitly selected diagnostics enter this file, never config.
@@ -80,6 +81,7 @@ class RuntimeStatus:
             'commit': self.build.commit, 'hostname': identity.get('hostname', 'unknown'),
             'ip': identity.get('ip', 'unknown'), 'mqtt': dict(mqtt),
             'plex_api_status': plex_api_status,
+            'agent_process_cpu': dict(cpu),
         }
         try:
             self.store.save(payload)
