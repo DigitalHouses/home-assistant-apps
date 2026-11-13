@@ -1,6 +1,7 @@
 # DH-View: dh_plex_agent
 # DH-View-Version: 1.0.0
 # DH-View-Date: 2026-11-14
+
 type: sections
 max_columns: 4
 title: Plex
