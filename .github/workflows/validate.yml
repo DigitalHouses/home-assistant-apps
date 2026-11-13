@@ -144,7 +144,7 @@ jobs:
         with:
           go-version: "1.23"
       - name: Install monitoring YAML parser
-        run: python -m pip install PyYAML==6.0.2
+        run: python -m pip install PyYAML websocket-client==6.0.2
       - name: Validate Python source
         run: python -m compileall -q digitalhouses_network_app/rootfs/app digitalhouses_network_app/tests
       - name: Run Python unit tests

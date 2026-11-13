@@ -18,7 +18,7 @@ Home Assistant 2026.10.4 code:
 3. Operator confirms that the running Plex Agent is exactly 0.8.17 (only approved compatibility at current canonical view revision).
 4. Canonical Plex view is pinned at merged source SHA \`d4e99ac789b6bd53c4185bff0612edff5427d315\`.
 5. HA App gets a **reviewed and explicitly enabled** write mount for the migration operation. Its currently released preview mapping is read-only; **there is no production CLI for this migration yet**.
-6. The HA admin bridge implementation must use the authenticated WebSocket and validate the persisted Storage result. It must also validate HA config and require actual user confirmation of the destination's rendered view.
+6. The admin bridge uses authenticated Lovelace WebSocket and independent read-back from the explicitly supplied Storage file; it validates HA config. The CLI is not enabled unless an administrator explicitly sets the development unlock flag and uses a confirmation option. Live compatibility has not yet been tested.
 7. No simultaneous dashboard edits during stage/cutover.
 
 ## Two phases with an explicit reversible checkpoint
