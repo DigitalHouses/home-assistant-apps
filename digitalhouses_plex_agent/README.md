@@ -38,7 +38,15 @@ Lovelace example: [plex-dashboard.yaml](examples/lovelace/plex-dashboard.yaml)
 
 For DH Sync v1, the operator-approved **Russian view** is [dashboards/ru/10_plex.yaml](dashboards/ru/10_plex.yaml) (`DH-View-Version: 1.0.0`, existing `path: dh-plex-agent`). The current **Recorder package** is [packages/common/dh_plex_app_package.yaml](packages/common/dh_plex_app_package.yaml) (`DH-Package-Version: 1.0.0`, preserved `dh_app_plex_monitoring_package` key). Only DH metadata comments differ from the existing examples; no runtime agent or HA installation changes are made.
 
-Do not enable the canonical Recorder package *alongside* an existing `dh_plex_app_package.yaml` or the older `dh_plex_agent_recorder_package.yaml`. Adopt and replace the matching installed package only after comparing it and making a backup. `DH-Compatible-Agent` remains unspecified until live acceptance; DH Sync must not auto-apply this revision. English view and locally reviewed notification packages are still gaps.
+Do not co-install the canonical Recorder with an existing dh_plex_app_package.yaml or
+legacy dh_plex_agent_recorder_package.yaml; adopt the identical existing package
+with a backup and explicit approval. HOME compatibility is verified for agent
+>=0.8.17,<0.8.18 only; other versions are not approved. The current Plex view
+is inside Storage dashboard_system, so DH Sync must never duplicate its path
+or overwrite the parent dashboard, and needs a supported reversible migration
+before applying anything. Git binary tag 0.8.17 predates this YAML: pin the
+verified immutable merged commit SHA, not just the installed agent release tag.
+EN view and reviewed localized notification packages remain open gaps.
 
 Frontend custom cards used by the existing view: Mushroom (`mushroom-template-card`, `mushroom-chips-card`), `auto-entities`, `button-card` and `entity-progress-card-template`. DH Sync reports missing dependencies but does not install them.
 
