@@ -12,7 +12,7 @@ The App **does not** update Agent/App executable code. It is independent of Ansi
 
 ## Current implementation
 
-The 0.0.1 source contains a conservative, read-only MQTT availability observer. It stores seen product identities in its own /data/inventory.json and publishes the App's canonical version/started-at diagnostics through MQTT Discovery. It does NOT download GitHub YAML, register a dashboard, write to Home Assistant config, validate HA packages, or apply updates.
+The 0.0.1 source contains a conservative, read-only MQTT availability observer and the Plex adoption preflight. It stores seen product identities in its own /data/inventory.json and publishes the App's canonical version/started-at diagnostics through MQTT Discovery. The preflight can read two canonical Plex YAML files from an immutable Git commit and compare them with local Storage/Recorder, but it cannot edit HA configuration. The separately consented Recorder receipt is stored under /data. The background App does NOT download GitHub YAML, register a dashboard, write to Home Assistant config, validate HA packages, or apply updates.
 
 The HA configuration is mapped **read-only** in this development phase to make accidental writes impossible.
 
@@ -26,7 +26,7 @@ The HA configuration is mapped **read-only** in this development phase to make a
 - Configurable interval (default 24 h) and explicit manual synchronization.
 - No auxiliary VM, database, CI runner, HACS manager, or agent code updater.
 
-See [DOCS.md](DOCS.md), [Architecture](docs/ARCHITECTURE.md), , [Product requirements](docs/PRODUCT_REQUIREMENTS.md), [MQTT inventory](docs/MQTT_INVENTORY.md), and [handoff to product developers](docs/DEVELOPER_HANDOFF_RU.md).
+See [DOCS.md](DOCS.md), [Architecture](docs/ARCHITECTURE.md), , [Product requirements](docs/PRODUCT_REQUIREMENTS.md), [MQTT inventory](docs/MQTT_INVENTORY.md), [handoff to product developers](docs/DEVELOPER_HANDOFF_RU.md), and [Plex adoption preflight](docs/ADOPTION.md).
 
 ## Release constraints
 

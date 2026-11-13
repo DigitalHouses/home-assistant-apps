@@ -9,7 +9,9 @@ This is the development-stage Home Assistant OS App. It is **not yet installable
 - App data is under `/data`, Home Assistant is mounted at `/homeassistant` **read-only** in 0.0.1.
 - Availability watcher records previously online installations; offline never proves uninstall.
 - The preview publishes diagnostic version and process started-at sensors for the App itself.
-- No network writes to customer infrastructure; no Home Assistant YAML is changed.
+- Optional manual Plex preflight fetches immutable YAML from GitHub and compares it with Storage/Recorder without touching HA files.
+- A separately confirmed command can create an audit receipt under /data for an identical installed Recorder; see [Plex adoption](docs/ADOPTION.md).
+- No Home Assistant YAML is changed.
 
 ## Design for v1
 
