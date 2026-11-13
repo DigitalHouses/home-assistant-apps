@@ -6,7 +6,7 @@
 
 The approved Plex view is currently embedded in the HOME Storage dashboard (historically reported as \`/config/.storage/lovelace.dashboard_system\`, view \`dh-plex-agent\`). Direct JSON edits are unsupported and unsafe. The preflight reads Storage, compares the full view with the canonical Git file, then reports \`blocked_identical_storage_view\` or \`blocked_different_storage_view\`. It **never** migrates, deletes or duplicates the view. If the same path is found twice, it blocks.
 
-A Storage → managed YAML conversion still needs an explicit reversible migration workflow, UI operator consent and live acceptance. Until that is implemented, existing Plex views remain untouched in their current dashboard. The absence of a found Storage view does not itself authorize creating a new one.
+A two-phase Storage → managed YAML engine now exists under [STORAGE_MIGRATION.md](STORAGE_MIGRATION.md), but lacks the production HA WebSocket bridge and live acceptance. The actual conversion still needs an explicit reversible migration workflow, UI operator consent and live acceptance. Until that is implemented, existing Plex views remain untouched in their current dashboard. The absence of a found Storage view does not itself authorize creating a new one.
 
 ## Recorder: safe adoption without reinstallation
 
