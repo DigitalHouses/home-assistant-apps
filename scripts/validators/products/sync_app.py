@@ -9,6 +9,9 @@ from validators.common import fail, require_files
 def validate_sync_app(root: Path, app: Path, context: dict) -> None:
     require_files(root, [
         app / "docs/ARCHITECTURE.md",
+        app / "docs/PRODUCT_REQUIREMENTS.md",
+        app / "docs/DEVELOPER_HANDOFF_RU.md",
+        app / "docs/MQTT_INVENTORY.md",
         app / "rootfs/app/inventory.py",
         app / "rootfs/app/app.py",
         app / "tests/test_inventory.py",

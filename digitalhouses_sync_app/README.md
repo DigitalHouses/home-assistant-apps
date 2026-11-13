@@ -26,7 +26,7 @@ The HA configuration is mapped **read-only** in this development phase to make a
 - Configurable interval (default 24 h) and explicit manual synchronization.
 - No auxiliary VM, database, CI runner, HACS manager, or agent code updater.
 
-See [DOCS.md](DOCS.md), [Architecture](docs/ARCHITECTURE.md), and [Product requirements](docs/PRODUCT_REQUIREMENTS.md) once added.
+See [DOCS.md](DOCS.md), [Architecture](docs/ARCHITECTURE.md), , [Product requirements](docs/PRODUCT_REQUIREMENTS.md), [MQTT inventory](docs/MQTT_INVENTORY.md), and [handoff to product developers](docs/DEVELOPER_HANDOFF_RU.md).
 
 ## Release constraints
 
