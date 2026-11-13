@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.5.88
+
+- Monitor CPU time of the entire PVE Agent process (all threads), with 100% representing one fully busy CPU core and values above 100% possible on multicore use; sample every 10 seconds independently of MQTT.
+- Publish a new sensor.dh_pve_agent_process_cpu_usage (%, measurement) without replacing the existing host-wide sensor.dh_pve_agent_cpu_usage. Local CLI status retains agent process CPU usage and overload state even without MQTT.
+- Add binary_sensor.dh_pve_agent_cpu_overload with Home Assistant device_class: problem; ON after >80% continuously for 5 minutes, OFF after <40% continuously for 2 minutes, using monotonic time and resetting confirmation on missing/gapped samples. Include this binary in the existing PVE Problems aggregate and event stream, without separate dashboard cards.
+- On MQTT reconnection, report the latest state rather than replaying outdated offline transitions. No external packages, hardware subprocesses, or additional collection loops.
+
 ## 0.5.87
 
 - Extend the local read-only dh-pve-agent status with PCI passthrough ownership for GPUs: physical PCI BDF, VMID, and connection type from the existing native PVE topology. A GPU passed to a VM no longer appears simply as unavailable because the PVE host cannot read its temperature.

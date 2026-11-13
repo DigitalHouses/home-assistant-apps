@@ -403,6 +403,12 @@ def print_status(path: Path, runtime_path: Path = RUNTIME_STATUS) -> None:
     cpu_data = cpu.get('data') if cpu_ok else None
     cpu_data = cpu_data if isinstance(cpu_data, dict) else {}
     print(f'  CPU:       {temperature(cpu_data.get("temperature_c"))} | usage {percent(cpu_data.get("usage_percent"))}' + ('' if cpu_ok else ' (STALE/UNAVAILABLE)'))
+    agent_process_cpu = runtime.get('agent_process_cpu') if live else None
+    agent_process_cpu = agent_process_cpu if isinstance(agent_process_cpu, dict) else {}
+    agent_usage = agent_process_cpu.get('usage_percent')
+    agent_overload = agent_process_cpu.get('overloaded')
+    overload_label = ('ON' if agent_overload else 'OFF') if isinstance(agent_overload, bool) else 'unknown'
+    print(f'  Agent CPU: {percent(agent_usage)} | overload {overload_label}')
     memory, memory_ok = sample('memory')
     mem_data = memory.get('data') if memory_ok else None
     mem_data = mem_data if isinstance(mem_data, dict) else {}

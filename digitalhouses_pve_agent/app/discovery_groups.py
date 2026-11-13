@@ -318,6 +318,13 @@ def _problem_components(
     inventory: Mapping[str, object],
 ) -> dict[str, dict[str, object]]:
     result = {
+        "agent_cpu_overload": _problem_binary(
+            topics,
+            key="agent_cpu_overload",
+            problem_id="agent_cpu_overload",
+            name="PVE Agent CPU overload",
+            entity_id="binary_sensor.dh_pve_agent_cpu_overload",
+        ),
         "cpu_temperature_problem": _problem_binary(
             topics,
             key="cpu_temperature_problem",

@@ -28,6 +28,7 @@ from .nfs_monitor import NfsFailureMonitor, POLL_SECONDS as NFS_POLL_SECONDS
 from .mqtt_bridge import MqttBridge
 from .operation_status import operation_payload
 from .agent_card import AgentCard
+from .agent_process_cpu import AgentProcessCpu
 from .production import _run
 from .publish_policy import PublishPolicy
 from .pve_cache import read_pve_version
@@ -435,6 +436,9 @@ def run(config: AppConfig, *, state_dir: Path = DEFAULT_STATE_DIR) -> int:
     initialized = False
     host_identity = HostIdentity(config.mqtt.host, config.mqtt.port)
     local_status = RuntimeStatus(STATUS_PATH, load_build_info(APP_ROOT))
+    agent_cpu = AgentProcessCpu()
+    agent_cpu.observe()  # Seed the process CPU clock before the first interval.
+    next_agent_cpu_sample = time.monotonic() + FAST_SECONDS
     ups_startup_attempted = False
     restart_requested = False
     debug_last_published: bool | None = None
@@ -476,6 +480,17 @@ def run(config: AppConfig, *, state_dir: Path = DEFAULT_STATE_DIR) -> int:
 
     try:
         while not stop_event.is_set():
+            process_now = time.monotonic()
+            if process_now >= next_agent_cpu_sample:
+                next_agent_cpu_sample = process_now + FAST_SECONDS
+                process_usage = agent_cpu.observe(now=process_now)
+                if process_usage is not None:
+                    runtime.observe_agent_cpu(
+                        process_usage, agent_cpu.overloaded,
+                        online=initialized and bridge.connected.is_set(),
+                    )
+                    if bridge.connected.is_set():
+                        bridge.publish_agent_process_cpu(agent_cpu.snapshot())
             debug_reconnected = bridge.reconnect_requested.is_set()
             while not bridge.ups_debug_updates.empty():
                 ups_debug.set_enabled(bridge.ups_debug_updates.get_nowait())
@@ -717,7 +732,10 @@ def run(config: AppConfig, *, state_dir: Path = DEFAULT_STATE_DIR) -> int:
             identity_reconnect = debug_reconnected and bridge.connected.is_set()
             if host_identity.refresh(now=time.monotonic(), force=identity_reconnect) or identity_reconnect:
                 bridge.publish_host_identity(host_identity.value)
-            local_status.update(bridge.diagnostics(), host_identity.value, runtime, ups_runtime)
+            local_status.update(
+                bridge.diagnostics(), host_identity.value, runtime, ups_runtime,
+                agent_process_cpu=agent_cpu.snapshot(),
+            )
             bridge.wake_requested.wait(1.0)
             bridge.wake_requested.clear()
     finally:

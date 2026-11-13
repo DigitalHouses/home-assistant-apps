@@ -222,6 +222,21 @@ class ProblemAwareRuntime(DynamicDiscoveryRuntime):
         except Exception:
             return False
 
+    def observe_agent_cpu(self, usage_percent: float, overloaded: bool, *, online: bool) -> None:
+        """Track agent overload even while MQTT is disconnected."""
+        transition = self.problem_engine.observe_agent_cpu(usage_percent, overloaded)
+        if not online:
+            # A reconnect should publish the current state, not replay
+            # historical start/recovery events from a disconnected period.
+            self._pending_problem_transitions = [
+                item for item in self._pending_problem_transitions
+                if item.current.problem_id != "agent_cpu_overload"
+            ]
+            self._published_problem_ids.discard("agent_cpu_overload")
+            self._problem_snapshot_dirty = True
+        elif transition is not None:
+            self._pending_problem_transitions.append(transition)
+
     def run_collection(
         self,
         names: tuple[str, ...] | list[str] | None = None,

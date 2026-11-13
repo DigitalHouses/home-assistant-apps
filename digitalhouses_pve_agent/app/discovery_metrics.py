@@ -257,6 +257,25 @@ def build_full_discovery_payload(
     for key, item in static:
         components[key] = item
 
+    components["agent_process_cpu_usage"] = {
+        "platform": "sensor",
+        "name": "PVE Agent CPU usage",
+        "unique_id": uid("agent_process_cpu_usage"),
+        "default_entity_id": "sensor.dh_pve_agent_process_cpu_usage",
+        "state_topic": f"{topics.base}/agent/process_cpu/state",
+        "value_template": "{{ value_json.usage_percent | default(none) }}",
+        "unit_of_measurement": "%",
+        "state_class": "measurement",
+        "availability": [{
+            "topic": topics.availability,
+            "payload_available": "online",
+            "payload_not_available": "offline",
+        }],
+        "availability_mode": "all",
+        "entity_category": "diagnostic",
+        "icon": "mdi:cpu-64-bit",
+    }
+
     collector_names = {
         "host": "Host",
         "cpu": "CPU",
