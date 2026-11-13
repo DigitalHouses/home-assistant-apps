@@ -353,6 +353,29 @@ class MqttBridge:
         except (RuntimeError, ValueError):
             return False
 
+    def publish_cpu_diagnostic_event(self, payload: dict[str, object]) -> bool:
+        """Best-effort QoS1 live transition; never replay offline CPU events.
+
+        The retained CPU problem binary is the authoritative current state.
+        Existing GPU event outbox and topic remain untouched.
+        """
+        if not self.connected.is_set():
+            return False
+        raw = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
+        info = self._publish(self.topics.cpu_diagnostic_event, raw, qos=1, retain=False)
+        if info is None:
+            return False
+        if not self._receipt_acknowledged(info):
+            try:
+                info.wait_for_publish(timeout=2.0)
+            except (RuntimeError, ValueError):
+                return False
+        if not self._receipt_acknowledged(info):
+            return False
+        with self._lock:
+            self._diagnostics.update(last_ack=self._now(), publication_state="qos1_acked")
+        return True
+
     def publish_agent_card(self, payload: dict[str, object]) -> bool:
         if not self.connected.is_set():
             return False

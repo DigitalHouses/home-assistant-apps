@@ -99,7 +99,8 @@ fi
 need_apt=0
 command -v git >/dev/null 2>&1 || need_apt=1
 command -v python3 >/dev/null 2>&1 || need_apt=1
-python3 -m venv --help >/dev/null 2>&1 || need_apt=1
+# --help succeeds even when Debian lacks ensurepip/python3-venv.
+python3 -c 'import ensurepip' >/dev/null 2>&1 || need_apt=1
 
 if [[ "${need_apt}" -eq 1 ]]; then
     if ! command -v apt-get >/dev/null 2>&1; then
@@ -439,7 +440,9 @@ if [[ -f "${MIGRATION_MARKER}" ]]; then
     chmod 0644 "${MIGRATION_MARKER}"
 fi
 
-if [[ ! -x "${APP_DIR}/.venv/bin/python" ]]; then
+# A failed earlier installation may leave a Python symlink without pip.
+if [[ ! -x "${APP_DIR}/.venv/bin/python" ]] || \
+   ! "${APP_DIR}/.venv/bin/python" -m pip --version >/dev/null 2>&1; then
     python3 -m venv "${APP_DIR}/.venv"
 fi
 "${APP_DIR}/.venv/bin/python" -m pip install \
@@ -471,6 +474,7 @@ install -o root -g root -m 0750 \
 cat >"/root/dh-plex-agent.txt" <<'DH_PLEX_REFERENCE'
 DIGITALHOUSES PLEX AGENT
 /usr/local/bin/dh-plex-agent status
+/usr/local/bin/dh-plex-agent update
 /usr/local/bin/dh-plex-agent restart
 /usr/local/bin/dh-plex-agent help
 # Config may contain secrets; do not share its output.

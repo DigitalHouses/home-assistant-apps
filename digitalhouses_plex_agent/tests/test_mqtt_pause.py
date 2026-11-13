@@ -39,6 +39,10 @@ class PauseTests(unittest.TestCase):
             bridge.connected.set()
             bridge.republish_requested.set()
         bridge.diagnostics.side_effect = lambda: {'state': 'CONNECTED' if bridge.connected.is_set() else 'MQTT_PAUSED'}
+        def verify_publish(group, payload):
+            self.assertTrue(bridge.connected.is_set(), "CPU MQTT publication occurred offline")
+            return True
+        bridge.publish_state_group.side_effect = verify_publish
         waits = []
         collected = []
         handlers = {}
@@ -137,9 +141,11 @@ class PauseTests(unittest.TestCase):
         self.assertEqual(api.collect.call_count,len(collected))
         self.assertEqual(gpu_reader.collect.call_count, len(collected))
         publication.republish_cached.assert_not_called()
+        self.assertIn("agent/process_cpu",
+                      [call.args[0] for call in bridge.publish_state_group.call_args_list])
         self.assertTrue(publication.publish_snapshot.call_args.kwargs['force'])
-        self.assertIn(30.0, waits)
-        self.assertLessEqual(max(waits), 30.0)
+        # Offline foreground is still paused, but self-CPU samples at 10s.
+        self.assertTrue(all(0 <= wait <= 10.0 for wait in waits))
         return bridge
 
     def test_authoritative_discovery_after_inventory_and_mount_observation(self):
