@@ -183,9 +183,9 @@ def make_server(sources: ProductSources, inventory: Inventory, *, version: str =
             # GitHub is read only; Apply requires separate plan + explicit POST.
             preview_html = (
                 "<section><h2>Канонические dashboards · RU</h2>"
-                "<p>GitHub-файлы обнаруживаются в dashboards/ru/ из "
-                "репозитория организации DigitalHouses. SHA фиксируется для "
-                "каждого просмотра автоматически.</p>"
+                "<p>Ресурсы читаются из публичного Git репозитория DigitalHouses, "
+                "без REST API и токена. Один Git-снимок обслуживает все продукты "
+                "репозитория; кэш 5 минут. SHA фиксируется автоматически.</p>"
                 "<p><a href='?resources=1'>Проверить GitHub-ресурсы</a></p>"
             )
             if inspect is not None and parse_qs(urlsplit(self.path).query).get("resources") == ["1"]:
