@@ -1,10 +1,11 @@
 # DigitalHouses Recorder App — DH Sync Discovery v1
 
 **Status:** source-level dashboard compatibility reviewed against the immutable
-Recorder App `0.1.28` release. Proposed `DH-Compatible-App` range is limited
-to `>=0.1.28,<0.1.29`. **Live frontend acceptance is still outstanding:**
-this metadata-only change must remain Draft until operator confirmation.
-No dashboard installation, CORE/HOME modification, or YAML adoption is implied. The canonical specification is
+Recorder App `0.1.28` release. The metadata declares exactly
+`DH-Compatible-App: >=0.1.28,<0.1.29` to allow **read-only DH Sync preview**.
+**Live frontend acceptance remains outstanding and must precede Apply.**
+Releasing this metadata does not install a dashboard, modify CORE/HOME,
+or authorize YAML adoption. The canonical specification is
 [`digitalhouses_sync_app/docs/DH_SYNC_DISCOVERY_CONTRACT_V1.md`](../../digitalhouses_sync_app/docs/DH_SYNC_DISCOVERY_CONTRACT_V1.md).
 
 ## Source and identity
@@ -138,7 +139,7 @@ The compatibility expression is accepted by the DH Sync
 excluding both 0.1.27 and 0.1.29. It is a review candidate based on
 source/runtime contract evidence, **not evidence of successful live rendering**.
 
-## Live CORE HAOS acceptance required before merging
+## Live CORE HAOS acceptance required before applying YAML
 
 The operator has reported Recorder App **0.1.28 Online** in DH Sync 0.2.0.
 This is evidence of MQTT product discovery but **not** visual acceptance of
@@ -146,8 +147,12 @@ the dashboard. The CORE browser pages were not connected when checked;
 a read-only network probe established that the CORE HAOS web host responds,
 but an authenticated UI/entity/HACS-resource audit was not available.
 
-Before this PR leaves Draft, inspect the current Recorder dashboard in CORE
-HAOS **without editing it**, and confirm:
+The operator cannot preview Recorder via DH Sync until the independently
+reviewed product metadata has merged and DH Sync has pinned that immutable
+commit. This source-only change may therefore be merged for **read-only
+preview**, without claiming visual acceptance. Before allowing **Apply**,
+inspect the current Recorder dashboard in CORE HAOS **without editing it**,
+and confirm:
 
 1. Recorder App Version reads `0.1.28`; the database connected/writing
    cards, database details and optional disk usage render, or show truthful
@@ -165,8 +170,10 @@ HAOS **without editing it**, and confirm:
    *separate* DH Sync adoption comparison.
 
 **Do not apply a view, install HACS cards, mutate `/config`, restart HA,
-run an update, or initiate rollback during this review.** Once live
-acceptance is reported, the PR can be made Ready for normal CI-gated merge.
+run an update, or initiate rollback during this read-only review.**
+After the metadata PR is merged, give DH Sync its **exact immutable merged
+commit** as a separately reviewed pin. That only enables catalog/compatibility
+preview. Installation and rollback require independent operator approval.
 
 ## Remaining limitations
 
