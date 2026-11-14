@@ -1,9 +1,9 @@
-"""Admin-only, GET-only Ingress catalog of MQTT product source claims."""
+"""Admin-only Ingress catalog with explicit plan / Apply / Rollback controls."""
 from __future__ import annotations
 
 import html
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from urllib.parse import urlsplit, parse_qs
+from urllib.parse import urlsplit, parse_qs, quote
 
 from discovery_contract import ProductSources
 from inventory import Inventory
@@ -31,7 +31,7 @@ details{margin-top:8px}summary{cursor:pointer;color:#91caed}
 def _h(value: object) -> str:
     return html.escape(str(value), quote=True)
 
-def make_server(sources: ProductSources, inventory: Inventory, *, version: str = 'development', port: int = 8099, inspect=None, audit=None):
+def make_server(sources: ProductSources, inventory: Inventory, *, version: str = 'development', port: int = 8099, inspect=None, audit=None, apply_manager=None):
     class Handler(BaseHTTPRequestHandler):
         server_version = "DHSync/" + version
 
@@ -46,10 +46,101 @@ def make_server(sources: ProductSources, inventory: Inventory, *, version: str =
             self.send_header(
                 "Content-Security-Policy",
                 "default-src 'none'; style-src 'unsafe-inline'; "
-                "base-uri 'none'; form-action 'none'; frame-ancestors 'self'",
+                "base-uri 'none'; form-action 'self'; frame-ancestors 'self'",
             )
             self.end_headers()
             self.wfile.write(body)
+
+
+        def _action_shell(self, title: str, content: str, code: int = 200) -> None:
+            self._send(code, (
+                "<!doctype html><html lang='ru'><head><meta charset='utf-8'>"
+                "<meta name='viewport' content='width=device-width,initial-scale=1'>"
+                "<title>DH Sync</title><style>" + STYLE + "</style></head><body>"
+                "<main><h1>" + _h(title) + "</h1>" + content +
+                "<p><a href='./?local=1'>Вернуться к сравнению</a></p>"
+                "</main></body></html>"
+            ))
+
+        def _plan_page(self, identity: str) -> None:
+            if apply_manager is None:
+                self._action_shell("Apply недоступен", "Режим только чтение", 403)
+                return
+            try:
+                plan = apply_manager.prepare(sources.snapshot(), identity)
+            except Exception as exc:
+                self._action_shell("План не подготовлен",
+                                   "<p class='warn'>" + _h(exc) + "</p>", 409)
+                return
+            content = (
+                "<p>Продукт: <b>" + _h(plan["product"]) + "</b></p>"
+                "<p>Репозиторий: <code>" + _h(plan["repository"]) + "</code></p>"
+                "<p>Git commit: <code>" + _h(plan["commit"]) + "</code></p>"
+                "<p>Этот план действует 10 минут, применяется однократно. "
+                "Проверки версий продуктов отсутствуют.</p>"
+                "<table><thead><tr><th>Действие</th><th>Файл / View</th>"
+                "<th>SHA-256</th><th>Разница</th></tr></thead><tbody>"
+            )
+            for item in plan["entries"]:
+                source_url = (plan["repository"] + "/blob/" + plan["commit"] +
+                              "/" + item["source_path"])
+                delta = item["diff"]
+                details = ("<details><summary>Изменения</summary><pre>" +
+                           _h(delta["preview"]) + "</pre></details>") if delta else "—"
+                content += (
+                    "<tr><td>" + _h(item["action"]) + "</td><td><b>" +
+                    _h(item["filename"]) + "</b><br><small>" +
+                    _h(item["view_path"]) + " · " + str(item["bytes"]) +
+                    " байт</small><br><a href='" + _h(source_url) +
+                    "' target='_blank' rel='noopener noreferrer'>Исходный YAML в GitHub</a>"
+                    "</td><td><small>До: " + _h(item["before"] or "отсутствует") +
+                    "<br>После: " + _h(item["after"]) + "</small></td><td>" +
+                    details + "</td></tr>"
+                )
+            content += "</tbody></table>"
+            if plan["changes"]:
+                content += (
+                    "<p class='warn'>Изменяется только каталог dashboards/dh/views/. "
+                    "Перед записью сохраняются оригиналы. Lovelace Storage, пакеты "
+                    "и агенты не изменяются. Home Assistant не перезапускается.</p>"
+                    "<form action='./' method='post'>"
+                    "<input type='hidden' name='op' value='apply'>"
+                    "<input type='hidden' name='token' value='" + _h(plan["token"]) + "'>"
+                    "<p><label><input type='checkbox' name='confirm' value='YES' required>"
+                    " Подтверждаю запись перечисленных YAML</label></p>"
+                    "<button type='submit'>Применить " + str(plan["changes"]) +
+                    " файл(ов)</button></form>"
+                )
+            else:
+                content += "<p class='ok'>Все файлы полностью совпадают; запись не нужна.</p>"
+            self._action_shell("Предпросмотр Apply", content)
+
+        def _rollback_page(self) -> None:
+            if apply_manager is None:
+                self._action_shell("Rollback недоступен", "Режим только чтение", 403)
+                return
+            preview = apply_manager.rollback_preview()
+            if preview is None:
+                self._action_shell("Rollback", "<p>Нет применённых транзакций.</p>")
+                return
+            transaction = preview["transaction"]
+            content = "<p>Транзакция: <code>" + _h(transaction["id"]) + "</code></p>"
+            content += "<ul>" + "".join(
+                "<li>" + _h(item["file"]) + " — " +
+                ("восстановить оригинал" if item["before"] else "удалить созданный файл") +
+                "</li>" for item in transaction["entries"]
+            ) + "</ul>"
+            content += (
+                "<p class='warn'>Если пользователь изменил эти YAML после Apply, "
+                "откат будет заблокирован. Другие файлы не затрагиваются.</p>"
+                "<form action='./' method='post'>"
+                "<input type='hidden' name='op' value='rollback'>"
+                "<input type='hidden' name='token' value='" + _h(preview["token"]) + "'>"
+                "<p><label><input type='checkbox' name='confirm' value='YES' required>"
+                " Подтверждаю откат</label></p>"
+                "<button type='submit'>Откатить транзакцию</button></form>"
+            )
+            self._action_shell("Подтверждение Rollback", content)
 
         def do_GET(self) -> None:
             path = urlsplit(self.path).path
@@ -58,6 +149,14 @@ def make_server(sources: ProductSources, inventory: Inventory, *, version: str =
                 return
             if path not in ("/", ""):
                 self._send(404, "<html><body>Not found</body></html>")
+                return
+            params = parse_qs(urlsplit(self.path).query)
+            if "plan" in params:
+                identity = params["plan"][0][:200]
+                self._plan_page(identity)
+                return
+            if params.get("rollback") == ["1"]:
+                self._rollback_page()
                 return
             records = sources.snapshot()
             rows = ""
@@ -81,8 +180,7 @@ def make_server(sources: ProductSources, inventory: Inventory, *, version: str =
                 rows = ("<tr><td colspan='4' class='muted'>"
                         "MQTT metadata пока не обнаружены. Ожидаются retained /sync."
                         "</td></tr>")
-            # An explicit GET is required to query GitHub. The default page
-            # only reads local MQTT inventory. Neither route can write HA YAML.
+            # GitHub is read only; Apply requires separate plan + explicit POST.
             preview_html = (
                 "<section><h2>Канонические dashboards · RU</h2>"
                 "<p>GitHub-файлы обнаруживаются в dashboards/ru/ из "
@@ -130,12 +228,11 @@ def make_server(sources: ProductSources, inventory: Inventory, *, version: str =
                 "DigitalHouses. При применении потребуются резервные копии "
                 "и отдельное подтверждение.</p></section>"
             )
-            # Local config is read from Supervisor's RO bind only on GET.
+            # Local comparison is explicit and does not write to HA.
             audit_html = (
                 "<section><h2>Файлы CORE · локальное сравнение</h2>"
                 "<p>Проверка локальных YAML панели DigitalHouses и конфликтов "
-                "Lovelace Storage. Конфигурация HAOS подключена "
-                "<b>только для чтения</b>.</p>"
+                "Lovelace Storage. Само сравнение ничего не меняет.</p>"
                 "<p><a href='?local=1'>Сравнить с файлами CORE</a></p>"
             )
             if audit is not None and parse_qs(urlsplit(self.path).query).get("local") == ["1"]:
@@ -159,6 +256,13 @@ def make_server(sources: ProductSources, inventory: Inventory, *, version: str =
                             "</tr></thead><tbody>"
                         )
                         for item in result["products"]:
+                            if apply_manager is not None and item.get("identity"):
+                                audit_html += (
+                                    "<tr><td colspan='4'><a href='?plan=" +
+                                    quote(item["identity"], safe="") +
+                                    "'>Подготовить Apply: " + _h(item["product"]) +
+                                    "</a></td></tr>"
+                                )
                             if item["source_error"]:
                                 audit_html += (
                                     "<tr><td>" + _h(item["product"]) +
@@ -195,17 +299,22 @@ def make_server(sources: ProductSources, inventory: Inventory, *, version: str =
                         "Никаких изменений HAOS не производилось.</p>"
                     )
             audit_html += (
-                "<p class='muted'>Только сравнение, не установка. "
-                "Не создаёт резервные копии и не меняет .storage, YAML, "
-                "Recorder или Home Assistant. Перед Apply понадобятся "
-                "отдельные резервные копии и подтверждение.</p></section>"
+                "<p class='muted'>Сравнение не выполняет запись. Для Apply "
+                "нужен отдельный предпросмотр, подтверждение и backup.</p></section>"
             )
+            if apply_manager is not None:
+                audit_html += (
+                    "<section><h2>Управление изменениями</h2>"
+                    "<p><a href='?rollback=1'>Просмотреть последний Apply / Rollback</a></p>"
+                    "<p>Автоматическое обновление отключено. Пакеты и .storage "
+                    "не изменяются.</p></section>"
+                )
             page = (
                 "<!doctype html><html lang='ru'><head><meta charset='utf-8'>"
                 "<meta name='viewport' content='width=device-width,initial-scale=1'>"
                 "<title>DigitalHouses Sync</title><style>" + STYLE +
                 "</style></head><body><header><h1>DigitalHouses Sync · v" + _h(version) + "</h1>"
-                "<small>MQTT и аудит dashboards · только чтение</small></header><main>"
+                "<small>MQTT · предпросмотр · ручной Apply и Rollback</small></header><main>"
                 "<section><h2>Обнаруженные агенты и приложения (" +
                 str(len(records)) + ")</h2><table><thead><tr>"
                 "<th>Продукт / Instance</th><th>Версия</th><th>Доступность</th>"
@@ -214,15 +323,59 @@ def make_server(sources: ProductSources, inventory: Inventory, *, version: str =
                 "<p>Принимаются только репозитории GitHub организации "
                 "<b>DigitalHouses</b>. Метаданные получены из MQTT и сами по "
                 "себе не разрешают установку.</p>"
-                "<p class='muted'>В этой версии нет обновления YAML, доступа "
-                "на запись к конфигурации Home Assistant, запуска агентов или "
-                "автоматического удаления продуктов.</p></section></main>"
+                "<p class='muted'>Запись только вручную в DigitalHouses YAML views "
+                "после предпросмотра и подтверждения. Агенты не запускаются и "
+                "не обновляются, удаление продуктов автоматикой запрещено.</p>"
+                "</section></main>"
                 "</body></html>"
             )
             self._send(200, page)
 
         def do_POST(self) -> None:
-            self._send(405, "<html><body>Read-only catalog</body></html>")
+            # Only HA Supervisor ingress can submit a plan in production.
+            if apply_manager is None:
+                self._send(405, "<html><body>Read-only catalog</body></html>")
+                return
+            allowed = (self.client_address[0] == "172.30.32.2"
+                       or (port == 0 and self.client_address[0] == "127.0.0.1"))
+            if not allowed:
+                self._action_shell("Access denied", "Supervisor Ingress required", 403)
+                return
+            if urlsplit(self.path).path not in ("", "/"):
+                self._action_shell("Invalid request", "Unknown URL", 404)
+                return
+            if not self.headers.get("Content-Type", "").startswith(
+                    "application/x-www-form-urlencoded"):
+                self._action_shell("Invalid request", "Form encoding required", 400)
+                return
+            try:
+                size = int(self.headers.get("Content-Length", "0"))
+                if size <= 0 or size > 1024:
+                    raise ValueError("invalid form length")
+                fields = parse_qs(self.rfile.read(size).decode("ascii"), strict_parsing=True)
+                op, token, confirm = (
+                    fields.get("op", [""])[0], fields.get("token", [""])[0],
+                    fields.get("confirm", [""])[0],
+                )
+                if len(token) > 80 or op not in ("apply", "rollback"):
+                    raise ValueError("invalid request")
+                if op == "apply":
+                    result = apply_manager.apply(token, confirmed=confirm == "YES")
+                else:
+                    result = apply_manager.rollback(token, confirmed=confirm == "YES")
+            except Exception as exc:
+                self._action_shell("Операция отклонена",
+                                   "<p class='warn'>" + _h(exc) + "</p>", 409)
+                return
+            self._action_shell(
+                "Операция выполнена",
+                "<p class='ok'>" + _h(result["status"]) + ": " +
+                str(result["count"]) + " файлов. Транзакция: " +
+                _h(result["id"] or "—") + ".</p>"
+                "<p>Перезапуск Home Assistant не производился. "
+                "Проверьте вкладки в браузере.</p>"
+                "<p><a href='?rollback=1'>Rollback</a></p>"
+            )
 
         def log_message(self, fmt, *args) -> None:
             # Do not expose Ingress URLs, credentials or client headers.
