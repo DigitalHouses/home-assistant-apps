@@ -133,15 +133,14 @@ class LocalAuditTests(unittest.TestCase):
 
     def test_storage_mode_plex_path_prevents_false_missing(self):
         storage = {
-            "version": 1, "key": "lovelace.plex",
+            "version": 1, "key": "lovelace.plex", "private_token": "PRIVATE_SHOULD_NOT_LEAK",
             "data": {"config": {"views": [{"path": "dh-plex-agent", "title": "Plex"}]}}
         }
         (self.root/".storage/lovelace.plex").write_text(json.dumps(storage))
         report = self.audit()
         self.assertEqual(report["products"][1]["views"][0]["kind"], "storage")
         self.assertEqual(report["storage_files_examined"], 1)
-        self.assertNotIn("Plex", json.dumps(report).split("storage_files_examined")[0]
-                         if False else "")  # storage content itself is never returned
+        self.assertNotIn("PRIVATE_SHOULD_NOT_LEAK", json.dumps(report))
         self.assertNotIn("lovelace.plex", json.dumps(report))
 
     def test_broken_storage_blocks_audit_without_leaking_file(self):
