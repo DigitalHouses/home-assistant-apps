@@ -1,21 +1,25 @@
-"""DH Sync inventory-only preview: passive MQTT observer, no YAML writes."""
+"""DH Sync v0.1.0 MQTT inventory and opt-in YAML updates via Ingress."""
 from __future__ import annotations
 
 import json
 import logging
 import os
+import threading
 from datetime import datetime, timezone
 from pathlib import Path
 
 import paho.mqtt.client as mqtt
 
 from inventory import Inventory
+from ha_core import CoreAPI
+from sync_engine import SyncEngine
+from sync_web import make_server
 
 PRODUCT_ID = "digitalhouses_sync_app"
 BASE = "DigitalHouses/Global/" + PRODUCT_ID
 DISCOVERY = "homeassistant/device/" + PRODUCT_ID + "/config"
 STARTED_AT = datetime.now(timezone.utc).isoformat()
-VERSION = os.environ.get("APP_VERSION", "0.0.1-local")
+VERSION = os.environ.get("APP_VERSION", "0.1.0-local")
 STATE_PATH = Path("/data/inventory.json")
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -68,6 +72,12 @@ def device_discovery() -> dict:
 
 def main() -> None:
     inventory = Inventory(STATE_PATH)
+    api = CoreAPI()
+    controller = SyncEngine(Path("/homeassistant"), Path("/data"), api)
+    allow_changes = os.environ.get("DH_SYNC_ALLOW_CHANGES", "false").lower() == "true"
+    ingress = make_server(controller, allow_changes=allow_changes, port=8099)
+    threading.Thread(target=ingress.serve_forever, daemon=True, name="dh-sync-ingress").start()
+    LOG.info("Ingress on port 8099; opt-in writes enabled: %s", allow_changes)
     client = mqtt.Client(
         callback_api_version=mqtt.CallbackAPIVersion.VERSION2,
         client_id="digitalhouses-sync-app",
@@ -90,7 +100,7 @@ def main() -> None:
         client.publish(BASE + "/availability", "online", qos=1, retain=True)
         client.subscribe("DigitalHouses/Global/+/availability", qos=1)
         client.subscribe("DigitalHouses/Global/+/+/availability", qos=1)
-        LOG.info("MQTT observer active; managed YAML writes remain disabled")
+        LOG.info("MQTT inventory active; changes require explicit Ingress confirmation")
 
     def on_message(client, userdata, message):
         if inventory.apply(

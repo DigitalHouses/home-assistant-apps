@@ -16,5 +16,6 @@ if [[ -z "${MQTT_HOST}" || -z "${MQTT_PORT}" ]]; then
   exit 1
 fi
 
-bashio::log.warning "DH Sync 0.0.1 preview: inventory only. No YAML files will be modified."
+export DH_SYNC_ALLOW_CHANGES="$(bashio::config 'allow_changes')"
+bashio::log.info "DH Sync v0.1.0: UI ready; changes require opt-in and confirmation."
 exec python3 /app/app.py

@@ -1,24 +1,30 @@
 name: DigitalHouses Sync App
-version: "0.0.1"
+version: "0.1.0"
 slug: digitalhouses_sync_app
-description: Experimental DigitalHouses YAML synchronization controller (inventory-only preview).
+description: DigitalHouses view synchronization with preview, backups and rollback.
 url: https://github.com/DigitalHouses/home-assistant-apps/tree/main/digitalhouses_sync_app
 arch:
   - amd64
   - aarch64
 image: ghcr.io/digitalhouses/digitalhouses_sync_app
 startup: application
-boot: manual
+boot: auto
 init: false
 stage: experimental
 services:
   - mqtt:need
+homeassistant_api: true
+ingress: true
+ingress_port: 8099
+panel_title: DH Sync
+panel_icon: mdi:sync
+panel_admin: true
 map:
   - type: homeassistant_config
-    read_only: true
+    read_only: false
 options:
-  sync_interval_hours: 24
+  allow_changes: false
   log_level: info
 schema:
-  sync_interval_hours: int(1,168)
+  allow_changes: bool
   log_level: list(debug|info|warning|error)
