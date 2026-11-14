@@ -60,7 +60,8 @@ class DhSyncCanonicalPlexResourcesTests(unittest.TestCase):
         self.assertIn("event.dh_plex_agent_gpu_diagnostic", excluded_ids)
 
     def test_compatibility_is_limited_to_home_verified_agent_release(self):
-        self.assertEqual((ROOT / "VERSION").read_text().strip(), "0.8.17")
+        # Dashboard/package compatibility is *independent* of the agent's
+        # executable release. Do not expand it on a VERSION bump alone.
         for path in (VIEW, PACKAGE):
             metadata = path.read_text().splitlines()[:5]
             self.assertEqual(
