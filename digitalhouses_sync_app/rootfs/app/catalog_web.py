@@ -200,12 +200,31 @@ def make_server(sources: ProductSources, inventory: Inventory, *, version: str =
                         len(issues)) + ")</summary><ul>" + "".join(
                         "<li>" + _h(issue) + "</li>" for issue in issues[:40]
                     ) + "</ul></details>"
-                summary += "<table><thead><tr><th>Ресурс</th><th>Состояние</th>" \
-                           "</tr></thead><tbody>"
-                for entry in status.get("resources", []):
-                    summary += ("<tr><td>" + _h(entry["name"]) +
-                                "</td><td>" + _h(entry["status"]) + "</td></tr>")
-                summary += "</tbody></table></section>"
+                summary += "</section>"
+                for kind, heading in (("view", "Dashboards"),
+                                      ("package", "Packages")):
+                    entries = [entry for entry in status.get("resources", [])
+                               if entry.get("kind") == kind]
+                    summary += ("<section><h2>" + heading + " (" +
+                                str(len(entries)) + ")</h2>")
+                    if not entries:
+                        summary += "<p class='muted'>Нет найденных ресурсов.</p>"
+                    else:
+                        summary += (
+                            "<table><thead><tr><th>Продукт / файл</th>"
+                            "<th>Локальный путь</th><th>Состояние</th>"
+                            "</tr></thead><tbody>"
+                        )
+                        for entry in entries:
+                            summary += (
+                                "<tr><td>" + _h(entry["name"]) +
+                                "</td><td><code>" +
+                                _h(entry.get("local_path") or "—") +
+                                "</code></td><td>" + _h(entry["status"]) +
+                                "</td></tr>"
+                            )
+                        summary += "</tbody></table>"
+                    summary += "</section>"
                 page = (
                     "<!doctype html><html lang='ru'><head><meta charset='utf-8'>"
                     "<meta name='viewport' content='width=device-width,initial-scale=1'>"
