@@ -105,7 +105,7 @@ by Recorder; `button.press` and `update.install` are action names.
 
 ```bash
 python -m unittest discover -s digitalhouses_recorder_app/tests -p 'test_*.py'
-python -m unittest discover -s digitalhouses_sync_app/tests -p 'test_*.py'
+PYTHONPATH=digitalhouses_sync_app/rootfs/app python -m unittest discover -s digitalhouses_sync_app/tests -p 'test_*.py'
 python scripts/validate_repository.py
 ```
 
