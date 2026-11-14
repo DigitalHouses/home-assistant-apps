@@ -6,6 +6,8 @@ import tempfile
 import threading
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import patch
 
 from catalog_web import make_server
 from discovery_contract import ProductSources
@@ -157,6 +159,15 @@ class LocalAuditTests(unittest.TestCase):
         report = self.audit()
         self.assertFalse(report["ready"])
         self.assertTrue(report["issues"])
+
+    def test_writable_config_mount_blocks_before_reading_any_files(self):
+        with patch("local_audit.os.statvfs", return_value=SimpleNamespace(f_flag=0)):
+            result = LocalAuditor(self.root, catalog=self.catalog,
+                                  require_readonly=True).inspect({})
+        self.assertFalse(result["ready"])
+        self.assertTrue(any("not read-only" in issue for issue in result["issues"]))
+        self.assertEqual(self.catalog.calls, 0)
+        self.assertEqual(result["products"], [])
 
     def test_unavailable_config_fails_closed_without_github_requests(self):
         self.folder.rename(self.root/"saved_views")
