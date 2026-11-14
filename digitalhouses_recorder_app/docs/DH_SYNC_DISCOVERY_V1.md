@@ -1,8 +1,8 @@
 # DigitalHouses Recorder App — DH Sync Discovery v1
 
-**Status:** source-level dashboard compatibility reviewed against the immutable
-Recorder App `0.1.28` release. The metadata declares exactly
-`DH-Compatible-App: >=0.1.28,<0.1.29` to allow **read-only DH Sync preview**.
+**Status:** source-level dashboard compatibility reviewed for Recorder App
+`0.1.28` and source-equivalent release `0.1.29`. The canonical view declares
+`DH-Compatible-App: >=0.1.28,<0.1.30` for **read-only DH Sync preview**.
 **Live frontend acceptance remains outstanding and must precede Apply.**
 Releasing this metadata does not install a dashboard, modify CORE/HOME,
 or authorize YAML adoption. The canonical specification is
@@ -36,7 +36,7 @@ client publishes the following **QoS 1 retained** JSON using its existing
   "schema": 1,
   "product_id": "digitalhouses_recorder_app",
   "type": "app",
-  "version": "0.1.28",
+  "version": "0.1.29",
   "repository": "https://github.com/DigitalHouses/home-assistant-apps",
   "product_path": "digitalhouses_recorder_app"
 }
@@ -84,7 +84,7 @@ their public contracts.
 | `DH-View` | `dh_recorder_app` |
 | `DH-View-Version` | `1.0.0` |
 | `DH-View-Date` | `2026-11-14` |
-| `DH-Compatible-App` | `>=0.1.28,<0.1.29` (source-level candidate; live UI pending) |
+| `DH-Compatible-App` | `>=0.1.28,<0.1.30` (source-reviewed 0.1.28 and 0.1.29; live UI pending) |
 | Lovelace path | `recorder` |
 | View type | `sections` |
 | Source baseline | `examples/lovelace/dh_recorder_app_dashboard.yaml` |
@@ -105,12 +105,19 @@ The dashboard continues to display its existing offline/unknown states.
 App/MQTT Discovery integration and maintains no general-purpose HA package.
 Do not add empty `packages/` directories.
 
-## Recorder 0.1.28 compatibility review — source-level evidence
+## Recorder 0.1.28–0.1.29 compatibility review — source-level evidence
 
-The reviewed runtime is the immutable release
+The released baseline runtime is the immutable release
 `digitalhouses_recorder_app-v0.1.28`, whose source resolves to
 `2434d53dd9af2485e5650625b8a84fbd4e95f410`.
-The App's `config.yaml` declares `0.1.28`; the running-version
+Comparing that tag with merged dashboard-compatibility PR #513 confirms
+**no Recorder executable changes**: only Recorder view comments,
+documentation and compatibility tests were added. Version `0.1.29` changes
+only the product's `config.yaml` version, Docker build default, and canonical
+view compatibility comment, accompanied by tests and documentation. The
+actual Python runtime, MQTT producer, Home Assistant entity IDs and dashboard
+body are unchanged. Source-level compatibility therefore covers **both**
+`0.1.28` and `0.1.29`, but no other runtime versions. The running-version
 `sensor.dh_recorder_app_version` and MQTT Discovery device/origin versions
 share the validated `APP_VERSION`. The established product-level
 `availability` and retained `/sync` are independent of database/storage
@@ -126,8 +133,9 @@ was changed. Only the compatibility comment was added here. The independent
 view revision stays at **1.0.0**, with date **2026-11-14**.
 
 All Recorder `sensor.*`, `binary_sensor.*`, `number.*` and `button.*`
-references in the view are checked against the **real 0.1.28 MQTT
-Discovery payload** with optional storage enabled. The exceptions are the
+references in the view are checked against the **actual 0.1.28 and 0.1.29
+MQTT Discovery payloads** with optional storage enabled. The complete
+Discovery component definitions are asserted identical for both versions. The exceptions are the
 Supervisor-provided `update.digitalhouses_recorder_app_update` update entity
 and `button.press` / `update.install` action names; these are not App MQTT
 entities. Existing refresh, check-updates, Supervisor update-with-backup and
@@ -135,8 +143,8 @@ app-restart actions, rolling data graphs, Top-entities attributes and offline
 placeholders are preserved. They are not replaced by new identities.
 
 The compatibility expression is accepted by the DH Sync
-`resource_preview.compatible` grammar and includes **only 0.1.28**,
-excluding both 0.1.27 and 0.1.29. It is a review candidate based on
+`resource_preview.compatible` grammar and includes **only 0.1.28 and
+0.1.29**, excluding both 0.1.27 and 0.1.30. It is based on
 source/runtime contract evidence, **not evidence of successful live rendering**.
 
 ## Live CORE HAOS acceptance required before applying YAML
@@ -154,7 +162,8 @@ preview**, without claiming visual acceptance. Before allowing **Apply**,
 inspect the current Recorder dashboard in CORE HAOS **without editing it**,
 and confirm:
 
-1. Recorder App Version reads `0.1.28`; the database connected/writing
+1. Recorder App Version reads the actually installed compatible App version
+   (`0.1.28` or `0.1.29`); the database connected/writing
    cards, database details and optional disk usage render, or show truthful
    unavailable states when a subsystem is not configured.
 2. Mushroom template/chips/number cards, `button-card >= 5.0`,
@@ -183,12 +192,13 @@ preview. Installation and rollback require independent operator approval.
   example; DH Sync must diff and back up an existing local file before
   a separately approved adopt/apply. Product-only changes do not authorize
   replacement.
-- The DH Sync 0.2.0 preview pin registry currently covers PVE/Plex only;
-  pinning the **future immutable merged SHA** of this Recorder-only PR is a
-  separate DH Sync change. The product MQTT `/sync` record does not grant
-  installer authorization.
-- No Recorder executable version bump, other-product changes, package
-  creation, or automatic install is permitted for this metadata update.
+- The DH Sync 0.2.0 preview pin registry initially covered PVE/Plex only;
+  pinning an **immutable merged Recorder dashboard SHA** is a **separate DH Sync
+  change**. A Recorder release or `/sync` advertisement alone cannot alter
+  DH Sync's source allowlist or authorize installation.
+- Release `0.1.29` updates product version metadata and the App image only;
+  no runtime Python, database/MQTT contracts, other products, package
+  creation, HAOS dashboard deployment, or automatic installation changes.
 
 
 
@@ -202,12 +212,12 @@ python scripts/validate_repository.py
 Product tests cover exact retained topic/payload, producer owner, version
 sharing, connect/reconnect QoS 1, unchanged public identities, the locked
 immutable baseline Git blob SHA, an exact unchanged Lovelace body, the narrow
-App 0.1.28 compatibility range, the real Discovery entity set, controls,
+App 0.1.28–0.1.29 compatibility range, both Discovery entity sets, controls,
 graphs and frontend dependency references. CI also checks the repository
 contract and Recorder container image. Tests **do not** claim visual HACS
 rendering or live CORE/Home Assistant acceptance.
 
-After a released App `0.1.28` is installed with explicit consent to
+After a released App `0.1.28` or `0.1.29` is installed with explicit consent to
 statistics collection, inspect the retained `/sync` topic, restart or
 reconnect MQTT, verify `availability` and Version/Started at, then review
 the candidate dashboard in a **separate** HA/DH Sync adoption step.
