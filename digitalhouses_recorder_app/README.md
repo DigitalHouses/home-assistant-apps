@@ -41,8 +41,10 @@ Canonical YAML resources maintained by Recorder App:
 - [Russian Lovelace view 1.0.0](dashboards/ru/10_recorder.yaml), a
   standalone `sections` view with the existing `path: recorder`.
 - No canonical package (the App requires no separate HA package).
-- English dashboard translation is pending; no unverified
-  `DH-Compatible-App` range is published.
+- English dashboard translation is pending. The RU view declares a narrowly
+  reviewed source-compatibility candidate `DH-Compatible-App: >=0.1.28,<0.1.29`;
+  live CORE HAOS frontend acceptance is still required before the metadata PR
+  can be merged and pinned by DH Sync.
 
 The view requires Mushroom, button-card >= 5.0, mini-graph-card and
 entity-progress-card (`custom:entity-progress-card-template`). DH Sync does
