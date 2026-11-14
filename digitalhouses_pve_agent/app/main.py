@@ -147,6 +147,7 @@ def build_runtime(
         topics,
         settings,
         discovery_builder({}),
+        sync_version=version,
     )
 
     topology = ShutdownAwareTopologyManager(runner=_run)
