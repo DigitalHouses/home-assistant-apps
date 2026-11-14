@@ -114,8 +114,7 @@ def make_server(sources: ProductSources, inventory: Inventory, *, version: str =
                                 _h(view["title"]) + "<br><code>" +
                                 _h(view["file"]) + "</code><br><small>" +
                                 _h(view["path"]) + "</small></td><td><code>" +
-                                _h(view["revision"]) + "</code><br><small>" +
-                                _h(view["constraint"]) + "</small></td><td>" +
+                                _h(view["revision"]) + "</code></td><td>" +
                                 _h(view["status"]) + "</td></tr>"
                             )
                 except Exception:
