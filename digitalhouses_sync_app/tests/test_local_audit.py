@@ -35,7 +35,7 @@ def entry(product, views):
             "commit": COMMITS[product], "error": "",
             "views": [
                 {"title": title, "file": file, "path": path,
-                 "revision": "1.0.0", "status": "Владелец DigitalHouses · только просмотр",}
+                 "revision": "1.0.0", "status": "Владелец DigitalHouses · только просмотр"}
                 for file, title, path in views]}
 
 
