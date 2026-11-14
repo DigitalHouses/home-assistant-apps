@@ -411,7 +411,7 @@ jobs:
       - name: Compile Python
         run: python -m compileall -q digitalhouses_sync_app/rootfs/app digitalhouses_sync_app/tests
       - name: Install test dependency
-        run: python -m pip install PyYAML
+        run: python -m pip install PyYAML paho-mqtt
       - name: Test MQTT catalog and future YAML transaction engine
         env:
           PYTHONPATH: digitalhouses_sync_app/rootfs/app
@@ -433,6 +433,10 @@ jobs:
         run: |
           APP_VERSION="$(awk '$1 == "version:" {gsub(/"/,"",$2);print $2;exit}' digitalhouses_sync_app/config.yaml)"
           docker build --build-arg BUILD_VERSION="$APP_VERSION" --build-arg BUILD_ARCH=amd64 --tag dh-sync-preview:"$APP_VERSION" digitalhouses_sync_app
+      - name: Smoke-test Alpine Paho compatibility in built HAOS image
+        run: |
+          APP_VERSION="$(awk '$1 == "version:" {gsub(/"/,"",$2);print $2;exit}' digitalhouses_sync_app/config.yaml)"
+          docker run --rm --entrypoint python3 "dh-sync-preview:$APP_VERSION" -c 'import sys; sys.path.insert(0, "/app"); from app import create_mqtt_client, on_connect; c = create_mqtt_client(); assert c is not None; print("HAOS MQTT constructor OK")'
 
   stats-server:
     name: Stats Server

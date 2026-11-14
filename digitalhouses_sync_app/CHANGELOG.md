@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.1
+
+- Fix HAOS startup crash with Alpine `py3-paho-mqtt` 1.x, where `mqtt.CallbackAPIVersion` is not available.
+- Use Paho 2.x callback API when present and a compatible 1.x client otherwise; accept both four- and five-argument connect callbacks.
+- Add unit regression tests for both Paho API generations and a smoke test that executes the MQTT client constructor inside the actual built HAOS image.
+- No changes to broker authentication, MQTT topic names, Dashboard YAML, HA permissions or read-only Ingress behavior.
+
 ## 0.1.0
 
 - First HAOS Ingress read-only catalog of detected DigitalHouses agents and apps.
