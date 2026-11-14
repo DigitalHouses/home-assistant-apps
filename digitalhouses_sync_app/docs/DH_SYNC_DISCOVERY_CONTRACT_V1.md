@@ -1,117 +1,30 @@
-# DH Sync Discovery Contract v1 — MQTT product source
+# DH Sync Discovery Contract v1 — DigitalHouses owner only
 
-**Status:** accepted interface for new DigitalHouses Agent/App releases.
-Pilot DH Sync v0.1.0 accepts and displays metadata but does not yet use
-MQTT-supplied repositories for YAML installation.
+## Source admission
 
-## Purpose
+**The only admission rule is: the GitHub repository owner is DigitalHouses.** Any GitHub repository under that organization is accepted. There is no repository allowlist, no specific product registry gate, no static product commit mapping and no required Agent/App compatibility range for read-only discovery.
 
-Every DigitalHouses product publishes its identity, release version and the
-GitHub repository that owns its canonical YAML. DH Sync can discover products
-without keeping a continually updated mapping of product to repository.
+A repository URL must still be a structurally valid direct HTTPS GitHub URL, e.g. https://github.com/DigitalHouses/home-assistant-apps or https://github.com/DigitalHouses/recorder. This avoids accidentally fetching an unrelated host. Arbitrary URLs from MQTT are never passed directly to a network fetcher.
 
-The message describes a *claimed source*. **It is not authorization to
-download or install executable code, dashboards or packages.**
+## MQTT metadata
 
-## MQTT topic
+Existing producers continue to publish retained QoS 1 /sync metadata on each connect/reconnect:
 
-Keep every existing MQTT availability and Home Assistant Discovery topic.
+- DigitalHouses/Global/<product_id>/sync (single instance)
+- DigitalHouses/Global/<product_id>/<instance_id>/sync (multi instance)
 
-Publish the new **retained QoS 1** message when MQTT connects, reconnects or
-the fields change. No new heartbeat.
-
-- Single/default instance:
-  `DigitalHouses/Global/<product_id>/sync`
-- Multi-instance product:
-  `DigitalHouses/Global/<product_id>/<instance_id>/sync`
-
-`product_id` is canonical from `product_registry.json`, not a friendly
-name. Use the existing stable instance ID when one is already part of the
-product's MQTT namespace. The presence of a retained metadata topic, or the
-loss of an online availability message, does **not** prove installation or
-uninstallation; keep product-level availability separate.
-
-## Payload
+Typical JSON:
 
 ```json
-{
-  "schema": 1,
-  "product_id": "digitalhouses_pve_agent",
-  "type": "agent",
-  "version": "0.5.88",
-  "repository": "https://github.com/DigitalHouses/home-assistant-apps",
-  "product_path": "digitalhouses_pve_agent"
-}
+{"schema":1,"product_id":"digitalhouses_recorder_app","type":"app","version":"0.1.28","repository":"https://github.com/DigitalHouses/home-assistant-apps","product_path":"digitalhouses_recorder_app"}
 ```
 
-| Field | Rule |
-| --- | --- |
-| `schema` | Integer 1, not boolean |
-| `product_id` | `digitalhouses_<name>_agent` or `digitalhouses_<name>_app`; must match topic |
-| `type` | Exactly `agent` or `app`, consistent with the ID |
-| `version` | Installed running release, SemVer |
-| `repository` | Direct HTTPS GitHub repository under exact `DigitalHouses` owner |
-| `product_path` | Canonical product directory in monorepo; `.` for a dedicated repository |
+The topic is the source of product identity; repository is required for admission. Fields such as schema, type, version and product_path are informational, not approval gates. A malformed relative product_path falls back to the topic product ID. A dedicated repository may use product_path '.'.
 
-The repository URL identifies *where* the product is maintained, not the
-revision of its canonical YAML. View revisions and Agent/App releases are
-separate. Do **not** announce an unverified Git revision via MQTT as an
-authoritative update.
+Retained /sync does not prove online availability or uninstall. Availability remains in its existing product topic. No heartbeat is added.
 
-## Exact GitHub owner restriction
+## Dynamic dashboards
 
-Accept only:
-```text
-https://github.com/DigitalHouses/home-assistant-apps
-https://github.com/DigitalHouses/another-agent
-```
+On an explicit user action, DH Sync resolves the owned repository's default branch to one Git SHA and reads its dashboards/ru/*.yaml at that revision. DH-View-Version and DH-Compatible-Agent/App headers are optional informational values, not prerequisites for displaying a view. No product has to be manually registered in DH Sync.
 
-Validation must parse the URL structurally and normalize owner case.
-Reject HTTP, any domain other than exact `github.com`, userinfo, ports,
-query strings, fragments, extra URL path segments, encodings (`%`),
-backslashes, non-ASCII hostnames, whitespace, `.` / `..` names, and
-path traversal.
-
-Reject, for example:
-```text
-https://github.com/OtherUser/repo
-https://github.com/DigitalHouses-malicious/repo
-https://github.com/DigitalHouses/repo/../../OtherUser/repo
-https://github.com@evil.example/repo
-https://github.com.evil.example/DigitalHouses/repo
-http://github.com/DigitalHouses/repo
-```
-
-**Do not fetch arbitrary URLs from MQTT.** URL parsing does not prevent
-redirects if a future downloader follows them; any downloader must use a
-GitHub-only API transport, reject off-domain redirects, verify the final repo
-owner and pin an immutable reviewed Git commit. Validate resource paths,
-headers, compatibility, hashes, existing installation, backups and local
-modifications before *manual* approval.
-
-A compromised MQTT broker can lie about a product and even about a valid
-DigitalHouses repository. Organizational ownership is a useful restriction,
-**not** cryptographic authentication of an agent or security certification
-of a specific file in the repository.
-
-## DH Sync v0.1 behavior
-
-- Subscribes to both sync topic depths and validates exact topic-to-payload
-  identity, schema and repository owner.
-- Saves only accepted canonical metadata in
-  `/data/product_sources.json`, and displays it as *MQTT claimed metadata*.
-- Ignores/rejects malformed metadata. Offline doesn't purge last known
-  sources. No product removal based on absence of metadata.
-- Maintains the existing legacy availability inventory for producers that
-  have not implemented this contract.
-- The **Apply controller is unchanged**: only the three previously pinned
-  Proxmox/UPS/Plex resources are allowed; MQTT metadata has no influence
-  on the download endpoint, source commit or destination path.
-
-## Product-team acceptance
-
-Each product's own PR adds retained publication and tests of the new topic,
-without changing existing availability, MQTT Discovery, entity IDs,
-credentials, or update services. The product team reports its actual topic
-and demonstrates publication on normal MQTT reconnect. First pilot:
-PVE Agent and Plex Agent, then HAOS Apps.
+Basic transport/path safety and standalone YAML parsing remain to keep requests and the read-only view meaningful. The current App never changes HA configuration. Being owned by DigitalHouses does not authorize automatic installation; backup, visible review and user approval are separate future work.
