@@ -1,4 +1,4 @@
-# DigitalHouses Sync App — 0.4.0
+# DigitalHouses Sync App — 0.4.1
 
 DH Sync automatically maintains Home Assistant dashboards and packages from public GitHub repositories owned by **DigitalHouses**. No prompts, buttons, token, paid plan, product allowlist or app-version checks.
 
@@ -28,3 +28,5 @@ Site-specific notification variants stay locally managed until a single portable
 Installing DH Sync 0.4.0 enables automatic synchronization of published resources. Its Ingress panel shows last scan, updated/current counts, skipped conflicts and resource status. The old 0.3.x manual Apply/Rollback flow is no longer used by the running app.
 
 Tests: `python -m unittest discover -s digitalhouses_sync_app/tests -p 'test_*.py'`, plus repository CI.
+
+The Ingress status groups **Dashboards** and **Packages** separately, showing each discovered resource's name, exact local `/config/` path and last synchronization outcome. `examples/` is never scanned as a canonical source.
