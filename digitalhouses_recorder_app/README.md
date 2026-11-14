@@ -26,34 +26,38 @@ entity prefix dh_recorder_app
 
 Maintained Lovelace examples: [full dashboard](examples/lovelace/dh_recorder_app_dashboard.yaml) and [compact Russian control card](examples/lovelace/recorder_app_card_ru.yaml)
 
-## DH Sync v1 product source and dashboard
+## DH Sync 0.4 — automatic dashboard publishing
 
-Recorder App 0.1.28 and 0.1.29 announce the installed running version and owning GitHub repository on
-the retained QoS 1 MQTT topic
-`DigitalHouses/Global/digitalhouses_recorder_app/sync` whenever MQTT connects
-or reconnects. This is read-only product-source metadata for DH Sync; it is not
-authority to install or execute any resources. The existing product-level
-`availability`, MQTT Discovery topic, Version/Started-at sensors, database
-monitoring, telemetry consent and Home Assistant identifiers are unchanged.
+Recorder App announces its source via the existing retained QoS 1 MQTT topic
+`DigitalHouses/Global/digitalhouses_recorder_app/sync` on connection and
+reconnection. Its `repository` is
+`https://github.com/DigitalHouses/home-assistant-apps` and its
+`product_path` is `digitalhouses_recorder_app`.
 
-Canonical YAML resources maintained by Recorder App:
+DH Sync 0.4 admits public GitHub repositories owned by **DigitalHouses**.
+It reads canonical YAML from the default branch on discovery and periodically.
+There is **no product allowlist, pinned SHA, app-version compatibility gate,
+manual Preview/Apply approval, or separate dashboard release**.
 
-- [Russian Lovelace view 1.0.0](dashboards/ru/10_recorder.yaml), a
-  standalone `sections` view with the existing `path: recorder`.
-- No canonical package (the App requires no separate HA package).
-- English dashboard translation is pending. The RU view declares a narrowly
-  source-reviewed compatibility `DH-Compatible-App: >=0.1.28,<0.1.30` for
-  **read-only DH Sync preview**. Live CORE HAOS frontend acceptance is
-  required before any separate dashboard Apply; metadata alone never
-  authorizes installation or overwriting a local view.
+Published resource: [Russian Lovelace view](dashboards/ru/10_recorder.yaml),
+a standalone `sections` view with stable `path: recorder`. Its
+`DH-View-Version: 1.0.0` comment is informative only. No Recorder HA package
+is published; `examples/` remains examples only. English locale is pending.
 
-The view requires Mushroom, button-card >= 5.0, mini-graph-card and
-entity-progress-card (`custom:entity-progress-card-template`). DH Sync does
-not install these custom frontend cards. Do not overwrite a locally modified
-dashboard without a separate comparison, backup and explicit adoption.
+DH Sync finds an existing YAML view by `path: recorder` and automatically
+updates it in `/config/dashboards/dh/views/` when bytes differ, retaining its
+local filename. It backs up the original, uses atomic replacement, and skips
+ambiguous path/filename or Lovelace Storage collisions. **Locally edited YAML
+can be overwritten automatically with a backup; no confirmation is shown.**
+It does not restart Home Assistant, change `.storage`, install HACS cards,
+or modify Recorder's executable, MQTT entities or database.
 
-For publication details, compatibility boundaries and acceptance steps, see
-[DH Sync Discovery v1](docs/DH_SYNC_DISCOVERY_V1.md).
+The view needs Mushroom, button-card >= 5.0, mini-graph-card and
+entity-progress-card (`custom:entity-progress-card-template`) already
+installed in Home Assistant; DH Sync does not provide these frontend dependencies.
+
+See [Recorder DH Sync integration](docs/DH_SYNC_DISCOVERY_V1.md) and the
+[repository resource standard](../docs/standards/DH_SYNC_RESOURCES_STANDARD.md).
 
 ## Quick start
 
