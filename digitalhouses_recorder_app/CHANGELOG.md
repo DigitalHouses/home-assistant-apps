@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.28
+- Announce DH Sync Discovery Contract v1 via a retained QoS 1 `DigitalHouses/Global/digitalhouses_recorder_app/sync` product-source message on every successful MQTT connection and reconnection, using the same validated running version as HA Discovery and the Version sensor.
+- Publish the maintained Russian Recorder dashboard as canonical standalone `dashboards/ru/10_recorder.yaml` view revision 1.0.0, preserving the released Lovelace path, cards, controls and existing MQTT/HA entity identifiers.
+- Document the fixed DigitalHouses repository identity, existing product availability/LWT behavior, frontend card prerequisites and remaining English-locale/live-compatibility gaps. Do not advertise an unverified YAML compatibility range or change automatic update/install behavior.
+- Add regression tests for payload identity, QoS 1 retained publication, reconnect/failed-connect handling and dashboard source preservation; leave Recorder queries, database/storage monitoring and statistics-consent behavior unchanged.
+
 ## 0.1.27
 - Replace deprecated Bashio `bashio::addon.options` and `bashio::addon.option` calls with their supported `bashio::app.*` equivalents while retaining migration of historical App options.
 - Query the Supervisor MySQL service only when MariaDB uses `connection: supervisor`; prevent misleading Supervisor API errors on PostgreSQL or manual MariaDB installations.
