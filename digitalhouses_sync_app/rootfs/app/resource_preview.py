@@ -69,9 +69,9 @@ def resolve_revision(repository: str) -> tuple[str, str]:
                 or not isinstance(branch, str) or not branch or len(branch) > 200):
             raise PreviewError("GitHub repository owner or default branch invalid")
         revision = json.loads(_download(
-            base + "/commits/" + quote(branch, safe=""),
+            base + "/branches/" + quote(branch, safe=""),
             "api.github.com", 120_000,
-        ))["sha"]
+        ))["commit"]["sha"]
     except (ValueError, KeyError, TypeError, UnicodeError) as exc:
         if isinstance(exc, PreviewError):
             raise
