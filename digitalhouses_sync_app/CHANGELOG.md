@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.2
+
+- Remove DH-Compatible-Agent/App headers from canonical PVE, UPS, Plex and Recorder dashboards; no compatibility declaration is required.
+- Remove legacy compatibility text, range display, `constraint` and unreachable version-block status from the read-only DH Sync preview and CORE audit.
+- Keep GitHub owner `DigitalHouses` as the only source-admission rule, while retaining safe parsing, read-only access and manual review before any future Apply.
+- Update tests and product documentation to remove version-range and product-registry admission assumptions.
+
 ## 0.2.1
 
 - Reduce source admission to the GitHub repository owner DigitalHouses. Remove the fixed monorepo check, product-specific SHA allowlist, product-path equality rule, agent/app version gates and required DH-Compatible metadata.
