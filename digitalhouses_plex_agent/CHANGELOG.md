@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Align Plex Agent documentation and resource contract tests with the
+  active DH Sync 0.4.0 automatic YAML delivery standard. Clarify owner-only
+  GitHub source discovery, default-branch snapshots, Storage view conflict
+  handling and in-place Recorder updates; remove obsolete manual Apply,
+  pinned SHA and version compatibility gate guidance. No runtime or
+  canonical view/package YAML changes in this documentation-only revision.
+
 ## 0.8.18
 
 - Publish DH Sync Discovery Contract v1: the canonical Plex Agent product ID,

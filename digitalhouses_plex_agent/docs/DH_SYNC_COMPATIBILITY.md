@@ -1,161 +1,125 @@
-# DH Sync v1 — DigitalHouses Plex Agent canonical YAML contract
+# Plex Agent — DH Sync 0.4.0 automatic resources
 
-Status: historical source and operator validation for Plex Agent 0.8.17/0.8.18. Current DH Sync source admission uses only GitHub owner `DigitalHouses`; agent versions and compatibility ranges are not approval gates. YAML Apply and rollback remain separate, unimplemented work.
+**Normative source:** [DH Sync Resources Standard](../../docs/standards/DH_SYNC_RESOURCES_STANDARD.md)
+and [DH Sync Discovery Contract v1](../../digitalhouses_sync_app/docs/DH_SYNC_DISCOVERY_CONTRACT_V1.md).
+The old opt-in / pinned SHA / agent-version compatibility-gate workflow
+has been superseded. This is product-owned resource documentation, not an
+alternative DH Sync standard.
 
-## Identity and runtime
+## Product identity and MQTT
 
-- Canonical product ID: `digitalhouses_plex_agent` (`linux_agent`; unchanged).
-- Original YAML source was captured on v0.8.16; HOME was subsequently upgraded to v0.8.17. A source review of v0.8.18 PR #504 and a CORE operator visual check are retained as historical QA evidence, not as a source-admission version range.
-- Existing product-level MQTT availability (default `instance_id=plex`): `DigitalHouses/Global/digitalhouses_plex_agent/availability`. A non-default `instance_id` uses its existing instance-specific suffix. Do not rename either namespace.
-- Product availability sends retained `online` on MQTT connection; retained LWT sends `offline`. The current Plex LWT uses QoS 0. Existing reconnect, `MQTT_PAUSED` and optional collector/Plex API availability are not product uninstall signals.
-- MQTT Device Discovery uses the existing `homeassistant/device/<device_id>/config` pattern with retained QoS 1 / PUBACK reconciliation. Discovery is repaired on HA birth, reconnect and periodic recheck. The device identifier and MQTT base remain unchanged.
-- Version entity: `sensor.dh_plex_agent_version`; source: the running release build info in the existing state payload. Started-at entity: `sensor.dh_plex_agent_started_at` (timestamp). No new health heartbeat required.
-- There is no new machine-readable uninstall tombstone in this PR. DH Sync must retain a known product on `offline` and require confirmed removal before deleting its own resources.
+- Registry product: `digitalhouses_plex_agent`; `type: agent`.
+- Repository: `https://github.com/DigitalHouses/home-assistant-apps`;
+  `product_path: digitalhouses_plex_agent`.
+- Default instance `plex` publishes retained QoS1 source metadata at
+  `DigitalHouses/Global/digitalhouses_plex_agent/sync`.
+- Non-default instance `plex_guest` publishes at
+  `DigitalHouses/Global/digitalhouses_plex_agent/plex_guest/sync`.
+- Version is the running `BuildInfo.version` loaded from installed
+  `VERSION` / `BUILD_INFO`, not the view or package revision.
+- MQTT source uses six fields: `schema` = 1, `product_id`, `type`,
+  `version`, `repository` and `product_path`. The repository is a source
+  claim and **does not authorize installation of executable product code**.
 
-## DH Sync Discovery Contract v1 — product source MQTT
+The product's existing retained availability remains
+`DigitalHouses/Global/digitalhouses_plex_agent/availability` for the default
+instance. Its LWT sends `offline` and MQTT Discovery remains
+`homeassistant/device/digitalhouses_plex_agent_plex/config`. Custom
+instances keep their existing availability suffix and Discovery identity.
+The existing MQTT_PAUSED reconnect/backoff behavior and HA diagnostic
+entities `sensor.dh_plex_agent_version` /
+`sensor.dh_plex_agent_started_at` remain unchanged. Offline is not uninstall.
 
-Plex Agent 0.8.18 uses the existing Paho MQTT client to publish the
-new metadata topic on successful connect and on every reconnect:
+DH Sync admits **any structurally valid HTTPS GitHub repository owned by
+DigitalHouses**. The MQTT topic provides identity; metadata version and
+product_path are not approval gates. The app resolves the remote default
+branch to a consistent Git SHA and fetches product resource files from
+that snapshot.
 
-- Standard instance (instance_id=plex):
-  DigitalHouses/Global/digitalhouses_plex_agent/sync
-- Additional instance (for example plex_guest):
-  DigitalHouses/Global/digitalhouses_plex_agent/plex_guest/sync
+## Files published for automatic delivery
 
-The topic is derived from the canonical product registry identity and
-stable instance ID, NOT the configurable legacy mqtt.topic_prefix.
+| Category | Source | Existing identity |
+| --- | --- | --- |
+| Russian view | `dashboards/ru/10_plex.yaml` | `path: dh-plex-agent` |
+| Common Recorder | `packages/common/dh_plex_app_package.yaml` | `dh_app_plex_monitoring_package` |
+| RU notification package | none published | no portable recipient-free YAML yet |
+| English view/package | none published | DH Sync 0.4.0 currently uses RU only |
 
-Exact JSON fields for the default instance (the shown version is only an
-example; the runtime uses BuildInfo.version, validated against VERSION):
+The canonical view is a standalone `type: sections` Lovelace view with four
+sections. It is byte-identical to the operator-approved source at
+`examples/lovelace/plex-dashboard.yaml` once the three comment header
+lines and blank separator are excluded. The Recorder package likewise
+matches the historical `examples/packages/dh_plex_app_package.yaml` body,
+with 24 recorded and six excluded entity IDs. Those `examples/` paths are
+**not** automatically installed by DH Sync.
 
-    {"schema":1,"product_id":"digitalhouses_plex_agent",
-     "type":"agent","version":"0.8.17",
-     "repository":"https://github.com/DigitalHouses/home-assistant-apps",
-     "product_path":"digitalhouses_plex_agent"}
+The `DH-View-Version` / `DH-Package-Version` comments are retained only
+as descriptive metadata (1.0.0). No `DH-Compatible-Agent` range applies,
+and the installed Plex Agent version **does not gate** discovery or YAML
+sync. Published files can be updated by simply changing their content and
+merging the reviewed PR to `main`. After merging, installations may receive
+a changed YAML file automatically without a second product release.
 
-Paho publishes with QoS 1, retain=true through the existing connection,
-without an extra heartbeat, process, thread, retry policy, credentials
-or private-site details. It does not block the Paho network callback
-waiting for PUBACK. This process's build/version is immutable: when an
-updated agent starts, it connects again and announces the new version.
+### What DH Sync 0.4.0 changes on HA
 
-Existing product-level availability, retained offline LWT, Discovery
-device/unique/entity IDs, Version/Started-at sensors, and MQTT_PAUSED
-fail-safe behavior remain unchanged. A retained /sync topic is only
-MQTT-claimed source metadata: it never authorizes installation or
-uninstallation. DH Sync checks DigitalHouses ownership to admit a source;
-immutable Git revisions make previews consistent, while backup and operator
-approval apply separately to future writes.
+- Reads `dashboards/ru/*.yaml`, `packages/common/*.yaml` and
+  `packages/locales/ru/*.yaml` inside the announced product folder.
+- Finds views by Lovelace `path` and packages by their top-level YAML key.
+- Writes standalone views to `/config/dashboards/dh/views/`.
+- Finds and updates any existing Recorder package **at its current location**
+  under `/config/packages/`, preserving its package key. A new package would
+  be written to `/config/packages/dh/`.
+- Makes a backup before changed-file replacement; restores failed or
+  interrupted transactions when safe, avoids duplicate keys/path conflicts.
+- Never modifies `.storage`, automatically deletes missing resources,
+  updates the Plex binary or restarts Home Assistant.
 
-Plex Agent 0.8.18 publishes this metadata only after the service is
-updated and restarted. The previously verified HOME installation ran
-0.8.17 and does not yet publish /sync. An earlier proposed version range has
-been removed; it is not a DH Sync gate. The operator visually confirmed the
-existing dashboard while 0.8.18 was announced. Auto-apply remains unavailable.
-No current Home Assistant YAML has been changed by the agent release.
+**Existing Storage dashboard limitation:** the original Plex view on HOME
+is inside `/config/.storage/lovelace.dashboard_system` with
+`path: dh-plex-agent`. DH Sync detects this as a Storage path collision
+and skips this YAML view. This is deliberate, not successful migration.
+To move that user-managed view, use a separately supported Storage migration
+procedure; the product **must not** modify that Storage dashboard.
 
-## 0.8.18 historical source and runtime evidence
+DH Sync does not automatically install HACS frontend dependencies. The
+current view uses Mushroom, `auto-entities`, `button-card` and
+`entity-progress-card-template`.
 
-Merged release PR #504 changes the existing MQTT bridge to additionally publish retained
-QoS 1 /sync metadata on connect/reconnect. In app/app.py it passes sync_payload
-to the existing bridge. In discovery.py the existing device_id is still the
-same string, now composed from SYNC_PRODUCT_ID, and the old telemetry topic
-prefix and existing Home Assistant entities are preserved. No dashboard cards,
-legacy entity IDs, source telemetry or Recorder membership changed in 0.8.18.
+## Historical HOME/CORE validation — not a version gate
 
-The canonical view and Recorder package have **no compatibility-range comment
-headers**. View/package revisions remain 1.0.0, and
-product regression tests still compare the complete bodies byte-for-byte to
-the approved sources and assert the original 24 included / 6 excluded entities.
-CORE live MQTT showed 0.8.18 Online; it does NOT confirm card rendering.
+On 2026-11-14 the operator compared the full original HOME Storage Plex
+view to the canonical source. Normalized SHA-256 matched:
+`9a1f922f58bcdcc2fc285c9f262f57ab9aed22a3487899d8cf64fe2d5bbb48b8`.
+The HOME Recorder at
+`/config/packages/DH/dh_plex_app_package.yaml` had SHA-256
+`340cce8e68477b2faf2192f50465471e18c7e9311b46930620a4c01b7e62ff4a`.
+These are installed-source baselines; the canonical files with metadata
+comment headers have different byte hashes.
 
-The operator confirmed the existing Plex view was visible on CORE after 0.8.18 was announced by MQTT. This visual check does not authorize automatic Storage migration, a new dashboard sidebar, package installation or any HA writes.
+Plex Agent v0.8.17 passed live MQTT/Plex and CPU self-diagnostic checks on
+HOME. On CORE Media VM 192.168.11.243 the user upgraded to released 0.8.18,
+with MQTT CONNECTED to 192.168.11.242:1883, Plex API OK and successful
+QoS1 publication. Later a CORE operator check reported Plex visible and
+the retained `/sync` entry Online. This is evidence of the existing view,
+not proof that DH Sync updated or migrated any HA YAML.
 
-## Live operator check — 2026-11-14
+The existing GPU machine event entity remains
+`event.dh_plex_agent_gpu_diagnostic` and agent CPU events use
+`event.dh_plex_agent_cpu_diagnostic`. Notification routing stays local;
+there is no portable RU notification package in the canonical directory,
+so no notification file is automatically installed by DH Sync.
 
-On CORE the product's retained MQTT /sync reported Plex Agent 0.8.18
-and the DigitalHouses catalog showed it Online. After an explicit request
-to inspect the existing Proxmox, UPS and Plex dashboards, the operator
-reported «все видно». This confirms a visible Plex dashboard in the user's
-HA environment running the announced agent version; it is not evidence
-of a new DH Sync YAML deployment, Storage migration, Recorder reconfiguration
-or transaction rollback. The original view/package bodies remain unchanged.
+## Test and release policy
 
-## Canonical resources
+Product tests ensure the exact approved YAML bodies, standalone view,
+stable `path`, Recorder key and entity list, no duplicate canonical names
+and the six-field retained MQTT source payload. Run:
 
-| Resource | Path | Revision | Source |
-| --- | --- | --- | --- |
-| Russian view | `dashboards/ru/10_plex.yaml` | `DH-View-Version: 1.0.0` | Approved deployed dashboard from PR #493, stored at `examples/lovelace/plex-dashboard.yaml` |
-| Common Recorder package | `packages/common/dh_plex_app_package.yaml` | `DH-Package-Version: 1.0.0` | Operator-supplied current package, identical to `examples/packages/dh_plex_app_package.yaml` (Git blob `72cf231da4e9e1c7a28fa7452b50c58f811dc6b0`) |
+- `PYTHONPATH=digitalhouses_plex_agent python -m pytest digitalhouses_plex_agent/tests -q`
+- `python scripts/validate_repository.py`
 
-Only comment headers were added. Tests compare the remaining bytes with the existing examples. Agent `VERSION` stays independent of view/package revisions.
-
-The published binary release tag digitalhouses_plex_agent-v0.8.17
-predates these canonical YAML files and cannot be used as the YAML source.
-After merging this PR, DH Sync must pin the immutable merged commit SHA
-(or a later verified resource tag). Never equate the agent tag with a
-Git revision containing the canonical YAML merely because versions match.
-
-
-### View
-
-- `type: sections`, `title: Plex`, `path: dh-plex-agent`. Treat as **one view** for the unified DigitalHouses dashboard; do not register a new sidebar or wrap it in `lovelace:`.
-- Existing four sections, entity IDs, card actions, charts, server identity, GPU and dynamic media/storage cards remain unchanged.
-- Frontend dependencies from the approved YAML: HACS/custom `mushroom-template-card`, `mushroom-chips-card`, `auto-entities`, `button-card`, `entity-progress-card-template`. DH Sync must inform the user if any are missing; it must not install HACS itself.
-- Missing data or offline agents do not authorize removing this view. The original design uses existing conditional and availability logic; live UI behavior still requires HA acceptance.
-- English locale `dashboards/en/` is **not available**: translation requires design review of all embedded Russian, English and Jinja UI strings. No synthetic English file is supplied.
-
-### Recorder package
-
-- Keep package filename `dh_plex_app_package.yaml` and historical top-level key **`dh_app_plex_monitoring_package`** to preserve deployed configuration semantics.
-- Keep exactly the same 24 included and 6 excluded Recorder entity IDs. GPU diagnostic event/verbose session sensors remain excluded, not relabeled.
-- Do **not** install alongside `examples/packages/dh_plex_agent_recorder_package.yaml`: the two variants overlap in Recorder configuration. The canonical copy is a managed replacement of the already deployed package, not an additional package.
-- The canonical copy does not contain site-specific notify targets, credentials, IPs, or a new notification automation. Existing GPU machine events and local notification policy remain untouched.
-- Do not assume a package can be hot-reloaded. The operator should validate HA configuration and follow the site's established restart procedure when applying a Recorder package.
-
-## Verified HOME baseline (operator-provided checks, 2026-11-14)
-
-- Installed Recorder path: /config/packages/DH/dh_plex_app_package.yaml.
-  Original installed file SHA-256:
-  340cce8e68477b2faf2192f50465471e18c7e9311b46930620a4c01b7e62ff4a.
-  This SHA is for the installed file, NOT the metadata-bearing canonical
-  Git file. Compare semantic Recorder content, then verify metadata separately.
-- The Plex view lives inside the existing multi-view Storage dashboard
-  /config/.storage/lovelace.dashboard_system, view index 13, path dh-plex-agent,
-  title Plex, type sections, with four sections. The user compared the
-  complete Storage view against normalized canonical YAML; identical
-  normalized JSON SHA-256:
-  9a1f922f58bcdcc2fc285c9f262f57ab9aed22a3487899d8cf64fe2d5bbb48b8.
-  No content discrepancy was detected at the baseline check.
-- After agent upgrade to v0.8.17 (commit d38bf94542544d0e54dfff5c9431241e369566cf)
-  the active Linux service reported MQTT CONNECTED, QoS1 PUBACK received,
-  Plex API ok, Agent CPU around 1%, overload OFF, and CLI update returned
-  UP_TO_DATE 0.8.17. The existing dashboard content was not changed by
-  this runtime release. This is functional QA evidence, not a version gate.
-- These checks do not establish end-to-end DH Sync migration,
-  cross-HA acceptance, or the
-  appearance of every conditional UI card following the agent update.
-- New v0.8.17 CPU self-diagnostic entities do not require changes to the
-  existing canonical dashboard. The verified Recorder package is preserved
-  unchanged (24 include / 6 exclude); optional CPU history is a future
-  reviewed package revision, not a silent change.
-
-## Adopting an existing HA installation
-
-1. Compare actual Storage view and installed package as parsed YAML/JSON (ignore only metadata comments and nonsemantic whitespace); preserve local differences and stop if mismatched.
-2. Back up resources before explicit operator-approved adoption. The live view belongs to Storage dashboard_system: DO NOT edit .storage directly, delete or replace the dashboard, or create a duplicate dh-plex-agent path. If a supported, reversible Storage-to-YAML migration is not implemented in DH Sync, make NO writes.
-3. Ensure there is only one active Recorder package for this Plex agent and retain the exact top-level key.
-4. Validate Home Assistant YAML and required frontend resources; only then enable managed updates. Removing the app/agent or losing MQTT must not silently remove user-managed resources.
-5. Deletion from DH Sync, when explicitly confirmed, must remove only its managed files with backup/rollback support.
-
-## Open acceptance gaps
-
-- Source admission requires only GitHub owner `DigitalHouses`. Existing HOME and CORE checks are historical functional evidence. Storage adoption, backups, rollback, config validation and explicit operator consent remain separate future write-stage safeguards.
-- EN locale is missing; only the real Russian/operator-approved dashboard is shipped.
-- No live two-HA DH Sync adoption, update, rollback, restart-required flow or missing-HACS-dependency acceptance has been performed. CORE YAML apply/rollback behavior is unverified for this candidate.
-- Live HOME MQTT CONNECTED is confirmed; broker-retain inspection, forced LWT/reconnect, custom instance IDs and uninstall semantics remain to be tested.
-- No canonical localized notification package is proposed; audit of deployed local notification rules is a separate task.
-
-## Validation
-
-Run `PYTHONPATH=digitalhouses_plex_agent python -m pytest digitalhouses_plex_agent/tests -q` and `python scripts/validate_repository.py` in repository CI. `tests/test_dh_sync_canonical_resources.py` validates comment headers, exactly preserved YAML bodies, baseline identifiers and Recorder membership. Repository YAML parsing/contract CI is separate. Do not deploy, merge or modify other products through this PR.
+**Important:** a change to an already published canonical YAML is live
+distribution intent. Verify its contents and effects **before merging**
+the PR because DH Sync may update enabled HA files on its next sync. A
+documentation/test-only PR is not a YAML update and does not require
+incrementing Plex Agent `VERSION` or changing its installed code.
