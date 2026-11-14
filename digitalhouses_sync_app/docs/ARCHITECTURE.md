@@ -1,6 +1,6 @@
 # DigitalHouses Sync — текущая архитектура
 
-**Источник правил размещения YAML:** [DH Sync Resources Standard](../../../docs/standards/DH_SYNC_RESOURCES_STANDARD.md).
+**Источник правил размещения YAML:** [DH Sync Resources Standard](../../docs/standards/DH_SYNC_RESOURCES_STANDARD.md).
 
 - Продукты обнаруживаются по существующим MQTT `/sync` metadata.
 - Единственное правило допуска Git-источника: владелец GitHub `DigitalHouses`.
