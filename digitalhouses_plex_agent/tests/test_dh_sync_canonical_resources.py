@@ -13,13 +13,13 @@ VIEW_HEADER = (
     "# DH-View: dh_plex_agent\n"
     "# DH-View-Version: 1.0.0\n"
     "# DH-View-Date: 2026-11-14\n"
-    "# DH-Compatible-Agent: >=0.8.17,<0.8.18\n"
+    "# DH-Compatible-Agent: >=0.8.17,<0.8.19\n"
 )
 PACKAGE_HEADER = (
     "# DH-Package: dh_app_plex_monitoring_package\n"
     "# DH-Package-Version: 1.0.0\n"
     "# DH-Package-Date: 2026-11-14\n"
-    "# DH-Compatible-Agent: >=0.8.17,<0.8.18\n"
+    "# DH-Compatible-Agent: >=0.8.17,<0.8.19\n"
 )
 
 
@@ -33,7 +33,7 @@ class DhSyncCanonicalPlexResourcesTests(unittest.TestCase):
         self.assertIn("\npath: dh-plex-agent\n", source)
         self.assertIn("\ntitle: Plex\n", source)
         self.assertNotIn("\nlovelace:", source)
-        self.assertIn("# DH-Compatible-Agent: >=0.8.17,<0.8.18", canonical)
+        self.assertIn("# DH-Compatible-Agent: >=0.8.17,<0.8.19", canonical)
 
     def test_package_is_exact_deployed_snapshot_plus_comments(self):
         canonical = PACKAGE.read_text(encoding="utf-8")
@@ -41,7 +41,7 @@ class DhSyncCanonicalPlexResourcesTests(unittest.TestCase):
         self.assertTrue(canonical.startswith(PACKAGE_HEADER + "\n"))
         self.assertEqual(canonical[len(PACKAGE_HEADER) + 1 :], source)
         self.assertIn("\ndh_app_plex_monitoring_package:\n", source)
-        self.assertIn("# DH-Compatible-Agent: >=0.8.17,<0.8.18", canonical)
+        self.assertIn("# DH-Compatible-Agent: >=0.8.17,<0.8.19", canonical)
 
         included, excluded = source.split("    exclude:\n", 1)
         find_ids = lambda text: re.findall(
@@ -59,14 +59,15 @@ class DhSyncCanonicalPlexResourcesTests(unittest.TestCase):
         self.assertIn("binary_sensor.dh_plex_agent_audio_transcoding_active", included_ids)
         self.assertIn("event.dh_plex_agent_gpu_diagnostic", excluded_ids)
 
-    def test_compatibility_is_limited_to_home_verified_agent_release(self):
+    def test_compatibility_is_limited_to_reviewed_agent_releases(self):
         # Dashboard/package compatibility is *independent* of the agent's
         # executable release. Do not expand it on a VERSION bump alone.
+        self.assertEqual((ROOT / "VERSION").read_text().strip(), "0.8.18")
         for path in (VIEW, PACKAGE):
             metadata = path.read_text().splitlines()[:5]
             self.assertEqual(
                 [x for x in metadata if x.startswith("# DH-Compatible-Agent: ")],
-                ["# DH-Compatible-Agent: >=0.8.17,<0.8.18"],
+                ["# DH-Compatible-Agent: >=0.8.17,<0.8.19"],
             )
             self.assertNotIn("# DH-Compatible-App:", "\n".join(metadata))
 

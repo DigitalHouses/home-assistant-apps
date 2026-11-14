@@ -1,7 +1,7 @@
 # DH-View: dh_plex_agent
 # DH-View-Version: 1.0.0
 # DH-View-Date: 2026-11-14
-# DH-Compatible-Agent: >=0.8.17,<0.8.18
+# DH-Compatible-Agent: >=0.8.17,<0.8.19
 
 type: sections
 max_columns: 4
