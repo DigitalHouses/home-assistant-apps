@@ -1,4 +1,4 @@
-"""Product-specific contract for DigitalHouses Sync manual YAML Apply."""
+"""Product-specific contract for DigitalHouses automatic YAML synchronization."""
 from __future__ import annotations
 
 from pathlib import Path
@@ -8,6 +8,7 @@ from validators.common import fail, require_files
 
 def validate_sync_app(root: Path, app: Path, context: dict) -> None:
     require_files(root, [
+        Path("docs/standards/DH_SYNC_RESOURCES_STANDARD.md"),
         app / "docs/ARCHITECTURE.md",
         app / "docs/ADOPTION.md",
         app / "docs/STORAGE_MIGRATION.md",
@@ -39,8 +40,6 @@ def validate_sync_app(root: Path, app: Path, context: dict) -> None:
         app / "docs/FIRST_VERSION.md",
         app / "rootfs/app/adoption.py",
         app / "tests/test_adoption.py",
-        app / "docs/PRODUCT_REQUIREMENTS.md",
-        app / "docs/DEVELOPER_HANDOFF_RU.md",
         app / "docs/MQTT_INVENTORY.md",
         app / "rootfs/app/inventory.py",
         app / "rootfs/app/app.py",
@@ -68,7 +67,7 @@ def validate_sync_app(root: Path, app: Path, context: dict) -> None:
         fail("DH Sync: incorrect Supervisor slug")
     maps = config.get("map", [])
     if maps != [{"type": "homeassistant_config", "read_only": False}]:
-        fail("DH Sync v0.3 uses only an explicitly writable HA configuration bind for manual YAML views")
+        fail("DH Sync requires a writable HA configuration bind for automatic YAML sync")
     if config.get("homeassistant_api"):
         fail("DH Sync must not access HA Core API")
     if not config.get("ingress") or config.get("ingress_port") != 8099:
@@ -76,4 +75,4 @@ def validate_sync_app(root: Path, app: Path, context: dict) -> None:
     if config.get("panel_admin") is not True:
         fail("DH Sync Ingress must be admin-only")
     if "allow_changes" in config.get("options", {}) or "allow_changes" in config.get("schema", {}):
-        fail("DH Sync Apply needs manual Ingress confirmation, not a global toggle")
+        fail("DH Sync does not use confirmation or change-permission toggles")
