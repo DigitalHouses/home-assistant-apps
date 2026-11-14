@@ -1,35 +1,21 @@
-# DigitalHouses Recorder App — DH Sync Discovery v1
+# DigitalHouses Recorder App — DH Sync 0.4 integration
 
-**Status:** source-level dashboard compatibility reviewed for Recorder App
-`0.1.28` and source-equivalent release `0.1.29`. The canonical view declares
-`DH-Compatible-App: >=0.1.28,<0.1.30` for **read-only DH Sync preview**.
-**Live frontend acceptance remains outstanding and must precede Apply.**
-Releasing this metadata does not install a dashboard, modify CORE/HOME,
-or authorize YAML adoption. The canonical specification is
-[`digitalhouses_sync_app/docs/DH_SYNC_DISCOVERY_CONTRACT_V1.md`](../../digitalhouses_sync_app/docs/DH_SYNC_DISCOVERY_CONTRACT_V1.md).
+**Current standard:** [DH Sync Resources Standard](../../docs/standards/DH_SYNC_RESOURCES_STANDARD.md).
+DH Sync 0.4 automatically maintains canonical GitHub YAML. This document
+supersedes Recorder's earlier pinned-commit, version-range, Preview/Apply and
+manual-acceptance procedure. The **only source admission rule** is a public
+GitHub repository whose owner is `DigitalHouses`.
 
-## Source and identity
+## Product MQTT source — existing producer remains unchanged
 
-- Canonical product: `digitalhouses_recorder_app`, type `app`.
-- Repository: `https://github.com/DigitalHouses/home-assistant-apps`.
-- Product directory: `digitalhouses_recorder_app`.
-- Running version: the validated `APP_VERSION` used by MQTT Discovery
-  `device.sw_version`, `origin.sw_version`, and
-  `sensor.dh_recorder_app_version`. The App version is defined by
-  `config.yaml` and the released immutable GHCR image; it is not the
-  dashboard revision.
-
-## MQTT producer
-
-The existing single App instance publishes:
+The Recorder App uses its existing MQTT client to publish retained QoS 1 JSON
+at every successful connect or reconnect:
 
 ```text
 DigitalHouses/Global/digitalhouses_recorder_app/sync
 ```
 
-On **each successful MQTT connection and reconnect**, the existing Paho
-client publishes the following **QoS 1 retained** JSON using its existing
-`publish_json` method:
+Example, with the version taken from the running App:
 
 ```json
 {
@@ -42,182 +28,94 @@ client publishes the following **QoS 1 retained** JSON using its existing
 }
 ```
 
-The version is illustrative; it is built from the currently **running** App,
-never fetched from GitHub. The repository URL and product path are constants,
-not editable through MQTT or the App options. This message is a **claimed
-source only**, not permission to fetch/execute/install YAML or executable code.
-It contains no database host/user/password, MQTT credential, installation ID,
-IP address, tenant data or telemetry data. No new timer, heartbeat, client,
-broker subscription or reconnect strategy is added.
+The repository and path are product-owned constants. DH Sync takes product
+identity from the MQTT topic, validates the GitHub owner, and uses the path
+to locate published resources. Product version, schema, type and path do
+**not** form additional *source admission* or dashboard compatibility gates.
+There is no pin registry, version-range marker, REST API token, or manual
+release-registration step. GitHub's default branch is the YAML source of truth.
 
-## Existing product contract — unchanged
+The existing retained/LWT availability topic is
+`DigitalHouses/Global/digitalhouses_recorder_app/availability`; it is separate
+from the `/sync` source metadata and subsystem availability. Retained `/sync`
+does not prove that an App instance is currently online and does not authorize
+deleting resources. No heartbeat, new MQTT client, or polling loop is added.
 
-| Interface | Value |
+Recorder's HA MQTT Discovery, entities, database/storage monitoring, update
+controls and optional telemetry consent are unchanged.
+
+## Published Recorder resource
+
+| Property | Value |
 | --- | --- |
-| Product availability | `DigitalHouses/Global/digitalhouses_recorder_app/availability` |
-| MQTT Discovery | `homeassistant/device/digitalhouses_recorder_app/config` |
-| MQTT Discovery device ID | `digitalhouses_recorder_app` |
-| Version | `sensor.dh_recorder_app_version` |
-| Started at | `sensor.dh_recorder_app_started_at` |
-| DB availability | `DigitalHouses/Global/digitalhouses_recorder_app/database_availability` |
-| DB status availability | `DigitalHouses/Global/digitalhouses_recorder_app/database_status_availability` |
-| DB static availability | `DigitalHouses/Global/digitalhouses_recorder_app/database_static_availability` |
-| Storage availability | `DigitalHouses/Global/digitalhouses_recorder_app/storage_availability` |
+| Repository | `DigitalHouses/home-assistant-apps` |
+| Product path | `digitalhouses_recorder_app` |
+| Canonical source | `dashboards/ru/10_recorder.yaml` |
+| Lovelace kind | One standalone `sections` view |
+| Stable view identity | `path: recorder` |
+| Optional informational header | `DH-View: dh_recorder_app`, `DH-View-Version: 1.0.0` |
+| Canonical packages | None |
+| Other locales | Not published; DH Sync 0.4 only synchronizes Russian |
 
-The product-level LWT is retained `offline` at QoS 1, and a successful
-connect publishes retained `online`. It is separate from DB/storage subsystem
-availability. When the App stops normally, it publishes product `offline`
-before disconnecting. MQTT loss invokes the existing LWT. The retained `/sync`
-metadata remains at the broker through disconnections; neither offline nor the
-mere absence of a message proves uninstall. No uninstall tombstone or
-automatic dashboard removal is introduced.
+The source contains the original maintained Recorder dashboard from
+`examples/lovelace/dh_recorder_app_dashboard.yaml`, with informative comments
+at the top. After removing that comment header, the Lovelace body is
+byte-for-byte identical to the maintained example (original Git blob
+`45dd279a425c0165deccdb0b53e6d9fe6b37a8af`). No card, graph, control,
+entity, view title or `path` has been altered for the DH Sync transition.
 
-Recorder queries, rankings, sensors, database configurations, events, settings,
-backup, telemetry-consent gating, release checks and manual refresh all retain
-their public contracts.
+There is deliberately no `DH-Compatible-App` or `DH-Compatible-Agent` range.
+App version and `DH-View-Version` are informative and must not restrict the
+automatic Sync 0.4 resource fetch. No empty `packages/common` or
+`packages/locales/ru` files are created. Files under `examples/` never
+become DH Sync resources.
 
-## Canonical Lovelace resource
+## Automatic installation and existing local files
 
-| Field | Value |
-| --- | --- |
-| Path | `dashboards/ru/10_recorder.yaml` |
-| `DH-View` | `dh_recorder_app` |
-| `DH-View-Version` | `1.0.0` |
-| `DH-View-Date` | `2026-11-14` |
-| `DH-Compatible-App` | `>=0.1.28,<0.1.30` (source-reviewed 0.1.28 and 0.1.29; live UI pending) |
-| Lovelace path | `recorder` |
-| View type | `sections` |
-| Source baseline | `examples/lovelace/dh_recorder_app_dashboard.yaml` |
+1. DH Sync discovers the Recorder MQTT `/sync` source and periodically
+   rechecks its owned GitHub repository.
+2. It reads `digitalhouses_recorder_app/dashboards/ru/10_recorder.yaml` at
+   one Git revision from the default branch.
+3. It identifies a local YAML view under `/config/dashboards/dh/views/`
+   by Lovelace `path: recorder`, preserving the local filename when present.
+4. **If bytes differ, it backs up the original and atomically replaces the
+   YAML automatically. No Preview, Apply button, confirmation or compatible
+   App-version check is involved.** Backup/journal state is maintained by DH
+   Sync under private persistent `/data/dh-sync-auto/`.
+5. It skips ambiguous duplicate paths, occupied filenames and Lovelace Storage
+   conflicts instead of guessing. It never edits `.storage`, deletes YAML
+   merely because a GitHub resource disappears, or restarts Home Assistant.
 
-This is an unchanged standalone copy of the maintained Russian dashboard
-apart from its DH-View comment header. Existing entities, controls, data
-templates and view path are preserved. Existing user-edited copies under HA
-`/config` must not be silently replaced or adopted. DH Sync must compare and
-back up existing files before a user-approved adoption.
+**Operational consequence:** A locally customized file with the same
+`path: recorder` can be replaced by published GitHub YAML when DH Sync 0.4
+runs. Retained backups provide recovery, but the App's GitHub canonical file
+is authoritative. Review and test canonical YAML **before merging to main**
+because the next Sync scan can distribute it automatically.
 
-Frontend custom-card requirements: **Mushroom**, **button-card >= 5.0**
-(for `update_timer`), **mini-graph-card**, and
-**entity-progress-card / custom:entity-progress-card-template**.
-They must be installed separately; DH Sync does not install HACS components.
-The dashboard continues to display its existing offline/unknown states.
+The dashboard requires frontend resources installed independently in HA:
+Mushroom, **button-card >= 5.0** (for `update_timer`),
+**mini-graph-card**, and **entity-progress-card**
+(`custom:entity-progress-card-template`). DH Sync does not install HACS
+cards. Missing cards affect rendering but do not change the source-admission
+rule. The Supervisor-provided
+`update.digitalhouses_recorder_app_update` is not an MQTT entity published
+by Recorder; `button.press` and `update.install` are action names.
 
-**No canonical HA package is published:** Recorder App currently uses its
-App/MQTT Discovery integration and maintains no general-purpose HA package.
-Do not add empty `packages/` directories.
-
-## Recorder 0.1.28–0.1.29 compatibility review — source-level evidence
-
-The released baseline runtime is the immutable release
-`digitalhouses_recorder_app-v0.1.28`, whose source resolves to
-`2434d53dd9af2485e5650625b8a84fbd4e95f410`.
-Comparing that tag with merged dashboard-compatibility PR #513 confirms
-**no Recorder executable changes**: only Recorder view comments,
-documentation and compatibility tests were added. Version `0.1.29` changes
-only the product's `config.yaml` version, Docker build default, and canonical
-view compatibility comment, accompanied by tests and documentation. The
-actual Python runtime, MQTT producer, Home Assistant entity IDs and dashboard
-body are unchanged. Source-level compatibility therefore covers **both**
-`0.1.28` and `0.1.29`, but no other runtime versions. The running-version
-`sensor.dh_recorder_app_version` and MQTT Discovery device/origin versions
-share the validated `APP_VERSION`. The established product-level
-`availability` and retained `/sync` are independent of database/storage
-subsystem availability.
-
-The canonical RU file, after stripping its initial DH metadata comment lines,
-matches `examples/lovelace/dh_recorder_app_dashboard.yaml` byte-for-byte.
-The **original Git blob SHA-1** is
-`45dd279a425c0165deccdb0b53e6d9fe6b37a8af`. The source is the
-maintained Recorder App dashboard from the 0.1.28 release; no card,
-template, graph, service call, view title, or Lovelace `path: recorder`
-was changed. Only the compatibility comment was added here. The independent
-view revision stays at **1.0.0**, with date **2026-11-14**.
-
-All Recorder `sensor.*`, `binary_sensor.*`, `number.*` and `button.*`
-references in the view are checked against the **actual 0.1.28 and 0.1.29
-MQTT Discovery payloads** with optional storage enabled. The complete
-Discovery component definitions are asserted identical for both versions. The exceptions are the
-Supervisor-provided `update.digitalhouses_recorder_app_update` update entity
-and `button.press` / `update.install` action names; these are not App MQTT
-entities. Existing refresh, check-updates, Supervisor update-with-backup and
-app-restart actions, rolling data graphs, Top-entities attributes and offline
-placeholders are preserved. They are not replaced by new identities.
-
-The compatibility expression is accepted by the DH Sync
-`resource_preview.compatible` grammar and includes **only 0.1.28 and
-0.1.29**, excluding both 0.1.27 and 0.1.30. It is based on
-source/runtime contract evidence, **not evidence of successful live rendering**.
-
-## Live CORE HAOS acceptance required before applying YAML
-
-The operator has reported Recorder App **0.1.28 Online** in DH Sync 0.2.0.
-This is evidence of MQTT product discovery but **not** visual acceptance of
-the dashboard. The CORE browser pages were not connected when checked;
-a read-only network probe established that the CORE HAOS web host responds,
-but an authenticated UI/entity/HACS-resource audit was not available.
-
-The operator cannot preview Recorder via DH Sync until the independently
-reviewed product metadata has merged and DH Sync has pinned that immutable
-commit. This source-only change may therefore be merged for **read-only
-preview**, without claiming visual acceptance. Before allowing **Apply**,
-inspect the current Recorder dashboard in CORE HAOS **without editing it**,
-and confirm:
-
-1. Recorder App Version reads the actually installed compatible App version
-   (`0.1.28` or `0.1.29`); the database connected/writing
-   cards, database details and optional disk usage render, or show truthful
-   unavailable states when a subsystem is not configured.
-2. Mushroom template/chips/number cards, `button-card >= 5.0`,
-   `mini-graph-card` (including the hourly/daily `delta` graphs), and
-   `custom:entity-progress-card-template` all load without missing-resource
-   errors. These are frontend/HACS dependencies, not bundled by Recorder App.
-3. The Refresh, Check updates, optional Supervisor Update (backup-before-update)
-   and Restart controls are visible and correctly configured. No destructive
-   actions or updates are required as part of acceptance.
-4. Top Recorder 24h/all-time tables show absolute row counts and attribute
-   templates as intended; `path: recorder` remains the single existing
-   Lovelace view path. Note any user-customized source differences for later
-   *separate* DH Sync adoption comparison.
-
-**Do not apply a view, install HACS cards, mutate `/config`, restart HA,
-run an update, or initiate rollback during this read-only review.**
-After the metadata PR is merged, give DH Sync its **exact immutable merged
-commit** as a separately reviewed pin. That only enables catalog/compatibility
-preview. Installation and rollback require independent operator approval.
-
-## Remaining limitations
-
-- Only the existing Russian locale is verified at the source level;
-  no English placeholder is generated.
-- A working CORE view may differ from the repository's maintained
-  example; DH Sync must diff and back up an existing local file before
-  a separately approved adopt/apply. Product-only changes do not authorize
-  replacement.
-- The DH Sync 0.2.0 preview pin registry initially covered PVE/Plex only;
-  pinning an **immutable merged Recorder dashboard SHA** is a **separate DH Sync
-  change**. A Recorder release or `/sync` advertisement alone cannot alter
-  DH Sync's source allowlist or authorize installation.
-- Release `0.1.29` updates product version metadata and the App image only;
-  no runtime Python, database/MQTT contracts, other products, package
-  creation, HAOS dashboard deployment, or automatic installation changes.
-
-
-
-## Regression and acceptance
+## Validation
 
 ```bash
 python -m unittest discover -s digitalhouses_recorder_app/tests -p 'test_*.py'
+python -m unittest discover -s digitalhouses_sync_app/tests -p 'test_*.py'
 python scripts/validate_repository.py
 ```
 
-Product tests cover exact retained topic/payload, producer owner, version
-sharing, connect/reconnect QoS 1, unchanged public identities, the locked
-immutable baseline Git blob SHA, an exact unchanged Lovelace body, the narrow
-App 0.1.28–0.1.29 compatibility range, both Discovery entity sets, controls,
-graphs and frontend dependency references. CI also checks the repository
-contract and Recorder container image. Tests **do not** claim visual HACS
-rendering or live CORE/Home Assistant acceptance.
+Recorder regression tests protect the canonical standalone Lovelace path, exact
+view body, source ownership, MQTT identities, existing controls, entity
+references and frontend dependencies. DH Sync's own tests cover automatic
+fetch-by-owned-repository, local identity matching, backups, atomic writes and
+conflict handling. CI validates the source; live HACS/frontend rendering is
+not inferred from unit tests and is not a DH Sync admission gate.
 
-After a released App `0.1.28` or `0.1.29` is installed with explicit consent to
-statistics collection, inspect the retained `/sync` topic, restart or
-reconnect MQTT, verify `availability` and Version/Started at, then review
-the candidate dashboard in a **separate** HA/DH Sync adoption step.
+**No new Recorder App release is needed for this source-only correction.**
+The existing Recorder 0.1.29 runtime and its retained `/sync` producer are
+already compatible with the DH Sync 0.4 source contract.
