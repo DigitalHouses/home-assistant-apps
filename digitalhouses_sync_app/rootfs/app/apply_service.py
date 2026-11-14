@@ -126,6 +126,7 @@ class ApplyManager:
 
     def prepare(self, claims: dict, identity: str) -> dict:
         with self.lock:
+            self._assert_no_pending()
             if identity not in claims:
                 raise ApplyError("Product was not discovered by MQTT")
             claim = claims[identity]
