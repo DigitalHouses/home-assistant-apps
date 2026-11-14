@@ -54,6 +54,7 @@ from discovery import (
     build_discovery_payload,
 )
 from identity_migration import cleanup_required, mark_cleanup_complete
+from sync_discovery import SYNC_TOPIC, build_sync_payload
 from storage import StorageCollector
 from telemetry import TelemetryClient, TelemetryRunner
 from runtime_settings import (
@@ -177,6 +178,11 @@ class DatabaseMonitorApp:
             qos=1,
         )
         self.publish_discovery()
+        self.publish_json(
+            SYNC_TOPIC,
+            build_sync_payload(self.app_version),
+            retain=True,
+        )
         self.publish_text(
             APP_AVAILABILITY_TOPIC,
             "online",
