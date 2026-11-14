@@ -1,7 +1,9 @@
-"""Read-only preview of canonical views at pinned, review-controlled Git commits.
+"""Read-only dynamic dashboard preview: GitHub owner DigitalHouses is the only
+product-source admission rule. No per-product pins, registry or version gates.
 
-MQTT source claims are never used as Git URLs, revisions, or download paths.
-This module never modifies Home Assistant state. No background Git polling.
+Each explicit preview resolves the repository's default branch to an exact
+commit SHA first, then reads all views from that single immutable revision.
+No YAML is installed, and no request uses an MQTT URL as a network endpoint.
 """
 from __future__ import annotations
 
@@ -9,39 +11,17 @@ import json
 import re
 import urllib.error
 import urllib.request
-from dataclasses import dataclass
-from urllib.parse import urlsplit
+from urllib.parse import quote, urlsplit
 
 import yaml
 
-MONOREPO = "https://github.com/DigitalHouses/home-assistant-apps"
-API = "https://api.github.com/repos/DigitalHouses/home-assistant-apps/contents/"
-RAW = "https://raw.githubusercontent.com/DigitalHouses/home-assistant-apps/"
-PRODUCT_RE = re.compile(r"digitalhouses_[a-z0-9_]+_(?:app|agent)\Z")
+from discovery_contract import DiscoveryError, canonical_repository, safe_product_path
+
 FILE_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]*\.yaml\Z")
-SEMVER = re.compile(r"([0-9]+)\.([0-9]+)\.([0-9]+)\Z")
-RANGE = re.compile(r">=([0-9]+\.[0-9]+\.[0-9]+),<([0-9]+\.[0-9]+\.[0-9]+)\Z")
-
-
-@dataclass(frozen=True)
-class Pin:
-    commit: str
-    label: str
-    reviewed: bool
-
-
-# Immutable review boundaries for the pilot, not a product/repository registry.
-# GitHub itself enumerates an arbitrary number of dashboard YAML files.
-PINS = {
-    "digitalhouses_pve_agent": Pin(
-        "7a2bc76f7c69312366ea70a6d9236549a978d636",
-        "Утверждённые Proxmox/UPS · merged PR #502", True,
-    ),
-    "digitalhouses_plex_agent": Pin(
-        "fd9d257972f0afdf979bfdd27ba7c6c86991fceb",
-        "Plex dashboard + Recorder · merged PR #508", True,
-    ),
-}
+SHA_RE = re.compile(r"[0-9a-f]{40}\Z")
+ORG = "DigitalHouses"
+API = "https://api.github.com/repos/" + ORG + "/"
+RAW = "https://raw.githubusercontent.com/" + ORG + "/"
 
 
 class PreviewError(ValueError):
@@ -49,14 +29,14 @@ class PreviewError(ValueError):
 
 
 def _download(url: str, host: str, max_bytes: int) -> bytes:
-    request = urllib.request.Request(url, headers={"User-Agent": "DH-Sync-Preview/0.1"})
+    request = urllib.request.Request(url, headers={"User-Agent": "DH-Sync-Preview/0.2"})
     try:
         with urllib.request.urlopen(request, timeout=8) as response:
             final = urlsplit(response.geturl())
             if (final.scheme != "https" or final.hostname != host
                     or final.username is not None or final.password is not None
                     or final.port is not None):
-                raise PreviewError("GitHub redirected outside pinned source host")
+                raise PreviewError("GitHub redirected outside the fixed source host")
             data = response.read(max_bytes + 1)
     except (OSError, ValueError, urllib.error.URLError) as exc:
         if isinstance(exc, PreviewError):
@@ -67,132 +47,160 @@ def _download(url: str, host: str, max_bytes: int) -> bytes:
     return data
 
 
-def list_views(product: str, commit: str) -> list:
-    url = API + product + "/dashboards/ru?ref=" + commit
+def _repo_name(repository: str) -> str:
+    try:
+        return canonical_repository(repository).rsplit("/", 1)[-1]
+    except DiscoveryError as exc:
+        raise PreviewError("GitHub owner is not DigitalHouses") from exc
+
+
+def _repository_api(repository: str) -> str:
+    return API + quote(_repo_name(repository), safe="")
+
+
+def resolve_revision(repository: str) -> tuple[str, str]:
+    """Capture the current Git revision; not a source approval or version gate."""
+    base = _repository_api(repository)
+    try:
+        metadata = json.loads(_download(base, "api.github.com", 120_000))
+        owner = metadata["owner"]["login"]
+        branch = metadata["default_branch"]
+        if (not isinstance(owner, str) or owner.lower() != ORG.lower()
+                or not isinstance(branch, str) or not branch or len(branch) > 200):
+            raise PreviewError("GitHub repository owner or default branch invalid")
+        revision = json.loads(_download(
+            base + "/commits/" + quote(branch, safe=""),
+            "api.github.com", 120_000,
+        ))["sha"]
+    except (ValueError, KeyError, TypeError, UnicodeError) as exc:
+        if isinstance(exc, PreviewError):
+            raise
+        raise PreviewError("Unable to resolve GitHub repository revision") from exc
+    if not isinstance(revision, str) or not SHA_RE.fullmatch(revision):
+        raise PreviewError("Invalid GitHub commit identifier")
+    return revision, branch
+
+
+def _directory(product_path: str) -> str:
+    return ("dashboards/ru" if product_path == "."
+            else product_path + "/dashboards/ru")
+
+
+def list_views(repository: str, product_path: str, commit: str) -> list:
+    if not SHA_RE.fullmatch(commit):
+        raise PreviewError("Invalid GitHub commit")
+    safe_path = safe_product_path(product_path, "invalid_product")
+    if safe_path != product_path:
+        raise PreviewError("Invalid GitHub product directory")
+    folder = _directory(product_path)
+    path = quote(folder, safe="/")
+    url = _repository_api(repository) + "/contents/" + path + "?ref=" + commit
     try:
         data = json.loads(_download(url, "api.github.com", 150_000))
     except (ValueError, UnicodeError) as exc:
         raise PreviewError("Invalid GitHub directory response") from exc
     if not isinstance(data, list):
-        raise PreviewError("Canonical RU dashboards directory not found")
+        raise PreviewError("Canonical RU dashboard folder is not present")
     return data
 
 
-def read_view(path: str, commit: str) -> bytes:
-    return _download(RAW + commit + "/" + path, "raw.githubusercontent.com", 600_000)
-
-
-def version_tuple(value) -> tuple[int, int, int] | None:
-    match = SEMVER.fullmatch(value) if isinstance(value, str) else None
-    return tuple(int(n) for n in match.groups()) if match else None
-
-
-def compatible(installed: str, constraint: str) -> bool:
-    match = RANGE.fullmatch(constraint)
-    if not match:
-        return False
-    version = version_tuple(installed)
-    lower, upper = version_tuple(match.group(1)), version_tuple(match.group(2))
-    return bool(version and lower and upper and lower <= version < upper)
+def read_view(repository: str, path: str, commit: str) -> bytes:
+    if not SHA_RE.fullmatch(commit):
+        raise PreviewError("Invalid GitHub commit")
+    if not isinstance(path, str) or not path.endswith(".yaml"):
+        raise PreviewError("Invalid canonical view path")
+    segments = path.split("/")
+    if any(not part or part in (".", "..") or "%" in part or "\\" in part
+           for part in segments):
+        raise PreviewError("Unsafe canonical view path")
+    return _download(
+        RAW + quote(_repo_name(repository), safe="") + "/" + commit + "/" +
+        quote(path, safe="/"),
+        "raw.githubusercontent.com", 600_000,
+    )
 
 
 def parse_view(raw: bytes, path: str, product: str) -> dict:
+    """Recognize a standalone Lovelace view; metadata headers are optional."""
     try:
         text = raw.decode("utf-8", "strict")
-    except UnicodeError as exc:
-        raise PreviewError("Invalid view encoding: " + path) from exc
-    header = {}
-    for line in text.splitlines()[:10]:
+        view = yaml.safe_load(text)
+    except (UnicodeError, yaml.YAMLError, RecursionError) as exc:
+        raise PreviewError("Invalid canonical view YAML: " + path) from exc
+    if (not isinstance(view, dict) or view.get("type") != "sections"
+            or not isinstance(view.get("sections"), list)
+            or not isinstance(view.get("title"), str)
+            or not isinstance(view.get("path"), str) or not view["path"]):
+        raise PreviewError("Not a standalone sections view: " + path)
+    metadata = {}
+    for line in text.splitlines()[:15]:
         found = re.fullmatch(
             r"# (DH-View|DH-View-Version|DH-Compatible-(?:Agent|App)): (.+)", line,
         )
         if found:
-            if found.group(1) in header:
-                raise PreviewError("Duplicate metadata header: " + path)
-            header[found.group(1)] = found.group(2)
-    compatible_key = "DH-Compatible-Agent" if product.endswith("_agent") else "DH-Compatible-App"
-    expected_view = "dh_" + product.removeprefix("digitalhouses_")
-    if (header.get("DH-View") != expected_view
-            or not version_tuple(header.get("DH-View-Version"))
-            or not header.get(compatible_key)):
-        raise PreviewError("Missing or mismatched canonical view metadata: " + path)
-    try:
-        view = yaml.safe_load(text)
-    except (yaml.YAMLError, RecursionError) as exc:
-        raise PreviewError("Invalid view YAML: " + path) from exc
-    if (not isinstance(view, dict) or view.get("type") != "sections"
-            or not isinstance(view.get("sections"), list)
-            or not isinstance(view.get("title"), str)
-            or not isinstance(view.get("path"), str) or not view["path"]
-            or "views" in view or "lovelace" in view):
-        raise PreviewError("Invalid standalone view: " + path)
+            metadata[found.group(1)] = found.group(2)
     return {
         "file": path.rsplit("/", 1)[-1],
         "title": view["title"],
         "path": view["path"],
-        "revision": header["DH-View-Version"],
-        "constraint": header[compatible_key],
+        "revision": metadata.get("DH-View-Version", "—"),
+        "constraint": metadata.get(
+            "DH-Compatible-Agent" if product.endswith("_agent")
+            else "DH-Compatible-App", "—",
+        ),
     }
 
 
 class PreviewCatalog:
-    def __init__(self, *, listing=list_views, reader=read_view):
+    def __init__(self, *, resolver=resolve_revision, listing=list_views, reader=read_view):
+        self.resolver = resolver
         self.listing = listing
         self.reader = reader
 
     def inspect(self, claims: dict[str, dict]) -> list[dict]:
         results = []
         for identity, claim in sorted(claims.items()):
-            product = claim.get("product_id")
-            entry = {
-                "identity": identity, "product": product, "version": claim.get("version"),
+            product = claim["product_id"]
+            repo = claim["repository"]
+            folder = safe_product_path(claim.get("product_path"), product)
+            row = {
+                "identity": identity, "product": product, "version": claim.get("version", "unknown"),
+                "repository": repo, "product_path": folder,
                 "commit": "", "label": "", "views": [], "error": "",
             }
-            results.append(entry)
-            if not isinstance(product, str) or not PRODUCT_RE.fullmatch(product):
-                entry["error"] = "Некорректный product_id"
-                continue
-            if claim.get("repository") != MONOREPO or claim.get("product_path") != product:
-                entry["error"] = "Источник не совпадает с разрешённым репозиторием пилота"
-                continue
-            pin = PINS.get(product)
-            if pin is None:
-                entry["error"] = "Ревизия ресурсов продукта ещё не проверена"
-                continue
-            entry["commit"], entry["label"] = pin.commit, pin.label
+            results.append(row)
             try:
-                listing = self.listing(product, pin.commit)
+                canonical_repository(repo)  # only source-owner admission rule
+                sha, branch = self.resolver(repo)
+                row["commit"] = sha
+                row["label"] = "DigitalHouses · " + branch
+                listing = self.listing(repo, folder, sha)
                 if not isinstance(listing, list) or len(listing) > 100:
-                    raise PreviewError("Too many or invalid directory entries")
-                prefix = product + "/dashboards/ru/"
-                files = []
-                for obj in listing:
-                    if not isinstance(obj, dict):
-                        raise PreviewError("Invalid GitHub list item")
-                    if obj.get("type") != "file":
+                    raise PreviewError("Invalid or oversized GitHub directory listing")
+                prefix = _directory(folder) + "/"
+                filenames = []
+                for item in listing:
+                    if not isinstance(item, dict):
+                        raise PreviewError("Invalid GitHub directory item")
+                    if item.get("type") != "file":
                         continue
-                    name, path = obj.get("name"), obj.get("path")
+                    name, path = item.get("name"), item.get("path")
                     if (not isinstance(name, str) or not FILE_RE.fullmatch(name)
                             or path != prefix + name):
-                        raise PreviewError("Unsafe YAML filename returned by GitHub")
-                    files.append(path)
-                paths = set()
-                for path in sorted(files):
-                    view = parse_view(self.reader(path, pin.commit), path, product)
-                    if view["path"] in paths:
-                        raise PreviewError("Duplicate Lovelace path in product")
-                    paths.add(view["path"])
-                    reasons = []
-                    if not pin.reviewed:
-                        reasons.append("Источник не утверждён")
-                    if not compatible(claim["version"], view["constraint"]):
-                        reasons.append("Нет подтверждения совместимости с установленной версией")
-                    view["status"] = "; ".join(reasons) if reasons else "Совместимость подтверждена · только просмотр"
-                    view["blocked"] = bool(reasons)
-                    entry["views"].append(view)
-                if not entry["views"]:
-                    entry["error"] = "Нет канонических dashboards/ru/*.yaml"
-            except (PreviewError, ValueError, TypeError, UnicodeError) as exc:
-                entry["views"] = []
-                entry["error"] = str(exc)[:180]
+                        raise PreviewError("Unsafe GitHub YAML filename")
+                    filenames.append(path)
+                seen_paths = set()
+                for path in sorted(filenames):
+                    view = parse_view(self.reader(repo, path, sha), path, product)
+                    if view["path"] in seen_paths:
+                        raise PreviewError("Duplicate Lovelace view path")
+                    seen_paths.add(view["path"])
+                    view["status"] = "Владелец DigitalHouses · только просмотр"
+                    view["blocked"] = False
+                    row["views"].append(view)
+                if not row["views"]:
+                    row["error"] = "В GitHub нет dashboards/ru/*.yaml"
+            except (PreviewError, DiscoveryError, ValueError, TypeError, UnicodeError) as exc:
+                row["views"] = []
+                row["error"] = str(exc)[:180]
         return results
