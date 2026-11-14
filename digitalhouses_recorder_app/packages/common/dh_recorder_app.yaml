@@ -1,0 +1,37 @@
+# =============================================================================
+# DigitalHouses Recorder App Package
+# =============================================================================
+# file: /config/packages/Global/DH_APP/dh_recorder_app.yaml
+#
+# Local Home Assistant responsibility:
+#   - Recorder selection only.
+#
+# App responsibility:
+#   - database/storage acquisition;
+#   - Recorder writing health;
+#   - disk usage threshold;
+#   - problem decisions;
+#   - machine events.
+# =============================================================================
+
+dh_recorder_app_package:
+
+  recorder:
+    include:
+      entities:
+        - binary_sensor.dh_recorder_app_db_connected
+        - binary_sensor.dh_recorder_app_recorder_writing
+
+        - sensor.dh_recorder_app_db_last_age
+        - sensor.dh_recorder_app_db_depth
+
+        - sensor.dh_recorder_app_db_records
+        - sensor.dh_recorder_app_db_size
+
+        - sensor.dh_recorder_app_db_today_records
+        - sensor.dh_recorder_app_db_current_hour_records
+
+        - sensor.dh_recorder_app_db_disk_free
+        - sensor.dh_recorder_app_db_disk_used
+        - sensor.dh_recorder_app_db_disk_total
+        - sensor.dh_recorder_app_db_disk_used_percentage
