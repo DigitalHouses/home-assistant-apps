@@ -138,11 +138,11 @@ def parse_view(raw: bytes, path: str, product: str) -> dict:
         view = yaml.safe_load(text)
     except (UnicodeError, yaml.YAMLError, RecursionError) as exc:
         raise PreviewError("Invalid canonical view YAML: " + path) from exc
-    if (not isinstance(view, dict) or view.get("type") != "sections"
-            or not isinstance(view.get("sections"), list)
-            or not isinstance(view.get("title"), str)
-            or not isinstance(view.get("path"), str) or not view["path"]):
-        raise PreviewError("Not a standalone sections view: " + path)
+    if (not isinstance(view, dict)
+            or not isinstance(view.get("title"), str) or not view["title"]
+            or not isinstance(view.get("path"), str) or not view["path"]
+            or not isinstance(view.get("type", "masonry"), str)):
+        raise PreviewError("Not a standalone Lovelace view: " + path)
     metadata = {}
     for line in text.splitlines()[:15]:
         found = re.fullmatch(
