@@ -116,8 +116,10 @@ def _storage_view_paths(root: Path) -> tuple[set[str], list[str]]:
     _safe_path(root, folder)
     if not folder.is_dir():
         raise AuditError("Lovelace Storage directory is invalid")
+    # Newer HA versions store Storage dashboards as lovelace.<url_path>.
+    # Keep support for the legacy lovelace and lovelace.dashboard_* layout.
     files = sorted(p for p in folder.iterdir()
-                   if p.name == "lovelace" or p.name.startswith("lovelace.dashboard_"))
+                   if p.name == "lovelace" or p.name.startswith("lovelace."))
     if len(files) > MAX_STORAGE_FILES:
         raise AuditError("Too many Lovelace Storage files for bounded audit")
     paths: set[str] = set()
