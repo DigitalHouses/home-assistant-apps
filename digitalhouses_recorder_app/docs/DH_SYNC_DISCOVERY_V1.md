@@ -105,15 +105,17 @@ by Recorder; `button.press` and `update.install` are action names.
 
 ```bash
 python -m unittest discover -s digitalhouses_recorder_app/tests -p 'test_*.py'
-PYTHONPATH=digitalhouses_sync_app/rootfs/app python -m unittest discover -s digitalhouses_sync_app/tests -p 'test_*.py'
+PYTHONPATH=digitalhouses_sync_app/rootfs/app python -m unittest discover -s digitalhouses_sync_app/tests -p 'test_auto_sync.py'
+PYTHONPATH=digitalhouses_sync_app/rootfs/app python -m unittest discover -s digitalhouses_sync_app/tests -p 'test_discovery_contract.py'
 python scripts/validate_repository.py
 ```
 
 Recorder regression tests protect the canonical standalone Lovelace path, exact
 view body, source ownership, MQTT identities, existing controls, entity
-references and frontend dependencies. DH Sync's own tests cover automatic
-fetch-by-owned-repository, local identity matching, backups, atomic writes and
-conflict handling. CI validates the source; live HACS/frontend rendering is
+references and frontend dependencies. DH Sync's focused auto-sync and discovery tests cover owned-repository
+admission, local identity matching, backups, atomic writes and conflict
+handling. The complete DH Sync suite additionally requires the Sync App's
+runtime dependencies (including paho-mqtt) and is run by repository CI. CI validates the source; live HACS/frontend rendering is
 not inferred from unit tests and is not a DH Sync admission gate.
 
 **No new Recorder App release is needed for this source-only correction.**
