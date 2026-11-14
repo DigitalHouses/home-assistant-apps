@@ -28,7 +28,7 @@ Maintained Lovelace examples: [full dashboard](examples/lovelace/dh_recorder_app
 
 ## DH Sync v1 product source and dashboard
 
-Recorder App 0.1.28 announces its running version and owning GitHub repository on
+Recorder App 0.1.28 and 0.1.29 announce the installed running version and owning GitHub repository on
 the retained QoS 1 MQTT topic
 `DigitalHouses/Global/digitalhouses_recorder_app/sync` whenever MQTT connects
 or reconnects. This is read-only product-source metadata for DH Sync; it is not
@@ -42,7 +42,7 @@ Canonical YAML resources maintained by Recorder App:
   standalone `sections` view with the existing `path: recorder`.
 - No canonical package (the App requires no separate HA package).
 - English dashboard translation is pending. The RU view declares a narrowly
-  source-reviewed compatibility `DH-Compatible-App: >=0.1.28,<0.1.29` for
+  source-reviewed compatibility `DH-Compatible-App: >=0.1.28,<0.1.30` for
   **read-only DH Sync preview**. Live CORE HAOS frontend acceptance is
   required before any separate dashboard Apply; metadata alone never
   authorizes installation or overwriting a local view.

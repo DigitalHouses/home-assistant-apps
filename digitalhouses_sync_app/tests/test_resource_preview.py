@@ -1,4 +1,4 @@
-"""Dynamic, read-only GitHub discovery: owner-only product admission."""
+"""Resource discovery uses pinned commits and requires an explicit read-only GET."""
 from __future__ import annotations
 
 import json
@@ -10,154 +10,161 @@ from pathlib import Path
 from catalog_web import make_server
 from discovery_contract import ProductSources
 from inventory import Inventory
-from resource_preview import PreviewCatalog, PreviewError, parse_view
+from resource_preview import PINS, PreviewCatalog, compatible
 from test_catalog_web import fetch
 
 REPO = "https://github.com/DigitalHouses/home-assistant-apps"
-OTHER = "https://github.com/DigitalHouses/recorder"
-SHA = "a" * 40
 
 
-def claim(product, version, repo=REPO, path=None):
-    return {"product_id": product, "version": version, "repository": repo,
-            "product_path": path if path is not None else product}
+def claim(product, version, repo=REPO):
+    return {"product_id": product, "version": version,
+            "repository": repo, "product_path": product, "schema": 1, "type": "agent"}
 
 
-def raw_view(title, view_path, header=True):
-    top = (
-        "# DH-View: any_name\n# DH-View-Version: 1.0.0\n"
-        "# DH-Compatible-App: >=0.1.28,<0.1.29\n" if header else ""
-    )
-    return (top + f"type: sections\ntitle: {title}\npath: {view_path}\nsections: []\n").encode()
+def raw_view(name, path, constraint, view_id="dh_pve_agent"):
+    return (f"# DH-View: {view_id}\n"
+            f"# DH-View-Version: 1.0.0\n"
+            f"# DH-Compatible-Agent: {constraint}\n\n"
+            f"type: sections\ntitle: {name}\npath: {path}\nsections: []\n").encode()
 
 
-class OwnerOnlyDiscoveryTests(unittest.TestCase):
-    def test_two_pve_views_are_enumerated_without_product_pins(self):
+class PinnedDiscoveryTests(unittest.TestCase):
+    def test_release_014_pins_exact_approved_product_commits(self):
+        self.assertEqual(
+            PINS["digitalhouses_pve_agent"].commit,
+            "7a2bc76f7c69312366ea70a6d9236549a978d636",
+        )
+        self.assertEqual(
+            PINS["digitalhouses_plex_agent"].commit,
+            "fd9d257972f0afdf979bfdd27ba7c6c86991fceb",
+        )
+        self.assertTrue(PINS["digitalhouses_pve_agent"].reviewed)
+        self.assertTrue(PINS["digitalhouses_plex_agent"].reviewed)
+
+    def test_pve_discovers_both_views_from_directory(self):
         product = "digitalhouses_pve_agent"
-        received = []
-        def listing(repo, folder, sha):
-            received.append((repo, folder, sha))
-            return [{"name": name, "path": product+"/dashboards/ru/"+name, "type": "file"}
-                    for name in ("11_pve_ups.yaml", "10_pve_proxmox.yaml")]
-        inspector = PreviewCatalog(
-            resolver=lambda repo: (SHA, "main"),
-            listing=listing,
-            reader=lambda repo,path,sha: raw_view(path.split("/")[-1], path),
-        )
-        row = inspector.inspect({product+"/a": claim(product, "9999.0")})[0]
-        self.assertEqual([v["file"] for v in row["views"]],
-                         ["10_pve_proxmox.yaml", "11_pve_ups.yaml"])
-        self.assertEqual(received, [(REPO, product, SHA)])
-        self.assertTrue(all(v["blocked"] is False for v in row["views"]))
-        self.assertEqual(row["commit"], SHA)
-
-    def test_unlisted_recorder_works_without_compatible_header(self):
-        product = "digitalhouses_recorder_app"
-        inspector = PreviewCatalog(
-            resolver=lambda repo: (SHA, "main"),
-            listing=lambda repo,folder,sha: [{
-                "name":"10_recorder.yaml", "type":"file",
-                "path": product+"/dashboards/ru/10_recorder.yaml",
-            }],
-            reader=lambda repo,path,sha: raw_view("DH Recorder", "recorder", header=False),
-        )
-        result = inspector.inspect({product+"/default":claim(product, "0.1.28")})[0]
-        self.assertEqual(result["error"], "")
-        self.assertEqual(result["views"][0]["path"], "recorder")
-        self.assertEqual(result["views"][0]["constraint"], "—")
-        self.assertFalse(result["views"][0]["blocked"])
-
-    def test_other_org_owned_repo_and_root_folder(self):
-        product = "custom_tool"
         seen = []
-        inspector = PreviewCatalog(
-            resolver=lambda repo: (SHA, "development"),
-            listing=lambda repo,folder,sha: (
-                seen.append((repo,folder,sha)) or [
-                    {"name":"dashboard.yaml","type":"file","path":"dashboards/ru/dashboard.yaml"}
-                ]),
-            reader=lambda repo,path,sha: raw_view("Custom","custom"),
-        )
-        row=inspector.inspect({product+"/default":claim(product,"unknown",OTHER,".")})[0]
-        self.assertEqual(seen, [(OTHER, ".", SHA)])
-        self.assertEqual(row["views"][0]["path"],"custom")
+        def listing(pid, sha):
+            self.assertEqual((pid, sha), (product, PINS[product].commit))
+            return [{"type":"file","name":n,"path":product+"/dashboards/ru/"+n}
+                    for n in ("11_pve_ups.yaml","10_pve_proxmox.yaml")]
+        def reader(path, sha):
+            seen.append(path)
+            return raw_view(path.split("/")[-1], "dh_pve_ups" if "ups" in path else "dh_pve",
+                            ">=0.5.88,<0.5.90")
+        found = PreviewCatalog(listing=listing, reader=reader).inspect({
+            product+"/synthetic": claim(product, "0.5.89")
+        })[0]
+        self.assertEqual([v["file"] for v in found["views"]],
+                         ["10_pve_proxmox.yaml", "11_pve_ups.yaml"])
+        self.assertEqual(len(seen), 2)
+        self.assertTrue(all(not v["blocked"] for v in found["views"]))
+        self.assertTrue(all("Совместимость подтверждена" in v["status"] for v in found["views"]))
+        self.assertTrue(all(PINS[product].reviewed for _ in found["views"]))
 
-    def test_invalid_owner_has_no_network_calls(self):
-        inspector=PreviewCatalog(
-            resolver=lambda *args: (_ for _ in ()).throw(AssertionError("owner bypass")),
-            listing=lambda *args: (_ for _ in ()).throw(AssertionError("listing bypass")),
+    def test_plex_view_0818_within_reviewed_compatibility(self):
+        product = "digitalhouses_plex_agent"
+        viewpath = product + "/dashboards/ru/10_plex.yaml"
+        catalog = PreviewCatalog(
+            listing=lambda pid,sha:[{"type":"file","name":"10_plex.yaml","path":viewpath}],
+            reader=lambda p,sha:raw_view("Plex","dh-plex-agent",">=0.8.17,<0.8.19","dh_plex_agent")
         )
-        result=inspector.inspect({"bad/default":claim(
-            "bad", "1.0.0", "https://github.com/SomebodyElse/app")})[0]
-        self.assertIn("DigitalHouses", result["error"])
+        row = catalog.inspect({product+"/default":claim(product,"0.8.18")})[0]
+        self.assertEqual([v["file"] for v in row["views"]],["10_plex.yaml"])
+        self.assertFalse(row["views"][0]["blocked"])
+        self.assertTrue(compatible("0.8.17",">=0.8.17,<0.8.19"))
+        self.assertTrue(compatible("0.8.18",">=0.8.17,<0.8.19"))
+        self.assertFalse(compatible("0.8.19",">=0.8.17,<0.8.19"))
+        self.assertFalse(compatible("unknown",">=0.8.17,<0.8.19"))
 
-    def test_bogus_git_listing_paths_do_not_become_downloads(self):
+    def test_mqtt_unknown_repo_or_product_never_triggers_download(self):
+        def forbidden(*args):
+            raise AssertionError("Unsafe MQTT input reached a GitHub fetch")
+        inspector=PreviewCatalog(listing=forbidden,reader=forbidden)
+        rows=inspector.inspect({
+            "digitalhouses_plex_agent/default":claim(
+                "digitalhouses_plex_agent","0.8.18",
+                "https://github.com/DigitalHouses/other"),
+            "digitalhouses_unknown_agent/default":claim(
+                "digitalhouses_unknown_agent","1.0.0")
+        })
+        self.assertEqual(len(rows),2)
+        self.assertTrue(all(row["error"] for row in rows))
+        self.assertTrue(all(not row["views"] for row in rows))
+
+    def test_duplicate_view_path_rejected_as_whole_group(self):
         product="digitalhouses_pve_agent"
         inspector=PreviewCatalog(
-            resolver=lambda repo: (SHA,"main"),
-            listing=lambda repo,folder,sha: [{
-                "name":"../private.yaml","type":"file",
-                "path":product+"/dashboards/ru/../private.yaml",
-            }],
-            reader=lambda *args: (_ for _ in ()).throw(AssertionError("unsafe fetch")),
+            listing=lambda pid,sha:[{"type":"file","name":n,
+                "path":product+"/dashboards/ru/"+n} for n in ("10_a.yaml","11_b.yaml")],
+            reader=lambda p,sha:raw_view("duplicate","same",">=0.5.88,<0.5.89")
         )
-        row=inspector.inspect({product+"/default":claim(product, "0.5.89")})[0]
-        self.assertIn("Unsafe GitHub", row["error"])
-
-    def test_duplicate_lovelace_paths_are_reported(self):
-        product="digitalhouses_pve_agent"
-        inspector=PreviewCatalog(
-            resolver=lambda repo: (SHA,"main"),
-            listing=lambda repo,folder,sha:[
-                {"name":name,"type":"file","path":product+"/dashboards/ru/"+name}
-                for name in ("10_a.yaml","11_b.yaml")],
-            reader=lambda repo,path,sha: raw_view("Title","same"),
-        )
-        row=inspector.inspect({product+"/default":claim(product,"0.5.89")})[0]
+        row=inspector.inspect({product+"/default":claim(product,"0.5.88")})[0]
         self.assertIn("Duplicate Lovelace",row["error"])
         self.assertEqual(row["views"],[])
 
-    def test_view_headers_are_optional_information_only(self):
-        output=parse_view(raw_view("Recorder","recorder",header=False),
-                          "dashboards/ru/10_recorder.yaml","digitalhouses_recorder_app")
-        self.assertEqual(output["revision"],"—")
-        self.assertEqual(output["constraint"],"—")
+    def test_unsafe_listing_cannot_be_used_as_download_url(self):
+        product="digitalhouses_pve_agent"
+        inspector=PreviewCatalog(
+            listing=lambda p,sha:[{"type":"file","name":"../evil.yaml",
+                "path":product+"/dashboards/ru/../evil.yaml"}],
+            reader=lambda *args: (_ for _ in ()).throw(AssertionError("Unsafe fetch"))
+        )
+        row=inspector.inspect({product+"/default":claim(product,"0.5.88")})[0]
+        self.assertIn("Unsafe YAML",row["error"])
 
-    def test_preview_requires_explicit_get_and_post_stays_disabled(self):
-        with tempfile.TemporaryDirectory() as t:
-            root=Path(t)
+    def test_mismatched_view_identity_fails_closed(self):
+        product="digitalhouses_plex_agent"
+        inspector=PreviewCatalog(
+            listing=lambda p,sha:[{"type":"file","name":"10_plex.yaml",
+                "path":product+"/dashboards/ru/10_plex.yaml"}],
+            reader=lambda p,sha:raw_view("Plex","dh-plex-agent",
+                ">=0.8.17,<0.8.18","dh_pve_agent"),
+        )
+        row=inspector.inspect({product+"/default":claim(product,"0.8.18")})[0]
+        self.assertIn("mismatched canonical view",row["error"])
+        self.assertEqual(row["views"],[])
+
+    def test_future_agent_versions_remain_blocked(self):
+        self.assertFalse(compatible("0.5.90", ">=0.5.88,<0.5.90"))
+        self.assertFalse(compatible("0.8.19", ">=0.8.17,<0.8.19"))
+        self.assertFalse(compatible("0.5.89", ">=0.8.17,<0.8.19"))
+
+    def test_get_preview_not_automatic_and_post_still_disabled(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp)
             sources=ProductSources(root/"sources.json")
             inventory=Inventory(root/"inventory.json")
-            product="digitalhouses_recorder_app"
+            product="digitalhouses_plex_agent"
             sources.apply("DigitalHouses/Global/"+product+"/sync",
-                          json.dumps(claim(product,"0.1.28")))
-            calls=[]
+                json.dumps(claim(product,"0.8.18")))
+            called=[]
             def inspect(records):
-                calls.append(1)
+                called.append(1)
                 return PreviewCatalog(
-                    resolver=lambda repo:(SHA,"main"),
-                    listing=lambda repo,folder,sha:[{
-                        "name":"10_recorder.yaml","type":"file",
-                        "path":product+"/dashboards/ru/10_recorder.yaml"}],
-                    reader=lambda repo,path,sha:raw_view("Recorder","recorder",header=False),
+                    listing=lambda p,sha:[{"type":"file","name":"10_plex.yaml",
+                         "path":product+"/dashboards/ru/10_plex.yaml"}],
+                    reader=lambda p,sha:raw_view("Plex","dh-plex-agent",">=0.8.17,<0.8.19","dh_plex_agent")
                 ).inspect(records)
-            server=make_server(sources,inventory,version="0.2.1",port=0,inspect=inspect)
+            server=make_server(sources,inventory,version="0.1.4",port=0,inspect=inspect)
             server.timeout=2
-            worker=threading.Thread(target=lambda:[
-                server.handle_request() for _ in range(3)],daemon=True)
+            thread=threading.Thread(target=lambda:[server.handle_request() for _ in range(3)],
+                                     daemon=True)
             try:
-                worker.start()
-                self.assertEqual(fetch(server)[0],200)
-                self.assertEqual(calls,[])
+                thread.start()
+                status,body=fetch(server)
+                self.assertEqual(status,200)
+                self.assertEqual(called,[])
+                self.assertIn("Проверить GitHub-ресурсы",body)
                 status,body=fetch(server,path="/?resources=1")
                 self.assertEqual(status,200)
-                self.assertEqual(len(calls),1)
-                self.assertIn("10_recorder.yaml",body)
-                self.assertIn("Владелец DigitalHouses",body)
+                self.assertEqual(len(called),1)
+                self.assertIn("10_plex.yaml",body)
+                self.assertIn("Совместимость подтверждена",body)
                 self.assertEqual(fetch(server,method="POST")[0],405)
             finally:
                 server.server_close()
-                worker.join(timeout=4)
+                thread.join(timeout=3)
 
 
 if __name__ == "__main__":
