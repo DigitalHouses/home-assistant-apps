@@ -135,7 +135,7 @@ def parse_view(raw: bytes, path: str, product: str) -> dict:
     metadata = {}
     for line in text.splitlines()[:15]:
         found = re.fullmatch(
-            r"# (DH-View|DH-View-Version|DH-Compatible-(?:Agent|App)): (.+)", line,
+            r"# (DH-View|DH-View-Version): (.+)", line,
         )
         if found:
             metadata[found.group(1)] = found.group(2)
@@ -144,10 +144,6 @@ def parse_view(raw: bytes, path: str, product: str) -> dict:
         "title": view["title"],
         "path": view["path"],
         "revision": metadata.get("DH-View-Version", "—"),
-        "constraint": metadata.get(
-            "DH-Compatible-Agent" if product.endswith("_agent")
-            else "DH-Compatible-App", "—",
-        ),
     }
 
 
@@ -196,7 +192,6 @@ class PreviewCatalog:
                         raise PreviewError("Duplicate Lovelace view path")
                     seen_paths.add(view["path"])
                     view["status"] = "Владелец DigitalHouses · только просмотр"
-                    view["blocked"] = False
                     row["views"].append(view)
                 if not row["views"]:
                     row["error"] = "В GitHub нет dashboards/ru/*.yaml"
