@@ -26,3 +26,7 @@ No telemetry integration is enabled (`telemetry_allowed: false` remains unchange
 After an immutable GitHub release/GHCR build, install in CORE HAOS and check the three retained MQTT entries for PVE, Plex and DH Sync. Check that no YAML, `.storage`, packages or agent executable files were changed. Additional homes are out of scope for this first trial.
 
 See [First version](docs/FIRST_VERSION.md), [MQTT Discovery Contract](docs/DH_SYNC_DISCOVERY_CONTRACT_V1.md), [Product requirements](docs/PRODUCT_REQUIREMENTS.md).
+
+## GitHub dashboards preview (v0.1.3)
+
+The admin-only Ingress panel now offers an explicit **Проверить GitHub-ресурсы** GET link. It reads the `dashboards/ru/` directory of the recognized products at fixed immutable Git SHAs; MQTT supplies identity and installed version only, never the Git revision or a download URL. The preview displays all discovered views, their independent `DH-View-Version`, compatibility header and current source-approval status. This feature does not compare Home Assistant's local files and does not authorize an update. PVE #502 remains Draft, and both current PVE 0.5.89 and Plex 0.8.18 remain outside canonical YAML compatibility ranges. The installed App still has no Home Assistant config mount, YAML Apply or rollback path.

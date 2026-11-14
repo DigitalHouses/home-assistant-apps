@@ -18,6 +18,8 @@ def validate_sync_app(root: Path, app: Path, context: dict) -> None:
         app / "tests/test_storage_migration.py",
         app / "rootfs/app/sync_engine.py",
         app / "rootfs/app/catalog_web.py",
+        app / "rootfs/app/resource_preview.py",
+        app / "tests/test_resource_preview.py",
         app / "tests/test_catalog_web.py",
         app / "rootfs/app/discovery_contract.py",
         app / "tests/test_discovery_contract.py",

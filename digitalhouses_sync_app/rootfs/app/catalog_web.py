@@ -3,13 +3,13 @@ from __future__ import annotations
 
 import html
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from urllib.parse import urlsplit
+from urllib.parse import urlsplit, parse_qs
 
 from discovery_contract import ProductSources
 from inventory import Inventory
 
 STYLE = """body{background:#121619;color:#e5e9eb;font:15px system-ui,sans-serif;
-margin:0;line-height:1.5}header{padding:22px;border-bottom:1px solid #343d43}
+margin:0;line-height:1.5}a{color:#8dcaf1}header{padding:22px;border-bottom:1px solid #343d43}
 h1{font-size:23px;margin:0}main{margin:30px auto;max-width:1040px;padding:0 22px}
 section{border:1px solid #343d43;border-radius:10px;background:#1c2225;
 padding:18px;margin:18px 0}table{width:100%;border-collapse:collapse}
@@ -22,7 +22,7 @@ code{font:12px ui-monospace,monospace;color:#bddbf1}
 def _h(value: object) -> str:
     return html.escape(str(value), quote=True)
 
-def make_server(sources: ProductSources, inventory: Inventory, *, version: str = 'development', port: int = 8099):
+def make_server(sources: ProductSources, inventory: Inventory, *, version: str = 'development', port: int = 8099, inspect=None):
     class Handler(BaseHTTPRequestHandler):
         server_version = "DHSync/" + version
 
@@ -72,6 +72,54 @@ def make_server(sources: ProductSources, inventory: Inventory, *, version: str =
                 rows = ("<tr><td colspan='4' class='muted'>"
                         "MQTT metadata пока не обнаружены. Ожидаются retained /sync."
                         "</td></tr>")
+            # An explicit GET is required to query GitHub. The default page
+            # only reads local MQTT inventory. Neither route can write HA YAML.
+            preview_html = (
+                "<section><h2>Канонические dashboards · RU</h2>"
+                "<p>GitHub-файлы обнаруживаются в dashboards/ru/ из "
+                "закреплённых commit SHA, а не перечисляются в MQTT.</p>"
+                "<p><a href='?resources=1'>Проверить GitHub-ресурсы</a></p>"
+            )
+            if inspect is not None and parse_qs(urlsplit(self.path).query).get("resources") == ["1"]:
+                preview_html += (
+                    "<table><thead><tr><th>Продукт / Git SHA</th>"
+                    "<th>Dashboard / файл</th><th>Ревизия / совместимость</th>"
+                    "<th>Результат</th></tr></thead><tbody>"
+                )
+                try:
+                    for product in inspect(records):
+                        header = (
+                            _h(product["product"]) + "<br><code>" +
+                            _h(product["commit"][:12]) + "</code><br><small>" +
+                            _h(product["label"]) + "</small>"
+                        )
+                        if product["error"]:
+                            preview_html += (
+                                "<tr><td>" + header + "</td><td>—</td>"
+                                "<td>—</td><td>" + _h(product["error"]) + "</td></tr>"
+                            )
+                        for view in product["views"]:
+                            preview_html += (
+                                "<tr><td>" + header + "</td><td>" +
+                                _h(view["title"]) + "<br><code>" +
+                                _h(view["file"]) + "</code><br><small>" +
+                                _h(view["path"]) + "</small></td><td><code>" +
+                                _h(view["revision"]) + "</code><br><small>" +
+                                _h(view["constraint"]) + "</small></td><td>" +
+                                _h(view["status"]) + "</td></tr>"
+                            )
+                except Exception:
+                    preview_html += (
+                        "<tr><td colspan='4'>Не удалось проверить GitHub. "
+                        "Установка недоступна.</td></tr>"
+                    )
+                preview_html += "</tbody></table>"
+            preview_html += (
+                "<p class='muted'>Предпросмотр не сравнивает локальные YAML, "
+                "не устанавливает ресурсы и не подтверждает готовность Apply. "
+                "Требуется отдельная проверка установленного HA и согласование "
+                "совместимости с версиями агентов.</p></section>"
+            )
             page = (
                 "<!doctype html><html lang='ru'><head><meta charset='utf-8'>"
                 "<meta name='viewport' content='width=device-width,initial-scale=1'>"
@@ -82,7 +130,7 @@ def make_server(sources: ProductSources, inventory: Inventory, *, version: str =
                 str(len(records)) + ")</h2><table><thead><tr>"
                 "<th>Продукт / Instance</th><th>Версия</th><th>Доступность</th>"
                 "<th>Репозиторий / Каталог</th></tr></thead><tbody>" +
-                rows + "</tbody></table></section><section>"
+                rows + "</tbody></table></section>" + preview_html + "<section>"
                 "<p>Принимаются только репозитории GitHub организации "
                 "<b>DigitalHouses</b>. Метаданные получены из MQTT и сами по "
                 "себе не разрешают установку.</p>"
