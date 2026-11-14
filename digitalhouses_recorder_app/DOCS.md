@@ -38,6 +38,31 @@ The completed marker is idempotent. Rolling back from 0.1.16 to bridge release
 0.1.15 does not reactivate the legacy mirror. Releases 0.1.14 and older predate
 the completed-marker behavior and are not safe rollback targets after cleanup.
 
+## DH Sync Discovery Contract v1 (from App 0.1.28)
+
+Recorder uses its existing MQTT client to publish a retained QoS 1 static
+source declaration at
+`DigitalHouses/Global/digitalhouses_recorder_app/sync` on each successful
+connect/reconnect. The JSON has exactly `schema`, `product_id`, `type`,
+`version`, `repository`, `product_path`. Its version comes from the
+validated running `APP_VERSION`; the GitHub owner, repo and product path are
+compiled constants and never provided by MQTT.
+
+The existing retained/LWT product availability remains
+`DigitalHouses/Global/digitalhouses_recorder_app/availability`; DB/storage
+availability topics remain subsystem-level only. Retained source metadata is
+not a heartbeat or proof of installation, and does not drive downloads or
+uninstallation. No changes to MQTT Discovery, `entity_id`, `unique_id`,
+database, Collector, telemetry or update mechanics.
+
+Canonical Lovelace resources are maintained under
+`dashboards/ru/10_recorder.yaml` (view revision 1.0.0), separately from
+the App release version. It copies the maintained Russian view exactly except
+for DH-View header comments. No common/localized HA packages currently exist.
+The English locale and tested automatic compatibility range remain open gaps.
+See [Recorder DH Sync contract](docs/DH_SYNC_DISCOVERY_V1.md) for detailed
+topics, frontend card dependencies, offline/uninstall semantics and tests.
+
 ## Common runtime diagnostics
 
 Recorder App exposes:
