@@ -1,4 +1,4 @@
-# DigitalHouses Sync App — v0.3.0
+# DigitalHouses Sync App — v0.3.1
 
 ## One rule: GitHub owner DigitalHouses
 
@@ -9,6 +9,14 @@ No hardcoded approved product list, no static per-product Git SHA pins, no fixed
 Each explicit GitHub preview resolves the repository's default branch to a concrete SHA and reads every dashboards/ru/*.yaml from that single revision. This supports PVE (Proxmox plus UPS), Plex, Recorder, and future DigitalHouses products. View revision metadata may be shown for information; compatibility ranges are neither read nor displayed.
 
 The separate 'Сравнить с файлами CORE' action compares actual YAML views with GitHub by Lovelace path, SHA-256 and parsed YAML. It reports changes, missing files, duplicate paths and Storage collisions without modifying them.
+
+## Free public Git transport (0.3.1)
+
+DH Sync **does not call the GitHub REST API** for discovery, dashboard listing or YAML download. It does not require a PAT, GitHub App, account sign-in or paid GitHub plan.
+
+For each distinct public repository under `DigitalHouses`, the add-on uses `git clone --depth=1 --single-branch --no-checkout` once, caches that immutable Git commit for five minutes, enumerates product views with `git ls-tree` and reads exact file blobs locally using `git show`. Products in the same monorepo share one snapshot. After the cache expires, the next explicit user action refreshes it. Missing resource directories are normal. GitHub may still impose general network/abuse protections; this avoids only the REST API quota, not all upstream constraints.
+
+A plan displays the exact Git SHA of the snapshot used for Apply, and records source bytes before confirmation. During an accepted Apply, no GitHub access or external source re-download is necessary.
 
 ## Manual YAML Apply / Rollback (0.3.0)
 
