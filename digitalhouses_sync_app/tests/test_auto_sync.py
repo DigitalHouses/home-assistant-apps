@@ -63,12 +63,19 @@ class AutomaticSyncTests(unittest.TestCase):
         first = self.app.sync(CLAIMS)
         self.assertEqual(first["state"], "OK", first["issues"])
         self.assertEqual(first["updated"], 2)
+        indexed = {row["kind"]: row for row in first["resources"]}
+        self.assertEqual(indexed["view"]["local_path"],
+                         "/config/dashboards/dh/views/10_first.yaml")
+        self.assertEqual(indexed["package"]["local_path"],
+                         "/config/packages/dh/dh_example_package.yaml")
+        self.assertEqual(indexed["package"]["status"], "Updated")
         self.assertEqual((self.views / "10_first.yaml").read_bytes(), VIEW)
         self.assertEqual((self.root / "packages/dh/dh_example_package.yaml").read_bytes(),
                          PACKAGE)
         second = self.app.sync(CLAIMS)
         self.assertEqual(second["updated"], 0)
         self.assertEqual(second["unchanged"], 2)
+        self.assertEqual({row["status"] for row in second["resources"]}, {"Current"})
         self.assertEqual(len(list((self.root / "packages").rglob("*.yaml"))), 1)
 
     def test_replace_existing_views_and_packages_in_original_locations(self):
@@ -83,6 +90,11 @@ class AutomaticSyncTests(unittest.TestCase):
         self.assertEqual(report["updated"], 2, report["issues"])
         self.assertEqual((self.views / "99_existing.yaml").read_bytes(), VIEW)
         self.assertEqual(local.read_bytes(), PACKAGE)
+        indexed = {row["kind"]: row for row in report["resources"]}
+        self.assertEqual(indexed["view"]["local_path"],
+                         "/config/dashboards/dh/views/99_existing.yaml")
+        self.assertEqual(indexed["package"]["local_path"],
+                         "/config/packages/Global/System/my_existing.yaml")
         self.assertFalse((self.views / "10_first.yaml").exists())
         self.assertFalse((self.root / "packages/dh/dh_example_package.yaml").exists())
         backups = list((self.app.data).glob("tx-*/original.yaml"))
