@@ -128,7 +128,7 @@ PYTHONPATH=digitalhouses_pve_agent python -m pytest digitalhouses_pve_agent/test
 python scripts/validate_repository.py
 ```
 
-The product regression tests assert metadata, YAML parsing, unique existing
-paths, icon-only navigation, exact v3 body hashes, FAN graph markers and
+The product regression tests assert metadata, stable top-level view structure,
+unique existing paths, icon-only navigation, exact v3 body hashes, FAN graph markers and
 absence of fake EN files. Existing agent/executable code, MQTT, Recorder and
 UPS/NUT protection files are intentionally untouched.
