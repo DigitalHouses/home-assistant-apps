@@ -94,6 +94,8 @@ class ApplyManager:
     def _snapshot(self) -> dict:
         if not self.root.is_dir() or self.root.is_symlink():
             raise ApplyError("Home Assistant config mount unavailable")
+        if os.statvfs(self.root).f_flag & getattr(os, "ST_RDONLY", 1):
+            raise ApplyError("Home Assistant config mount is read-only; Apply disabled")
         _safe_path(self.root, self.root / VIEW_DIR)
         snap = _local_snapshot(self.root)
         if snap["issues"]:
@@ -219,7 +221,7 @@ class ApplyManager:
             txn.mkdir(mode=0o700)
             manifest = {
                 "id": txn.name, "identity": plan["identity"],
-                "commit": plan["commit"], "state": "prepared",
+                "created": time.time(), "commit": plan["commit"], "state": "prepared",
                 "entries": [],
             }
             for index, e in enumerate(entries):
@@ -270,16 +272,18 @@ class ApplyManager:
         with self.lock:
             if not self.data.is_dir():
                 return None
-            for path in sorted(self.data.glob("tx-*/manifest.json"), reverse=True):
+            candidates = []
+            for path in self.data.glob("tx-*/manifest.json"):
                 if path.is_symlink() or path.parent.is_symlink():
                     continue
                 try:
                     manifest = json.loads(path.read_text())
                 except (OSError, ValueError):
                     continue
-                if manifest.get("state") == "applied":
-                    return manifest
-            return None
+                if isinstance(manifest.get("created"), (int, float)):
+                    candidates.append(manifest)
+            newest = max(candidates, key=lambda x: x["created"], default=None)
+            return newest if newest and newest.get("state") == "applied" else None
 
     def rollback_preview(self) -> dict | None:
         with self.lock:
@@ -287,18 +291,18 @@ class ApplyManager:
             if manifest is None:
                 return None
             token = secrets.token_urlsafe(24)
-            self.rollback_tokens[token] = self.clock()
+            self.rollback_tokens[token] = (self.clock(), manifest["id"])
             return {"token": token, "transaction": manifest}
 
     def rollback(self, token: str, *, confirmed: bool) -> dict:
         with self.lock:
             if not confirmed:
                 raise ApplyError("Explicit rollback confirmation required")
-            created = self.rollback_tokens.pop(token, None)
-            if created is None or self.clock() - created > 600:
+            ticket = self.rollback_tokens.pop(token, None)
+            if ticket is None or self.clock() - ticket[0] > 600:
                 raise ApplyError("Rollback token expired; prepare again")
             manifest = self.last_transaction()
-            if manifest is None:
+            if manifest is None or manifest["id"] != ticket[1]:
                 raise ApplyError("No successful transaction to roll back")
             txn = self.data / manifest["id"]
             for e in manifest["entries"]:
