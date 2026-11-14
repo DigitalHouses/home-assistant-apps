@@ -8,7 +8,7 @@ Native Linux agent for **Proxmox VE 8.x** that publishes host, CPU, memory, stor
 
 ## Native CLI and unattended installation (development source)
 
-The source tree implements the [DigitalHouses Linux Agent Management Standard](../docs/standards/DH_LINUX_AGENT_MANAGEMENT_STANDARD.md). Version 0.5.88 adds these changes; production installation requires the canonical released tag.
+The source tree implements the [DigitalHouses Linux Agent Management Standard](../docs/standards/DH_LINUX_AGENT_MANAGEMENT_STANDARD.md). Version 0.5.89 publishes the DH Sync Discovery v1 metadata on MQTT connect/reconnect; production installation requires the canonical released tag.
 
 Root/admin commands after installing a release that includes the feature:
 
@@ -49,7 +49,7 @@ The installed `/root/dh-pve-agent.txt` guide is mode `0600`. The existing MQTT D
 
 The canonical product and runtime identity is **DigitalHouses PVE Agent** / `digitalhouses_pve_agent`: systemd service `digitalhouses_pve_agent.service`, filesystem roots under `/opt/digitalhouses/digitalhouses_pve_agent`, `/etc/digitalhouses_pve_agent` and `/var/lib/digitalhouses_pve_agent`, MQTT base `DigitalHouses/Global/digitalhouses_pve_agent/<instance>`, and Home Assistant entity prefix `dh_pve_agent_*`. Version 0.5.30 performs the corrected one-time controlled migration from the former `dh_pve_app` / `dh_app_pve_*` runtime, including deterministic cleanup of retained data owned by the legacy MQTT instance namespace.
 
-Current source version: `VERSION` is `0.5.88`.
+Current source version: `VERSION` is `0.5.89`.
 Agent CPU self-monitoring (v0.5.88): Home Assistant sensor.dh_pve_agent_process_cpu_usage measures the agent process independently of the existing host CPU usage sensor, where 100% means one entire CPU core. binary_sensor.dh_pve_agent_cpu_overload has device_class: problem and becomes ON after strictly above 80% for 300 seconds, then OFF after strictly below 40% for 120 seconds. The condition is part of the existing PVE Problems aggregate. Measurement is performed every 10 seconds in the existing main loop (including while MQTT is disconnected), without new subprocesses. The local dh-pve-agent status reports the latest usage and overload state. MQTT connectivity remains necessary for Home Assistant to receive fresh readings.
 
 
@@ -465,7 +465,7 @@ Production install/update is release-tag only. Version 0.5.30 is the corrected c
 For the canonical runtime, install/update/reinstall never clears the current canonical MQTT namespace. Canonical retained MQTT cleanup is owned exclusively by the supported uninstaller.
 
 ```bash
-TAG=digitalhouses_pve_agent-v0.5.88
+TAG=digitalhouses_pve_agent-v0.5.89
 DIGITALHOUSES_SOURCE_REF="$TAG" \
   bash <(curl -fsSL "https://raw.githubusercontent.com/DigitalHouses/home-assistant-apps/$TAG/digitalhouses_pve_agent/install.sh")
 ```

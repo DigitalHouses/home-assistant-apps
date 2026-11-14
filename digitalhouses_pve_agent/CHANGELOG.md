@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.89
+
+- Publish DH Sync Discovery Contract v1 source metadata at `DigitalHouses/Global/digitalhouses_pve_agent/<instance_id>/sync` via the existing MQTT client, using QoS 1 with retained delivery on every successful connect or reconnect. The instance ID remains the existing configured ID or stable machine ID.
+- Announce canonical product identity, installed running release version (from the same `VERSION` source used by Home Assistant diagnostics), fixed DigitalHouses GitHub repository and product path. Do not publish host addresses, credentials, client identity, release commit or dashboard update authorization.
+- Preserve the previous availability/LWT, MQTT Discovery, entity IDs, reconnect backoff, UPS/NUT shutdown protection, recorder and dashboard behavior; no additional heartbeat, client connection or polling loop. DH Sync v0.1.0 uses this metadata for its read-only product catalog only.
+
 ## 0.5.88
 
 - Monitor CPU time of the entire PVE Agent process (all threads), with 100% representing one fully busy CPU core and values above 100% possible on multicore use; sample every 10 seconds independently of MQTT.

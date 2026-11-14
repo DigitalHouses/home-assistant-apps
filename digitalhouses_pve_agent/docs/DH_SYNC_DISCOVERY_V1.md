@@ -106,6 +106,6 @@ no leaked secrets, unchanged LWT/availability and no periodic announcements.
 Gaps: broker-side retained QoS1 delivery and consumer display on real
 PVE/HA have **not** been tested yet; production release and rollout require
 separate approval. The corresponding canonical PVE dashboards belong to
-separate PR #502. The existing Linux binary `VERSION` remains 0.5.88;
-the feature requires a future approved executable release to appear on
-operational agents.
+separate PR #502. The candidate release source is `VERSION=0.5.89`; the feature appears
+on operational agents only after publishing the canonical GitHub Release
+and explicitly updating each selected PVE host.
