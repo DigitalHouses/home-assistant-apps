@@ -16,5 +16,5 @@ if [[ -z "${MQTT_HOST}" || -z "${MQTT_PORT}" ]]; then
   exit 1
 fi
 
-bashio::log.info "DH Sync v${APP_VERSION}: manual YAML Apply / Rollback with backup."
+bashio::log.info "DH Sync v${APP_VERSION}: automatic dashboards and packages sync with backup."
 exec python3 /app/app.py

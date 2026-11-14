@@ -31,7 +31,7 @@ details{margin-top:8px}summary{cursor:pointer;color:#91caed}
 def _h(value: object) -> str:
     return html.escape(str(value), quote=True)
 
-def make_server(sources: ProductSources, inventory: Inventory, *, version: str = 'development', port: int = 8099, inspect=None, audit=None, apply_manager=None):
+def make_server(sources: ProductSources, inventory: Inventory, *, version: str = 'development', port: int = 8099, inspect=None, audit=None, apply_manager=None, auto_status=None):
     class Handler(BaseHTTPRequestHandler):
         server_version = "DHSync/" + version
 
@@ -180,6 +180,46 @@ def make_server(sources: ProductSources, inventory: Inventory, *, version: str =
                 rows = ("<tr><td colspan='4' class='muted'>"
                         "MQTT metadata пока не обнаружены. Ожидаются retained /sync."
                         "</td></tr>")
+            if auto_status is not None:
+                status = auto_status()
+                issues = status.get("issues", [])
+                summary = (
+                    "<section><h2>Автоматическая синхронизация</h2>"
+                    "<p>GitHub DigitalHouses → Dashboard и Packages. "
+                    "Обновление без кнопок и подтверждений; резервные копии "
+                    "создаются автоматически. Home Assistant не перезапускается.</p>"
+                    "<p>Состояние: <b>" + _h(status.get("state", "—")) +
+                    "</b> · Обновлено: " + str(status.get("updated", 0)) +
+                    " · Без изменений: " + str(status.get("unchanged", 0)) +
+                    "</p><p><small>Последняя проверка: " +
+                    _h(status.get("last_run") or "ожидание первого запуска") +
+                    "</small></p>"
+                )
+                if issues:
+                    summary += "<details><summary class='warn'>Пропущенные ресурсы (" + str(
+                        len(issues)) + ")</summary><ul>" + "".join(
+                        "<li>" + _h(issue) + "</li>" for issue in issues[:40]
+                    ) + "</ul></details>"
+                summary += "<table><thead><tr><th>Ресурс</th><th>Состояние</th>" \
+                           "</tr></thead><tbody>"
+                for entry in status.get("resources", []):
+                    summary += ("<tr><td>" + _h(entry["name"]) +
+                                "</td><td>" + _h(entry["status"]) + "</td></tr>")
+                summary += "</tbody></table></section>"
+                page = (
+                    "<!doctype html><html lang='ru'><head><meta charset='utf-8'>"
+                    "<meta name='viewport' content='width=device-width,initial-scale=1'>"
+                    "<title>DigitalHouses Sync</title><style>" + STYLE +
+                    "</style></head><body><header><h1>DigitalHouses Sync · v" +
+                    _h(version) + "</h1><small>Автоматически · GitHub DigitalHouses"
+                    "</small></header><main><section><h2>Продукты (" +
+                    str(len(records)) + ")</h2><table><thead><tr>"
+                    "<th>Продукт / Instance</th><th>Версия</th>"
+                    "<th>Доступность</th><th>Источник</th></tr></thead><tbody>" +
+                    rows + "</tbody></table></section>" + summary + "</main></body></html>"
+                )
+                self._send(200, page)
+                return
             # GitHub is read only; Apply requires separate plan + explicit POST.
             preview_html = (
                 "<section><h2>Канонические dashboards · RU</h2>"

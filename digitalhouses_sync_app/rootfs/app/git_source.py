@@ -115,6 +115,28 @@ class GitSnapshots:
         entry = self._snapshot(repository)
         return entry["sha"], entry["branch"]
 
+    def list_yaml(self, repository: str, folder: str, commit: str) -> list[dict]:
+        """List top-level YAML in a canonical resource directory."""
+        entry = self._at_revision(repository, commit)
+        if (not folder or any(not part or part in (".", "..")
+                              or not NAME_RE.fullmatch(part)
+                              for part in folder.split("/"))):
+            raise GitSourceError("Invalid resource directory")
+        tree = self._run(["git", "ls-tree", "-r", "--name-only", commit,
+                          "--", folder + "/"], cwd=entry["path"])
+        prefix = folder + "/"
+        found = []
+        for path in tree.decode("utf-8", "strict").splitlines():
+            if not path.startswith(prefix):
+                continue
+            filename = path[len(prefix):]
+            if "/" in filename or not filename.endswith(".yaml"):
+                continue
+            if not NAME_RE.fullmatch(filename):
+                raise GitSourceError("Unsafe YAML filename in Git repository")
+            found.append({"name": filename, "path": path, "type": "file"})
+        return found
+
     def list_views(self, repository: str, product_path: str,
                    commit: str) -> list[dict]:
         if safe_product_path(product_path, "invalid_product") != product_path:
@@ -152,4 +174,5 @@ class GitSnapshots:
 BACKEND = GitSnapshots()
 resolve_revision = BACKEND.resolve_revision
 list_views = BACKEND.list_views
+list_yaml = BACKEND.list_yaml
 read_view = BACKEND.read_view
