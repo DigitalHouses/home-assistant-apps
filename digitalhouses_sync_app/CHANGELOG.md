@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.4
+
+- Pin the immutable approved merged PR #502 commit for both PVE Proxmox/UPS views and merged PR #508 for Plex Dashboard; do not fetch unreviewed Draft sources.
+- Confirm compatibility preview for PVE Agent 0.5.89 (>=0.5.88,<0.5.90) and Plex Agent 0.8.18 (>=0.8.17,<0.8.19), while future versions still fail closed.
+- Improve GitHub resource table column widths and natural word wrapping for longer Russian names.
+- Retain GET-only, admin-only preview with no Home Assistant API/config mount, file comparison, Apply, backup, rollback, automatic agent updates or YAML writes.
+
 ## 0.1.3
 
 - Add operator-initiated, read-only preview of canonical RU dashboards at immutable pinned GitHub commits.

@@ -17,6 +17,10 @@ th,td{text-align:left;padding:12px 8px;border-bottom:1px solid #30383d;
 vertical-align:top;overflow-wrap:anywhere}th,small{color:#a8b3ba}
 code{font:12px ui-monospace,monospace;color:#bddbf1}
 .ok{color:#87d59c}.muted{color:#b9c8d1}
+table.views{table-layout:fixed}table.views th:nth-child(1){width:23%}
+table.views th:nth-child(2){width:22%}table.views th:nth-child(3){width:22%}
+table.views th:nth-child(4){width:33%}
+table.views td{overflow-wrap:anywhere;word-break:normal}
 """
 
 def _h(value: object) -> str:
@@ -82,7 +86,7 @@ def make_server(sources: ProductSources, inventory: Inventory, *, version: str =
             )
             if inspect is not None and parse_qs(urlsplit(self.path).query).get("resources") == ["1"]:
                 preview_html += (
-                    "<table><thead><tr><th>Продукт / Git SHA</th>"
+                    "<table class=\'views\'><thead><tr><th>Продукт / Git SHA</th>"
                     "<th>Dashboard / файл</th><th>Ревизия / совместимость</th>"
                     "<th>Результат</th></tr></thead><tbody>"
                 )

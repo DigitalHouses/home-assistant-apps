@@ -39,31 +39,31 @@ class PinnedDiscoveryTests(unittest.TestCase):
         def reader(path, sha):
             seen.append(path)
             return raw_view(path.split("/")[-1], "dh_pve_ups" if "ups" in path else "dh_pve",
-                            ">=0.5.88,<0.5.89")
+                            ">=0.5.88,<0.5.90")
         found = PreviewCatalog(listing=listing, reader=reader).inspect({
             product+"/synthetic": claim(product, "0.5.89")
         })[0]
         self.assertEqual([v["file"] for v in found["views"]],
                          ["10_pve_proxmox.yaml", "11_pve_ups.yaml"])
         self.assertEqual(len(seen), 2)
-        self.assertTrue(all(v["blocked"] for v in found["views"]))
-        self.assertTrue(all("Источник не утверждён" in v["status"] for v in found["views"]))
-        self.assertTrue(all("Нет подтверждения совместимости" in v["status"]
-                            for v in found["views"]))
+        self.assertTrue(all(not v["blocked"] for v in found["views"]))
+        self.assertTrue(all("Совместимость подтверждена" in v["status"] for v in found["views"]))
+        self.assertTrue(all(PINS[product].reviewed for _ in found["views"]))
 
-    def test_plex_view_found_but_0818_outside_compatibility(self):
+    def test_plex_view_0818_within_reviewed_compatibility(self):
         product = "digitalhouses_plex_agent"
         viewpath = product + "/dashboards/ru/10_plex.yaml"
         catalog = PreviewCatalog(
             listing=lambda pid,sha:[{"type":"file","name":"10_plex.yaml","path":viewpath}],
-            reader=lambda p,sha:raw_view("Plex","dh-plex-agent",">=0.8.17,<0.8.18","dh_plex_agent")
+            reader=lambda p,sha:raw_view("Plex","dh-plex-agent",">=0.8.17,<0.8.19","dh_plex_agent")
         )
         row = catalog.inspect({product+"/default":claim(product,"0.8.18")})[0]
         self.assertEqual([v["file"] for v in row["views"]],["10_plex.yaml"])
-        self.assertTrue(row["views"][0]["blocked"])
-        self.assertTrue(compatible("0.8.17",">=0.8.17,<0.8.18"))
-        self.assertFalse(compatible("0.8.18",">=0.8.17,<0.8.18"))
-        self.assertFalse(compatible("unknown",">=0.8.17,<0.8.18"))
+        self.assertFalse(row["views"][0]["blocked"])
+        self.assertTrue(compatible("0.8.17",">=0.8.17,<0.8.19"))
+        self.assertTrue(compatible("0.8.18",">=0.8.17,<0.8.19"))
+        self.assertFalse(compatible("0.8.19",">=0.8.17,<0.8.19"))
+        self.assertFalse(compatible("unknown",">=0.8.17,<0.8.19"))
 
     def test_mqtt_unknown_repo_or_product_never_triggers_download(self):
         def forbidden(*args):
@@ -113,6 +113,11 @@ class PinnedDiscoveryTests(unittest.TestCase):
         self.assertIn("mismatched canonical view",row["error"])
         self.assertEqual(row["views"],[])
 
+    def test_future_agent_versions_remain_blocked(self):
+        self.assertFalse(compatible("0.5.90", ">=0.5.88,<0.5.90"))
+        self.assertFalse(compatible("0.8.19", ">=0.8.17,<0.8.19"))
+        self.assertFalse(compatible("0.5.89", ">=0.8.17,<0.8.19"))
+
     def test_get_preview_not_automatic_and_post_still_disabled(self):
         with tempfile.TemporaryDirectory() as tmp:
             root=Path(tmp)
@@ -127,9 +132,9 @@ class PinnedDiscoveryTests(unittest.TestCase):
                 return PreviewCatalog(
                     listing=lambda p,sha:[{"type":"file","name":"10_plex.yaml",
                          "path":product+"/dashboards/ru/10_plex.yaml"}],
-                    reader=lambda p,sha:raw_view("Plex","dh-plex-agent",">=0.8.17,<0.8.18","dh_plex_agent")
+                    reader=lambda p,sha:raw_view("Plex","dh-plex-agent",">=0.8.17,<0.8.19","dh_plex_agent")
                 ).inspect(records)
-            server=make_server(sources,inventory,version="0.1.3",port=0,inspect=inspect)
+            server=make_server(sources,inventory,version="0.1.4",port=0,inspect=inspect)
             server.timeout=2
             thread=threading.Thread(target=lambda:[server.handle_request() for _ in range(3)],
                                      daemon=True)
@@ -143,7 +148,7 @@ class PinnedDiscoveryTests(unittest.TestCase):
                 self.assertEqual(status,200)
                 self.assertEqual(len(called),1)
                 self.assertIn("10_plex.yaml",body)
-                self.assertIn("Нет подтверждения совместимости",body)
+                self.assertIn("Совместимость подтверждена",body)
                 self.assertEqual(fetch(server,method="POST")[0],405)
             finally:
                 server.server_close()

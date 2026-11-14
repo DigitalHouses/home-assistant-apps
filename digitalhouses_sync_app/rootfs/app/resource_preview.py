@@ -34,12 +34,12 @@ class Pin:
 # GitHub itself enumerates an arbitrary number of dashboard YAML files.
 PINS = {
     "digitalhouses_pve_agent": Pin(
-        "2b7a7857ab5fe2d4c8493faacbfd1b43518ed087",
-        "Draft PR #502 — источник пока не утверждён", False,
+        "7a2bc76f7c69312366ea70a6d9236549a978d636",
+        "Утверждённые Proxmox/UPS · merged PR #502", True,
     ),
     "digitalhouses_plex_agent": Pin(
-        "d4e99ac789b6bd53c4185bff0612edff5427d315",
-        "Канонические ресурсы merged PR #500", True,
+        "fd9d257972f0afdf979bfdd27ba7c6c86991fceb",
+        "Plex dashboard + Recorder · merged PR #508", True,
     ),
 }
 
@@ -187,7 +187,7 @@ class PreviewCatalog:
                         reasons.append("Источник не утверждён")
                     if not compatible(claim["version"], view["constraint"]):
                         reasons.append("Нет подтверждения совместимости с установленной версией")
-                    view["status"] = "; ".join(reasons) if reasons else "Диапазон совместимости совпадает"
+                    view["status"] = "; ".join(reasons) if reasons else "Совместимость подтверждена · только просмотр"
                     view["blocked"] = bool(reasons)
                     entry["views"].append(view)
                 if not entry["views"]:
