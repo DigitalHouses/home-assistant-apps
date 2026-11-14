@@ -1,7 +1,7 @@
 # DH-View: dh_recorder_app
 # DH-View-Version: 1.0.0
 # DH-View-Date: 2026-11-14
-# Canonical standalone Russian Lovelace view for DH Sync adoption.
+# Published Russian Lovelace view; DH Sync automatically maintains this YAML.
 # Requires Mushroom, button-card >= 5.0, mini-graph-card, and entity-progress-card.
 title: DH Recorder
 path: recorder
