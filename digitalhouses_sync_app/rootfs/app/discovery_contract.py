@@ -39,9 +39,13 @@ def canonical_repository(value: str) -> str:
         url = urlsplit(value)
     except ValueError as exc:
         raise DiscoveryError("Malformed repository URL") from exc
-    if (url.scheme != "https" or url.netloc.lower() != "github.com"
-            or url.hostname != "github.com" or url.username is not None
-            or url.password is not None or url.port is not None):
+    try:
+        is_github = (url.scheme == "https" and url.netloc.lower() == "github.com"
+                     and url.hostname == "github.com" and url.username is None
+                     and url.password is None and url.port is None)
+    except ValueError as exc:
+        raise DiscoveryError("Malformed repository URL port") from exc
+    if not is_github:
         raise DiscoveryError("Repository must be a direct GitHub HTTPS URL")
     parts = url.path.removesuffix("/").split("/")
     if len(parts) != 3 or parts[0] or parts[1].lower() != EXPECTED_OWNER.lower():
