@@ -1,7 +1,7 @@
 name: DigitalHouses Sync App
 version: "0.1.0"
 slug: digitalhouses_sync_app
-description: DigitalHouses view synchronization with preview, backups and rollback.
+description: Read-only DigitalHouses MQTT product and GitHub repository catalog.
 url: https://github.com/DigitalHouses/home-assistant-apps/tree/main/digitalhouses_sync_app
 arch:
   - amd64
@@ -13,18 +13,12 @@ init: false
 stage: experimental
 services:
   - mqtt:need
-homeassistant_api: true
 ingress: true
 ingress_port: 8099
 panel_title: DH Sync
 panel_icon: mdi:sync
 panel_admin: true
-map:
-  - type: homeassistant_config
-    read_only: false
 options:
-  allow_changes: false
   log_level: info
 schema:
-  allow_changes: bool
   log_level: list(debug|info|warning|error)

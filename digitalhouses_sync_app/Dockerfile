@@ -9,7 +9,7 @@ LABEL io.hass.version="${BUILD_VERSION}" \
       io.hass.type="app" \
       io.hass.arch="${BUILD_ARCH}"
 
-RUN apk add --no-cache python3 py3-paho-mqtt py3-yaml py3-websocket-client tzdata
+RUN apk add --no-cache python3 py3-paho-mqtt tzdata
 COPY rootfs /
 RUN chmod a+x /run.sh && python3 -m compileall -q /app
 CMD ["/run.sh"]

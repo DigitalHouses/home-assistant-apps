@@ -1,4 +1,8 @@
-"""DH Sync v0.1.0 MQTT inventory and opt-in YAML updates via Ingress."""
+"""DH Sync v0.1.0: strictly read-only MQTT product catalog.
+
+No Home Assistant API, HA configuration mount, Git downloads or YAML apply in
+the installed runtime. Resource delivery code is development-only.
+"""
 from __future__ import annotations
 
 import json
@@ -10,11 +14,9 @@ from pathlib import Path
 
 import paho.mqtt.client as mqtt
 
-from inventory import Inventory
+from catalog_web import make_server
 from discovery_contract import DiscoveryError, ProductSources
-from ha_core import CoreAPI
-from sync_engine import SyncEngine
-from sync_web import make_server
+from inventory import Inventory
 
 PRODUCT_ID = "digitalhouses_sync_app"
 BASE = "DigitalHouses/Global/" + PRODUCT_ID
@@ -37,10 +39,7 @@ def device_discovery() -> dict:
             "model": "Sync App",
             "sw_version": VERSION,
         },
-        "origin": {
-            "name": "DigitalHouses Sync App",
-            "sw_version": VERSION,
-        },
+        "origin": {"name": "DigitalHouses Sync App", "sw_version": VERSION},
         "components": {
             "version": {
                 "platform": "sensor",
@@ -62,25 +61,24 @@ def device_discovery() -> dict:
                 "value_template": "{{ value_json.started_at }}",
             },
         },
-        "availability": [
-            {
-                "topic": BASE + "/availability",
-                "payload_available": "online",
-                "payload_not_available": "offline",
-            }
-        ],
+        "availability": [{
+            "topic": BASE + "/availability",
+            "payload_available": "online",
+            "payload_not_available": "offline",
+        }],
     }
 
 
 def main() -> None:
     inventory = Inventory(STATE_PATH)
     sources = ProductSources(SOURCES_PATH)
-    api = CoreAPI()
-    controller = SyncEngine(Path("/homeassistant"), Path("/data"), api)
-    allow_changes = os.environ.get("DH_SYNC_ALLOW_CHANGES", "false").lower() == "true"
-    ingress = make_server(controller, allow_changes=allow_changes, port=8099, sources=sources)
-    threading.Thread(target=ingress.serve_forever, daemon=True, name="dh-sync-ingress").start()
-    LOG.info("Ingress on port 8099; opt-in writes enabled: %s", allow_changes)
+    # No routes can POST or mutate HA; this port is available only through
+    # Supervisor's admin-only Ingress.
+    ingress = make_server(sources, inventory, port=8099)
+    threading.Thread(target=ingress.serve_forever, daemon=True,
+                     name="dh-sync-ingress").start()
+    LOG.info("DH Sync v0.1.0 read-only catalog Ingress ready on 8099")
+
     client = mqtt.Client(
         callback_api_version=mqtt.CallbackAPIVersion.VERSION2,
         client_id="digitalhouses-sync-app",
@@ -117,22 +115,22 @@ def main() -> None:
         client.subscribe("DigitalHouses/Global/+/+/sync", qos=1)
         client.subscribe("DigitalHouses/Global/+/availability", qos=1)
         client.subscribe("DigitalHouses/Global/+/+/availability", qos=1)
-        LOG.info("MQTT inventory active; changes require explicit Ingress confirmation")
+        LOG.info("Subscribed to retained product metadata (read-only)")
 
     def on_message(client, userdata, message):
         if message.topic.endswith("/sync"):
             try:
                 if sources.apply(message.topic, message.payload):
                     sources.save()
-                    LOG.info("Accepted DigitalHouses repository metadata: %s", message.topic)
+                    LOG.info("Accepted product source: %s", message.topic)
             except DiscoveryError as exc:
-                LOG.warning("Rejected MQTT repository metadata (%s): %s", message.topic, exc)
+                LOG.warning("Rejected MQTT source (%s): %s", message.topic, exc)
             return
         if inventory.apply(
             message.topic, message.payload.decode("utf-8", errors="replace").strip()
         ):
             inventory.save()
-            LOG.info("Inventory updated: %s", sorted(inventory.known))
+            LOG.info("Inventory changed: %s", sorted(inventory.known))
 
     client.on_connect = on_connect
     client.on_message = on_message
@@ -146,4 +144,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

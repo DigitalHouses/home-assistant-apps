@@ -2,14 +2,13 @@
 
 ## 0.1.0
 
-- First opt-in YAML view controller with admin-only Ingress and Supervisor Core API.
-- Pinned version-compatible CORE v3 PVE/UPS and Plex resources.
-- Detect duplicates, unexpected local edits, pinned Git metadata and incompatible agent versions.
-- Durable transaction journal, SHA-verified backup, HA config validation, Lovelace readback and rollback.
-- Default allow_changes: false; no automatic HA writes or restarts.
-- DH Sync Discovery Contract v1: retained MQTT metadata for installed DigitalHouses products, strict GitHub repository-owner validation, and read-only catalog of sources and versions.
-- Regression coverage for the CORE retained MQTT payloads: PVE Agent 0.5.89 and Plex Agent 0.8.18 (catalog visible even when YAML Apply is blocked).
-- This first release is strictly operator-controlled: no automatic YAML updates, agent updates, HACS installation, or background changes.
+- First HAOS Ingress read-only catalog of detected DigitalHouses agents and apps.
+- Discover product ID, running version, instance and owning GitHub repository from retained MQTT Discovery Contract v1 messages.
+- Strictly accept only direct GitHub repositories owned by `DigitalHouses`; reject URL spoofing and mismatched product identities.
+- Display product-level online/offline/unknown availability separately from retained source metadata. Offline never means uninstall.
+- Publish its own Version/Started-at diagnostics and source metadata using the existing HAOS MQTT service.
+- No Home Assistant API permission, configuration mount, YAML Apply or Rollback, external services, dynamic downloads, Home Assistant restarts or executable agent updates in installed v0.1.0.
+- Keep view transaction and migration prototypes in source for future product-compatibility-gated integration; they are not part of the running v0.1.0 UI.
 
 ## 0.0.1 — unpublished prototype
 
