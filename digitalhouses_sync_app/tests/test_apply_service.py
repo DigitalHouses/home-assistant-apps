@@ -165,6 +165,37 @@ class ApplyServiceTests(unittest.TestCase):
             self.manager.prepare(self.claims, IDENTITY)
         self.assertEqual(elsewhere.read_bytes(), self.old)
 
+    def test_restart_recovers_interrupted_two_view_apply(self):
+        plan = self.manager.prepare(self.claims, IDENTITY)
+        result = self.manager.apply(plan["token"], confirmed=True)
+        manifest = self.data / result["id"] / "manifest.json"
+        journal = json.loads(manifest.read_text())
+        journal["state"] = "prepared"  # power failure before commit status
+        manifest.write_text(json.dumps(journal))
+        (self.views / "10_first.yaml").unlink()  # first file was not yet applied
+        new_instance = ApplyManager(self.root, self.data)
+        self.assertEqual(new_instance.recover_pending(), [result["id"]])
+        self.assertFalse((self.views / "10_first.yaml").exists())
+        self.assertFalse((self.views / "11_second.yaml").exists())
+        self.assertEqual(json.loads(manifest.read_text())["state"], "recovered")
+
+    def test_recovery_never_overwrites_user_edit(self):
+        plan = self.manager.prepare(self.claims, IDENTITY)
+        result = self.manager.apply(plan["token"], confirmed=True)
+        manifest = self.data / result["id"] / "manifest.json"
+        journal = json.loads(manifest.read_text())
+        journal["state"] = "prepared"
+        manifest.write_text(json.dumps(journal))
+        changed = view("User customized", "first")
+        (self.views / "10_first.yaml").write_bytes(changed)
+        new_instance = ApplyManager(self.root, self.data)
+        self.assertEqual(new_instance.recover_pending(), [])
+        self.assertEqual((self.views / "10_first.yaml").read_bytes(), changed)
+        self.assertTrue((self.views / "11_second.yaml").is_file())
+        self.assertEqual(json.loads(manifest.read_text())["state"], "needs_recovery")
+        with self.assertRaisesRegex(ApplyError, "recovery required"):
+            new_instance.prepare(self.claims, IDENTITY)
+
     def test_no_published_directory_is_normal_absence(self):
         with patch("resource_preview._download", side_effect=MissingDirectory("absent")):
             self.assertEqual(list_views(REPO, "dash", SHA), [])
