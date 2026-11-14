@@ -34,38 +34,50 @@ Discovery alone uses retained QoS1 with a bounded two-second PUBACK wait and one
 
 Lovelace example: [plex-dashboard.yaml](examples/lovelace/plex-dashboard.yaml)
 
-### DH Sync Discovery Contract v1 (pending runtime release)
+### DH Sync 0.4.0 automatic YAML resources
 
-The next approved Plex Agent release will publish canonical product/source
-metadata to DigitalHouses/Global/digitalhouses_plex_agent/sync for the
-default instance, or to
-DigitalHouses/Global/digitalhouses_plex_agent/<instance_id>/sync
-for extra instances, using retained QoS1 on every successful MQTT
-connect/reconnect. The six fields are schema, product_id, type, running
-version, repository and product_path. No credentials, home IP, commit
-authorization, heartbeat or new Home Assistant entities are added.
-See [DH Sync compatibility and metadata contract](docs/DH_SYNC_COMPATIBILITY.md).
-Version 0.8.18 adds this retained announcement. An agent still running
-0.8.17 will not publish it until it is explicitly upgraded.
+Source of truth: [DH Sync Resources Standard](../docs/standards/DH_SYNC_RESOURCES_STANDARD.md).
+The running Plex Agent (v0.8.18 or newer) publishes its canonical product
+source over the existing MQTT connection with QoS 1, retain=true:
 
-### DH Sync canonical resources (review preview)
+- Default instance: `DigitalHouses/Global/digitalhouses_plex_agent/sync`
+- Other instance: `DigitalHouses/Global/digitalhouses_plex_agent/<instance_id>/sync`
 
-For DH Sync v1, the operator-approved **Russian view** is [dashboards/ru/10_plex.yaml](dashboards/ru/10_plex.yaml) (`DH-View-Version: 1.0.0`, existing `path: dh-plex-agent`). The current **Recorder package** is [packages/common/dh_plex_app_package.yaml](packages/common/dh_plex_app_package.yaml) (`DH-Package-Version: 1.0.0`, preserved `dh_app_plex_monitoring_package` key). Only DH metadata comments differ from the existing examples; no runtime agent or HA installation changes are made.
+The payload contains `schema`, `product_id`, `type`, the running `version`,
+`repository` and `product_path`. MQTT version is **informational**; DH Sync
+0.4.0 accepts any structurally valid GitHub repository belonging to
+`DigitalHouses` and resolves the source's default branch automatically.
 
-Do not co-install the canonical Recorder with an existing dh_plex_app_package.yaml or
-legacy dh_plex_agent_recorder_package.yaml; adopt the identical existing package
-with a backup and explicit approval. HOME compatibility is verified for agent
->=0.8.17,<0.8.18 only; other versions are not approved. The current Plex view
-is inside Storage dashboard_system, so DH Sync must never duplicate its path
-or overwrite the parent dashboard, and needs a supported reversible migration
-before applying anything. Git binary tag 0.8.17 predates this YAML: pin the
-verified immutable merged commit SHA, not just the installed agent release tag.
-EN view and reviewed localized notification packages remain open gaps.
+The published product-managed YAML is:
 
-Frontend custom cards used by the existing view: Mushroom (`mushroom-template-card`, `mushroom-chips-card`), `auto-entities`, `button-card` and `entity-progress-card-template`. DH Sync reports missing dependencies but does not install them.
+| DH Sync resource | Published Git path | Identity |
+| --- | --- | --- |
+| Russian Lovelace view | [dashboards/ru/10_plex.yaml](dashboards/ru/10_plex.yaml) | `path: dh-plex-agent` |
+| Common Recorder | [packages/common/dh_plex_app_package.yaml](packages/common/dh_plex_app_package.yaml) | `dh_app_plex_monitoring_package` |
 
-Full identity, MQTT availability/Discovery, YAML provenance and adoption requirements: [DH Sync compatibility handoff](docs/DH_SYNC_COMPATIBILITY.md).
+DH Sync checks these folders on product discovery and periodically,
+**without a manual Apply, release-version gate or user confirmation**.
+Published view/package version headers are informational. `examples/` files
+never participate. English and localized notification resources are not
+currently published, so DH Sync has nothing to install for those categories.
 
+The Plex view is a *standalone view* for the common DigitalHouses YAML
+dashboard. If a Storage-mode Lovelace dashboard already has
+`path: dh-plex-agent`, DH Sync refuses to overwrite or migrate it; that
+resource reports a Storage path collision instead. It never edits
+`.storage`. A matching existing Recorder package remains at its **existing
+path** in `/config/packages/`, identified by its top-level key; any update
+gets a backup and atomic replacement. Do not activate a second Recorder
+package with the same key. HA is not restarted automatically, so Recorder
+changes may require the site's normal HA restart.
+
+Frontend cards used by the current view: Mushroom, `auto-entities`,
+`button-card`, and `entity-progress-card-template`. Missing HACS components
+are a separate UI prerequisite, not a reason to alter Plex Agent MQTT
+identity or create placeholder resources.
+
+Details and historical adoption evidence:
+[DH Sync resources and discovery](docs/DH_SYNC_COMPATIBILITY.md).
 
 ### Background processes (0.8.8)
 
