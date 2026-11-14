@@ -46,22 +46,33 @@ def digest(content: bytes | None) -> str | None:
     return hashlib.sha256(content).hexdigest() if content is not None else None
 
 
-def package_identity(raw: bytes) -> str:
-    """One keyed Home Assistant package, without requiring version headers."""
+def package_keys(raw: bytes) -> list[str]:
+    """Read HA package keys without constructing HA-specific YAML tags."""
     try:
         node = yaml.compose(raw.decode("utf-8", "strict"), Loader=yaml.BaseLoader)
     except (UnicodeError, yaml.YAMLError, RecursionError) as exc:
         raise SyncError("Package YAML is invalid") from exc
-    if not isinstance(node, yaml.MappingNode) or len(node.value) != 1:
-        raise SyncError("Package needs one top-level key")
-    key_node, value_node = node.value[0]
-    if (not isinstance(key_node, yaml.ScalarNode)
-            or not isinstance(value_node, yaml.MappingNode)):
-        raise SyncError("Invalid package structure")
-    key = key_node.value
-    if not isinstance(key, str) or not re.fullmatch(r"[A-Za-z0-9_-]{1,120}", key):
-        raise SyncError("Invalid package name")
-    return key
+    if not isinstance(node, yaml.MappingNode) or not node.value:
+        raise SyncError("Package has no top-level keys")
+    result = []
+    for key_node, value_node in node.value:
+        if (not isinstance(key_node, yaml.ScalarNode)
+                or not isinstance(value_node, yaml.MappingNode)):
+            raise SyncError("Invalid package structure")
+        key = key_node.value
+        if not isinstance(key, str) or not re.fullmatch(r"[A-Za-z0-9_-]{1,120}", key):
+            raise SyncError("Invalid package name")
+        if key in result:
+            raise SyncError("Duplicate package key")
+        result.append(key)
+    return result
+
+
+def package_identity(raw: bytes) -> str:
+    keys = package_keys(raw)
+    if len(keys) != 1:
+        raise SyncError("Canonical package must have one top-level key")
+    return keys[0]
 
 
 def _safe_file(root: Path, relative: Path) -> Path:
@@ -116,8 +127,8 @@ class AutoSync:
             _safe_path(self.root, path)
             if not path.is_file() or path.stat().st_size > MAX_BYTES:
                 raise SyncError("Unsafe local package file")
-            key = package_identity(path.read_bytes())
-            found.setdefault(key, []).append(path.relative_to(self.root))
+            for key in package_keys(path.read_bytes()):
+                found.setdefault(key, []).append(path.relative_to(self.root))
         return found
 
     def _published(self, claims: dict) -> tuple[list[dict], list[str]]:
@@ -157,7 +168,7 @@ class AutoSync:
                             "identity": key, "name": name, "bytes": raw,
                         })
             except Exception as exc:
-                issues.append(product if "product" in locals() else identity)
+                issues.append(identity + ": " + str(exc)[:100])
                 LOG.warning("Source skipped: %s: %s", identity, exc)
         # Do not let two different Git resources fight for one local identity.
         count: dict[tuple[str, str], int] = {}
@@ -188,6 +199,8 @@ class AutoSync:
         if len(matches) > 1:
             raise SyncError("Duplicate local package key: " + key)
         if matches:
+            if len(package_keys(_safe_file(self.root, matches[0]).read_bytes())) != 1:
+                raise SyncError("Shared local package file cannot be replaced")
             return matches[0]
         if not PACKAGE_LOADER.search(
                 (self.root / "configuration.yaml").read_text(encoding="utf-8")):
@@ -259,8 +272,7 @@ class AutoSync:
                 target = _safe_file(self.root, relative)
                 current = target.read_bytes() if target.exists() else None
                 if digest(current) not in (manifest["before"], manifest["after"]):
-                    LOG.warning("Recovery skipped, user-edited YAML: %s", relative)
-                    continue
+                    raise SyncError("Recovery skipped because YAML was edited: " + str(relative))
                 if digest(current) == manifest["after"]:
                     if manifest["before"] is None:
                         target.unlink()
@@ -274,6 +286,7 @@ class AutoSync:
                 _save_json(file, manifest)
             except Exception:
                 LOG.exception("Recovery failed: %s", file.parent.name)
+                raise SyncError("An unfinished YAML transaction needs recovery")
 
     def sync(self, claims: dict) -> dict:
         with self.lock:
