@@ -64,6 +64,17 @@ both Proxmox (including FAN% graph) and UPS views on live Agent 0.5.89.
 Do not approve DH Sync Apply, touch HOME/CORE files, or merge solely because
 the agent's MQTT /sync metadata is correct.
 
+## Live operator acceptance — 2026-11-14
+
+After the CORE MQTT /sync record confirmed running PVE Agent v0.5.89,
+the operator was asked to inspect the existing DigitalHouses Proxmox
+(including FAN% graph) and Электропитание / UPS views in CORE HAOS.
+The operator replied «все видно», confirming the visible dashboards.
+This is a visual functional acceptance of existing dashboards, not an
+end-to-end DH Sync file-apply/rollback acceptance or a new YAML deployment.
+Canonical source views, entity IDs, FAN/UPS cards and local installed files
+were not modified during this check.
+
 ## Provenance — exact working CORE v3 source
 
 The original **read-only** snapshots were retrieved on 2026-11-14 from
