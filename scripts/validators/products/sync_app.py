@@ -52,8 +52,8 @@ def validate_sync_app(root: Path, app: Path, context: dict) -> None:
         "policy_baseline": "0.0.0",
     }:
         fail("DH Sync: canonical release configuration is required")
-    if config.get("version") != "0.1.0":
-        fail("DH Sync: source version must match first release candidate")
+    # Version and changelog are checked by shared release-readiness rules.
+    # Do not freeze the source validator to the initial 0.1.0 release.
     if config.get("slug") != "digitalhouses_sync_app":
         fail("DH Sync: incorrect Supervisor slug")
     maps = config.get("map", [])

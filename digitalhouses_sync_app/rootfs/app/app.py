@@ -1,4 +1,4 @@
-"""DH Sync v0.1.0: strictly read-only MQTT product catalog.
+"""DH Sync v0.1.1: strictly read-only MQTT product catalog.
 
 No Home Assistant API, HA configuration mount, Git downloads or YAML apply in
 the installed runtime. Resource delivery code is development-only.
@@ -22,7 +22,7 @@ PRODUCT_ID = "digitalhouses_sync_app"
 BASE = "DigitalHouses/Global/" + PRODUCT_ID
 DISCOVERY = "homeassistant/device/" + PRODUCT_ID + "/config"
 STARTED_AT = datetime.now(timezone.utc).isoformat()
-VERSION = os.environ.get("APP_VERSION", "0.1.0-local")
+VERSION = os.environ.get("APP_VERSION", "0.1.1-local")
 STATE_PATH = Path("/data/inventory.json")
 SOURCES_PATH = Path("/data/product_sources.json")
 
@@ -69,6 +69,51 @@ def device_discovery() -> dict:
     }
 
 
+def create_mqtt_client():
+    """Use Paho 2 callback API where supported; retain Alpine Paho 1.x support.
+
+    HAOS base image's apk py3-paho-mqtt can predate CallbackAPIVersion.
+    Do not assume the host's Paho version matches CI's pip installation.
+    """
+    if hasattr(mqtt, "CallbackAPIVersion"):
+        return mqtt.Client(
+            callback_api_version=mqtt.CallbackAPIVersion.VERSION2,
+            client_id="digitalhouses-sync-app",
+        )
+    return mqtt.Client(client_id="digitalhouses-sync-app")
+
+
+def on_connect(client, userdata, flags, reason_code, properties=None):
+    """Accept MQTT callback shape from Paho 1.x (4 args) or 2.x (5 args)."""
+    if reason_code != 0:
+        LOG.error("MQTT connect failed: %s", reason_code)
+        return
+    client.publish(DISCOVERY, json.dumps(device_discovery()), qos=1, retain=True)
+    client.publish(
+        BASE + "/diagnostics",
+        json.dumps({"version": VERSION, "started_at": STARTED_AT}),
+        qos=1, retain=True,
+    )
+    client.publish(BASE + "/availability", "online", qos=1, retain=True)
+    client.publish(
+        BASE + "/sync",
+        json.dumps({
+            "schema": 1,
+            "product_id": PRODUCT_ID,
+            "type": "app",
+            "version": VERSION,
+            "repository": "https://github.com/DigitalHouses/home-assistant-apps",
+            "product_path": "digitalhouses_sync_app",
+        }),
+        qos=1, retain=True,
+    )
+    client.subscribe("DigitalHouses/Global/+/sync", qos=1)
+    client.subscribe("DigitalHouses/Global/+/+/sync", qos=1)
+    client.subscribe("DigitalHouses/Global/+/availability", qos=1)
+    client.subscribe("DigitalHouses/Global/+/+/availability", qos=1)
+    LOG.info("Subscribed to retained product metadata (read-only)")
+
+
 def main() -> None:
     inventory = Inventory(STATE_PATH)
     sources = ProductSources(SOURCES_PATH)
@@ -77,45 +122,13 @@ def main() -> None:
     ingress = make_server(sources, inventory, port=8099)
     threading.Thread(target=ingress.serve_forever, daemon=True,
                      name="dh-sync-ingress").start()
-    LOG.info("DH Sync v0.1.0 read-only catalog Ingress ready on 8099")
+    LOG.info("DH Sync v0.1.1 read-only catalog Ingress ready on 8099")
 
-    client = mqtt.Client(
-        callback_api_version=mqtt.CallbackAPIVersion.VERSION2,
-        client_id="digitalhouses-sync-app",
-    )
+    client = create_mqtt_client()
     username = os.environ.get("MQTT_USER") or None
     if username:
         client.username_pw_set(username, os.environ.get("MQTT_PASSWORD", ""))
     client.will_set(BASE + "/availability", "offline", qos=1, retain=True)
-
-    def on_connect(client, userdata, flags, reason_code, properties):
-        if reason_code != 0:
-            LOG.error("MQTT connect failed: %s", reason_code)
-            return
-        client.publish(DISCOVERY, json.dumps(device_discovery()), qos=1, retain=True)
-        client.publish(
-            BASE + "/diagnostics",
-            json.dumps({"version": VERSION, "started_at": STARTED_AT}),
-            qos=1, retain=True,
-        )
-        client.publish(BASE + "/availability", "online", qos=1, retain=True)
-        client.publish(
-            BASE + "/sync",
-            json.dumps({
-                "schema": 1,
-                "product_id": PRODUCT_ID,
-                "type": "app",
-                "version": VERSION,
-                "repository": "https://github.com/DigitalHouses/home-assistant-apps",
-                "product_path": "digitalhouses_sync_app",
-            }),
-            qos=1, retain=True,
-        )
-        client.subscribe("DigitalHouses/Global/+/sync", qos=1)
-        client.subscribe("DigitalHouses/Global/+/+/sync", qos=1)
-        client.subscribe("DigitalHouses/Global/+/availability", qos=1)
-        client.subscribe("DigitalHouses/Global/+/+/availability", qos=1)
-        LOG.info("Subscribed to retained product metadata (read-only)")
 
     def on_message(client, userdata, message):
         if message.topic.endswith("/sync"):
