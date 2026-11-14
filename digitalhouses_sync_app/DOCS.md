@@ -1,32 +1,18 @@
-# DigitalHouses Sync — implementation and operations
+# DH Sync v0.1.0 — устройство и эксплуатация
 
-This is the development-stage Home Assistant OS App. It is **not yet installable** as a released product. No production image or release tag exists.
+Это экспериментальная версия HAOS App, **пока без опубликованного образа**.
 
-## Runtime scope
+App использует Supervisor MQTT service и Supervisor Core API proxy для чтения версий и проверки загруженной панели.
+Не нужно создавать пользовательский Home Assistant token. Внутренний Ingress доступен только администраторам.
 
-- Supervisor App / container; not a custom integration.
-- MQTT credentials come from the Supervisor MQTT service. No broker IP is embedded.
-- App data is under `/data`, Home Assistant is mounted at `/homeassistant` **read-only** in 0.0.1.
-- Availability watcher records previously online installations; offline never proves uninstall.
-- The preview publishes diagnostic version and process started-at sensors for the App itself.
-- Optional manual Plex preflight fetches immutable YAML from GitHub and compares it with Storage/Recorder without touching HA files.
-- A separately confirmed command can create an audit receipt under /data for an identical installed Recorder; see [Plex adoption](docs/ADOPTION.md).
-- No Home Assistant YAML is changed.
+Режим при установке: allow_changes: false. Просмотр плана не изменяет /config; для Apply и Rollback требуется включить настройку и нажать кнопку с подтверждением.
 
-## Design for v1
+Источник — три зафиксированных Git SHA; ресурсы только ru. Все другие продукты остаются нетронутыми.
+Установленные PVE/UPS обновляются только если соответствуют проверенным CORE v3 SHA, установленный Plex сравнивается и не переписывается, если совпадает.
+Дубликаты view path, Lovelace Storage, несовместимые версии, незнакомые локальные изменения и некорректная конфигурация HA блокируют операцию.
 
-The write-enabled implementation must switch the config mapping explicitly, remain confined to App-owned paths (`/homeassistant/dashboards/dh`, `/homeassistant/packages/dh`), validate the entire candidate set, and preserve a recoverable previous generation. Existing locally edited files are conflicts, not files to overwrite.
+Откат из /data/sync-v01/transactions/ восстанавливает исходные байты. Не перезаписывать пользовательские изменения после применения.
 
-Do not assume package changes are immediately applied; the operator receives an explicit restart-required state. Existing panel and package configurations must be adopted cautiously (no duplicate dashboard registration).
+Не поддерживаются packages, уведомления, установка HACS, обновления Apps/Agents, автообновление по расписанию и перезапуск HA.
 
-## Sources and standards
-
-- `docs/standards/DIGITALHOUSES_APP_STANDARD.md`
-- `docs/standards/PRODUCT_NAMING_STANDARD.md`
-- `docs/standards/HA_PACKAGE_VERSIONING_STANDARD.md`
-- `docs/standards/REPOSITORY_GOVERNANCE.md`
-- `docs/standards/IMMUTABLE_DELIVERY_AND_TELEMETRY_STANDARD.md`
-- `docs/standards/PRODUCT_TELEMETRY_POLICY.md`
-
-Next: product teams publish canonical YAML bundles and MQTT contracts; then implement active sync and two-instance pilot.
-
+Перед публикацией: пройти требования [FIRST_VERSION.md](docs/FIRST_VERSION.md).

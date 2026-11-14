@@ -1,10 +1,14 @@
 # Changelog
 
-## 0.0.1 (unreleased)
-- Initial HAOS App scaffold conforming to the DigitalHouses product identity and type contracts.
-- Read-only MQTT availability inventory preview; no updates to Home Assistant YAML.
-- Initial architecture and product handoff documentation.
-- Add tested two-phase Storage to managed Plex YAML migration engine (inactive until authenticated HA bridge and pilot acceptance).
-- Add Plex Storage/Recorder read-only preflight and opt-in /data receipt; no HA file writes.
-- No GHCR image has been published. This version is not yet a production release.
+## 0.1.0 — source candidate, not published
 
+- First opt-in YAML view controller with admin-only Ingress and Supervisor Core API.
+- Pinned version-compatible CORE v3 PVE/UPS and Plex resources.
+- Detect duplicates, unexpected local edits, pinned Git metadata and incompatible agent versions.
+- Durable transaction journal, SHA-verified backup, HA config validation, Lovelace readback and rollback.
+- Default allow_changes: false; no automatic HA writes or restarts.
+
+## 0.0.1 — unpublished prototype
+
+- MQTT product inventory and diagnostics.
+- Read-only Plex adoption preflight and separately gated Storage migration prototype.
