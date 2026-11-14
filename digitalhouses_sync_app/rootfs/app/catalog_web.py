@@ -256,7 +256,8 @@ def make_server(sources: ProductSources, inventory: Inventory, *, version: str =
                             "</tr></thead><tbody>"
                         )
                         for item in result["products"]:
-                            if apply_manager is not None and item.get("identity"):
+                            if (apply_manager is not None and item.get("identity")
+                                    and item["views"] and not item["source_error"]):
                                 audit_html += (
                                     "<tr><td colspan='4'><a href='?plan=" +
                                     quote(item["identity"], safe="") +
