@@ -210,6 +210,10 @@ class ApplyManager:
                     raise ApplyError("Local view identity changed; start again")
                 if matches[0]["sha256"] != e["before"]:
                     raise ApplyError("Local YAML changed since preview; start again")
+                current = target.stat()
+                if (stat.S_IMODE(current.st_mode) != e["mode"]
+                        or current.st_uid != e["uid"] or current.st_gid != e["gid"]):
+                    raise ApplyError("Local YAML permissions changed since preview")
 
     def apply(self, token: str, *, confirmed: bool) -> dict:
         with self.lock:
