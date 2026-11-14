@@ -256,8 +256,12 @@ def _save_json(path: Path, document: dict) -> None:
 
 @contextmanager
 def _lock(root: Path):
+    # Verify the complete transaction path before and after creating it.
+    parent = root.parent
+    if parent.is_symlink() or root.is_symlink():
+        raise SyncError("Symlink in transaction directory")
     root.mkdir(mode=0o700, parents=True, exist_ok=True)
-    if root.is_symlink():
+    if parent.is_symlink() or root.is_symlink():
         raise SyncError("Symlink in transaction directory")
     lockfile = root / ".lock"
     if lockfile.is_symlink():
@@ -487,6 +491,8 @@ class SyncEngine:
             except Exception as exc:
                 try:
                     self._rollback_files(folder, journal)
+                    if not self.api.check_config():
+                        raise SyncError("HA config check failed after automatic rollback")
                     journal["phase"] = "rolled_back_auto"
                 except Exception as rollback_exc:
                     journal["phase"] = "recovery_required"
@@ -509,6 +515,10 @@ class SyncEngine:
             if journal.get("phase") not in ("committed", "applying", "recovery_required"):
                 raise SyncError("No active transaction to roll back")
             self._rollback_files(folder, journal)
+            if not self.api.check_config():
+                journal["phase"] = "rollback_validation_failed"
+                _save_json(folder / "journal.json", journal)
+                raise SyncError("Files restored, but Home Assistant validation failed")
             journal["phase"] = "rolled_back"
             _save_json(folder / "journal.json", journal)
             return {"status": "rolled_back", "transaction_id": journal["id"],

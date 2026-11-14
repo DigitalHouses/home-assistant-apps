@@ -171,7 +171,7 @@ def make_server(engine: SyncEngine, *, allow_changes: bool, port: int = 8099):
                 "<section><h2>Канонические вкладки</h2><table>"
                 "<thead><tr><th>View</th><th>Agent</th><th>Состояние</th><th>Git commit</th></tr></thead>"
                 "<tbody>" + rows + "</tbody></table>"
-                "<small>Поддержка v0.1: Proxmox, UPS, Plex · только RU · packages не изменяются</small>"
+                "<small>Поддержка v0.1: Proxmox, UPS, Plex · только RU · packages не изменяются. PVE SHA — кандидат Draft PR #502.</small>"
                 + apply_form + "</section><section><h2>Последняя операция и откат</h2>"
                 + (rollback_form or "<p class='muted'>Пока нет транзакций.</p>") +
                 "</section><p class='muted'>Существующие файлы с неизвестными локальными "
