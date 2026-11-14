@@ -74,6 +74,11 @@ def _save_json(path: Path, value: dict) -> None:
     _file_sync(temp, raw)
     try:
         os.replace(temp, path)
+        directory = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY)
+        try:
+            os.fsync(directory)
+        finally:
+            os.close(directory)
     finally:
         if temp.exists():
             temp.unlink()
