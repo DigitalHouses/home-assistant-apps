@@ -25,10 +25,7 @@ def claim(product, version, repo=REPO, path=None):
 
 
 def raw_view(title, view_path, header=True):
-    top = (
-        "# DH-View: any_name\n# DH-View-Version: 1.0.0\n"
-        "" if header else ""
-    )
+    top = "# DH-View: any_name\n# DH-View-Version: 1.0.0\n" if header else ""
     return (top + f"type: sections\ntitle: {title}\npath: {view_path}\nsections: []\n").encode()
 
 
