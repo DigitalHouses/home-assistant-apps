@@ -12,7 +12,7 @@ HEADER = (
     "# DH-View: dh_pve_agent\n"
     "# DH-View-Version: 1.0.0\n"
     "# DH-View-Date: 2026-11-14\n"
-    "# DH-Compatible-Agent: >=0.5.88,<0.5.89\n"
+    "# DH-Compatible-Agent: >=0.5.88,<0.5.90\n"
     "\n"
 )
 BASELINES = {
@@ -82,11 +82,11 @@ class DhSyncCanonicalPveResourcesTests(unittest.TestCase):
                 paths.add(view["path"])
         self.assertEqual(paths, {"dh_pve_agent", "dh_pve_agent_ups"})
 
-    def test_narrow_core_verified_agent_compatibility(self):
-        self.assertEqual((PRODUCT / "VERSION").read_text().strip(), "0.5.88")
+    def test_narrow_pve_089_source_compatible(self):
+        self.assertEqual((PRODUCT / "VERSION").read_text().strip(), "0.5.89")
         for filename in BASELINES:
             text = (DASHBOARDS / filename).read_text(encoding="utf-8")
-            self.assertIn("# DH-Compatible-Agent: >=0.5.88,<0.5.89\n", text)
+            self.assertIn("# DH-Compatible-Agent: >=0.5.88,<0.5.90\n", text)
             self.assertNotIn("# DH-Compatible-App:", text)
 
     def test_confirmed_fan_graph_and_ups_survive(self):

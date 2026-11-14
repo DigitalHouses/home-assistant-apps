@@ -1,0 +1,8 @@
+configuration:
+  sync_interval_hours:
+    name: Интервал синхронизации (часы)
+    description: Интервал будущей автосинхронизации. В 0.0.1 YAML не изменяются.
+  log_level:
+    name: Уровень журнала
+    description: Подробность журналирования.
+

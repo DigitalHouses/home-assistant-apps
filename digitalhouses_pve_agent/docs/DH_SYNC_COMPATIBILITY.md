@@ -34,11 +34,7 @@ DH Sync, update Linux Agent, or grant permission for automatic adoption.
 | `dashboards/ru/11_pve_ups.yaml` | `DH-View-Version: 1.0.0` | `dh_pve_agent_ups` | `mdi:power-plug-battery`, icon-only |
 
 - `DH-View: dh_pve_agent`; `DH-View-Date: 2026-11-14`.
-- `DH-Compatible-Agent: >=0.5.88,<0.5.89` is deliberately narrow:
-  CORE Linux Agent v0.5.88 was confirmed active and MQTT CONNECTED via
-  `dh-pve-agent status` on 2026-11-14. The existing CORE v3 views were
-  operator-confirmed to work with this agent. This is **not** proof that DH
-  Sync's new update/rollback mechanism has passed live acceptance.
+- `DH-Compatible-Agent: >=0.5.88,<0.5.90` is a narrow candidate: CORE v3 views were confirmed with Agent 0.5.88; 0.5.89 only adds MQTT /sync metadata while preserving existing telemetry. Live CORE MQTT subsequently showed 0.5.89 Online, but new-version live view rendering has NOT been independently verified. DH Sync update/rollback remains a separate gate.
 - HA view revisions are independent of the Linux Agent binary release.
   Do **not** release a new Agent version for navigation-only YAML changes.
 - English UI has **not** been verified or translated; no placeholder EN files
@@ -48,6 +44,25 @@ DH Sync, update Linux Agent, or grant permission for automatic adoption.
   helpers and localized notifications need a separate product-led audit
   before they can be made canonical; do not silently co-install a second
   Recorder package.
+
+## Agent 0.5.89 source compatibility review — Draft acceptance gate
+
+Merged Agent PR #503 was inspected against 0.5.88, the working CORE v3 baseline.
+The source diff only adds sync_version in app/main.py, retained QoS1 /sync
+source metadata in app/mqtt_bridge.py, an independent sync field in topics.py,
+and app/sync_discovery.py. Existing HA entity IDs, availability, FAN readings,
+UPS/NUT logic and discovery data remain unchanged by this release.
+
+Both original CORE v3 view bodies remain exactly the pinned historical SHA-256
+baselines (after reversing previously approved icon-only navigation changes).
+The only proposed change here is each view's compatible-agent comment header
+to >=0.5.88,<0.5.90. View revisions remain 1.0.0.
+
+Live CORE MQTT confirmed PVE Agent 0.5.89 Online. This validates discovery,
+not card rendering. Before leaving Draft, the PVE product owner must confirm
+both Proxmox (including FAN% graph) and UPS views on live Agent 0.5.89.
+Do not approve DH Sync Apply, touch HOME/CORE files, or merge solely because
+the agent's MQTT /sync metadata is correct.
 
 ## Provenance — exact working CORE v3 source
 
@@ -96,7 +111,7 @@ Existing live files (do **not** change them in this PR):
 - `/config/dashboards/dh/views/11_pve_ups.yaml`
 
 1. DH Sync must pin the **immutable merged Git commit SHA containing these
-   YAML assets**, independently of the Linux Agent v0.5.88 release tag.
+   YAML assets**, independently of the Linux Agent v0.5.89 release tag.
    Never install unreviewed branch `main` by default.
 2. Preflight: confirm registered `digital-houses` YAML dashboard and
    `!include_dir_list views/`, matching two paths, no duplicate views,
@@ -117,7 +132,7 @@ Existing live files (do **not** change them in this PR):
 6. Retain both tabs on agent `offline` or UPS not configured. Uninstall
    requires an explicit user action and removes only DH Sync-managed assets.
 
-No end-to-end CORE HA deployment, live icon rendering, adoption rollback or
+No end-to-end DH Sync CORE HA deployment, Agent 0.5.89 live rendering, adoption rollback or
 cross-HA regression has been run in this product PR. Those are acceptance
 gates for the **DH Sync** implementation, not permissions to edit CORE now.
 

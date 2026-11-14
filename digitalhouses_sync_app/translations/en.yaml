@@ -1,0 +1,8 @@
+configuration:
+  sync_interval_hours:
+    name: Sync interval (hours)
+    description: Future automatic synchronization interval. No YAML writes in 0.0.1.
+  log_level:
+    name: Log level
+    description: Logging verbosity.
+

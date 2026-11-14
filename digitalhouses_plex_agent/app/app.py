@@ -18,7 +18,7 @@ from .activity_classifier import classify_activity
 from .api_runtime import PlexApiRuntime
 from .build_info import load_build_info
 from .config import AppConfig, load_config
-from .discovery import build_discovery_payload, build_topics
+from .discovery import build_discovery_payload, build_topics, build_sync_payload
 from .discovery_lifecycle import DiscoveryLifecycle
 from .library_storage import LibraryStorageRuntime
 from .gpu_collector import GpuStateReader, gpu_driver_info, gpu_operational_problem
@@ -147,7 +147,7 @@ def run(config: AppConfig) -> int:
         timezone.utc,
     ).isoformat()
     discovery = build_discovery_payload(config, build)
-    mqtt = MqttBridge(config, topics, discovery)
+    mqtt = MqttBridge(config, topics, discovery, sync_payload=build_sync_payload(build))
     discovery_lifecycle = DiscoveryLifecycle(
         mqtt, StateStore(CONTROL_STATE_DIR / "discovery_manifest.json"), topics.base,
     )

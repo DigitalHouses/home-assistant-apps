@@ -25,12 +25,30 @@ class Topics:
     agent_card_state: str
     diagnostic_event: str
     cpu_diagnostic_event: str
+    sync: str
     discovery: str
     ha_status: str
     device_id: str
 
 
 _GROUP_SEGMENT = re.compile(r"^[A-Za-z0-9_.-]+$")
+
+# Canonical registry identity. The existing configurable MQTT namespace must
+# remain unchanged; DH Sync's new metadata namespace is registry-derived.
+SYNC_PRODUCT_ID = "digitalhouses_plex_agent"
+SYNC_REPOSITORY = "https://github.com/DigitalHouses/home-assistant-apps"
+
+
+def build_sync_payload(build: BuildInfo) -> dict[str, object]:
+    """Claim the running release and owning source, not an approved YAML ref."""
+    return {
+        "schema": 1,
+        "product_id": SYNC_PRODUCT_ID,
+        "type": "agent",
+        "version": build.version,
+        "repository": SYNC_REPOSITORY,
+        "product_path": SYNC_PRODUCT_ID,
+    }
 
 
 def state_group_topic(topics: Topics, group: str) -> str:
@@ -45,7 +63,7 @@ def state_group_topic(topics: Topics, group: str) -> str:
 
 def build_topics(config: AppConfig) -> Topics:
     instance = config.general.instance_id
-    device_id = f"digitalhouses_plex_agent_{instance}"
+    device_id = f"{SYNC_PRODUCT_ID}_{instance}"
     topic_prefix = config.mqtt.topic_prefix.rstrip(chr(47))
     base = topic_prefix if instance == "plex" else f"{topic_prefix}/{instance}"
     return Topics(
@@ -62,6 +80,12 @@ def build_topics(config: AppConfig) -> Topics:
         agent_card_state=f"{base}/agent/card",
         diagnostic_event=f"{base}/events/diagnostic",
         cpu_diagnostic_event=f"{base}/events/agent_cpu",
+        # Default instance intentionally has no /plex/ segment; variants do.
+        # Never derive this topic from config.mqtt.topic_prefix: the existing
+        # namespace can be customized, but the /sync contract is canonical.
+        sync=(f"DigitalHouses/Global/{SYNC_PRODUCT_ID}/sync"
+              if instance == "plex" else
+              f"DigitalHouses/Global/{SYNC_PRODUCT_ID}/{instance}/sync"),
         discovery=(
             f"{config.mqtt.discovery_prefix.strip('/')}/device/{device_id}/config"
         ),

@@ -95,6 +95,7 @@ def test_product_registry_is_complete_and_drives_allowlist() -> None:
         "digitalhouses_zigbee_monitor_app",
         "digitalhouses_aqara_switch_app",
         "digitalhouses_network_app",
+        "digitalhouses_sync_app",
     ]
     assert ALLOWED_PRODUCTS == {
         product.identifier

@@ -150,6 +150,20 @@
       "release": null,
       "repository_directory": "digitalhouses_network_app",
       "haos_slug": "digitalhouses_network_app"
+    },
+    {
+      "id": "digitalhouses_sync_app",
+      "type": "app",
+      "entity_prefix": "dh_sync_app",
+      "display_name": "Sync App",
+      "telemetry_allowed": false,
+      "release": {
+        "title": "DigitalHouses Sync App",
+        "version_source": "haos_config",
+        "policy_baseline": "0.0.0"
+      },
+      "repository_directory": "digitalhouses_sync_app",
+      "haos_slug": "digitalhouses_sync_app"
     }
   ]
 }
