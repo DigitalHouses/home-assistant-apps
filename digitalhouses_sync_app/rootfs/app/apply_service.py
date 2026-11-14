@@ -97,6 +97,7 @@ class ApplyManager:
         if os.statvfs(self.root).f_flag & getattr(os, "ST_RDONLY", 1):
             raise ApplyError("Home Assistant config mount is read-only; Apply disabled")
         _safe_path(self.root, self.root / VIEW_DIR)
+        self._assert_no_pending()
         snap = _local_snapshot(self.root)
         if snap["issues"]:
             raise ApplyError("; ".join(snap["issues"])[:300])
@@ -268,6 +269,68 @@ class ApplyManager:
                                   else "completed") + ": " + str(exc)) from exc
             return {"status": "applied", "count": len(entries), "id": txn.name}
 
+
+    def _pending_manifests(self) -> list[tuple[Path, dict]]:
+        if not self.data.is_dir():
+            return []
+        pending = []
+        for path in sorted(self.data.glob("tx-*/manifest.json")):
+            if path.is_symlink() or path.parent.is_symlink():
+                continue
+            try:
+                item = json.loads(path.read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                continue
+            if item.get("state") in ("prepared", "rolling_back", "needs_recovery"):
+                pending.append((path, item))
+        return pending
+
+    def _assert_no_pending(self) -> None:
+        if self._pending_manifests():
+            raise ApplyError("Unfinished YAML transaction; recovery required before Apply")
+
+    def recover_pending(self) -> list[str]:
+        """On startup undo interrupted transactions only if no user edits intervene.
+
+        An unrelated edit results in needs_recovery; it is never overwritten.
+        Already restored entries are allowed, and all backups are verified
+        before touching any file.
+        """
+        with self.lock:
+            recovered = []
+            for path, manifest in self._pending_manifests():
+                entries = manifest.get("entries", [])
+                try:
+                    if not isinstance(entries, list):
+                        raise ApplyError("Corrupt transaction manifest")
+                    work = []
+                    for e in entries:
+                        target = self._target(e["file"])
+                        if target.is_symlink():
+                            raise ApplyError("Unexpected symlink in recovery path")
+                        state = _sha(target.read_bytes()) if target.is_file() else None
+                        if state not in (e["before"], e["after"]):
+                            raise ApplyError("User edit detected: " + e["file"])
+                        backup = path.parent / e["backup"] if e["backup"] else None
+                        if backup is not None:
+                            if (not backup.is_file() or backup.is_symlink()
+                                    or _sha(backup.read_bytes()) != e["before"]):
+                                raise ApplyError("Invalid rollback backup: " + e["file"])
+                        work.append((e, target, state, backup))
+                    for e, target, state, backup in reversed(work):
+                        if state == e["before"]:
+                            continue
+                        if backup is not None:
+                            _atomic_replace(target, backup.read_bytes(), e["mode"])
+                        else:
+                            target.unlink()
+                    manifest["state"] = "recovered"
+                    recovered.append(manifest.get("id", path.parent.name))
+                except (ApplyError, OSError, KeyError, ValueError):
+                    manifest["state"] = "needs_recovery"
+                _save_json(path, manifest)
+            return recovered
+
     def last_transaction(self) -> dict | None:
         with self.lock:
             if not self.data.is_dir():
@@ -315,13 +378,20 @@ class ApplyManager:
                         raise ApplyError("Backup missing: " + e["file"])
                     if _sha(backup.read_bytes()) != e["before"]:
                         raise ApplyError("Backup checksum mismatch: " + e["file"])
-            for e in reversed(manifest["entries"]):
-                path = self._target(e["file"])
-                if e["backup"]:
-                    _atomic_replace(path, (txn / e["backup"]).read_bytes(), e["mode"])
-                else:
-                    path.unlink()
-            manifest["state"] = "rolled_back"
+            manifest["state"] = "rolling_back"
+            _save_json(txn / "manifest.json", manifest)
+            try:
+                for e in reversed(manifest["entries"]):
+                    path = self._target(e["file"])
+                    if e["backup"]:
+                        _atomic_replace(path, (txn / e["backup"]).read_bytes(), e["mode"])
+                    else:
+                        path.unlink()
+                manifest["state"] = "rolled_back"
+            except Exception:
+                manifest["state"] = "needs_recovery"
+                _save_json(txn / "manifest.json", manifest)
+                raise
             _save_json(txn / "manifest.json", manifest)
             return {"status": "rolled_back", "count": len(manifest["entries"]),
                     "id": manifest["id"]}
