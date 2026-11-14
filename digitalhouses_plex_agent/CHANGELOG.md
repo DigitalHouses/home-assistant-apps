@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Prepare DH Sync Discovery Contract v1 for the next approved Plex Agent release:
+  publish the canonical product/source/running version to retained QoS1
+  DigitalHouses/Global/digitalhouses_plex_agent[/<instance_id>]/sync
+  on MQTT connect/reconnect through existing Paho; preserve all existing
+  MQTT/HA identities, availability/LWT and reconnect/backoff behavior.
+  No executable release is created by this source-only PR.
+
 ## 0.8.17
 
 - Add dh-plex-agent update: latest published stable Plex release, existing independent systemd update worker, backup, verification and rollback; no MQTT dependency or Plex Server restart. Preserve installed INI, reject concurrent updates and print UP_TO_DATE when current.

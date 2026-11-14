@@ -34,6 +34,20 @@ Discovery alone uses retained QoS1 with a bounded two-second PUBACK wait and one
 
 Lovelace example: [plex-dashboard.yaml](examples/lovelace/plex-dashboard.yaml)
 
+### DH Sync Discovery Contract v1 (pending runtime release)
+
+The next approved Plex Agent release will publish canonical product/source
+metadata to DigitalHouses/Global/digitalhouses_plex_agent/sync for the
+default instance, or to
+DigitalHouses/Global/digitalhouses_plex_agent/<instance_id>/sync
+for extra instances, using retained QoS1 on every successful MQTT
+connect/reconnect. The six fields are schema, product_id, type, running
+version, repository and product_path. No credentials, home IP, commit
+authorization, heartbeat or new Home Assistant entities are added.
+See [DH Sync compatibility and metadata contract](docs/DH_SYNC_COMPATIBILITY.md).
+Installed agent 0.8.17 does not yet provide this feature: an approved
+version increment, release and installation are required.
+
 ### DH Sync canonical resources (review preview)
 
 For DH Sync v1, the operator-approved **Russian view** is [dashboards/ru/10_plex.yaml](dashboards/ru/10_plex.yaml) (`DH-View-Version: 1.0.0`, existing `path: dh-plex-agent`). The current **Recorder package** is [packages/common/dh_plex_app_package.yaml](packages/common/dh_plex_app_package.yaml) (`DH-Package-Version: 1.0.0`, preserved `dh_app_plex_monitoring_package` key). Only DH metadata comments differ from the existing examples; no runtime agent or HA installation changes are made.

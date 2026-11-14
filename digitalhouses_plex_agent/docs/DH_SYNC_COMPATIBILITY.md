@@ -12,6 +12,45 @@ Status: product-team Draft PR. HOME baseline and agent v0.8.17 verified; DH Sync
 - Version entity: `sensor.dh_plex_agent_version`; source: the running release build info in the existing state payload. Started-at entity: `sensor.dh_plex_agent_started_at` (timestamp). No new health heartbeat required.
 - There is no new machine-readable uninstall tombstone in this PR. DH Sync must retain a known product on `offline` and require confirmed removal before deleting its own resources.
 
+## DH Sync Discovery Contract v1 — product source MQTT
+
+Starting with the next explicitly approved Plex Agent runtime release,
+the existing Paho MQTT client publishes the new metadata topic on
+successful connect and on every reconnect:
+
+- Standard instance (instance_id=plex):
+  DigitalHouses/Global/digitalhouses_plex_agent/sync
+- Additional instance (for example plex_guest):
+  DigitalHouses/Global/digitalhouses_plex_agent/plex_guest/sync
+
+The topic is derived from the canonical product registry identity and
+stable instance ID, NOT the configurable legacy mqtt.topic_prefix.
+
+Exact JSON fields for the default instance (the shown version is only an
+example; the runtime uses BuildInfo.version, validated against VERSION):
+
+    {"schema":1,"product_id":"digitalhouses_plex_agent",
+     "type":"agent","version":"0.8.17",
+     "repository":"https://github.com/DigitalHouses/home-assistant-apps",
+     "product_path":"digitalhouses_plex_agent"}
+
+Paho publishes with QoS 1, retain=true through the existing connection,
+without an extra heartbeat, process, thread, retry policy, credentials
+or private-site details. It does not block the Paho network callback
+waiting for PUBACK. This process's build/version is immutable: when an
+updated agent starts, it connects again and announces the new version.
+
+Existing product-level availability, retained offline LWT, Discovery
+device/unique/entity IDs, Version/Started-at sensors, and MQTT_PAUSED
+fail-safe behavior remain unchanged. A retained /sync topic is only
+MQTT-claimed source metadata: it never authorizes installation or
+uninstallation. DH Sync validates DigitalHouses owner, immutable Git
+resource revisions, compatibility, backup and operator approval separately.
+
+Current deployed Plex Agent 0.8.17 does NOT publish /sync. It becomes
+live only following a separately approved new agent release and upgrade.
+Canonical dashboard/package versions are independent of agent version.
+
 ## Canonical resources
 
 | Resource | Path | Revision | Source |

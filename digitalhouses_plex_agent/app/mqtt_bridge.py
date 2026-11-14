@@ -18,10 +18,13 @@ class MqttBridge:
         config: AppConfig,
         topics: Topics,
         discovery_payload: dict[str, Any],
+        *,
+        sync_payload: dict[str, object] | None = None,
     ) -> None:
         self.config = config
         self.topics = topics
         self.discovery_payload = discovery_payload
+        self.sync_payload = sync_payload
         self.log = logging.getLogger(__name__)
 
         self.refresh_requested = threading.Event()
@@ -97,6 +100,17 @@ class MqttBridge:
         client.subscribe(self.topics.update_install)
         client.subscribe(self.topics.restart_agent)
         self._publish(self.topics.app_availability, "online")
+        if self.sync_payload is not None:
+            # Callback-safe: enqueue once per successful (re)connect, without
+            # waiting for PUBACK inside Paho's network callback. Retained QoS1
+            # is retransmitted by Paho when the connection is interrupted.
+            self._publish(
+                self.topics.sync,
+                json.dumps(self.sync_payload, ensure_ascii=False,
+                           sort_keys=True, separators=(",", ":")),
+                qos=1,
+                retain=True,
+            )
         self.republish_requested.set()
         self.wake_requested.set()
 

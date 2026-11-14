@@ -75,6 +75,7 @@ class MqttReliabilityTests(unittest.TestCase):
             diagnostic_event="plex/events", collector_availability="plex/collector",
             plex_api_availability="plex/api", agent_card_state="plex/card", update_state="plex/update")
         b.discovery_payload = {}
+        b.sync_payload = None
         b._collector_available = None
         b._plex_api_available = None
         return b
