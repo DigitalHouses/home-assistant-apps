@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2.0
+
+- Add operator-triggered read-only CORE HAOS YAML audit through Supervisor homeassistant_config map with read_only: true.
+- Compare pinned PVE Proxmox/UPS and Plex resources against local DigitalHouses views by Lovelace path, exact SHA-256 and parsed YAML. Present a bounded, HTML-escaped diff of modified view YAML.
+- Detect absent views, occupied filenames, duplicate YAML paths and matching Lovelace Storage views including modern .storage/lovelace.<dashboard> variants, without exposing Storage JSON.
+- Default Ingress never scans local files; GitHub preview and local audit require distinct GET actions. HTTP POST still returns 405.
+- Fail closed for missing or writable mount, symlink, unreadable/malformed or oversized files, and source identity mismatch.
+- No HA Core API, writable HA mount, backup, Apply, rollback, Recorder mutation or automatic restart in v0.2.0.
+
 ## 0.1.4
 
 - Pin the immutable approved merged PR #502 commit for both PVE Proxmox/UPS views and merged PR #508 for Plex Dashboard; do not fetch unreviewed Draft sources.

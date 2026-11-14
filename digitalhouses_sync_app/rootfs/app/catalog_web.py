@@ -21,12 +21,17 @@ table.views{table-layout:fixed}table.views th:nth-child(1){width:23%}
 table.views th:nth-child(2){width:22%}table.views th:nth-child(3){width:22%}
 table.views th:nth-child(4){width:33%}
 table.views td{overflow-wrap:anywhere;word-break:normal}
+pre{white-space:pre-wrap;overflow-wrap:anywhere;max-height:370px;overflow:auto;
+background:#111619;padding:12px;border:1px solid #343d43;border-radius:6px;
+font:12px ui-monospace,monospace}
+details{margin-top:8px}summary{cursor:pointer;color:#91caed}
+.warn{color:#ffcf86}
 """
 
 def _h(value: object) -> str:
     return html.escape(str(value), quote=True)
 
-def make_server(sources: ProductSources, inventory: Inventory, *, version: str = 'development', port: int = 8099, inspect=None):
+def make_server(sources: ProductSources, inventory: Inventory, *, version: str = 'development', port: int = 8099, inspect=None, audit=None):
     class Handler(BaseHTTPRequestHandler):
         server_version = "DHSync/" + version
 
@@ -124,22 +129,92 @@ def make_server(sources: ProductSources, inventory: Inventory, *, version: str =
                 "Требуется отдельная проверка установленного HA и согласование "
                 "совместимости с версиями агентов.</p></section>"
             )
+            # Local config is read from Supervisor's RO bind only on GET.
+            audit_html = (
+                "<section><h2>Файлы CORE · локальное сравнение</h2>"
+                "<p>Проверка локальных YAML панели DigitalHouses и конфликтов "
+                "Lovelace Storage. Конфигурация HAOS подключена "
+                "<b>только для чтения</b>.</p>"
+                "<p><a href='?local=1'>Сравнить с файлами CORE</a></p>"
+            )
+            if audit is not None and parse_qs(urlsplit(self.path).query).get("local") == ["1"]:
+                try:
+                    result = audit(records)
+                    if not result["ready"]:
+                        audit_html += "<p class='warn'>Аудит недоступен. Никаких изменений.</p>"
+                    else:
+                        audit_html += (
+                            "<p class='muted'>Проверено файлов Lovelace Storage: " +
+                            str(result["storage_files_examined"]) + ". "
+                            "Содержимое Storage не показывается.</p>"
+                        )
+                    for issue in result["issues"]:
+                        audit_html += "<p class='warn'>Проверка: " + _h(issue) + "</p>"
+                    if result["ready"]:
+                        audit_html += (
+                            "<table class='views'><thead><tr>"
+                            "<th>Продукт</th><th>View / файл CORE</th>"
+                            "<th>SHA-256 (начало)</th><th>Сравнение</th>"
+                            "</tr></thead><tbody>"
+                        )
+                        for item in result["products"]:
+                            if item["source_error"]:
+                                audit_html += (
+                                    "<tr><td>" + _h(item["product"]) +
+                                    "</td><td>—</td><td>—</td><td>" +
+                                    _h(item["source_error"]) + "</td></tr>"
+                                )
+                            for view in item["views"]:
+                                source = view["source_sha256"][:12] or "—"
+                                local = view["local_sha256"][:12] or "—"
+                                row = (
+                                    "<tr><td>" + _h(item["product"]) +
+                                    "<br><small>v" + _h(item["version"]) +
+                                    "</small></td><td>" + _h(view["title"]) +
+                                    "<br><code>" + _h(view["local_file"] or "нет файла") +
+                                    "</code><br><small>" + _h(view["view_path"]) +
+                                    "</small></td><td><code>GitHub " + _h(source) +
+                                    "<br>CORE " + _h(local) +
+                                    "</code></td><td>" + _h(view["status"])
+                                )
+                                delta = view.get("diff")
+                                if delta and delta.get("preview"):
+                                    row += (
+                                        "<details><summary>Различия +" +
+                                        str(delta["added"]) + " / -" +
+                                        str(delta["removed"]) +
+                                        "</summary><pre>" +
+                                        _h(delta["preview"]) + "</pre></details>"
+                                    )
+                                audit_html += row + "</td></tr>"
+                        audit_html += "</tbody></table>"
+                except Exception:
+                    audit_html += (
+                        "<p class='warn'>Ошибка локального аудита. "
+                        "Никаких изменений HAOS не производилось.</p>"
+                    )
+            audit_html += (
+                "<p class='muted'>Только сравнение, не установка. "
+                "Не создаёт резервные копии и не меняет .storage, YAML, "
+                "Recorder или Home Assistant. Перед Apply понадобятся "
+                "отдельные резервные копии и подтверждение.</p></section>"
+            )
             page = (
                 "<!doctype html><html lang='ru'><head><meta charset='utf-8'>"
                 "<meta name='viewport' content='width=device-width,initial-scale=1'>"
                 "<title>DigitalHouses Sync</title><style>" + STYLE +
                 "</style></head><body><header><h1>DigitalHouses Sync · v" + _h(version) + "</h1>"
-                "<small>Каталог MQTT продуктов · только чтение</small></header><main>"
+                "<small>MQTT и аудит dashboards · только чтение</small></header><main>"
                 "<section><h2>Обнаруженные агенты и приложения (" +
                 str(len(records)) + ")</h2><table><thead><tr>"
                 "<th>Продукт / Instance</th><th>Версия</th><th>Доступность</th>"
                 "<th>Репозиторий / Каталог</th></tr></thead><tbody>" +
-                rows + "</tbody></table></section>" + preview_html + "<section>"
+                rows + "</tbody></table></section>" + preview_html + audit_html + "<section>"
                 "<p>Принимаются только репозитории GitHub организации "
                 "<b>DigitalHouses</b>. Метаданные получены из MQTT и сами по "
                 "себе не разрешают установку.</p>"
                 "<p class='muted'>В этой версии нет обновления YAML, доступа "
-                "к конфигурации Home Assistant, запуска агентов или "
+                "на запись к конфигурации Home Assistant, запуска агентов или "
                 "автоматического удаления продуктов.</p></section></main>"
                 "</body></html>"
             )

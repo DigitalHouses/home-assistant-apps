@@ -30,3 +30,18 @@ See [First version](docs/FIRST_VERSION.md), [MQTT Discovery Contract](docs/DH_SY
 ## GitHub dashboards preview (v0.1.3)
 
 The admin-only Ingress panel now offers an explicit **Проверить GitHub-ресурсы** GET link. It reads the `dashboards/ru/` directory of the recognized products at fixed immutable Git SHAs; MQTT supplies identity and installed version only, never the Git revision or a download URL. The preview displays all discovered views, their independent `DH-View-Version`, compatibility header and current source-approval status. This feature does not compare Home Assistant's local files and does not authorize an update. PVE #502 and Plex #508 have merged, and the approved YAML ranges now include PVE 0.5.89 and Plex 0.8.18. This is source compatibility only; installed HAOS YAML is not compared or modified. The installed App still has no Home Assistant config mount, YAML Apply or rollback path.
+
+## CORE local YAML audit (v0.2.0)
+
+The admin-only Ingress has an explicit **Сравнить с файлами CORE** link.
+Supervisor maps only homeassistant_config to /homeassistant with read_only: true.
+No Core API is granted. It compares the installed DigitalHouses views against
+the two previously approved immutable product commits, showing byte hashes,
+semantic YAML equality, missing views and a bounded diff when applicable.
+It looks only at the Lovelace Storage dashboard view paths, not their contents
+in the UI. Existing Plex Storage dashboards are treated as migration conflicts,
+never silently installed over. A failure to verify the read-only map blocks
+the audit. The installed App still has no POST handling or any YAML write path.
+
+Backup and rollback are not activated in v0.2.0: their design must follow the
+actual CORE read-only comparison, and a separate operator approval is required.

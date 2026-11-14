@@ -436,7 +436,7 @@ jobs:
       - name: Smoke-test Alpine Paho compatibility in built HAOS image
         run: |
           APP_VERSION="$(awk '$1 == "version:" {gsub(/"/,"",$2);print $2;exit}' digitalhouses_sync_app/config.yaml)"
-          docker run --rm --entrypoint python3 "dh-sync-preview:$APP_VERSION" -c 'import sys; sys.path.insert(0, "/app"); from app import create_mqtt_client, on_connect; from resource_preview import PreviewCatalog; c = create_mqtt_client(); assert c is not None; assert PreviewCatalog(); print("HAOS MQTT + preview imports OK")'
+          docker run --rm --entrypoint python3 "dh-sync-preview:$APP_VERSION" -c 'import sys; sys.path.insert(0, "/app"); from app import create_mqtt_client, on_connect; from resource_preview import PreviewCatalog; from local_audit import LocalAuditor; c = create_mqtt_client(); assert c is not None; assert PreviewCatalog(); assert LocalAuditor(); print("HAOS MQTT + preview + local audit imports OK")'
 
   stats-server:
     name: Stats Server
