@@ -1,6 +1,6 @@
 # DH Sync v0.1.0 — первый рабочий кандидат
 
-**Статус: исходный код в Draft PR #499, образ GHCR ещё не опубликован.** Никаких автоматических изменений CORE/HOME.
+**Статус: исходный код в Draft PR #499, подготовлен release metadata для будущего GHCR, образ ещё не опубликован.** Никаких автоматических изменений CORE/HOME.
 
 ## Что делает v0.1.0
 
@@ -71,3 +71,19 @@ host, userinfo, URL encoding, redirect URL, портов и traversal. В пил
 адресам из MQTT запрещён: текущий SyncEngine использует три pinned commit.
 
 Подробности: [Discovery Contract v1](DH_SYNC_DISCOVERY_CONTRACT_V1.md).
+
+
+## Подготовка к штатному релизу (2026-11-14)
+
+В реестре `digitalhouses-stats/digitalhouses_stats/product_registry.json` для
+`digitalhouses_sync_app` добавлен `release` c `version_source: haos_config`
+и baseline `0.0.0`. Поле `telemetry_allowed: false` **не изменено**.
+Changelog теперь содержит релизный заголовок `## 0.1.0` для автоматической
+проверки release intent. Образ нельзя публиковать из Draft PR: сначала
+пройти YAML compatibility gates, App permissions/release governance, затем
+review + merge. Штатный workflow после merge должен автоматически сделать
+`digitalhouses_sync_app-v0.1.0` и GHCR arch/version image с digest.
+
+**Каталог MQTT уже проверяется на фактически полученных CORE-пакетах**;
+первый интерфейсный пилот на CORE проводить с `allow_changes: false`.
+Никакой прямой установки исходников из ветки и ручной публикации tag/image.

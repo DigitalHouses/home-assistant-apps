@@ -37,6 +37,21 @@ def validate_sync_app(root: Path, app: Path, context: dict) -> None:
         app / "logo.png",
     ])
     config = context["config"]
+    registry_path = root / "digitalhouses-stats/digitalhouses_stats/product_registry.json"
+    import json
+    registry = json.loads(registry_path.read_text(encoding="utf-8"))
+    product = next((entry for entry in registry.get("products", [])
+                    if entry.get("id") == "digitalhouses_sync_app"), None)
+    if not product or product.get("telemetry_allowed") is not False:
+        fail("DH Sync: registry identity or privacy-disabled telemetry changed")
+    if product.get("release") != {
+        "title": "DigitalHouses Sync App",
+        "version_source": "haos_config",
+        "policy_baseline": "0.0.0",
+    }:
+        fail("DH Sync: canonical release configuration is required")
+    if config.get("version") != "0.1.0":
+        fail("DH Sync: source version must match first release candidate")
     if config.get("slug") != "digitalhouses_sync_app":
         fail("DH Sync: incorrect Supervisor slug")
     maps = config.get("map", [])
