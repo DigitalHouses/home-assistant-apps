@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.4.1
+
+- Separate automatic synchronization statuses into Dashboards and Packages, showing each resource's local `/config/` path.
+- Keep synchronization engine and Git source rules unchanged; `examples/` remains excluded.
+
 ## 0.4.0
 
 - Enable zero-click automatic dashboard and Home Assistant package sync after MQTT discovery and hourly.
