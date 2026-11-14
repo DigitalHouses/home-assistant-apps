@@ -13,10 +13,11 @@ import threading
 from pathlib import Path
 from urllib.parse import urlsplit
 
-PRODUCT_RE = re.compile(r"digitalhouses_[a-z0-9_]+_(?:app|agent)\Z", re.ASCII)
-INSTANCE_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,95}\Z", re.ASCII)
-REPOSITORY_RE = re.compile(r"[A-Za-z0-9_.-]{1,100}\Z", re.ASCII)
-VERSION_RE = re.compile(r"[0-9]+\.[0-9]+\.[0-9]+(?:[-+][0-9A-Za-z.+-]+)?\Z", re.ASCII)
+# Source admission has ONE rule: GitHub repository owner DigitalHouses.
+# The remaining parsing is transport hygiene, not a product approval registry.
+TOPIC_PART = re.compile(r"[A-Za-z0-9_][A-Za-z0-9_.-]{0,95}\Z", re.ASCII)
+REPO_PART = re.compile(r"[A-Za-z0-9_.-]{1,100}\Z", re.ASCII)
+FOLDER_PART = re.compile(r"[A-Za-z0-9_][A-Za-z0-9_.-]{0,99}\Z", re.ASCII)
 SOURCE_ROOT = "DigitalHouses/Global/"
 EXPECTED_OWNER = "DigitalHouses"
 MAX_PAYLOAD = 4096
@@ -27,32 +28,40 @@ class DiscoveryError(ValueError):
 
 
 def canonical_repository(value: str) -> str:
-    """Reject host confusion, credentials, encodings, ports and path traversal."""
-    if not isinstance(value, str) or not value or len(value) > 220:
-        raise DiscoveryError("Missing or oversized repository URL")
+    """Accept any actual GitHub repository under the DigitalHouses owner."""
+    if not isinstance(value, str) or len(value) > 220:
+        raise DiscoveryError("Repository URL missing or oversized")
     if not value.isascii() or any(ord(c) <= 32 or ord(c) == 127 for c in value):
-        raise DiscoveryError("Repository URL must be printable ASCII without whitespace")
-    # Reject ambiguous userinfo, URL encoding, backslashes and fragments outright.
+        raise DiscoveryError("Invalid repository URL")
     if any(c in value for c in ("@", "%", "\\", "?", "#")):
-        raise DiscoveryError("Ambiguous repository URL syntax")
+        raise DiscoveryError("Ambiguous repository URL")
     try:
-        parsed = urlsplit(value)
+        url = urlsplit(value)
     except ValueError as exc:
         raise DiscoveryError("Malformed repository URL") from exc
-    if (parsed.scheme != "https" or parsed.netloc.lower() != "github.com"
-            or parsed.hostname != "github.com" or parsed.username is not None
-            or parsed.password is not None or parsed.query or parsed.fragment):
-        raise DiscoveryError("Only a direct HTTPS github.com repository is allowed")
-    segments = parsed.path.split("/")
-    if len(segments) != 3 or segments[0] != "":
-        raise DiscoveryError("Repository URL must be /DigitalHouses/<repository>")
-    owner, name = segments[1:]
-    if owner.lower() != EXPECTED_OWNER.lower():
-        raise DiscoveryError("Repository owner is not DigitalHouses")
-    if (not REPOSITORY_RE.fullmatch(name) or name in (".", "..")
-            or name.startswith("-") or name.endswith(".git")):
-        raise DiscoveryError("Invalid repository name")
+    if (url.scheme != "https" or url.netloc.lower() != "github.com"
+            or url.hostname != "github.com" or url.username is not None
+            or url.password is not None or url.port is not None):
+        raise DiscoveryError("Repository must be a direct GitHub HTTPS URL")
+    parts = url.path.removesuffix("/").split("/")
+    if len(parts) != 3 or parts[0] or parts[1].lower() != EXPECTED_OWNER.lower():
+        raise DiscoveryError("GitHub repository owner must be DigitalHouses")
+    name = parts[2]
+    if not REPO_PART.fullmatch(name) or name in (".", ".."):
+        raise DiscoveryError("Missing or invalid GitHub repository name")
     return f"https://github.com/{EXPECTED_OWNER}/{name}"
+
+
+def safe_product_path(value: object, product: str) -> str:
+    """A safe relative lookup location; bad metadata falls back to product ID."""
+    if not isinstance(value, str) or not value or len(value) > 240:
+        return product
+    if value == ".":
+        return "."
+    parts = value.split("/")
+    if any(not FOLDER_PART.fullmatch(part) or part in (".", "..") for part in parts):
+        return product
+    return "/".join(parts)
 
 
 def parse_sync_topic(topic: str) -> tuple[str, str] | None:
@@ -65,7 +74,7 @@ def parse_sync_topic(topic: str) -> tuple[str, str] | None:
         product, instance = parts[0], parts[1]
     else:
         return None
-    if not PRODUCT_RE.fullmatch(product) or not INSTANCE_RE.fullmatch(instance):
+    if not TOPIC_PART.fullmatch(product) or not TOPIC_PART.fullmatch(instance):
         return None
     return product, instance
 
@@ -73,44 +82,29 @@ def parse_sync_topic(topic: str) -> tuple[str, str] | None:
 def validate_sync_message(topic: str, payload: bytes | str) -> tuple[str, dict]:
     identity = parse_sync_topic(topic)
     if identity is None:
-        raise DiscoveryError("Unsupported product sync topic")
+        raise DiscoveryError("Unsupported MQTT sync topic")
     raw = payload.encode("utf-8") if isinstance(payload, str) else payload
     if not isinstance(raw, bytes) or not raw or len(raw) > MAX_PAYLOAD:
-        raise DiscoveryError("Invalid MQTT sync payload size")
+        raise DiscoveryError("Invalid MQTT payload size")
     try:
-        message = json.loads(raw.decode("utf-8"))
+        message = json.loads(raw.decode("utf-8", "strict"))
     except (UnicodeError, json.JSONDecodeError) as exc:
         raise DiscoveryError("Invalid MQTT sync JSON") from exc
     if not isinstance(message, dict):
-        raise DiscoveryError("MQTT sync payload must be an object")
-    required = ("schema", "product_id", "type", "version", "repository", "product_path")
-    if any(key not in message for key in required):
-        raise DiscoveryError("Required discovery field is missing")
-    if type(message["schema"]) is not int or message["schema"] != 1:
-        raise DiscoveryError("Unsupported discovery schema")
-    product_id = identity[0]
-    if message["product_id"] != product_id:
-        raise DiscoveryError("MQTT topic and product_id do not match")
-    expected_type = "agent" if product_id.endswith("_agent") else "app"
-    if message["type"] != expected_type:
-        raise DiscoveryError("Product type does not match its identity")
-    if not isinstance(message["version"], str) or not VERSION_RE.fullmatch(message["version"]):
-        raise DiscoveryError("Invalid product version")
-    repo = canonical_repository(message["repository"])
-    path = message["product_path"]
-    if path != "." and (not isinstance(path, str) or not PRODUCT_RE.fullmatch(path)):
-        raise DiscoveryError("product_path must be a canonical product directory or '.'")
-    if repo.lower() == "https://github.com/digitalhouses/home-assistant-apps":
-        if path != product_id:
-            raise DiscoveryError("Monorepo product_path must match product_id")
-    key = product_id + "/" + identity[1]
-    return key, {
+        raise DiscoveryError("MQTT sync payload must be a JSON object")
+
+    # Only rejection/approval condition for a well-formed message.
+    repo = canonical_repository(message.get("repository"))
+    product, instance = identity
+    version = message.get("version")
+    product_type = message.get("type")
+    return product + "/" + instance, {
         "schema": 1,
-        "product_id": product_id,
-        "type": expected_type,
-        "version": message["version"],
+        "product_id": product,  # the topic is authoritative for the identity
+        "type": product_type if isinstance(product_type, str) else "unknown",
+        "version": version if isinstance(version, str) else "unknown",
         "repository": repo,
-        "product_path": path,
+        "product_path": safe_product_path(message.get("product_path"), product),
     }
 
 
