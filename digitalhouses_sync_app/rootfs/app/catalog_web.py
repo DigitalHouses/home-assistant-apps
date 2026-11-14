@@ -22,9 +22,9 @@ code{font:12px ui-monospace,monospace;color:#bddbf1}
 def _h(value: object) -> str:
     return html.escape(str(value), quote=True)
 
-def make_server(sources: ProductSources, inventory: Inventory, *, port: int = 8099):
+def make_server(sources: ProductSources, inventory: Inventory, *, version: str = 'development', port: int = 8099):
     class Handler(BaseHTTPRequestHandler):
-        server_version = "DHSync/0.1"
+        server_version = "DHSync/" + version
 
         def _send(self, code: int, content: str) -> None:
             body = content.encode("utf-8")
@@ -76,7 +76,7 @@ def make_server(sources: ProductSources, inventory: Inventory, *, port: int = 80
                 "<!doctype html><html lang='ru'><head><meta charset='utf-8'>"
                 "<meta name='viewport' content='width=device-width,initial-scale=1'>"
                 "<title>DigitalHouses Sync</title><style>" + STYLE +
-                "</style></head><body><header><h1>DigitalHouses Sync · v0.1.0</h1>"
+                "</style></head><body><header><h1>DigitalHouses Sync · v" + _h(version) + "</h1>"
                 "<small>Каталог MQTT продуктов · только чтение</small></header><main>"
                 "<section><h2>Обнаруженные агенты и приложения (" +
                 str(len(records)) + ")</h2><table><thead><tr>"

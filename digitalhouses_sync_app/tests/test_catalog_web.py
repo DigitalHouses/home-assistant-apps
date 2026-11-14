@@ -45,7 +45,7 @@ class CatalogTests(unittest.TestCase):
                 pve.removesuffix("/sync") + "/availability", "online")
             inventory.apply(
                 plex.removesuffix("/sync") + "/availability", "online")
-            server = make_server(sources, inventory, port=0)
+            server = make_server(sources, inventory, version="0.1.2", port=0)
             server.timeout = 2
             thread = threading.Thread(
                 target=lambda: [server.handle_request() for _ in range(2)],
@@ -59,6 +59,7 @@ class CatalogTests(unittest.TestCase):
                     "digitalhouses_pve_agent", "digitalhouses_plex_agent",
                     "0.5.89", "0.8.18", "Online",
                     "home-assistant-apps", "0123456789abcdef0123456789abcdef",
+                    "DigitalHouses Sync · v0.1.2",
                 ):
                     self.assertIn(expected, body)
                 self.assertNotIn("<form", body)
@@ -67,6 +68,60 @@ class CatalogTests(unittest.TestCase):
             finally:
                 server.server_close()
                 thread.join(timeout=4)
+
+    def test_self_availability_is_online_in_catalog(self):
+        import json
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            sources = ProductSources(root / "sources.json")
+            inventory = Inventory(root / "inventory.json")
+            sources.apply(
+                "DigitalHouses/Global/digitalhouses_sync_app/sync",
+                json.dumps({
+                    "schema": 1, "product_id": "digitalhouses_sync_app",
+                    "type": "app", "version": "0.1.2",
+                    "repository": "https://github.com/DigitalHouses/home-assistant-apps",
+                    "product_path": "digitalhouses_sync_app"
+                }),
+            )
+            self.assertTrue(inventory.apply(
+                "DigitalHouses/Global/digitalhouses_sync_app/availability",
+                "online",
+            ))
+            server = make_server(sources, inventory, version="0.1.2", port=0)
+            server.timeout = 2
+            thread = threading.Thread(target=server.handle_request, daemon=True)
+            try:
+                thread.start()
+                status, body = fetch(server)
+                self.assertEqual(status, 200)
+                self.assertIn("digitalhouses_sync_app", body)
+                self.assertIn("DigitalHouses Sync · v0.1.2", body)
+                self.assertIn("Online", body)
+                self.assertNotIn("Unknown</span>", body)
+            finally:
+                server.server_close()
+                thread.join(timeout=3)
+
+    def test_version_header_escapes_text(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            server = make_server(
+                ProductSources(root / "sources.json"),
+                Inventory(root / "inventory.json"),
+                version="<script>alert(1)</script>", port=0,
+            )
+            server.timeout = 2
+            thread = threading.Thread(target=server.handle_request, daemon=True)
+            try:
+                thread.start()
+                status, body = fetch(server)
+                self.assertEqual(status, 200)
+                self.assertNotIn("<script>", body)
+                self.assertIn("&lt;script&gt;", body)
+            finally:
+                server.server_close()
+                thread.join(timeout=3)
 
     def test_empty_catalog_does_not_claim_products_are_absent(self):
         with tempfile.TemporaryDirectory() as directory:

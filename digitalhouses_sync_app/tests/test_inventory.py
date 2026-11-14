@@ -37,6 +37,17 @@ class InventoryTest(unittest.TestCase):
                 Inventory(path).known["digitalhouses_pve_agent/abc"], "offline"
             )
 
+    def test_sync_app_self_availability_topic(self):
+        topic = "DigitalHouses/Global/digitalhouses_sync_app/availability"
+        self.assertEqual(parse_availability(topic), ("digitalhouses_sync_app", "default"))
+        with tempfile.TemporaryDirectory() as t:
+            inventory = Inventory(Path(t) / "inventory.json")
+            self.assertTrue(inventory.apply(topic, "online"))
+            self.assertEqual(inventory.known["digitalhouses_sync_app/default"], "online")
+            self.assertTrue(inventory.apply(topic, "offline"))
+            # Never remove a discovered product when it goes offline.
+            self.assertEqual(inventory.known["digitalhouses_sync_app/default"], "offline")
+
     def test_unknown_topic_is_ignored(self):
         with tempfile.TemporaryDirectory() as t:
             inventory = Inventory(Path(t) / "inventory.json")

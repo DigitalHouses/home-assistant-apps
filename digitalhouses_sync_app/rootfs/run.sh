@@ -16,5 +16,5 @@ if [[ -z "${MQTT_HOST}" || -z "${MQTT_PORT}" ]]; then
   exit 1
 fi
 
-bashio::log.info "DH Sync v0.1.0: MQTT-only read-only product catalog."
+bashio::log.info "DH Sync v${APP_VERSION}: MQTT-only read-only product catalog."
 exec python3 /app/app.py
