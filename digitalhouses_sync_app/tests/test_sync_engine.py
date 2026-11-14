@@ -168,7 +168,7 @@ class SyncEngineTests(unittest.TestCase):
             self.engine.apply(p["fingerprint"], approved=True)
         for name, raw in self.initial.items():
             self.assertEqual(self.home.joinpath("dashboards/dh/views", name).read_bytes(), raw)
-        self.assertEqual(self.engine.last_transaction()["phase"], "rolled_back_auto")
+        self.assertEqual(self.engine.last_transaction()["phase"], "recovery_required")
 
     def test_rollback_refuses_new_user_changes(self):
         p = self.engine.plan()
