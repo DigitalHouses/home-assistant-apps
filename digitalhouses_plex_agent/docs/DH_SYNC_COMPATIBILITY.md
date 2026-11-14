@@ -70,6 +70,16 @@ This is a **Draft compatibility review**. Before it may merge, the product owner
 must confirm the Plex view renders on 0.8.18. This does not authorize automatic
 Storage migration, a new dashboard sidebar, package installation or any HA writes.
 
+## Live operator check — 2026-11-14
+
+On CORE the product's retained MQTT /sync reported Plex Agent 0.8.18
+and the DigitalHouses catalog showed it Online. After an explicit request
+to inspect the existing Proxmox, UPS and Plex dashboards, the operator
+reported «все видно». This confirms a visible Plex dashboard in the user's
+HA environment running the announced agent version; it is not evidence
+of a new DH Sync YAML deployment, Storage migration, Recorder reconfiguration
+or transaction rollback. The original view/package bodies remain unchanged.
+
 ## Canonical resources
 
 | Resource | Path | Revision | Source |
