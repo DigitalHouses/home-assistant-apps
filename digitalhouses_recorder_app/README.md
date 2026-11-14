@@ -39,10 +39,28 @@ It reads canonical YAML from the default branch on discovery and periodically.
 There is **no product allowlist, pinned SHA, app-version compatibility gate,
 manual Preview/Apply approval, or separate dashboard release**.
 
-Published resource: [Russian Lovelace view](dashboards/ru/10_recorder.yaml),
-a standalone `sections` view with stable `path: recorder`. Its
-`DH-View-Version: 1.0.0` comment is informative only. No Recorder HA package
-is published; `examples/` remains examples only. English locale is pending.
+Published canonical resources:
+
+- [Russian Lovelace view](dashboards/ru/10_recorder.yaml), a standalone
+  `sections` view with stable `path: recorder`; its
+  `DH-View-Version: 1.0.0` comment is informational only.
+- [Recorder selection package](packages/common/dh_recorder_app.yaml), stable
+  YAML key `dh_recorder_app_package`. It includes only the existing twelve
+  Recorder health/usage entities.
+- [Russian storage notifications](packages/locales/ru/dh_recorder_app_notification_package.yaml),
+  stable YAML key `dh_recorder_app_notification_package` and automation ID
+  `dh_recorder_notifications`. The existing two diagnostic MQTT events call
+  `script.write2log` directly. **Prerequisite:** the shared DigitalHouses
+  `write2log` script must be deployed in each home. This package requires
+  an explicit exception to the current public notification standard, which
+  otherwise treats `script.write2log` as site-specific.
+
+DH Sync matches existing packages by their top-level YAML keys and keeps
+their existing paths (for example `/config/packages/Global/DH_APP/`).
+New packages go under `/config/packages/dh/`. Changes are backed up and
+written automatically; Home Assistant may need a normal restart before newly
+published package configuration takes effect. `examples/` is never synced;
+English locale is pending.
 
 DH Sync finds an existing YAML view by `path: recorder` and automatically
 updates it in `/config/dashboards/dh/views/` when bytes differ, retaining its
