@@ -139,6 +139,12 @@ class OwnerOnlyDiscoveryTests(unittest.TestCase):
         self.assertIn("Duplicate Lovelace",row["error"])
         self.assertEqual(row["views"],[])
 
+    def test_owned_product_may_publish_masonry_view(self):
+        source = b"title: Extra\npath: extra\ntype: masonry\ncards: []\n"
+        parsed = parse_view(source, "dashboards/ru/10_extra.yaml", "any_product")
+        self.assertEqual(parsed["path"], "extra")
+        self.assertEqual(parsed["title"], "Extra")
+
     def test_view_version_headers_are_optional_information_only(self):
         output=parse_view(raw_view("Recorder","recorder",header=False),
                           "dashboards/ru/10_recorder.yaml","digitalhouses_recorder_app")
