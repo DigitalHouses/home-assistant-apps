@@ -23,8 +23,18 @@ The topic is the source of product identity; repository is required for admissio
 
 Retained /sync does not prove online availability or uninstall. Availability remains in its existing product topic. No heartbeat is added.
 
-## Dynamic dashboards
+## Automatic dashboards and packages
 
-On an explicit user action, DH Sync resolves the owned repository's default branch to one Git SHA and reads its dashboards/ru/*.yaml at that revision. DH-View-Version is optional informational metadata. DH-Compatible-Agent/App ranges are not read or enforced; do not publish them as admission requirements. No product has to be manually registered in DH Sync.
+On MQTT product discovery and then periodically, DH Sync resolves the owned
+Git repository's default branch to one Git SHA and reads its canonical YAML
+resources at that revision. No explicit user action, product allowlist,
+compatibility-range check or confirmation is needed.
 
-Basic transport/path safety and standalone YAML parsing remain to keep requests and the read-only view meaningful. In v0.3.0 manual Apply is available through Supervisor admin-only Ingress. A fresh plan captures a commit SHA and local hashes; writes require explicit confirmation, are limited to DigitalHouses YAML views, and create private rollback backups. A duplicate Lovelace Storage view is not migrated automatically. No product is installed or updated merely because its GitHub repository belongs to DigitalHouses.
+File locations and simple identity rules are defined only by
+[DH Sync Resources Standard](../../docs/standards/DH_SYNC_RESOURCES_STANDARD.md).
+The App reads `dashboards/ru/*.yaml`, `packages/common/*.yaml` and
+`packages/locales/ru/*.yaml`, never `examples/`.
+
+Git transport/path safety, duplicate-path/key checks, backups and atomic
+file replacement protect the local HA configuration. No HA restart,
+Lovelace Storage edits, product binary update or automatic deletion occurs.

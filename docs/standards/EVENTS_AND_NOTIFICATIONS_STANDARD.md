@@ -6,7 +6,7 @@
 
 This standard complements [DigitalHouses Contract Data Policy](CONTRACT_DATA_POLICY.md).
 
-All HA YAML notification packages are also subject to [Home Assistant YAML Package Versioning Standard](HA_PACKAGE_VERSIONING_STANDARD.md): independent package version and release date must be present in the package file.
+Canonical notification YAML paths and automatic delivery are defined in [DH Sync Resources Standard](DH_SYNC_RESOURCES_STANDARD.md). Resource-version comment headers are optional.
 
 ---
 
@@ -146,30 +146,23 @@ If durable event retry/outbox logic is used, it must preserve event ordering.
 
 ---
 
-## 6. Local Home Assistant notification package
+## 6. Home Assistant notification package
 
-Human-readable notification logic belongs to the **local Home Assistant installation**.
+The public product publishes machine events without binding them to a local
+notification service.
 
-A local package may use any language and any delivery mechanism required by that installation.
+For optional **automatic DH Sync distribution**, a portable Russian notification
+package belongs in the product's `packages/locales/ru/` directory, as defined
+in [DH Sync Resources Standard](DH_SYNC_RESOURCES_STANDARD.md). Use a standard
+HA delivery action, such as `persistent_notification.create`, that does not
+require private scripts, personal recipients or secrets.
 
-Examples:
+Home Assistant installations may separately maintain customized local delivery
+(`script.write2log`, `notify.mobile_app_*`, Telegram, email, etc.). These
+site-specific files are **not canonical**, and files under `examples/` are
+never synchronized by DH Sync.
 
-```text
-script.write2log
-notify.mobile_app_*
-Telegram
-persistent_notification
-email
-Slack
-TTS
-Node-RED
-webhook
-other local service
-```
-
-This package is installation-specific. It is not part of the public DigitalHouses product contract.
-
-The public App/Agent must work correctly without that package.
+The App/Agent must work correctly without either notification package.
 
 ---
 
@@ -466,9 +459,12 @@ Owns:
 
 ## 17. Public examples
 
-A product may include optional notification examples for documentation.
+A product may include optional notification examples under `examples/` for
+documentation. DH Sync ignores them even when their contents resemble a live
+package.
 
-An example is not a reusable notification protocol and must not introduce an intermediate DigitalHouses event or Envelope.
+An example is not a reusable notification protocol and must not introduce an
+intermediate DigitalHouses event or Envelope.
 
 Public examples should use a replaceable placeholder/familiar Home Assistant delivery action rather than depend on a private service that users do not have.
 

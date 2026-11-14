@@ -1,5 +1,7 @@
 # DigitalHouses Sync App — 0.4.0
 
+**Единый стандарт публикации YAML:** [DH Sync Resources Standard](../docs/standards/DH_SYNC_RESOURCES_STANDARD.md).
+
 DH Sync automatically maintains Home Assistant dashboards and packages from public GitHub repositories owned by **DigitalHouses**. No prompts, buttons, token, paid plan, product allowlist or app-version checks.
 
 ## How it works
@@ -17,7 +19,7 @@ DH Sync never changes `.storage`, product binaries, HA credentials or MQTT confi
 
 The only product-source admission rule is GitHub owner `DigitalHouses`. Safe Git paths, YAML identity and duplicate detection are operational file-integrity checks, not additional product/version gates.
 
-Published canonical package examples:
+Currently published canonical packages:
 - `digitalhouses_pve_agent/packages/common/dh_pve_agent_package.yaml`
 - `digitalhouses_plex_agent/packages/common/dh_plex_app_package.yaml`
 
