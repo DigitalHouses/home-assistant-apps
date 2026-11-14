@@ -246,10 +246,10 @@ class LocalAuditor:
                     row["kind"], row["status"] = "blocked", "Неподтверждённая версия ресурса"
                     continue
                 try:
-                    source_path = product["product"] + "/dashboards/ru/" + view["file"]
+                    source_path = ("" if product["product_path"] == "." else product["product_path"] + "/") + "dashboards/ru/" + view["file"]
                     if not VIEW_NAME.fullmatch(view["file"]):
                         raise AuditError("Unexpected GitHub view filename")
-                    raw = self.fetcher(source_path, product["commit"])
+                    raw = self.fetcher(product["repository"], source_path, product["commit"])
                     if len(raw) > MAX_VIEW_BYTES:
                         raise AuditError("Oversized canonical source")
                     checked = parse_view(raw, source_path, product["product"])

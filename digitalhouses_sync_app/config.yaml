@@ -1,5 +1,5 @@
 name: DigitalHouses Sync App
-version: "0.2.0"
+version: "0.2.1"
 slug: digitalhouses_sync_app
 description: Read-only DigitalHouses MQTT product and GitHub repository catalog.
 url: https://github.com/DigitalHouses/home-assistant-apps/tree/main/digitalhouses_sync_app

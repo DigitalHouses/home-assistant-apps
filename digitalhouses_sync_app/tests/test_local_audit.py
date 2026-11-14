@@ -31,7 +31,8 @@ def yaml_view(product, title, path, *, extra=""):
 
 
 def entry(product, views):
-    return {"product": product, "version": "0.5.89" if product == PVE else "0.8.18",
+    return {"product": product, "repository": REPO, "product_path": product,
+            "version": "0.5.89" if product == PVE else "0.8.18",
             "commit": PINS[product], "error": "",
             "views": [
                 {"title": title, "file": file, "path": path,
@@ -76,8 +77,8 @@ class LocalAuditTests(unittest.TestCase):
         self.fetches = []
 
     def audit(self):
-        def source(path, sha):
-            self.fetches.append((path, sha))
+        def source(repo, path, sha):
+            self.fetches.append((repo, path, sha))
             return self.contents[path]
         return LocalAuditor(self.root, catalog=self.catalog, fetcher=source,
                             require_readonly=False).inspect({})
@@ -91,7 +92,32 @@ class LocalAuditTests(unittest.TestCase):
         self.assertEqual([v["kind"] for p in report["products"] for v in p["views"]],
                          ["identical", "identical", "missing"])
         self.assertEqual(len(self.fetches), 3)
-        self.assertEqual({sha for _,sha in self.fetches}, set(PINS.values()))
+        self.assertEqual({sha for _,_,sha in self.fetches}, set(PINS.values()))
+        self.assertTrue(all(repo == REPO for repo, _, _ in self.fetches))
+
+    def test_owned_dedicated_repo_root_directory(self):
+        self.catalog.entries = [{
+            "product": PLEX, "repository": "https://github.com/DigitalHouses/recorder",
+            "product_path": ".", "version": "0.1.28", "commit": "c"*40,
+            "error": "", "views": [{
+                "title": "Recorder", "file": "10_recorder.yaml", "path": "recorder",
+                "revision": "—", "status": "Владелец DigitalHouses · только просмотр",
+                "blocked": False,
+            }],
+        }]
+        source = (b"type: sections\ntitle: Recorder\npath: recorder\nsections: []\n")
+        source_path = "dashboards/ru/10_recorder.yaml"
+        captured = []
+        def reader(repo, path, sha):
+            captured.append((repo,path,sha))
+            return source
+        report = LocalAuditor(self.root, catalog=self.catalog, fetcher=reader,
+                              require_readonly=False).inspect({})
+        self.assertTrue(report["ready"])
+        self.assertEqual(report["products"][0]["views"][0]["kind"], "missing")
+        self.assertEqual(captured, [(
+            "https://github.com/DigitalHouses/recorder", source_path, "c"*40,
+        )])
 
     def test_semantically_equal_but_comments_changed(self):
         (self.folder/"10_pve_proxmox.yaml").write_bytes(

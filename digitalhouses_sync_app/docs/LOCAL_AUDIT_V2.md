@@ -10,7 +10,7 @@
 
 ## Source and local comparison
 
-- Read-only GitHub preview (v0.1.4) stays anchored to two immutable, merged product commits: PVE `7a2bc76f7c69312366ea70a6d9236549a978d636` and Plex `fd9d257972f0afdf979bfdd27ba7c6c86991fceb`.
+- From v0.2.1, a read-only GitHub preview accepts any repository owned by DigitalHouses, resolves its default branch to a SHA for the requested inspection, and enumerates its dashboards/ru/*.yaml without hardcoded product pins or version gates.
 - No MQTT-provided URL/ref is used to choose a Git download, and no dashboard filenames are advertised via MQTT.
 - The local audit scans only `dashboards/dh/ui.yaml` and bounded `dashboards/dh/views/*.yaml|*.yml` from CORE. It matches views by their Lovelace `path` (not only by basename), and checks a filename collision separately.
 - For each canonical view, compare raw bytes (SHA-256), parsed YAML semantic equality, or produce a bounded escaped unified diff (45 lines / 4500 characters maximum). Differences are shown only for allowlisted dashboard-view YAML, never `secrets.yaml` or other HA settings.
@@ -25,7 +25,7 @@
 | PVE UPS `11_pve_ups.yaml` | `dh_pve_agent_ups` | identical / semantically equal / changed / missing / conflict |
 | Plex `10_plex.yaml` | `dh-plex-agent` | a local YAML match, absent, or a Lovelace Storage conflict |
 
-The current view remains **read-only** regardless of status. `Source-compatible` is only a necessary condition. The UI must never claim Apply is authorized.
+The current view remains **read-only** regardless of status. `GitHub owner DigitalHouses` is a source admission result, not proof of compatibility or permission to Apply.
 
 ## Separate future transaction stage (not enabled)
 

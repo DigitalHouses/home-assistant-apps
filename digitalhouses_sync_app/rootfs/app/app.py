@@ -1,4 +1,4 @@
-"""DH Sync v0.2.0: read-only MQTT catalog and CORE dashboard diff.
+"""DH Sync v0.2.1: owner-only MQTT catalog and CORE dashboard diff.
 
 Home Assistant configuration is mounted read-only for bounded YAML/Storage
 comparison. No Home Assistant API, file writes, installs or YAML Apply.
@@ -24,7 +24,7 @@ PRODUCT_ID = "digitalhouses_sync_app"
 BASE = "DigitalHouses/Global/" + PRODUCT_ID
 DISCOVERY = "homeassistant/device/" + PRODUCT_ID + "/config"
 STARTED_AT = datetime.now(timezone.utc).isoformat()
-VERSION = os.environ.get("APP_VERSION", "0.2.0-local")
+VERSION = os.environ.get("APP_VERSION", "0.2.1-local")
 STATE_PATH = Path("/data/inventory.json")
 SOURCES_PATH = Path("/data/product_sources.json")
 
