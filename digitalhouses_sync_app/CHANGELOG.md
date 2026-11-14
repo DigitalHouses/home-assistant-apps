@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.3
+
+- Add operator-initiated, read-only preview of canonical RU dashboards at immutable pinned GitHub commits.
+- Discover any number of YAML views under each allowed product's `dashboards/ru/`, including both PVE views and the Plex view, without embedding YAML filenames in MQTT.
+- Display view revision, compatibility range, source review state and blocked reasons for running Agent 0.5.89/0.8.18.
+- Validate standalone YAML, duplicate paths and GitHub response origins. Do not introduce HA API access, config mount, YAML Apply or background polling.
+- Add HAOS container smoke coverage and unit tests for GitHub listing, version gates and read-only Ingress.
+
 ## 0.1.2
 
 - Show the installed release version in the Ingress heading and startup log using APP_VERSION instead of hardcoding v0.1.0.

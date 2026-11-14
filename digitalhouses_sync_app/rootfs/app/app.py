@@ -1,4 +1,4 @@
-"""DH Sync v0.1.2: strictly read-only MQTT product catalog.
+"""DH Sync v0.1.3: strictly read-only MQTT product catalog.
 
 No Home Assistant API, HA configuration mount, Git downloads or YAML apply in
 the installed runtime. Resource delivery code is development-only.
@@ -17,12 +17,13 @@ import paho.mqtt.client as mqtt
 from catalog_web import make_server
 from discovery_contract import DiscoveryError, ProductSources
 from inventory import Inventory
+from resource_preview import PreviewCatalog
 
 PRODUCT_ID = "digitalhouses_sync_app"
 BASE = "DigitalHouses/Global/" + PRODUCT_ID
 DISCOVERY = "homeassistant/device/" + PRODUCT_ID + "/config"
 STARTED_AT = datetime.now(timezone.utc).isoformat()
-VERSION = os.environ.get("APP_VERSION", "0.1.2-local")
+VERSION = os.environ.get("APP_VERSION", "0.1.3-local")
 STATE_PATH = Path("/data/inventory.json")
 SOURCES_PATH = Path("/data/product_sources.json")
 
@@ -119,7 +120,8 @@ def main() -> None:
     sources = ProductSources(SOURCES_PATH)
     # No routes can POST or mutate HA; this port is available only through
     # Supervisor's admin-only Ingress.
-    ingress = make_server(sources, inventory, version=VERSION, port=8099)
+    ingress = make_server(sources, inventory, version=VERSION, port=8099,
+                          inspect=PreviewCatalog().inspect)
     threading.Thread(target=ingress.serve_forever, daemon=True,
                      name="dh-sync-ingress").start()
     LOG.info("DH Sync v%s read-only catalog Ingress ready on 8099", VERSION)
