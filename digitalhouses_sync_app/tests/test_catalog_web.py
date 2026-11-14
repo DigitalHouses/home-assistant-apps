@@ -28,7 +28,8 @@ class CatalogTests(unittest.TestCase):
             root = Path(directory)
             sources = ProductSources(root / "sources.json")
             inventory = Inventory(root / "inventory.json")
-            pve = "DigitalHouses/Global/digitalhouses_pve_agent/c5c5a3df346042e7af61515a90cfada0/sync"
+            # Synthetic instance ID; never publish real home machine identifiers.
+            pve = "DigitalHouses/Global/digitalhouses_pve_agent/0123456789abcdef0123456789abcdef/sync"
             plex = "DigitalHouses/Global/digitalhouses_plex_agent/sync"
             repo = "https://github.com/DigitalHouses/home-assistant-apps"
             import json
@@ -57,7 +58,7 @@ class CatalogTests(unittest.TestCase):
                 for expected in (
                     "digitalhouses_pve_agent", "digitalhouses_plex_agent",
                     "0.5.89", "0.8.18", "Online",
-                    "home-assistant-apps", "c5c5a3df346042e7af61515a90cfada0",
+                    "home-assistant-apps", "0123456789abcdef0123456789abcdef",
                 ):
                     self.assertIn(expected, body)
                 self.assertNotIn("<form", body)
