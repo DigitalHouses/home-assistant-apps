@@ -2,7 +2,7 @@
 
 **Статус:** проект контракта для поэтапного внедрения.  
 **Владелец контракта доставки YAML:** DigitalHouses Sync App.  
-**Область:** все поддерживаемые продукты в `DigitalHouses/home-assistant-apps`, независимо от типа `haos_addon` / `linux_agent`.  
+**Область:** все продукты репозиториев GitHub владельца `DigitalHouses`, независимо от типа `haos_addon` / `linux_agent`.  
 **Приоритет пилота:** `digitalhouses_pve_agent` (две вкладки: Proxmox и Электропитание).
 
 ## 1. Цель
@@ -54,7 +54,7 @@ digitalhouses_pve_agent/
 - Для public-ready продукта публикуйте `en` и `ru`, если UI использует текст. Для ещё не подготовленной локали **не делать пустой фиктивный перевод**: сообщить о gap.
 - Уже существующие `examples/` и пользовательские рабочие копии сохранять до отдельной подтверждённой миграции. Не удалять и не подменять их автоматически.
 
-## 4. Метаданные совместимости без отдельного продуктового manifest
+## 4. Метаданные ресурсов без проверки совместимости
 
 **Для HA packages** использовать уже обязательный формат из `HA_PACKAGE_VERSIONING_STANDARD.md`:
 
@@ -62,10 +62,7 @@ digitalhouses_pve_agent/
 # DH-Package: dh_pve_agent_package
 # DH-Package-Version: 1.0.0
 # DH-Package-Date: 2026-11-13
-# DH-Compatible-Agent: >=0.5.88,<0.6.0
 ```
-
-`DH-Compatible-Agent` — **необязателен и добавляется только после реального теста**.
 
 **Для каждого нового canonical Lovelace view** предлагаем минимальный comment header (контракт DH Sync; не YAML-сущности):
 
@@ -73,13 +70,12 @@ digitalhouses_pve_agent/
 # DH-View: dh_pve_agent
 # DH-View-Version: 1.0.0
 # DH-View-Date: 2026-11-13
-# DH-Compatible-Agent: >=0.5.88,<0.6.0
 title: Proxmox
 path: dh_pve_agent
 type: sections
 ```
 
-Для HA App вместо `DH-Compatible-Agent` используется `DH-Compatible-App` при проверенной совместимости. Не объявляйте диапазон «на глаз». Для read-only отображения DH Sync проверяет только владельца GitHub DigitalHouses. Заголовок совместимости является необязательным информационным полем, не блокирует обнаружение.
+DH Sync не использует диапазоны `DH-Compatible-*`: не добавляйте их в канонические YAML. Единственный критерий допуска источника — владелец GitHub `DigitalHouses`. Версии продукта, view и package показываются как сведения, но не используются для допуска.
 
 **Разные независимые версии:** App/Agent release, view revision, package revision. Не изменять версию исполняемого продукта из-за одной правки dashboard.
 
@@ -87,7 +83,7 @@ DH Sync при каждом явном read-only просмотре разреш
 
 ## 5. MQTT: установка, доступность и версия
 
-Для новых релизов, совместимых с DH Sync, обязателен также **Discovery Contract v1**:
+Для новых релизов, обнаруживаемых через DH Sync, используется **Discovery Contract v1**:
 [DH_SYNC_DISCOVERY_CONTRACT_V1.md](DH_SYNC_DISCOVERY_CONTRACT_V1.md).
 
 Продукт самостоятельно публикует retained QoS1 JSON со своим `product_id`,
@@ -100,7 +96,7 @@ DH Sync при каждом явном read-only просмотре разреш
 
 Каждая команда обязана указать в документации своего продукта:
 
-1. канонический `product_id` из `product_registry.json`;
+1. стабильный `product_id`, совпадающий с продуктом в MQTT `/sync` topic;
 2. существующий **product-level** MQTT availability topic с `online` / `offline`, retained publish и Last Will, либо зафиксированный gap;
 3. реальный MQTT Discovery device/topic и диагностический Version sensor, получающий версию из того же источника, что и release;
 4. стабильный Started-at sensor по общему стандарту, если его ещё нет;
@@ -162,7 +158,7 @@ DH Sync при каждом явном read-only просмотре разреш
 
 ## 11. Что вернуть координатору DH Sync
 
-В ответе разработчика обязательны: ссылка на PR/commit, `product_id`, актуальный `availability` topic, Version sensor, Started-at sensor, список новых YAML с версиями, проверенные версии продукта, статус EN/RU, результаты тестов, открытые gaps.
+В ответе разработчика обязательны: ссылка на PR/commit, `product_id`, актуальный `availability` topic, Version sensor, Started-at sensor, список новых YAML с версиями, статус EN/RU, результаты тестов, открытые gaps.
 
 **Отдельно от DH Sync:** обновление исполняемого кода Apps/Agents, телеметрия внешнего stats-сервера, и внутренние пороги/датчики продуктов остаются в своих проектах.
 

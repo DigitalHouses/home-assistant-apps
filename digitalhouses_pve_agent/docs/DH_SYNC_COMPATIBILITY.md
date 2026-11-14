@@ -34,7 +34,7 @@ DH Sync, update Linux Agent, or grant permission for automatic adoption.
 | `dashboards/ru/11_pve_ups.yaml` | `DH-View-Version: 1.0.0` | `dh_pve_agent_ups` | `mdi:power-plug-battery`, icon-only |
 
 - `DH-View: dh_pve_agent`; `DH-View-Date: 2026-11-14`.
-- `DH-Compatible-Agent: >=0.5.88,<0.5.90` is a narrow candidate: CORE v3 views were confirmed with Agent 0.5.88; 0.5.89 only adds MQTT /sync metadata while preserving existing telemetry. Live CORE MQTT subsequently showed 0.5.89 Online, but new-version live view rendering has NOT been independently verified. DH Sync update/rollback remains a separate gate.
+- **Текущее правило DH Sync:** допуск источника определяется только владельцем GitHub `DigitalHouses`. Версии Agent и диапазоны `DH-Compatible-*` не являются правилами допуска. CORE v3 view и MQTT Agent 0.5.89 проверялись отдельно как функциональные данные.
 - HA view revisions are independent of the Linux Agent binary release.
   Do **not** release a new Agent version for navigation-only YAML changes.
 - English UI has **not** been verified or translated; no placeholder EN files
@@ -45,7 +45,7 @@ DH Sync, update Linux Agent, or grant permission for automatic adoption.
   before they can be made canonical; do not silently co-install a second
   Recorder package.
 
-## Agent 0.5.89 source compatibility review — Draft acceptance gate
+## Agent 0.5.89 source review — historical QA
 
 Merged Agent PR #503 was inspected against 0.5.88, the working CORE v3 baseline.
 The source diff only adds sync_version in app/main.py, retained QoS1 /sync
@@ -55,8 +55,8 @@ UPS/NUT logic and discovery data remain unchanged by this release.
 
 Both original CORE v3 view bodies remain exactly the pinned historical SHA-256
 baselines (after reversing previously approved icon-only navigation changes).
-The only proposed change here is each view's compatible-agent comment header
-to >=0.5.88,<0.5.90. View revisions remain 1.0.0.
+The old compatibility-range comment headers have been removed; DH Sync now
+admits any product source owned by DigitalHouses. View revisions remain 1.0.0.
 
 Live CORE MQTT confirmed PVE Agent 0.5.89 Online. This validates discovery,
 not card rendering. Before leaving Draft, the PVE product owner must confirm
@@ -121,12 +121,12 @@ Existing live files (do **not** change them in this PR):
 - `/config/dashboards/dh/views/10_pve_proxmox.yaml`
 - `/config/dashboards/dh/views/11_pve_ups.yaml`
 
-1. DH Sync must pin the **immutable merged Git commit SHA containing these
-   YAML assets**, independently of the Linux Agent v0.5.89 release tag.
-   Never install unreviewed branch `main` by default.
+1. DH Sync resolves the repository default branch to a concrete Git commit SHA
+   for each read-only preview. This SHA is a consistent file snapshot, not a
+   product allowlist or version-compatibility gate.
 2. Preflight: confirm registered `digital-houses` YAML dashboard and
    `!include_dir_list views/`, matching two paths, no duplicate views,
-   installed compatible Agent version, required frontend dependencies,
+   running Agent version as information, required frontend dependencies,
    and compare each existing view to the known v3 baseline ignoring only
    header comments and the three explicitly approved navigation differences.
    If locally customized or unknown: display diff, **stop**, ask operator.

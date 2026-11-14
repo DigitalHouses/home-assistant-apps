@@ -93,7 +93,7 @@ def make_server(sources: ProductSources, inventory: Inventory, *, version: str =
             if inspect is not None and parse_qs(urlsplit(self.path).query).get("resources") == ["1"]:
                 preview_html += (
                     "<table class=\'views\'><thead><tr><th>Продукт / Git SHA</th>"
-                    "<th>Dashboard / файл</th><th>Ревизия / сведения</th>"
+                    "<th>Dashboard / файл</th><th>Ревизия</th>"
                     "<th>Результат</th></tr></thead><tbody>"
                 )
                 try:
@@ -114,8 +114,7 @@ def make_server(sources: ProductSources, inventory: Inventory, *, version: str =
                                 _h(view["title"]) + "<br><code>" +
                                 _h(view["file"]) + "</code><br><small>" +
                                 _h(view["path"]) + "</small></td><td><code>" +
-                                _h(view["revision"]) + "</code><br><small>" +
-                                _h(view["constraint"]) + "</small></td><td>" +
+                                _h(view["revision"]) + "</code></td><td>" +
                                 _h(view["status"]) + "</td></tr>"
                             )
                 except Exception:

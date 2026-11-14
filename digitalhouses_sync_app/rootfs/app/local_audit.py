@@ -1,7 +1,7 @@
 """Non-mutating local HAOS dashboard audit for the DH Sync v0.2.0 pilot.
 
 The container receives the Home Assistant config at /homeassistant as a
-READ-ONLY Supervisor bind mount. Only approved DigitalHouses view YAML and
+READ-ONLY Supervisor bind mount. Only DigitalHouses view YAML and
 Lovelace Storage metadata are inspected. No HA API, no writes, no reloads.
 """
 from __future__ import annotations
@@ -239,12 +239,8 @@ class LocalAuditor:
                     "view_path": view["path"], "source_status": view["status"],
                     "local_file": "", "status": "", "kind": "",
                     "source_sha256": "", "local_sha256": "", "diff": None,
-                    "blocked": True,
                 }
                 item["views"].append(row)
-                if view["blocked"]:
-                    row["kind"], row["status"] = "blocked", "Неподтверждённая версия ресурса"
-                    continue
                 try:
                     source_path = ("" if product["product_path"] == "." else product["product_path"] + "/") + "dashboards/ru/" + view["file"]
                     if not VIEW_NAME.fullmatch(view["file"]):

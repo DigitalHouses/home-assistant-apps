@@ -18,14 +18,13 @@ from test_catalog_web import fetch
 REPO = "https://github.com/DigitalHouses/home-assistant-apps"
 PVE = "digitalhouses_pve_agent"
 PLEX = "digitalhouses_plex_agent"
-PINS = {PVE: "7a2bc76f7c69312366ea70a6d9236549a978d636",
+COMMITS = {PVE: "7a2bc76f7c69312366ea70a6d9236549a978d636",
         PLEX: "fd9d257972f0afdf979bfdd27ba7c6c86991fceb"}
 
 
 def yaml_view(product, title, path, *, extra=""):
     return (f"# DH-View: dh_{product.removeprefix('digitalhouses_')}\n"
             "# DH-View-Version: 1.0.0\n"
-            f"# DH-Compatible-Agent: {'>=0.5.88,<0.5.90' if product == PVE else '>=0.8.17,<0.8.19'}\n"
             "\n"
             f"title: {title}\npath: {path}\ntype: sections\nsections: []\n" + extra).encode()
 
@@ -33,11 +32,10 @@ def yaml_view(product, title, path, *, extra=""):
 def entry(product, views):
     return {"product": product, "repository": REPO, "product_path": product,
             "version": "0.5.89" if product == PVE else "0.8.18",
-            "commit": PINS[product], "error": "",
+            "commit": COMMITS[product], "error": "",
             "views": [
                 {"title": title, "file": file, "path": path,
-                 "revision": "1.0.0", "status": "Совместимость подтверждена · только просмотр",
-                 "blocked": False}
+                 "revision": "1.0.0", "status": "Владелец DigitalHouses · только просмотр"}
                 for file, title, path in views]}
 
 
@@ -92,7 +90,7 @@ class LocalAuditTests(unittest.TestCase):
         self.assertEqual([v["kind"] for p in report["products"] for v in p["views"]],
                          ["identical", "identical", "missing"])
         self.assertEqual(len(self.fetches), 3)
-        self.assertEqual({sha for _,_,sha in self.fetches}, set(PINS.values()))
+        self.assertEqual({sha for _,_,sha in self.fetches}, set(COMMITS.values()))
         self.assertTrue(all(repo == REPO for repo, _, _ in self.fetches))
 
     def test_owned_dedicated_repo_root_directory(self):
@@ -102,7 +100,6 @@ class LocalAuditTests(unittest.TestCase):
             "error": "", "views": [{
                 "title": "Recorder", "file": "10_recorder.yaml", "path": "recorder",
                 "revision": "—", "status": "Владелец DigitalHouses · только просмотр",
-                "blocked": False,
             }],
         }]
         source = (b"type: sections\ntitle: Recorder\npath: recorder\nsections: []\n")
@@ -215,15 +212,14 @@ class LocalAuditTests(unittest.TestCase):
                 return {"ready":True, "issues":[], "readonly":True,
                         "write_enabled":False, "storage_files_examined":0,
                         "products":[{"product":PLEX,"version":"0.8.18",
-                                     "commit":PINS[PLEX],"source_error":"",
+                                     "commit":COMMITS[PLEX],"source_error":"",
                                      "views":[{"title":"Plex","source_file":"10_plex.yaml",
                                                "view_path":"dh-plex-agent",
-                                               "source_status":"compatible",
+                                               "source_status":"owner-only",
                                                "local_file":"", "kind":"missing",
                                                "status":"Локальный YAML отсутствует",
                                                "source_sha256":"a"*64,
-                                               "local_sha256":"","diff":None,
-                                               "blocked":True}]}]}
+                                               "local_sha256":"","diff":None}]}]}
             server=make_server(products,inventory,version="0.2.0",port=0,
                                audit=audit)
             server.timeout=2

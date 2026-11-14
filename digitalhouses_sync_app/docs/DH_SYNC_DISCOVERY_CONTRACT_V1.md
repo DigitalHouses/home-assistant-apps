@@ -25,6 +25,6 @@ Retained /sync does not prove online availability or uninstall. Availability rem
 
 ## Dynamic dashboards
 
-On an explicit user action, DH Sync resolves the owned repository's default branch to one Git SHA and reads its dashboards/ru/*.yaml at that revision. DH-View-Version and DH-Compatible-Agent/App headers are optional informational values, not prerequisites for displaying a view. No product has to be manually registered in DH Sync.
+On an explicit user action, DH Sync resolves the owned repository's default branch to one Git SHA and reads its dashboards/ru/*.yaml at that revision. DH-View-Version is optional informational metadata. DH-Compatible-Agent/App ranges are not read or enforced; do not publish them as admission requirements. No product has to be manually registered in DH Sync.
 
 Basic transport/path safety and standalone YAML parsing remain to keep requests and the read-only view meaningful. The current App never changes HA configuration. Being owned by DigitalHouses does not authorize automatic installation; backup, visible review and user approval are separate future work.

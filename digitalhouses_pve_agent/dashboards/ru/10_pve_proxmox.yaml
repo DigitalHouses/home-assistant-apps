@@ -1,7 +1,6 @@
 # DH-View: dh_pve_agent
 # DH-View-Version: 1.0.0
 # DH-View-Date: 2026-11-14
-# DH-Compatible-Agent: >=0.5.88,<0.5.90
 
 title: Proxmox
 path: dh_pve_agent
