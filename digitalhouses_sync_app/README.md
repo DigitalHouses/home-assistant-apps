@@ -1,6 +1,6 @@
 # DigitalHouses Sync App — v0.1.0
 
-**First experimental release candidate, Draft PR #499. GHCR image not yet published.**
+**First experimental release candidate, release PR #499, ready for review. GHCR image not yet published.**
 
 Version **0.1.0** is a **strictly read-only MQTT product catalog**. This is the first safe operational pilot before the separate YAML update/rollback feature is enabled.
 

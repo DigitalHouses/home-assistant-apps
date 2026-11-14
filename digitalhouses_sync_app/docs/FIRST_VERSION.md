@@ -1,6 +1,6 @@
 # DH Sync v0.1.0 — первый безопасный пилот (только MQTT-каталог)
 
-**Статус:** Draft PR #499, первый GHCR образ ещё не опубликован, реальное Ingress тестирование CORE ещё не проведено.
+**Статус:** PR #499 готов к проверке и автоматическому выпуску, первый GHCR образ ещё не опубликован, реальное Ingress тестирование CORE ещё не проведено.
 
 ## 1. Что входит в опубликованный App v0.1.0
 
@@ -38,7 +38,7 @@
 - Реестр релизов: `digitalhouses_sync_app` release `title: DigitalHouses Sync App`, `version_source: haos_config`, baseline `0.0.0`.
 - Версия `0.1.0` в `config.yaml` и заголовке changelog.
 - `telemetry_allowed: false` не меняется.
-- PR остаётся Draft до готовности UI/security review и успешного CI.
+- PR отмечен Ready после проверки read-only HTTP surface, исключения HA API/config mount и полного 14/14 CI.
 - Автоматический workflow после Merge создаст `digitalhouses_sync_app-v0.1.0`, GHCR image + digest; ручные теги и floating `latest` запрещены.
 
 ## 5. Поздняя фаза — YAML доставка
