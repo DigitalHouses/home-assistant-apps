@@ -228,7 +228,7 @@ class LocalAuditor:
         report["storage_files_examined"] = snapshot["storage_count"]
         for product in self.catalog.inspect(claims):
             item = {
-                "identity": product["identity"],
+                "identity": product.get("identity", product["product"] + "/default"),
                 "product": product["product"], "version": product["version"],
                 "commit": product["commit"], "source_error": product["error"],
                 "views": [],
