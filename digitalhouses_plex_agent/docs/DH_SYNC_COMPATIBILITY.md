@@ -1,11 +1,11 @@
 # DH Sync v1 — DigitalHouses Plex Agent canonical YAML contract
 
-Status: product compatibility accepted for 0.8.17 and 0.8.18 after source-delta review, original HOME 0.8.17 baseline and CORE operator visual check on the 0.8.18 MQTT-announced release. DH Sync YAML adoption and rollback remain separately gated.
+Status: historical source and operator validation for Plex Agent 0.8.17/0.8.18. Current DH Sync source admission uses only GitHub owner `DigitalHouses`; agent versions and compatibility ranges are not approval gates. YAML Apply and rollback remain separate, unimplemented work.
 
 ## Identity and runtime
 
 - Canonical product ID: `digitalhouses_plex_agent` (`linux_agent`; unchanged).
-- Original YAML source was captured on v0.8.16; HOME has since been upgraded to released v0.8.17. The narrowly source-reviewed compatibility range is >=0.8.17,<0.8.19 after inspecting v0.8.18 PR #504. The original byte-verified HOME baseline is v0.8.17; CORE operator visually confirmed the existing Plex dashboard after 0.8.18 was announced in MQTT. Do not extend to future versions without review.
+- Original YAML source was captured on v0.8.16; HOME was subsequently upgraded to v0.8.17. A source review of v0.8.18 PR #504 and a CORE operator visual check are retained as historical QA evidence, not as a source-admission version range.
 - Existing product-level MQTT availability (default `instance_id=plex`): `DigitalHouses/Global/digitalhouses_plex_agent/availability`. A non-default `instance_id` uses its existing instance-specific suffix. Do not rename either namespace.
 - Product availability sends retained `online` on MQTT connection; retained LWT sends `offline`. The current Plex LWT uses QoS 0. Existing reconnect, `MQTT_PAUSED` and optional collector/Plex API availability are not product uninstall signals.
 - MQTT Device Discovery uses the existing `homeassistant/device/<device_id>/config` pattern with retained QoS 1 / PUBACK reconciliation. Discovery is repaired on HA birth, reconnect and periodic recheck. The device identifier and MQTT base remain unchanged.
@@ -43,15 +43,18 @@ Existing product-level availability, retained offline LWT, Discovery
 device/unique/entity IDs, Version/Started-at sensors, and MQTT_PAUSED
 fail-safe behavior remain unchanged. A retained /sync topic is only
 MQTT-claimed source metadata: it never authorizes installation or
-uninstallation. DH Sync validates DigitalHouses owner, immutable Git
-resource revisions, compatibility, backup and operator approval separately.
+uninstallation. DH Sync checks DigitalHouses ownership to admit a source;
+immutable Git revisions make previews consistent, while backup and operator
+approval apply separately to future writes.
 
 Plex Agent 0.8.18 publishes this metadata only after the service is
 updated and restarted. The previously verified HOME installation ran
-0.8.17 and does not yet publish /sync. The canonical dashboard/package compatibility range is proposed as >=0.8.17,<0.8.19 by this PR after source review. The operator visually confirmed the existing dashboard while 0.8.18 was announced, but DH Sync auto-apply remains separately gated.
+0.8.17 and does not yet publish /sync. An earlier proposed version range has
+been removed; it is not a DH Sync gate. The operator visually confirmed the
+existing dashboard while 0.8.18 was announced. Auto-apply remains unavailable.
 No current Home Assistant YAML has been changed by the agent release.
 
-## 0.8.18 compatibility evidence and remaining gate
+## 0.8.18 historical source and runtime evidence
 
 Merged release PR #504 changes the existing MQTT bridge to additionally publish retained
 QoS 1 /sync metadata on connect/reconnect. In app/app.py it passes sync_payload
@@ -60,8 +63,8 @@ same string, now composed from SYNC_PRODUCT_ID, and the old telemetry topic
 prefix and existing Home Assistant entities are preserved. No dashboard cards,
 legacy entity IDs, source telemetry or Recorder membership changed in 0.8.18.
 
-The canonical view and Recorder package have **only their compatible-agent comment
-header changed** to >=0.8.17,<0.8.19. View/package revisions remain 1.0.0, and
+The canonical view and Recorder package have **no compatibility-range comment
+headers**. View/package revisions remain 1.0.0, and
 product regression tests still compare the complete bodies byte-for-byte to
 the approved sources and assert the original 24 included / 6 excluded entities.
 CORE live MQTT showed 0.8.18 Online; it does NOT confirm card rendering.
@@ -128,10 +131,9 @@ Git revision containing the canonical YAML merely because versions match.
   the active Linux service reported MQTT CONNECTED, QoS1 PUBACK received,
   Plex API ok, Agent CPU around 1%, overload OFF, and CLI update returned
   UP_TO_DATE 0.8.17. The existing dashboard content was not changed by
-  this runtime release. The current YAML selection is intentionally exact
-  to this minor patch release; no broader compatibility is asserted.
-- This establishes narrow product-source compatibility on HOME. It does not
-  establish end-to-end DH Sync migration, cross-HA acceptance, or the
+  this runtime release. This is functional QA evidence, not a version gate.
+- These checks do not establish end-to-end DH Sync migration,
+  cross-HA acceptance, or the
   appearance of every conditional UI card following the agent update.
 - New v0.8.17 CPU self-diagnostic entities do not require changes to the
   existing canonical dashboard. The verified Recorder package is preserved
@@ -148,7 +150,7 @@ Git revision containing the canonical YAML merely because versions match.
 
 ## Open acceptance gaps
 
-- Product source compatibility candidate covers ONLY agent >=0.8.17,<0.8.19 (v0.8.17 HOME byte-verified baseline; v0.8.18 release source delta and CORE operator visual acceptance). This version selector is NOT authorization to write to HA: Storage adoption, backups, rollback, config validation and explicit operator consent remain separate mandatory DH Sync gates.
+- Source admission requires only GitHub owner `DigitalHouses`. Existing HOME and CORE checks are historical functional evidence. Storage adoption, backups, rollback, config validation and explicit operator consent remain separate future write-stage safeguards.
 - EN locale is missing; only the real Russian/operator-approved dashboard is shipped.
 - No live two-HA DH Sync adoption, update, rollback, restart-required flow or missing-HACS-dependency acceptance has been performed. CORE YAML apply/rollback behavior is unverified for this candidate.
 - Live HOME MQTT CONNECTED is confirmed; broker-retain inspection, forced LWT/reconnect, custom instance IDs and uninstall semantics remain to be tested.
