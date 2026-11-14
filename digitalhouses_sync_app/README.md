@@ -7,6 +7,7 @@ DH Sync — локальное HAOS App для доставки утверждё
 ## Сейчас доступно в коде
 
 - Штатное MQTT inventory существующих Apps/Agents: offline не удаляет установленный продукт.
+- Discovery Contract v1: получает из MQTT сведения о версии и GitHub-репозитории продукта, принимает **только** организацию DigitalHouses и показывает найденные источники без права установки.
 - Admin-only Ingress (внутренний порт 8099) с просмотром текущих версий и трёх канонических русских views.
 - Три закреплённых ресурса: Proxmox и Электропитание из PR #502, Plex из merged PR #500.
 - Строгое определение уже установленного файла, конфликта, несовместимого агента и дублирующего view path.
@@ -22,4 +23,4 @@ Recorder, HA packages, Storage dashboards, configuration.yaml, HACS и испо�
 
 Исходник PVE остаётся Draft PR #502; перед публикацией стабильного App нужно принять PVE PR и заменить SHA на подтверждённый merge commit.
 
-Подробности: [версия и пилот](docs/FIRST_VERSION.md), [контракт продуктов](docs/PRODUCT_REQUIREMENTS.md), [архитектура](docs/ARCHITECTURE.md), [Plex Storage prototype](docs/STORAGE_MIGRATION.md), [передача разработчикам](docs/DEVELOPER_HANDOFF_RU.md).
+Подробности: [контракт MQTT-репозиториев](docs/DH_SYNC_DISCOVERY_CONTRACT_V1.md), [версия и пилот](docs/FIRST_VERSION.md), [контракт продуктов](docs/PRODUCT_REQUIREMENTS.md), [архитектура](docs/ARCHITECTURE.md), [Plex Storage prototype](docs/STORAGE_MIGRATION.md), [передача разработчикам](docs/DEVELOPER_HANDOFF_RU.md).

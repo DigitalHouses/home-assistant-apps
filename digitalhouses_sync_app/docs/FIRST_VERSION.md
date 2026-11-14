@@ -60,3 +60,14 @@ HAOS config содержит homeassistant_api: true, ingress: true, panel_admin
 - [ ] Пройдены release/telemetry/privacy governance gates проекта.
 
 **Зелёный CI сам по себе не является разрешением публиковать или устанавливать приложение.**
+
+## Discovery Contract v1 (принятое развитие v0.1.0)
+
+MQTT metadata продукта: `schema, product_id, type, version, repository, product_path`.
+Сохранение и список заявленных источников реализованы, проверка GitHub owner
+строгая: только `https://github.com/DigitalHouses/<repository>`, без подмены
+host, userinfo, URL encoding, redirect URL, портов и traversal. В пилоте
+это **только read-only обнаружение источников**. YAML Apply по новым
+адресам из MQTT запрещён: текущий SyncEngine использует три pinned commit.
+
+Подробности: [Discovery Contract v1](DH_SYNC_DISCOVERY_CONTRACT_V1.md).

@@ -13,11 +13,18 @@ https://github.com/DigitalHouses/home-assistant-apps/blob/feature/digitalhouses-
 - Какие resources можно сделать каноническими без изменения `entity_id`, Recorder, управления и UX.
 - Какие диапазоны совместимости реально подтверждены, где пока нет доказательств.
 
+Дополнительно реализуй [DH Sync Discovery Contract v1](DH_SYNC_DISCOVERY_CONTRACT_V1.md):
+публикуй retained QoS1 JSON `/sync` в существующем product namespace.
+`repository` — только прямой HTTPS URL GitHub с owner DigitalHouses,
+`product_path` — свой каталог в монорепозитории либо `.` в отдельном репо.
+Не добавляй URL в MQTT как источник автоматического исполнения и не меняй
+существующие topic availability / Discovery.
+
 Затем в отдельном PR своего продукта:
 1. Размести canonical `dashboards/<locale>/*.yaml` и `packages/common/`, `packages/locales/<locale>/` по применимости;
 2. Приведи headers, версии, метаданные совместимости и документацию к контракту;
 3. Исправь **только реальные gaps** MQTT availability/diagnostics, сохраняя выпущенные публичные идентификаторы;
-4. Добавь/обнови regression tests и запусти CI;
+4. Добавь/обнови regression tests, включая retained /sync, проверку product_id/topic и URL владельца, и запусти CI;
 5. Не меняй другие продукты, DH Sync, Ansible, рабочие HA, и не запускай массовые обновления.
 
 Верни итог: PR/commit, YAML paths/versions, MQTT availability и diagnostic entity IDs, протестированные версии, тесты, gaps.

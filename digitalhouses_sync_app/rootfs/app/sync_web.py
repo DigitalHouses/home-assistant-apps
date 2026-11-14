@@ -31,7 +31,7 @@ def _h(value) -> str:
     return html.escape(str(value), quote=True)
 
 
-def make_server(engine: SyncEngine, *, allow_changes: bool, port: int = 8099):
+def make_server(engine: SyncEngine, *, allow_changes: bool, port: int = 8099, sources=None):
     csrf = secrets.token_urlsafe(32)
 
     class Handler(BaseHTTPRequestHandler):
@@ -153,6 +153,24 @@ def make_server(engine: SyncEngine, *, allow_changes: bool, port: int = 8099):
                         "<button class='danger' type='submit' name='action' value='rollback' " +
                         ("" if allow_changes else "disabled") + ">Откатить</button></p></form>"
                     )
+            source_rows = ""
+            if sources is not None:
+                for identity, record in sources.snapshot().items():
+                    source_rows += (
+                        "<tr><td><code>" + _h(identity) + "</code></td>"
+                        "<td><code>" + _h(record["version"]) + "</code></td>"
+                        "<td><code>" + _h(record["repository"]) +
+                        "</code><br><small>" + _h(record["product_path"]) +
+                        "</small></td></tr>"
+                    )
+            source_table = (
+                "<section><h2>Найденные продукты (MQTT Discovery v1)</h2>"
+                "<p class='note'>Отображаются только адреса GitHub организации DigitalHouses."
+                " MQTT metadata — заявленные сведения, не разрешение на установку YAML.</p>"
+                "<table><thead><tr><th>Продукт / instance</th><th>Версия</th><th>Репозиторий</th>"
+                "</tr></thead><tbody>" + source_rows +
+                "</tbody></table></section>"
+            )
             notification = (
                 "<section class='" + ("bad" if error else "ok") + "'>" + _h(message) + "</section>"
                 if message else ""
@@ -174,7 +192,7 @@ def make_server(engine: SyncEngine, *, allow_changes: bool, port: int = 8099):
                 "<small>Поддержка v0.1: Proxmox, UPS, Plex · только RU · packages не изменяются. PVE SHA — кандидат Draft PR #502.</small>"
                 + apply_form + "</section><section><h2>Последняя операция и откат</h2>"
                 + (rollback_form or "<p class='muted'>Пока нет транзакций.</p>") +
-                "</section><p class='muted'>Существующие файлы с неизвестными локальными "
+                "</section>" + source_table + "<p class='muted'>Существующие файлы с неизвестными локальными "
                 "изменениями никогда не перезаписываются. Storage dashboards не изменяются."
                 " Backup сохраняется в /data.</p></main></body></html>"
             )

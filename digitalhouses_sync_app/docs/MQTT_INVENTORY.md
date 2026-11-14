@@ -20,3 +20,15 @@ Do not derive products from arbitrary matching MQTT sensor names; do not use sub
 
 **Important:** This adapter is a temporary v0.0.1 preview. Before production v1, verify actual deployed topics, discovery, variant instance IDs and reconnect behavior across HA restart. Allow manual add/adopt for legacy sites where reliable retained data is absent.
 
+
+## Repository metadata (Discovery Contract v1)
+
+Помимо существующего availability продукта, DH Sync v0.1.0 слушает
+`DigitalHouses/Global/+/sync` и `DigitalHouses/Global/+/+/sync`.
+Только валидные сообщения с точным GitHub owner `DigitalHouses`
+сохраняются в `/data/product_sources.json`. Они выводятся в панели как
+**заявленные MQTT сведения**, не используются для автоматической загрузки
+или установки YAML. Реализованный пилот Proxmox/UPS/Plex по-прежнему
+использует проверенные immutable commits.
+
+Новый формат и строгая валидация: [Discovery Contract v1](DH_SYNC_DISCOVERY_CONTRACT_V1.md).

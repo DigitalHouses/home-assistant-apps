@@ -87,6 +87,17 @@ type: sections
 
 ## 5. MQTT: установка, доступность и версия
 
+Для новых релизов, совместимых с DH Sync, обязателен также **Discovery Contract v1**:
+[DH_SYNC_DISCOVERY_CONTRACT_V1.md](DH_SYNC_DISCOVERY_CONTRACT_V1.md).
+
+Продукт самостоятельно публикует retained QoS1 JSON со своим `product_id`,
+`type`, `version`, `repository`, `product_path`. DH Sync проверяет
+**точного владельца GitHub `DigitalHouses`**, а не строковый префикс.
+Это самообновляемый источник описания продукта, **не разрешение на установку**.
+Действующий availability и MQTT Discovery не переименовывать; продукты без
+новой карточки остаются доступными через legacy-инвентаризацию пилота.
+
+
 Каждая команда обязана указать в документации своего продукта:
 
 1. канонический `product_id` из `product_registry.json`;
