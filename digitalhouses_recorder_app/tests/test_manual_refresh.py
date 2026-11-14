@@ -13,6 +13,7 @@ sys.path.insert(0, str(APP_DIR))
 
 from sync_discovery import SYNC_TOPIC, build_sync_payload
 from discovery import (
+    APP_AVAILABILITY_TOPIC,
     CHECK_UPDATES_COMMAND_TOPIC,
     DISK_USAGE_THRESHOLD_COMMAND_TOPIC,
     REFRESH_COMMAND_TOPIC,
@@ -212,6 +213,30 @@ class ManualRefreshTests(unittest.TestCase):
                 call(SYNC_TOPIC, build_sync_payload(app.app_version), retain=True),
             ],
         )
+        self.assertTrue(app.mqtt_connected.is_set())
+
+    def test_sync_identity_remains_visible_when_database_is_unavailable(self):
+        # DH Sync catalogs the App, not the connectivity of its DB subsystem.
+        app = self.make_app()
+        app.mqtt_connected = threading.Event()
+        app.db_available = False
+        app.db_status_observed = False
+        app.db_static_available = False
+        app.storage_available = False
+        app.publish_json = Mock()
+        app.publish_text = Mock()
+        app._schedule_legacy_cleanup = Mock()
+        client = Mock()
+
+        app._on_connect(client, None, None, 0)
+
+        app.publish_json.assert_any_call(
+            SYNC_TOPIC, build_sync_payload(app.app_version), retain=True
+        )
+        app.publish_text.assert_any_call(
+            APP_AVAILABILITY_TOPIC, "online", retain=True
+        )
+        app._publish_db_availability.assert_called_once_with()
         self.assertTrue(app.mqtt_connected.is_set())
 
     def test_failed_mqtt_connect_does_not_publish_sync(self):
