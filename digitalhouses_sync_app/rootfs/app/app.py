@@ -22,7 +22,7 @@ PRODUCT_ID = "digitalhouses_sync_app"
 BASE = "DigitalHouses/Global/" + PRODUCT_ID
 DISCOVERY = "homeassistant/device/" + PRODUCT_ID + "/config"
 STARTED_AT = datetime.now(timezone.utc).isoformat()
-VERSION = os.environ.get("APP_VERSION", "0.4.0-local")
+VERSION = os.environ.get("APP_VERSION", "0.4.1-local")
 STATE_PATH = Path("/data/inventory.json")
 SOURCES_PATH = Path("/data/product_sources.json")
 
