@@ -253,6 +253,14 @@ class ApplyManager:
             try:
                 for e in entries:
                     path = self._target(e["filename"])
+                    # A second just-in-time check avoids overwriting a manual
+                    # edit made between initial batch preflight and this write.
+                    if e["before"] is None:
+                        if path.exists() or path.is_symlink():
+                            raise ApplyError("New local YAML appeared during Apply")
+                    elif (not path.is_file() or path.is_symlink()
+                          or _sha(path.read_bytes()) != e["before"]):
+                        raise ApplyError("Local YAML changed during Apply")
                     _atomic_replace(path, e["raw"], e["mode"], e["uid"], e["gid"])
                     written.append(e)
                 manifest["state"] = "applied"
