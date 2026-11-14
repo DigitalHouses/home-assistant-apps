@@ -1,0 +1,67 @@
+# =============================================================================
+# DigitalHouses Recorder App — Storage Notifications
+# =============================================================================
+#
+# Machine-event source:
+#   DigitalHouses/Global/digitalhouses_recorder_app/event/diagnostic
+#
+# Flow:
+#   storage event -> trigger.id -> choose -> direct action
+# =============================================================================
+
+dh_recorder_app_notification_package:
+
+  automation:
+    - id: dh_recorder_notifications
+      alias: DH Recorder · Storage Notifications
+
+      triggers:
+        - trigger: mqtt
+          topic: DigitalHouses/Global/digitalhouses_recorder_app/event/diagnostic
+          value_template: "{{ value_json.event_type }}"
+          payload: storage_usage_high
+          id: storage_usage_high
+
+        - trigger: mqtt
+          topic: DigitalHouses/Global/digitalhouses_recorder_app/event/diagnostic
+          value_template: "{{ value_json.event_type }}"
+          payload: storage_usage_normal
+          id: storage_usage_normal
+
+      actions:
+        - choose:
+            - conditions:
+                - condition: trigger
+                  id: storage_usage_high
+              sequence:
+                - action: script.write2log
+                  data:
+                    title: "💾⚠️ Recorder: заполнение диска"
+                    message: >-
+                      Занято:
+                      {{ '%.1f' | format(trigger.payload_json.used_percent) }}%
+                      ({{ '%.1f' | format(trigger.payload_json.used_gb) }} GB
+                      из {{ '%.1f' | format(trigger.payload_json.total_gb) }} GB)
+                      · свободно:
+                      {{ '%.1f' | format(trigger.payload_json.free_gb) }} GB
+                      · порог:
+                      {{ '%.1f' | format(trigger.payload_json.threshold_percent) }}%.
+
+            - conditions:
+                - condition: trigger
+                  id: storage_usage_normal
+              sequence:
+                - action: script.write2log
+                  data:
+                    title: "💾✅ Recorder: заполнение диска в норме"
+                    message: >-
+                      Занято:
+                      {{ '%.1f' | format(trigger.payload_json.used_percent) }}%
+                      ({{ '%.1f' | format(trigger.payload_json.used_gb) }} GB
+                      из {{ '%.1f' | format(trigger.payload_json.total_gb) }} GB)
+                      · свободно:
+                      {{ '%.1f' | format(trigger.payload_json.free_gb) }} GB
+                      · порог:
+                      {{ '%.1f' | format(trigger.payload_json.threshold_percent) }}%.
+
+      mode: single
