@@ -1,7 +1,6 @@
 # DH-Package: dh_app_plex_monitoring_package
 # DH-Package-Version: 1.0.0
 # DH-Package-Date: 2026-11-14
-# DH-Compatible-Agent: >=0.8.17,<0.8.19
 
 # =============================================================================
 # DigitalHouses Plex Agent — Home Assistant Recorder package
