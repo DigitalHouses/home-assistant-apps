@@ -18,6 +18,10 @@ class PreviewError(ValueError):
     pass
 
 
+def _directory(product_path: str) -> str:
+    return ('dashboards/ru' if product_path == '.' else product_path + '/dashboards/ru')
+
+
 def parse_view(raw: bytes, path: str, product: str) -> dict:
     """Recognize a standalone Lovelace view; metadata headers are optional."""
     try:
