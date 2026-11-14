@@ -1,0 +1,2223 @@
+# DH-View: dh_pve_agent
+# DH-View-Version: 1.0.0
+# DH-View-Date: 2026-11-14
+# DH-Compatible-Agent: >=0.5.88,<0.5.90
+
+title: Электропитание
+path: dh_pve_agent_ups
+icon: mdi:power-plug-battery
+show_icon_and_title: false
+type: sections
+max_columns: 4
+badges: []
+sections:
+  - type: grid
+    cards:
+      - type: heading
+        heading: Состояние ИБП
+        heading_style: title
+        icon: mdi:power-plug-battery
+      - type: custom:mushroom-template-card
+        entity: binary_sensor.dh_pve_agent_ups_configured
+        primary: ИБП не настроен
+        secondary: >-
+          Мониторинг UPS на этом сервере не настроен. Основной мониторинг
+          Proxmox продолжает работать.
+        icon: mdi:power-plug-off-outline
+        icon_color: grey
+        multiline_secondary: true
+        tap_action:
+          action: more-info
+        visibility:
+          - condition: state
+            entity: binary_sensor.dh_pve_agent_ups_configured
+            state: 'off'
+        grid_options:
+          columns: 12
+          rows: auto
+      - type: custom:mushroom-template-card
+        entity: sensor.dh_pve_agent_ups_problems
+        primary: |-
+          {% set available =
+            is_state('binary_sensor.dh_pve_agent_ups_available', 'on')
+          %} {% set problems = states(entity) %}
+          {% if not available %}
+            ИБП недоступен
+          {% elif problems in ['unknown', 'unavailable', 'none', ''] %}
+            Состояние ИБП неизвестно
+          {% elif problems | is_number and problems | int(0) == 0 %}
+            ИБП работает нормально
+          {% else %}
+            ИБП требует внимания
+          {% endif %}
+        secondary: >-
+          {% set available =
+            states('binary_sensor.dh_pve_agent_ups_available')
+          %} {% set status = states('sensor.dh_pve_agent_ups_status') %} {% set
+          problems = states(entity) %}
+
+          {% if available != 'on' %}
+            NUT не получает достоверные данные от UPS
+          {% elif problems in ['unknown', 'unavailable', 'none', ''] %}
+            Статус: {{ status }} · диагностика недоступна
+          {% elif problems | is_number and problems | int(0) == 0 %}
+            Статус: {{ status }}
+          {% else %}
+            Статус: {{ status }} · Проблемы: {{ problems }}
+          {% endif %}
+        icon: |-
+          {% set available =
+            states('binary_sensor.dh_pve_agent_ups_available')
+          %} {% set problems = states(entity) %}
+          {% if available != 'on' %}
+            mdi:power-plug-off
+          {% elif problems in ['unknown', 'unavailable', 'none', ''] %}
+            mdi:shield-question
+          {% elif problems | is_number and problems | int(0) == 0 %}
+            mdi:shield-check
+          {% else %}
+            mdi:shield-alert
+          {% endif %}
+        icon_color: |-
+          {% set available =
+            states('binary_sensor.dh_pve_agent_ups_available')
+          %} {% set problems = states(entity) %}
+          {% if available != 'on' %}
+            red
+          {% elif problems in ['unknown', 'unavailable', 'none', ''] %}
+            grey
+          {% elif problems | is_number and problems | int(0) == 0 %}
+            green
+          {% else %}
+            orange
+          {% endif %}
+        multiline_secondary: true
+        tap_action:
+          action: more-info
+        visibility:
+          - condition: state
+            entity: binary_sensor.dh_pve_agent_ups_configured
+            state: 'on'
+        grid_options:
+          columns: 12
+          rows: auto
+      - type: heading
+        heading_style: title
+        icon: mdi:chart-timeline-variant
+        visibility:
+          - condition: state
+            entity: binary_sensor.dh_pve_agent_ups_configured
+            state: 'on'
+        heading: Текущий статус
+      - type: grid
+        columns: 2
+        square: false
+        visibility:
+          - condition: state
+            entity: binary_sensor.dh_pve_agent_ups_configured
+            state: 'on'
+        cards:
+          - type: custom:mushroom-template-card
+            entity: sensor.dh_pve_agent_ups_status
+            primary: |-
+              {% set s = states('sensor.dh_pve_agent_ups_status') %}
+              {% set labels = {
+                'online': 'UPS в норме',
+                'on_battery': 'Работа от батареи',
+                'low_battery': 'Низкий заряд',
+                'high_battery': 'Высокий заряд',
+                'replace_battery': 'Требуется замена батареи',
+                'bypass': 'Bypass',
+                'calibration': 'Калибровка',
+                'output_off': 'Выход UPS выключен',
+                'overload': 'Перегрузка',
+                'trim': 'AVR Trim',
+                'boost': 'AVR Boost',
+                'forced_shutdown': 'Forced Shutdown',
+                'alarm': 'Авария UPS',
+                'unknown': 'Состояние неизвестно',
+                'unavailable': 'UPS недоступен'
+              } %}
+              {{ labels.get(s, s) }}
+            secondary: Статус UPS
+            icon: |-
+              {% set s = states('sensor.dh_pve_agent_ups_status') %}
+              {% set icons = {
+                'online': 'mdi:power-plug-battery',
+                'on_battery': 'mdi:battery-arrow-down',
+                'low_battery': 'mdi:battery-alert',
+                'high_battery': 'mdi:battery-high',
+                'replace_battery': 'mdi:battery-sync-outline',
+                'bypass': 'mdi:transit-connection-variant',
+                'calibration': 'mdi:battery-sync',
+                'output_off': 'mdi:power-plug-off',
+                'overload': 'mdi:alert-octagon',
+                'trim': 'mdi:arrow-down-bold',
+                'boost': 'mdi:arrow-up-bold',
+                'forced_shutdown': 'mdi:power',
+                'alarm': 'mdi:alarm-light',
+                'unknown': 'mdi:help-circle-outline',
+                'unavailable': 'mdi:connection'
+              } %}
+              {{ icons.get(s, 'mdi:power-plug-battery') }}
+            icon_color: |-
+              {% set s = states('sensor.dh_pve_agent_ups_status') %}
+              {% set colors = {
+                'online': 'green',
+                'on_battery': 'orange',
+                'low_battery': 'red',
+                'high_battery': 'green',
+                'replace_battery': 'red',
+                'bypass': 'orange',
+                'calibration': 'blue',
+                'output_off': 'red',
+                'overload': 'red',
+                'trim': 'orange',
+                'boost': 'orange',
+                'forced_shutdown': 'red',
+                'alarm': 'red',
+                'unknown': 'grey',
+                'unavailable': 'grey'
+              } %}
+              {{ colors.get(s, 'grey') }}
+            tap_action:
+              action: more-info
+            fill_container: true
+          - type: custom:mushroom-template-card
+            entity: sensor.dh_pve_agent_ups_battery_charger_status
+            primary: |-
+              {% set replace =
+                is_state(
+                  'binary_sensor.dh_pve_agent_ups_replace_battery_problem',
+                  'on'
+                )
+              %}
+              {% set charge =
+                states('sensor.dh_pve_agent_ups_battery_charge')
+              %}
+
+              {% if replace %}
+                Требуется замена батареи
+              {% elif charge | is_number %}
+                Батарея {{ charge | float | round(0) | int }} %
+              {% else %}
+                Батарея
+              {% endif %}
+            secondary: |-
+              {% set replace =
+                is_state(
+                  'binary_sensor.dh_pve_agent_ups_replace_battery_problem',
+                  'on'
+                )
+              %}
+              {% set s =
+                states('sensor.dh_pve_agent_ups_battery_charger_status')
+              %}
+              {% set labels = {
+                'charging': 'Заряжается',
+                'floating': 'Поддержание заряда',
+                'resting': 'Заряжена',
+                'idle': 'Ожидание',
+                'discharging': 'Разряжается',
+                'unknown': 'Состояние неизвестно',
+                'unavailable': 'Данные недоступны'
+              } %}
+
+              {% if replace %}
+                ⚠️ NUT сообщает Replace Battery
+              {% else %}
+                {{ labels.get(s, s) }}
+              {% endif %}
+            icon: |-
+              {% set replace =
+                is_state(
+                  'binary_sensor.dh_pve_agent_ups_replace_battery_problem',
+                  'on'
+                )
+              %}
+              {% set s =
+                states('sensor.dh_pve_agent_ups_battery_charger_status')
+              %}
+
+              {% if replace %}
+                mdi:battery-alert
+              {% else %}
+                {% set icons = {
+                  'charging': 'mdi:battery-charging',
+                  'floating': 'mdi:battery-sync',
+                  'resting': 'mdi:battery-check',
+                  'idle': 'mdi:battery-clock-outline',
+                  'discharging': 'mdi:battery-arrow-down',
+                  'unknown': 'mdi:battery-unknown',
+                  'unavailable': 'mdi:battery-off-outline'
+                } %}
+                {{ icons.get(s, 'mdi:battery-unknown') }}
+              {% endif %}
+            icon_color: |-
+              {% set replace =
+                is_state(
+                  'binary_sensor.dh_pve_agent_ups_replace_battery_problem',
+                  'on'
+                )
+              %}
+              {% set s =
+                states('sensor.dh_pve_agent_ups_battery_charger_status')
+              %}
+
+              {% if replace %}
+                red
+              {% else %}
+                {% set colors = {
+                  'charging': 'green',
+                  'floating': 'green',
+                  'resting': 'green',
+                  'idle': 'blue',
+                  'discharging': 'orange',
+                  'unknown': 'grey',
+                  'unavailable': 'grey'
+                } %}
+                {{ colors.get(s, 'grey') }}
+              {% endif %}
+            tap_action:
+              action: more-info
+            fill_container: true
+        grid_options:
+          columns: 12
+      - type: heading
+        heading: История и диагностика
+        heading_style: title
+        icon: mdi:chart-timeline-variant
+        visibility:
+          - condition: state
+            entity: binary_sensor.dh_pve_agent_ups_configured
+            state: 'on'
+      - type: vertical-stack
+        cards:
+          - square: false
+            type: grid
+            columns: 2
+            cards:
+              - type: tile
+                entity: sensor.dh_pve_agent_ups_input_voltage
+                vertical: false
+                features:
+                  - type: trend-graph
+                    hours_to_show: 24
+                    detail: true
+                features_position: bottom
+                name: Вход
+              - type: tile
+                entity: sensor.dh_pve_agent_ups_output_voltage
+                vertical: false
+                features:
+                  - type: trend-graph
+                    hours_to_show: 24
+                    detail: true
+                features_position: bottom
+                name: Выход
+              - type: tile
+                entity: sensor.dh_pve_agent_ups_battery_charge
+                name: Батарея
+                vertical: false
+                features:
+                  - type: trend-graph
+                    hours_to_show: 24
+                    detail: true
+                features_position: bottom
+              - type: tile
+                entity: sensor.dh_pve_agent_ups_battery_runtime_minutes
+                name: Прогноз работы
+                show_entity_picture: false
+                vertical: false
+                features:
+                  - type: trend-graph
+                    hours_to_show: 24
+                    detail: true
+                features_position: bottom
+          - type: tile
+            entity: sensor.dh_pve_agent_ups_load
+            vertical: false
+            features:
+              - type: trend-graph
+                hours_to_show: 24
+                detail: true
+            features_position: bottom
+            name: Нагрузка
+        grid_options:
+          rows: auto
+        visibility:
+          - condition: state
+            entity: binary_sensor.dh_pve_agent_ups_configured
+            state: 'on'
+      - type: heading
+        heading: Управление
+        heading_style: subtitle
+        icon: mdi:refresh
+        visibility:
+          - condition: state
+            entity: binary_sensor.dh_pve_agent_ups_configured
+            state: 'on'
+      - type: grid
+        columns: 2
+        square: false
+        cards:
+          - type: tile
+            entity: button.dh_pve_agent_ups_refresh
+            name: Обновить UPS
+            icon: mdi:refresh
+            color: purple
+            tap_action:
+              action: perform-action
+              perform_action: button.press
+              target:
+                entity_id: button.dh_pve_agent_ups_refresh
+              confirmation:
+                text: Обновить данные UPS?
+          - type: tile
+            entity: button.dh_pve_agent_scan_ups
+            name: Сканировать UPS
+            icon: mdi:magnify-scan
+            color: purple
+            tap_action:
+              action: perform-action
+              perform_action: button.press
+              target:
+                entity_id: button.dh_pve_agent_scan_ups
+              confirmation:
+                text: Выполнить поиск подключённых UPS?
+        grid_options:
+          columns: 12
+        visibility:
+          - condition: state
+            entity: binary_sensor.dh_pve_agent_ups_configured
+            state: 'on'
+      - type: heading
+        heading: События месяца
+        heading_style: subtitle
+        icon: mdi:transmission-tower-export
+        visibility:
+          - condition: state
+            entity: binary_sensor.dh_pve_agent_ups_configured
+            state: 'on'
+      - type: markdown
+        content: >-
+          {%- set entity = 'sensor.dh_pve_agent_ups_line_power_outages_month'
+          -%}
+
+          {%- set events = state_attr(entity, 'events') or [] -%}
+
+          {%- set month = state_attr(entity, 'month') or '' -%}
+
+          {%- set since = state_attr(entity, 'history_since') -%}
+
+          {%- set quality_since = state_attr(entity, 'quality_history_since')
+          -%}
+
+          {%- set omitted = state_attr(entity, 'events_omitted_count') | int(0)
+          -%}
+
+          {%- set names = {
+            'outage':'🔴 Нет сети', 'boost':'🔼 Boost',
+            'trim':'🔽 Trim', 'bypass':'🔀 Bypass',
+            'overload':'⚠️ Перегрузка'
+          } -%}
+
+          {%- set months = {
+            '01':'январь', '02':'февраль', '03':'март', '04':'апрель',
+            '05':'май', '06':'июнь', '07':'июль', '08':'август',
+            '09':'сентябрь', '10':'октябрь', '11':'ноябрь', '12':'декабрь'
+          } -%}
+
+          {%- set ns = namespace(rows=[]) -%}
+
+          {%- for r in events | reverse -%}
+            {%- set kind = r['event'] | default('outage', true) -%}
+            {%- set started = as_local(as_datetime(r['from'])).strftime('%d.%m %H:%M:%S') if r['from'] else '—' -%}
+            {%- set ended = as_local(as_datetime(r['to'])).strftime('%d.%m %H:%M:%S') if r['to'] else 'сейчас' -%}
+            {%- set seconds = r['duration_seconds'] | int(0) -%}
+            {%- set duration = ('%02d:%02d:%02d' | format(seconds // 3600, (seconds % 3600) // 60, seconds % 60)) if seconds >= 3600 else ('%02d:%02d' | format(seconds // 60, seconds % 60)) -%}
+            {%- set duration = ('≈ ' if r['estimated'] else '') ~ duration -%}
+            {%- set ns.rows = ns.rows + [
+              '| ' ~ loop.index ~ ' | ' ~ names.get(kind, kind) ~
+              ' | ' ~ started ~ ' | ' ~ ended ~ ' | **' ~ duration ~ '** |'
+            ] -%}
+          {%- endfor -%}
+
+          {%- set count = states(entity) -%}
+
+          {%- set secs =
+          states('sensor.dh_pve_agent_ups_line_power_offline_month') | int(0)
+          -%}
+
+          {%- set total_time = '%02d:%02d:%02d' | format(secs // 3600, (secs %
+          3600) // 60, secs % 60) -%}
+
+          {%- set caption = '## События питания — ' ~ months.get(month[5:7],
+          'текущий месяц') -%}
+
+          {%- set header = '| № | Событие | С | До | Длительность
+          |\n|:---:|:---|:---|:---|---:|\n' -%}
+
+          {%- if events | count > 0 -%}
+            {{ caption ~ '\n\n' ~ header ~ (ns.rows | join('\n')) }}
+          {%- else -%}
+            {{ caption ~ '\n\n' ~ 'Событий пока нет.' }}
+          {%- endif -%}
+
+          {{ '\n\n**Отключений:** ' ~ (count if count not in
+          ['unknown','unavailable','none',''] else '—') ~ ' · **Без питания:** '
+          ~ total_time }}
+
+          {%- if omitted > 0 -%}
+            {{ '\n\n_Показаны последние 10 событий, ещё ' ~ omitted ~ ' хранятся на PVE._' }}
+          {%- endif -%}
+
+          {%- if since -%}
+            {{ '\n\n_Отключения записываются с ' ~ as_local(as_datetime(since)).strftime('%d.%m.%Y %H:%M') ~ '._' }}
+          {%- endif -%}
+
+          {%- if quality_since -%}
+            {{ '\n_События качества питания записываются с ' ~ as_local(as_datetime(quality_since)).strftime('%d.%m.%Y %H:%M') ~ '._' }}
+          {%- endif -%}
+
+          {%- if events | selectattr('estimated') | list | count > 0 -%}
+            {{ '\n\n_≈ Время ориентировочное: начало до запуска наблюдения, перезапуск агента или перерыв связи с NUT._' }}
+          {%- endif -%}
+        visibility:
+          - condition: state
+            entity: binary_sensor.dh_pve_agent_ups_configured
+            state: 'on'
+        grid_options:
+          columns: 12
+          rows: auto
+      - type: heading
+        heading: Диагностика UPS
+        heading_style: subtitle
+        icon: mdi:stethoscope
+        visibility:
+          - condition: state
+            entity: binary_sensor.dh_pve_agent_ups_configured
+            state: 'on'
+      - type: grid
+        columns: 2
+        square: false
+        visibility:
+          - condition: state
+            entity: binary_sensor.dh_pve_agent_ups_configured
+            state: 'on'
+        cards:
+          - type: custom:mushroom-template-card
+            entity: binary_sensor.dh_pve_agent_ups_nut_unavailable_problem
+            primary: NUT
+            secondary: |-
+              {% if is_state(entity, 'on') %}
+                Недоступен
+              {% elif is_state(entity, 'off') %}
+                OK
+              {% else %}
+                Нет данных
+              {% endif %}
+            icon: mdi:server-network
+            icon_color: |-
+              {% if is_state(entity, 'on') %}
+                red
+              {% elif is_state(entity, 'off') %}
+                green
+              {% else %}
+                grey
+              {% endif %}
+            tap_action:
+              action: more-info
+          - type: custom:mushroom-template-card
+            entity: binary_sensor.dh_pve_agent_ups_on_battery_problem
+            primary: Питание
+            secondary: |-
+              {% if is_state(entity, 'on') %}
+                От батареи
+              {% elif is_state(entity, 'off') %}
+                Сеть
+              {% else %}
+                Нет данных
+              {% endif %}
+            icon: mdi:power-plug-battery
+            icon_color: |-
+              {% if is_state(entity, 'on') %}
+                orange
+              {% elif is_state(entity, 'off') %}
+                green
+              {% else %}
+                grey
+              {% endif %}
+            tap_action:
+              action: more-info
+          - type: custom:mushroom-template-card
+            entity: binary_sensor.dh_pve_agent_ups_low_battery_problem
+            primary: Батарея
+            secondary: |-
+              {% if is_state(entity, 'on') %}
+                Низкий заряд
+              {% elif is_state(entity, 'off') %}
+                OK
+              {% else %}
+                Нет данных
+              {% endif %}
+            icon: mdi:battery-alert
+            icon_color: |-
+              {% if is_state(entity, 'on') %}
+                red
+              {% elif is_state(entity, 'off') %}
+                green
+              {% else %}
+                grey
+              {% endif %}
+            tap_action:
+              action: more-info
+          - type: custom:mushroom-template-card
+            entity: binary_sensor.dh_pve_agent_ups_overload_problem
+            primary: Нагрузка
+            secondary: |-
+              {% if is_state(entity, 'on') %}
+                Перегрузка
+              {% elif is_state(entity, 'off') %}
+                OK
+              {% else %}
+                Нет данных
+              {% endif %}
+            icon: mdi:gauge-full
+            icon_color: |-
+              {% if is_state(entity, 'on') %}
+                red
+              {% elif is_state(entity, 'off') %}
+                green
+              {% else %}
+                grey
+              {% endif %}
+            tap_action:
+              action: more-info
+          - type: custom:mushroom-template-card
+            entity: binary_sensor.dh_pve_agent_ups_replace_battery_problem
+            primary: Замена батареи
+            secondary: |-
+              {% if is_state(entity, 'on') %}
+                Требуется
+              {% elif is_state(entity, 'off') %}
+                Не требуется
+              {% else %}
+                Нет данных
+              {% endif %}
+            icon: mdi:battery-sync
+            icon_color: |-
+              {% if is_state(entity, 'on') %}
+                red
+              {% elif is_state(entity, 'off') %}
+                green
+              {% else %}
+                grey
+              {% endif %}
+            tap_action:
+              action: more-info
+          - type: custom:mushroom-template-card
+            entity: binary_sensor.dh_pve_agent_ups_bypass_problem
+            primary: Bypass
+            secondary: |-
+              {% if is_state(entity, 'on') %}
+                Активен
+              {% elif is_state(entity, 'off') %}
+                Нет
+              {% else %}
+                Нет данных
+              {% endif %}
+            icon: mdi:transit-connection-variant
+            icon_color: |-
+              {% if is_state(entity, 'on') %}
+                orange
+              {% elif is_state(entity, 'off') %}
+                green
+              {% else %}
+                grey
+              {% endif %}
+            tap_action:
+              action: more-info
+          - type: custom:mushroom-template-card
+            entity: binary_sensor.dh_pve_agent_ups_power_state_unknown_problem
+            primary: Состояние питания
+            secondary: |-
+              {% if is_state(entity, 'on') %}
+                Неизвестно
+              {% elif is_state(entity, 'off') %}
+                OK
+              {% else %}
+                Нет данных
+              {% endif %}
+            icon: mdi:help-circle-outline
+            icon_color: |-
+              {% if is_state(entity, 'on') %}
+                red
+              {% elif is_state(entity, 'off') %}
+                green
+              {% else %}
+                grey
+              {% endif %}
+            tap_action:
+              action: more-info
+          - type: custom:mushroom-template-card
+            entity: sensor.dh_pve_agent_ups_app_profile
+            primary: Профиль UPS
+            secondary: >-
+              {% set s = states(entity) %} {{ 'Нет данных' if s in ['unknown',
+              'unavailable', 'none', ''] else s }}
+            icon: mdi:tune-variant
+            icon_color: blue
+            tap_action:
+              action: more-info
+        grid_options:
+          columns: 12
+          rows: auto
+      - type: conditional
+        conditions:
+          - condition: state
+            entity: binary_sensor.dh_pve_agent_ups_beeper_control_supported
+            state: 'on'
+        card:
+          type: heading
+          heading: Звуковой сигнал UPS
+          heading_style: subtitle
+          icon: mdi:volume-high
+      - type: conditional
+        conditions:
+          - condition: or
+            conditions:
+              - condition: state
+                entity: switch.dh_pve_agent_ups_beeper
+                state: 'on'
+              - condition: state
+                entity: switch.dh_pve_agent_ups_beeper
+                state: 'off'
+        card:
+          type: tile
+          entity: switch.dh_pve_agent_ups_beeper
+          name: Управление зуммером
+          icon: mdi:volume-high
+          hide_state: false
+          vertical: true
+          tap_action:
+            action: more-info
+          features:
+            - type: toggle
+          features_position: bottom
+        grid_options:
+          columns: 12
+          rows: auto
+  - type: grid
+    visibility:
+      - condition: state
+        entity: binary_sensor.dh_pve_agent_ups_configured
+        state: 'on'
+    cards:
+      - type: heading
+        heading_style: subtitle
+        icon: mdi:timer-check-outline
+        heading: Параметры shutdown в PVE
+      - type: markdown
+        content: >-
+          {% set readiness = 'sensor.dh_pve_agent_ups_shutdown_readiness' %}
+
+          {% set guest = 'sensor.dh_pve_agent_ups_guest_shutdown_budget' %}
+
+          {% set shutdown = 'sensor.dh_pve_agent_ups_shutdown_budget' %}
+
+
+          {% set guest_budget = states(guest) | int(0) %}
+
+          {% set total_budget = states(shutdown) | int(0) %}
+
+
+          {% set pve_budget =
+              (state_attr(shutdown, 'hostsync_budget_seconds') | int(0)) +
+              (state_attr(shutdown, 'host_tail_budget_seconds') | int(0)) +
+              (state_attr(shutdown, 'finaldelay_seconds') | int(0))
+          %}
+
+
+          {% set running = state_attr(guest, 'running_guests') or [] %}
+
+          {% set sequence = state_attr(guest, 'shutdown_sequence') or [] %}
+
+
+          {% set state = states(readiness) %}
+
+          {% set issues = state_attr(readiness, 'issues') or [] %}
+
+
+          {% set ns = namespace(sequence_parts=[]) %}
+
+
+          {% for group in sequence %}
+            {% if group | count > 1 %}
+              {% set ns.sequence_parts =
+                ns.sequence_parts + ['[' ~ group | join(', ') ~ ']']
+              %}
+            {% elif group | count == 1 %}
+              {% set ns.sequence_parts = ns.sequence_parts + [group[0]] %}
+            {% endif %}
+          {% endfor %}
+
+
+          ### ⚙️ Конфигурация shutdown в PVE
+
+
+          ▶️ Гости ({{ running | count }}): {{ '%d:%02d' |
+
+          format(guest_budget // 60, guest_budget % 60) }}
+
+
+          🖥️ PVE: {{ '%d:%02d' |
+
+          format(pve_budget // 60, pve_budget % 60) }}
+
+
+          ⏱️ **ИТОГО: {{ '%d:%02d' |
+
+          format(total_budget // 60, total_budget % 60) }}**
+
+
+          ---
+
+
+          {% if state in ['ok', 'ready'] %}
+
+
+          🟢 **Готовность shutdown: Готово**
+
+
+          {% elif state in ['unknown', 'unavailable', 'skip'] %}
+
+
+          ⚪ **Готовность shutdown: Нет данных**
+
+
+          {% else %}
+
+
+          🟠 **Готовность shutdown: {{ issues | count }}**
+
+
+          {% for issue in issues %}
+            {% if issue == 'nut_unavailable' %}
+          {{ loop.index }}. 🔴 UPS · нет связи через NUT
+            {% elif issue == 'shutdown_policy_unavailable' %}
+          {{ loop.index }}. ⚠️ NUT · настройки автоматического выключения
+          недоступны
+            {% elif issue == 'shutdown_policy_not_enabled' %}
+          {{ loop.index }}. ⚠️ PVE · автоматическое выключение от UPS не готово
+            {% elif issue == 'nut_role_not_primary' %}
+          {{ loop.index }}. ⚠️ PVE · не назначен главным сервером UPS (NUT
+          PRIMARY)
+            {% elif issue == 'nut_monitor_not_active' %}
+          {{ loop.index }}. ⚠️ NUT · служба monitor не запущена
+            {% elif issue == 'shutdown_disabled' %}
+          {{ loop.index }}. ⚠️ PVE · команда выключения от UPS не активирована
+            {% elif issue == 'power_restore_delay_unreadable' %}
+          {{ loop.index }}. ⚠️ UPS · не удалось определить задержку включения
+          после возврата питания
+            {% elif issue == 'shutdown_budget_unavailable' %}
+          {{ loop.index }}. ⚠️ PVE · не удалось рассчитать время выключения
+          VM/LXC
+            {% elif issue == 'previous_host_shutdown_unclean' %}
+          {{ loop.index }}. 🔴 PVE · предыдущий shutdown завершился некорректно
+            {% elif issue == 'previous_host_shutdown_unknown' %}
+          {{ loop.index }}. ⚪ PVE · результат предыдущего shutdown не
+          подтверждён
+            {% elif issue.startswith('vm:') and issue.endswith(':near_timeout') %}
+          {{ loop.index }}. 🟠 VM {{ issue.split(':')[1] }} · shutdown близко к
+          timeout
+            {% elif issue.startswith('lxc:') and issue.endswith(':near_timeout') %}
+          {{ loop.index }}. 🟠 LXC {{ issue.split(':')[1] }} · shutdown близко к
+          timeout
+            {% elif issue.startswith('vm:') and issue.endswith(':timeout') %}
+          {{ loop.index }}. 🔴 VM {{ issue.split(':')[1] }} · превышен shutdown
+          timeout
+            {% elif issue.startswith('lxc:') and issue.endswith(':timeout') %}
+          {{ loop.index }}. 🔴 LXC {{ issue.split(':')[1] }} · превышен shutdown
+          timeout
+            {% elif issue.startswith('vm:') and issue.endswith(':forced') %}
+          {{ loop.index }}. 🔴 VM {{ issue.split(':')[1] }} · потребовалось
+          принудительное выключение
+            {% elif issue.startswith('lxc:') and issue.endswith(':forced') %}
+          {{ loop.index }}. 🔴 LXC {{ issue.split(':')[1] }} · потребовалось
+          принудительное выключение
+            {% elif issue.startswith('vm:') %}
+          {{ loop.index }}. ⚠️ VM {{ issue.split(':')[1] }} · требуется
+          проверить shutdown
+            {% elif issue.startswith('lxc:') %}
+          {{ loop.index }}. ⚠️ LXC {{ issue.split(':')[1] }} · требуется
+          проверить shutdown
+            {% else %}
+          {{ loop.index }}. ⚠️ Требуется дополнительная проверка shutdown
+            {% endif %}
+          {% endfor %}
+
+
+          {% endif %}
+
+
+          ---
+
+
+          🔌 **Цепочка выключения**
+
+
+          {{ ns.sequence_parts | join(' → ') }}
+
+
+
+
+          ---
+
+          📖 [Инструкция по настройке UPS/NUT и безопасного shutdown
+          PVE](https://github.com/DigitalHouses/home-assistant-apps/blob/main/digitalhouses_pve_agent/docs/UPS_SHUTDOWN_SETUP.md)
+      - type: heading
+        heading: VM / LXC
+        heading_style: subtitle
+        icon: mdi:server-network
+      - type: markdown
+        title: История остановок PVE
+        content: >-
+          {%- macro mmss(v) -%}
+            {%- if v is none -%}
+              —
+            {%- else -%}
+              {{ '%d:%02d' | format((v | int) // 60, (v | int) % 60) }}
+            {%- endif -%}
+          {%- endmacro -%}
+
+
+          {%- set history =
+            state_attr(
+              'sensor.dh_pve_agent_shutdown_history',
+              'history'
+            ) or []
+          -%}
+
+
+          {%- set ns = namespace(
+            lines=['PVE · факт / настроено']
+          ) -%}
+
+
+          {%- for h in history | reverse -%}
+
+            {%- set host_last = loop.last -%}
+
+            {%- set host_branch =
+              '└─' if host_last else '├─'
+            -%}
+
+            {%- set child_indent =
+              '   ' if host_last else '│  '
+            -%}
+
+
+            {%- set status =
+              h.get('shutdown_status', 'unknown')
+            -%}
+
+            {%- set shutdown_class =
+              h.get('shutdown_class', 'unknown')
+            -%}
+
+            {%- set shutdown_reason =
+              h.get('shutdown_reason', 'unknown')
+            -%}
+
+            {%- set ts =
+              h.get('shutdown_at')
+              or h.get('last_journal_at')
+            -%}
+
+            {%- set actual =
+              h.get('actual_shutdown_seconds')
+            -%}
+
+            {%- set planned =
+              h.get('planned_shutdown_seconds')
+            -%}
+
+
+            {%- set host_icon = {
+              'correct': '🟢',
+              'incorrect': '🔴',
+              'unknown': '⚪'
+            }.get(status, '⚪') -%}
+
+
+            {%- set reason = {
+              'ups_power': 'Отключение питания',
+              'normal': 'Штатная остановка',
+              'unclean': 'Некорректная остановка',
+              'unknown': 'Причина неизвестна'
+            }.get(shutdown_class, shutdown_class) -%}
+
+
+            {%- if ts -%}
+
+              {%- set dt =
+                as_datetime(ts) | as_local
+              -%}
+
+              {%- set when =
+                dt.strftime('%d.%m · %H:%M')
+              -%}
+
+            {%- else -%}
+
+              {%- set when = '—' -%}
+
+            {%- endif -%}
+
+
+            {%- if planned is none -%}
+
+              {%- set plan_text =
+                'план неизвестен'
+              -%}
+
+            {%- else -%}
+
+              {%- set plan_text =
+                mmss(planned)
+              -%}
+
+            {%- endif -%}
+
+
+            {%- if status == 'incorrect' -%}
+
+              {%- set host_text =
+                '⚠️ Завершение PVE не подтверждено'
+                ~ ' · '
+                ~ mmss(actual)
+                ~ ' / '
+                ~ plan_text
+              -%}
+
+            {%- else -%}
+
+              {%- set host_text =
+                reason
+                ~ ' · '
+                ~ mmss(actual)
+                ~ ' / '
+                ~ plan_text
+              -%}
+
+            {%- endif -%}
+
+
+            {%- set ns.lines = ns.lines + [
+              host_branch
+              ~ ' '
+              ~ host_icon
+              ~ ' '
+              ~ when
+              ~ ' · '
+              ~ host_text
+            ] -%}
+
+
+            {%- set guests =
+              h.get('guests') or {}
+            -%}
+
+            {%- set children =
+              namespace(items=[])
+            -%}
+
+
+            {%- for kind in ['vm', 'lxc'] -%}
+
+              {%- for gid, g
+                in (guests.get(kind) or {}).items()
+              -%}
+
+                {%- set children.items =
+                  children.items
+                  + [[kind, gid, g]]
+                -%}
+
+              {%- endfor -%}
+
+            {%- endfor -%}
+
+
+            {# ---------- UPS ---------- #}
+
+            {%- if shutdown_class == 'ups_power' -%}
+
+              {%- set held =
+                h.get('outage_to_fsd_seconds')
+              -%}
+
+              {%- set charge =
+                h.get('battery_charge_at_fsd')
+              -%}
+
+              {%- set charge_threshold =
+                h.get('trigger_charge_threshold_percent')
+              -%}
+
+              {%- set runtime_threshold =
+                h.get('trigger_runtime_threshold_seconds')
+              -%}
+
+
+              {%- set ns.lines = ns.lines + [
+                child_indent
+                ~ '├─ 🔋 UPS удерживал: '
+                ~ mmss(held)
+              ] -%}
+
+
+              {%- if shutdown_reason == 'charge_guard' -%}
+
+                {%- if charge_threshold is number -%}
+
+                  {%- set trigger_text =
+                    'Причина: порог заряда '
+                    ~ (charge_threshold | round(0) | int)
+                    ~ '%'
+                  -%}
+
+                {%- else -%}
+
+                  {%- set trigger_text =
+                    'Причина: порог заряда ??%'
+                  -%}
+
+                {%- endif -%}
+
+
+              {%- elif shutdown_reason == 'runtime_guard' -%}
+
+                {%- if runtime_threshold is number -%}
+
+                  {%- set trigger_text =
+                    'Причина: порог остатка '
+                    ~ mmss(runtime_threshold)
+                  -%}
+
+                {%- else -%}
+
+                  {%- set trigger_text =
+                    'Причина: порог остатка ??:??'
+                  -%}
+
+                {%- endif -%}
+
+
+              {%- elif shutdown_reason in
+                ['low_battery_fsd', 'native_lb']
+              -%}
+
+                {%- if charge is number -%}
+
+                  {%- set trigger_text =
+                    'Причина: UPS Low Battery · заряд '
+                    ~ (charge | round(0) | int)
+                    ~ '%'
+                  -%}
+
+                {%- else -%}
+
+                  {%- set trigger_text =
+                    'Причина: UPS Low Battery'
+                  -%}
+
+                {%- endif -%}
+
+
+              {%- elif shutdown_reason == 'on_battery_fsd' -%}
+
+                {%- set trigger_text =
+                  'Причина: FSD при работе от батареи'
+                -%}
+
+
+              {%- else -%}
+
+                {%- set trigger_text =
+                  'Причина: '
+                  ~ shutdown_reason
+                -%}
+
+              {%- endif -%}
+
+
+              {%- set ns.lines = ns.lines + [
+                child_indent
+                ~ '│  └─ '
+                ~ trigger_text
+              ] -%}
+
+            {%- endif -%}
+
+
+            {# ---------- VM / LXC ---------- #}
+
+            {%- for item in children.items -%}
+
+              {%- set child_last =
+                loop.last
+              -%}
+
+              {%- set child_branch =
+                '└─' if child_last else '├─'
+              -%}
+
+              {%- set kind =
+                item[0]
+              -%}
+
+              {%- set gid =
+                item[1]
+              -%}
+
+              {%- set g =
+                item[2]
+              -%}
+
+
+              {%- set name =
+                g.get('name')
+              -%}
+
+
+              {%- if not name -%}
+
+                {%- set entity =
+                  'sensor.dh_pve_agent_'
+                  ~ kind
+                  ~ '_'
+                  ~ gid
+                  ~ '_status'
+                -%}
+
+                {%- set name =
+                  state_attr(
+                    entity,
+                    'proxmox_display_name'
+                  )
+                -%}
+
+              {%- endif -%}
+
+
+              {%- if not name -%}
+
+                {%- set name =
+                  ('VM ' if kind == 'vm' else 'LXC ')
+                  ~ gid
+                -%}
+
+              {%- endif -%}
+
+
+              {%- set assessment =
+                g.get(
+                  'assessment',
+                  'unknown'
+                )
+              -%}
+
+
+              {%- set guest_icon = {
+                'ok': '🟢',
+                'warning': '🟠',
+                'critical': '🔴',
+                'unknown': '⚪'
+              }.get(
+                assessment,
+                '⚪'
+              ) -%}
+
+
+              {%- set ns.lines = ns.lines + [
+                child_indent
+                ~ child_branch
+                ~ ' '
+                ~ guest_icon
+                ~ ' '
+                ~ gid
+                ~ '·'
+                ~ name
+                ~ ' · '
+                ~ mmss(
+                  g.get(
+                    'duration_seconds'
+                  )
+                )
+                ~ '/'
+                ~ mmss(
+                  g.get(
+                    'timeout_seconds'
+                  )
+                )
+              ] -%}
+
+            {%- endfor -%}
+
+          {%- endfor -%}
+
+
+          <pre style="margin:0; padding:0; line-height:1.05;
+          font-family:'Courier New',monospace; white-space:pre;">{{ ns.lines |
+          join('\n') }}</pre>
+        grid_options:
+          columns: 12
+          rows: auto
+      - type: markdown
+        content: >-
+          {%- set guest_budget =
+          states('sensor.dh_pve_agent_ups_guest_shutdown_budget') | int(0) -%}
+
+          {%- set shutdown_budget =
+          states('sensor.dh_pve_agent_ups_shutdown_budget') | int(0) -%}
+
+          {%- set pve_budget = shutdown_budget - guest_budget -%}
+
+
+          {%- set ns = namespace(items=[], rows='') -%}
+
+
+          {%- for s in states.sensor -%}
+            {%- if (s.entity_id.startswith('sensor.dh_pve_agent_vm_')
+                    or s.entity_id.startswith('sensor.dh_pve_agent_lxc_'))
+                  and s.entity_id.endswith('_shutdown')
+                  and state_attr(s.entity_id, 'onboot') == true -%}
+
+              {%- set kind = state_attr(s.entity_id, 'guest_kind') | upper -%}
+              {%- set id = state_attr(s.entity_id, 'guest_id') -%}
+              {%- set name = state_attr(s.entity_id, 'proxmox_display_name') -%}
+
+              {%- set duration = state_attr(s.entity_id, 'last_shutdown_duration_seconds') -%}
+              {%- set last_timeout = state_attr(s.entity_id, 'last_shutdown_timeout_seconds') -%}
+              {%- set last_assessment = state_attr(s.entity_id, 'last_shutdown_assessment') -%}
+
+              {%- set configured_timeout = state_attr(s.entity_id, 'shutdown_timeout_seconds') -%}
+              {%- set next_timeout = state_attr(s.entity_id, 'next_shutdown_timeout_seconds') -%}
+              {%- set next_ratio = state_attr(s.entity_id, 'next_shutdown_timeout_ratio') -%}
+              {%- set next_assessment = state_attr(s.entity_id, 'next_shutdown_assessment') -%}
+
+              {%- set order = state_attr(s.entity_id, 'shutdown_order') | int(0) -%}
+
+              {%- if last_assessment == 'ok' -%}
+                {%- set last_icon = '🟢' -%}
+              {%- elif last_assessment == 'warning' -%}
+                {%- set last_icon = '🟠' -%}
+              {%- elif last_assessment == 'critical' -%}
+                {%- set last_icon = '🔴' -%}
+              {%- else -%}
+                {%- set last_icon = '⚪' -%}
+              {%- endif -%}
+
+              {%- if next_assessment == 'ok' -%}
+                {%- set next_icon = '🟢' -%}
+              {%- elif next_assessment == 'warning' -%}
+                {%- set next_icon = '🟠' -%}
+              {%- elif next_assessment == 'critical' -%}
+                {%- set next_icon = '🔴' -%}
+              {%- else -%}
+                {%- set next_icon = '⚪' -%}
+              {%- endif -%}
+
+              {%- if duration is not none -%}
+                {%- set last_text =
+                  last_icon ~ ' ' ~ duration ~ ' сек · лимит ' ~
+                  (last_timeout if last_timeout is not none else '?') ~ ' сек'
+                -%}
+              {%- else -%}
+                {%- set last_text = '⚪ нет данных' -%}
+              {%- endif -%}
+
+              {%- if duration is not none and next_timeout is not none -%}
+                {%- set next_text =
+                  next_icon ~ ' ' ~ duration ~ ' сек · лимит ' ~ next_timeout ~ ' сек'
+                -%}
+
+                {%- if next_ratio is not none -%}
+                  {%- set next_text =
+                    next_text ~ ' · ' ~
+                    ((next_ratio | float * 100) | round(0) | int) ~ '%'
+                  -%}
+                {%- endif -%}
+              {%- else -%}
+                {%- set next_text =
+                  '⚪ нет истории · лимит ' ~
+                  (configured_timeout if configured_timeout is not none else '?') ~ ' сек'
+                -%}
+              {%- endif -%}
+
+              {%- set ns.items = ns.items + [{
+                'order': order,
+                'guest': kind ~ ' ' ~ id ~ ' · ' ~ name,
+                'last': last_text,
+                'next': next_text
+              }] -%}
+            {%- endif -%}
+          {%- endfor -%}
+
+
+          {%- for item in ns.items | sort(attribute='order', reverse=true) -%}
+            {%- set ns.rows = ns.rows
+              ~ '\n| ' ~ item.guest
+              ~ ' | ' ~ item.last
+              ~ ' | ' ~ item.next
+              ~ ' |'
+            -%}
+          {%- endfor -%}
+
+
+          {{ '### ⚙️ Текущее состояние shutdown'
+             ~ '\n\n'
+             ~ '| Гость | Последний shutdown | При следующем shutdown |'
+             ~ '\n'
+             ~ '|:--|:--|:--|'
+             ~ ns.rows
+             ~ '\n'
+             ~ '| **ИТОГО** | **Гости: '
+             ~ ('%d:%02d' | format(guest_budget // 60, guest_budget % 60))
+             ~ '** | **PVE: '
+             ~ ('%d:%02d' | format(pve_budget // 60, pve_budget % 60))
+             ~ ' · ВСЕГО: '
+             ~ ('%d:%02d' | format(shutdown_budget // 60, shutdown_budget % 60))
+             ~ '** |'
+          }}
+        grid_options:
+          columns: 12
+          rows: auto
+  - type: grid
+    visibility:
+      - condition: state
+        entity: binary_sensor.dh_pve_agent_ups_configured
+        state: 'on'
+    cards:
+      - type: heading
+        heading: Тесты батареи
+        heading_style: title
+        icon: mdi:battery-heart-variant
+      - type: custom:mushroom-template-card
+        entity: sensor.dh_pve_agent_ups_test_state
+        primary: >-
+          {% set s = states(entity) %} {% if s in ['unknown', 'unavailable',
+          'none', ''] %}
+            Состояние тестов недоступно
+          {% elif s == 'Running' %}
+            Выполняется тест батареи
+          {% elif s == 'Idle' %}
+            Тест батареи не выполняется
+          {% else %}
+            Состояние теста: {{ s }}
+          {% endif %}
+        secondary: >-
+          {% set s = states(entity) %} {% set r =
+          states('sensor.dh_pve_agent_ups_test_result') %} {% set rl = r | lower
+          %} {% if s in ['unknown', 'unavailable', 'none', ''] %}
+            Нет данных
+          {% elif s == 'Running' %}
+            Тест выполняется
+          {% elif r in ['unknown', 'unavailable', 'none', ''] %}
+            Последний результат недоступен
+          {% elif 'pass' in rl or 'success' in rl %}
+            Последний результат: тест пройден
+          {% elif 'fail' in rl or 'error' in rl %}
+            Последний результат: ошибка теста
+          {% elif 'abort' in rl or 'stop' in rl or 'cancel' in rl %}
+            Последний результат: тест остановлен
+          {% else %}
+            Последний результат: {{ r }}
+          {% endif %}
+        icon: >-
+          {% set s = states(entity) %} {% set r =
+          states('sensor.dh_pve_agent_ups_test_result') | lower %} {% if s in
+          ['unknown', 'unavailable', 'none', ''] %}
+            mdi:battery-unknown
+          {% elif s == 'Running' %}
+            mdi:battery-sync
+          {% elif 'fail' in r or 'error' in r %}
+            mdi:battery-alert
+          {% elif 'abort' in r or 'stop' in r or 'cancel' in r %}
+            mdi:battery-minus
+          {% else %}
+            mdi:battery-check-outline
+          {% endif %}
+        icon_color: >-
+          {% set s = states(entity) %} {% set r =
+          states('sensor.dh_pve_agent_ups_test_result') | lower %} {% if s in
+          ['unknown', 'unavailable', 'none', ''] %}
+            grey
+          {% elif s == 'Running' %}
+            orange
+          {% elif 'fail' in r or 'error' in r %}
+            red
+          {% elif 'abort' in r or 'stop' in r or 'cancel' in r %}
+            orange
+          {% elif 'pass' in r or 'success' in r %}
+            green
+          {% else %}
+            blue
+          {% endif %}
+        multiline_secondary: true
+        tap_action:
+          action: more-info
+        grid_options:
+          columns: 12
+          rows: auto
+      - type: grid
+        columns: 2
+        square: false
+        cards:
+          - type: conditional
+            conditions:
+              - condition: state
+                entity: sensor.dh_pve_agent_ups_test_state
+                state: Idle
+              - condition: state
+                entity: binary_sensor.dh_pve_agent_ups_standard_test_supported
+                state: 'on'
+            card:
+              type: custom:mushroom-template-card
+              entity: button.dh_pve_agent_ups_test_standard
+              primary: Стандартный тест
+              secondary: Запустить вручную
+              icon: mdi:battery-check
+              icon_color: blue
+              tap_action:
+                action: perform-action
+                perform_action: button.press
+                target:
+                  entity_id: button.dh_pve_agent_ups_test_standard
+                confirmation:
+                  text: >-
+                    Запустить стандартный тест батареи? Продолжительность и
+                    нагрузка теста определяются самим UPS.
+          - type: conditional
+            conditions:
+              - condition: state
+                entity: sensor.dh_pve_agent_ups_test_state
+                state: Idle
+              - condition: state
+                entity: binary_sensor.dh_pve_agent_ups_quick_test_supported
+                state: 'on'
+            card:
+              type: custom:mushroom-template-card
+              entity: button.dh_pve_agent_ups_test_quick
+              primary: Быстрый тест
+              secondary: Запустить
+              icon: mdi:battery-sync
+              icon_color: blue
+              tap_action:
+                action: perform-action
+                perform_action: button.press
+                target:
+                  entity_id: button.dh_pve_agent_ups_test_quick
+                confirmation:
+                  text: Запустить быстрый тест батареи?
+          - type: conditional
+            conditions:
+              - condition: state
+                entity: sensor.dh_pve_agent_ups_test_state
+                state: Idle
+              - condition: state
+                entity: binary_sensor.dh_pve_agent_ups_deep_test_supported
+                state: 'on'
+            card:
+              type: custom:mushroom-template-card
+              entity: button.dh_pve_agent_ups_test_deep
+              primary: Глубокий тест
+              secondary: Запустить
+              icon: mdi:battery-heart-variant
+              icon_color: purple
+              tap_action:
+                action: perform-action
+                perform_action: button.press
+                target:
+                  entity_id: button.dh_pve_agent_ups_test_deep
+                confirmation:
+                  text: >-
+                    Запустить глубокий тест батареи? Тест может заметно
+                    разрядить батарею.
+        grid_options:
+          columns: 12
+          rows: auto
+      - type: conditional
+        conditions:
+          - condition: state
+            entity: sensor.dh_pve_agent_ups_test_state
+            state: Running
+          - condition: state
+            entity: binary_sensor.dh_pve_agent_ups_stop_test_supported
+            state: 'on'
+        card:
+          type: custom:mushroom-template-card
+          entity: button.dh_pve_agent_ups_test_stop
+          primary: Остановить тест батареи
+          secondary: Тест выполняется
+          icon: mdi:stop-circle-outline
+          icon_color: red
+          tap_action:
+            action: perform-action
+            perform_action: button.press
+            target:
+              entity_id: button.dh_pve_agent_ups_test_stop
+            confirmation:
+              text: Остановить текущий тест батареи?
+        grid_options:
+          columns: 12
+          rows: 1
+      - type: conditional
+        conditions:
+          - condition: or
+            conditions:
+              - condition: state
+                entity: binary_sensor.dh_pve_agent_ups_quick_test_supported
+                state: 'on'
+              - condition: state
+                entity: binary_sensor.dh_pve_agent_ups_deep_test_supported
+                state: 'on'
+        card:
+          type: heading
+          heading: Расписание тестов UPS
+          heading_style: subtitle
+          icon: mdi:calendar-sync-outline
+      - type: conditional
+        conditions:
+          - condition: or
+            conditions:
+              - condition: state
+                entity: binary_sensor.dh_pve_agent_ups_quick_test_supported
+                state: 'on'
+              - condition: state
+                entity: binary_sensor.dh_pve_agent_ups_deep_test_supported
+                state: 'on'
+        card:
+          type: horizontal-stack
+          cards:
+            - type: conditional
+              conditions:
+                - condition: state
+                  entity: binary_sensor.dh_pve_agent_ups_quick_test_supported
+                  state: 'on'
+              card:
+                type: vertical-stack
+                cards:
+                  - type: custom:mushroom-title-card
+                    subtitle: Быстрый тест батареи
+                  - type: custom:mushroom-number-card
+                    entity: number.dh_pve_agent_ups_quick_test_interval_days
+                    name: Интервал
+                    icon: mdi:calendar-range
+                    display_mode: buttons
+                  - type: custom:mushroom-entity-card
+                    entity: time.dh_pve_agent_ups_quick_test_time
+                    name: Время
+                    icon: mdi:clock-outline
+                    fill_container: true
+                    tap_action:
+                      action: more-info
+                  - type: custom:mushroom-entity-card
+                    entity: sensor.dh_pve_agent_ups_next_quick_test
+                    name: Следующий тест
+                    icon: mdi:calendar-clock
+                    tap_action:
+                      action: more-info
+                  - type: custom:mushroom-entity-card
+                    entity: sensor.dh_pve_agent_ups_last_quick_test
+                    name: Последний результат
+                    icon: mdi:battery-check
+                    tap_action:
+                      action: more-info
+            - type: conditional
+              conditions:
+                - condition: state
+                  entity: binary_sensor.dh_pve_agent_ups_deep_test_supported
+                  state: 'on'
+              card:
+                type: vertical-stack
+                cards:
+                  - type: custom:mushroom-title-card
+                    subtitle: Глубокий тест батареи
+                  - type: custom:mushroom-number-card
+                    entity: number.dh_pve_agent_ups_deep_test_interval_days
+                    name: Интервал
+                    icon: mdi:calendar-range
+                    display_mode: buttons
+                  - type: custom:mushroom-entity-card
+                    entity: time.dh_pve_agent_ups_deep_test_time
+                    name: Время
+                    icon: mdi:clock-outline
+                    fill_container: true
+                    tap_action:
+                      action: more-info
+                  - type: custom:mushroom-entity-card
+                    entity: sensor.dh_pve_agent_ups_next_deep_test
+                    name: Следующий тест
+                    icon: mdi:calendar-clock
+                    tap_action:
+                      action: more-info
+                  - type: custom:mushroom-entity-card
+                    entity: sensor.dh_pve_agent_ups_last_deep_test
+                    name: Последний результат
+                    icon: mdi:battery-check
+                    tap_action:
+                      action: more-info
+      - type: markdown
+        title: 🧪 История тестов батареи
+        content: >
+          {%- set history = state_attr('sensor.dh_pve_agent_ups_test_history',
+          'history') or [] -%}
+
+          {%- set ns = namespace(rows=[]) -%}
+
+
+          {%- for r in history | reverse -%}
+
+            {%- if r.type == 'Standard' -%}
+              {%- set test_type = 'Стандартный' -%}
+            {%- elif r.type == 'Quick' -%}
+              {%- set test_type = 'Быстрый' -%}
+            {%- elif r.type == 'Deep' -%}
+              {%- set test_type = 'Глубокий' -%}
+            {%- else -%}
+              {%- set test_type = r.type | default('—', true) -%}
+            {%- endif -%}
+
+            {%- if r.source == 'Manual' -%}
+              {%- set source_text = 'Вручную' -%}
+            {%- elif r.source == 'Scheduled' -%}
+              {%- set source_text = 'По расписанию' -%}
+            {%- else -%}
+              {%- set source_text = r.source | default('—', true) -%}
+            {%- endif -%}
+
+            {%- if r.result == 'Passed' -%}
+              {%- set result_text = '✅ Пройден' -%}
+            {%- elif r.result == 'Failed' -%}
+              {%- set result_text = '❌ Ошибка' -%}
+            {%- elif r.result == 'Stopped' -%}
+              {%- set result_text = '⏹️ Остановлен' -%}
+            {%- elif r.result == 'Running' -%}
+              {%- set result_text = '⏳ Выполняется' -%}
+            {%- elif r.result == 'Started' -%}
+              {%- set result_text = '⏳ Ожидается результат' -%}
+            {%- else -%}
+              {%- set result_text = r.result | default('—', true) -%}
+            {%- endif -%}
+
+            {%- if r.duration_seconds is not none -%}
+              {%- set duration = '%02d:%02d' | format(
+                (r.duration_seconds | int) // 60,
+                (r.duration_seconds | int) % 60
+              ) -%}
+            {%- else -%}
+              {%- set duration = '—' -%}
+            {%- endif -%}
+
+            {%- if r.battery_charge_before is not none -%}
+              {%- set battery =
+                (r.battery_charge_before | round(0) | int | string) ~ '%'
+              -%}
+              {%- if r.battery_charge_after is not none -%}
+                {%- set battery = battery ~ ' → ' ~
+                  (r.battery_charge_after | round(0) | int | string) ~ '%'
+                -%}
+              {%- endif -%}
+            {%- else -%}
+              {%- set battery = '—' -%}
+            {%- endif -%}
+
+            {%- set started =
+              as_datetime(r.started_at).strftime('%d.%m %H:%M')
+              if r.started_at is not none else '—'
+            -%}
+
+            {%- set ns.rows = ns.rows + [
+              '| ' ~ started ~
+              ' | ' ~ test_type ~
+              ' | ' ~ source_text ~
+              ' | ' ~ result_text ~
+              ' | ' ~ duration ~
+              ' | ' ~ battery ~ ' |'
+            ] -%}
+
+          {%- endfor -%}
+
+
+          {% if history | count == 0 -%}
+
+          История тестов пока пуста.
+
+          {%- else %}
+
+          {{ '| Дата | Тест | Запуск | Результат | Длительность | Батарея
+          |\n|:---|:---|:---|:---|---:|:---:|\n' ~ (ns.rows | join('\n')) }}
+
+
+          **Всего записей: {{ history | count }}**
+
+          {% endif %}
+        grid_options:
+          columns: 12
+          rows: auto
+  - type: grid
+    visibility:
+      - condition: state
+        entity: binary_sensor.dh_pve_agent_ups_configured
+        state: 'on'
+    cards:
+      - type: heading
+        heading: Параметры аварийного отключения
+        heading_style: title
+        icon: mdi:shield-power
+      - type: custom:mushroom-template-card
+        entity: sensor.dh_pve_agent_ups_trigger_policy
+        primary: Действующая Trigger Policy
+        secondary: |-
+          {% set charge =
+            state_attr(entity, 'active_charge_threshold_percent')
+          %} {% set reserve =
+            state_attr(entity, 'active_runtime_reserve_seconds')
+          %} {% set budget =
+            states('sensor.dh_pve_agent_ups_shutdown_budget')
+          %}
+          {% if charge is number %}
+            Заряд ≤ {{ charge | round(0) | int }} %
+          {% else %}
+            Заряд: нет данных
+          {% endif %}
+          {% if reserve is number and budget | is_number %}
+            · остаток ≤ {{
+              ((budget | float + reserve | float) / 60) | round(1)
+            }} мин
+          {% endif %}
+        icon: mdi:shield-check
+        icon_color: |-
+          {% set s = states(entity) %} {% if s == 'Active' %}
+            green
+          {% elif s == 'Pending changes' %}
+            orange
+          {% elif s in ['unknown', 'unavailable', 'none', ''] %}
+            grey
+          {% else %}
+            red
+          {% endif %}
+        multiline_secondary: true
+        tap_action:
+          action: more-info
+        grid_options:
+          columns: 12
+          rows: auto
+      - type: vertical-stack
+        cards:
+          - type: custom:mushroom-title-card
+            subtitle: Настройка · черновик
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-number-card
+                entity: number.dh_pve_agent_ups_shutdown_battery_charge_threshold
+                name: Черновик · порог заряда
+                icon: mdi:battery-alert
+                display_mode: buttons
+                fill_container: true
+              - type: custom:mushroom-number-card
+                entity: number.dh_pve_agent_ups_shutdown_runtime_reserve
+                name: Черновик · резерв времени
+                icon: mdi:timer-plus-outline
+                display_mode: buttons
+                fill_container: true
+          - type: custom:mushroom-title-card
+            subtitle: Действующие условия shutdown
+          - type: custom:mushroom-template-card
+            entity: sensor.dh_pve_agent_ups_trigger_policy
+            primary: Заряд батареи
+            secondary: |-
+              {% set value =
+                state_attr(entity, 'active_charge_threshold_percent')
+              %} {% if value is number %}
+                ≤ {{ value | round(0) | int }} %
+              {% else %}
+                Нет данных
+              {% endif %}
+            icon: mdi:battery-alert
+            icon_color: orange
+            tap_action:
+              action: more-info
+          - type: custom:mushroom-template-card
+            entity: sensor.dh_pve_agent_ups_shutdown_budget
+            primary: Остаток времени
+            secondary: |-
+              {% set budget = states(entity) %} {% set reserve =
+                state_attr(
+                  'sensor.dh_pve_agent_ups_trigger_policy',
+                  'active_runtime_reserve_seconds'
+                )
+              %}
+              {% if budget | is_number and reserve is number %}
+                ≤ {{ ((budget | float + reserve | float) / 60) | round(1) }} мин
+                · shutdown {{ (budget | float / 60) | round(1) }} мин
+                + резерв {{ (reserve | float / 60) | round(1) }} мин
+              {% else %}
+                Расчёт сейчас недоступен
+              {% endif %}
+            icon: mdi:timer-alert-outline
+            icon_color: orange
+            multiline_secondary: true
+            tap_action:
+              action: more-info
+          - type: custom:mushroom-template-card
+            primary: Low Battery
+            secondary: Нативный аварийный сигнал UPS
+            icon: mdi:battery-alert-variant-outline
+            icon_color: red
+          - type: conditional
+            conditions:
+              - condition: state
+                entity: sensor.dh_pve_agent_ups_trigger_policy
+                state: Pending changes
+            card:
+              type: custom:mushroom-template-card
+              entity: button.dh_pve_agent_ups_apply_trigger_policy
+              primary: Применить изменения
+              secondary: >-
+                {% set policy = 'sensor.dh_pve_agent_ups_trigger_policy' %} {%
+                set charge =
+                  state_attr(policy, 'draft_charge_threshold_percent')
+                %} {% set reserve =
+                  state_attr(policy, 'draft_runtime_reserve_seconds')
+                %}
+
+                {% if charge is number and reserve is number %}
+                  Черновик: заряд {{ charge | round(0) | int }} %
+                  · резерв {{ (reserve | float / 60) | round(1) }} мин
+                {% else %}
+                  Есть изменения, ожидающие применения
+                {% endif %}
+              icon: mdi:check-decagram-outline
+              icon_color: orange
+              multiline_secondary: true
+              tap_action:
+                action: perform-action
+                perform_action: button.press
+                target:
+                  entity_id: button.dh_pve_agent_ups_apply_trigger_policy
+                confirmation:
+                  text: Применить новые параметры аварийного отключения?
+        grid_options:
+          columns: 12
+          rows: auto
+      - type: heading
+        icon: mdi:shield-check
+        heading: Логика аварийного отключения
+        heading_style: title
+      - type: markdown
+        content: >
+          {% set policy_entity = 'sensor.dh_pve_agent_ups_trigger_policy' %}
+
+          {% set budget_entity = 'sensor.dh_pve_agent_ups_shutdown_budget' %}
+
+
+          {% set battery = states('sensor.dh_pve_agent_ups_battery_charge') %}
+
+          {% set load = states('sensor.dh_pve_agent_ups_load') %}
+
+          {% set runtime =
+          states('sensor.dh_pve_agent_ups_battery_runtime_minutes') %}
+
+
+          {% set charge_limit = state_attr(policy_entity,
+          'active_charge_threshold_percent') %}
+
+          {% set reserve = state_attr(policy_entity,
+          'active_runtime_reserve_seconds') %}
+
+
+          {% set budget = states(budget_entity) %}
+
+          {% set guest = states('sensor.dh_pve_agent_ups_guest_shutdown_budget')
+          %}
+
+
+          {% set hostsync = state_attr(budget_entity, 'hostsync_budget_seconds')
+          %}
+
+          {% set finaldelay = state_attr(budget_entity, 'finaldelay_seconds') %}
+
+          {% set host_tail = state_attr(budget_entity,
+          'host_tail_budget_seconds') %}
+
+
+          {% set shutdown_delay =
+          states('sensor.dh_pve_agent_ups_shutdown_delay') %}
+
+          {% set start_delay = states('sensor.dh_pve_agent_ups_start_delay') %}
+
+
+          {% set battery_ok = battery | is_number %}
+
+          {% set load_ok = load | is_number %}
+
+          {% set runtime_ok = runtime | is_number %}
+
+          {% set charge_limit_ok = charge_limit | is_number %}
+
+          {% set reserve_ok = reserve | is_number %}
+
+          {% set budget_ok = budget | is_number %}
+
+          {% set guest_ok = guest | is_number %}
+
+          {% set hostsync_ok = hostsync | is_number %}
+
+          {% set finaldelay_ok = finaldelay | is_number %}
+
+          {% set host_tail_ok = host_tail | is_number %}
+
+          {% set shutdown_delay_ok = shutdown_delay | is_number %}
+
+          {% set start_delay_ok = start_delay | is_number %}
+
+
+          {% if budget_ok and reserve_ok %}
+            {% set shutdown_threshold = budget | float + reserve | float %}
+            {% set shutdown_threshold_min = shutdown_threshold / 60 %}
+          {% else %}
+            {% set shutdown_threshold = none %}
+            {% set shutdown_threshold_min = none %}
+          {% endif %}
+
+
+          ## 🔋 Состояние UPS сейчас
+
+
+          | | |
+
+          |---|---:|
+
+          | Заряд батареи | {% if battery_ok %}**{{ battery | float | round(0) |
+          int }} %**{% else %}нет данных{% endif %} |
+
+          | Нагрузка | {% if load_ok %}**{{ load | float | round(1) }} %**{%
+          else %}нет данных{% endif %} |
+
+          | Оценка времени работы от батареи | {% if runtime_ok %}около **{{
+          runtime | float | round(1) }} мин**{% else %}нет данных{% endif %} |
+
+
+          Оценка времени работы показывает, сколько UPS сможет питать текущую
+          нагрузку, если внешнее питание пропадёт сейчас.
+
+
+          ---
+
+
+          ## ⚙️ Вы настроили
+
+
+          | Параметр | Текущее значение |
+
+          |---|---:|
+
+          | Порог заряда батареи | {% if charge_limit_ok %}**{{ charge_limit |
+          float | round(0) | int }} %**{% else %}нет данных{% endif %} |
+
+          | Дополнительный резерв времени | {% if reserve_ok %}**{{ (reserve |
+          float / 60) | round(1) }} мин**{% else %}нет данных{% endif %} |
+
+
+          Эти параметры **не являются фиксированными требованиями системы**. Это
+          текущие настройки вашей Trigger Policy.
+
+
+          ---
+
+
+          ## 🧮 Что рассчитала система
+
+
+          {% if budget_ok %}
+
+          Для корректного выключения текущей конфигурации Proxmox требуется до
+          **{{ (budget | float / 60) | round(1) }} мин**.
+
+          {% else %}
+
+          Время, необходимое на корректное выключение, сейчас определить нельзя.
+
+          {% endif %}
+
+
+          {% if guest_ok %}
+
+          Из них на остановку VM / LXC зарезервировано до **{{ (guest | float /
+          60) | round(1) }} мин**.
+
+          {% endif %}
+
+
+          {% if budget_ok and reserve_ok %}
+
+
+          При ваших текущих настройках:
+
+
+          **{{ (budget | float / 60) | round(1) }} мин на выключение  
+
+          + {{ (reserve | float / 60) | round(1) }} мин дополнительного
+          резерва  
+
+          = {{ shutdown_threshold_min | round(1) }} мин**
+
+
+          Поэтому система должна начать выключение, когда UPS прогнозирует около
+          **{{ shutdown_threshold_min | round(1) }} мин оставшейся работы**.
+
+
+          {% if runtime_ok %}
+            {% set runtime_left = runtime | float %}
+            {% if runtime_left > shutdown_threshold_min %}
+          Сейчас UPS прогнозирует **{{ runtime_left | round(1) }} мин**, то есть
+          примерно на **{{ (runtime_left - shutdown_threshold_min) | round(1) }}
+          мин больше текущего порога выключения**.
+            {% else %}
+          Сейчас UPS прогнозирует **{{ runtime_left | round(1) }} мин** — это
+          уже не больше текущего порога **{{ shutdown_threshold_min | round(1)
+          }} мин**.
+            {% endif %}
+          {% endif %}
+
+
+          {% endif %}
+
+
+          ---
+
+
+          ## ⚡ Когда начнётся аварийное выключение
+
+
+          Выключение начинается, если произошло **любое одно** из следующих
+          событий:
+
+
+          - 🚨 UPS сообщил **Low Battery**
+
+          {% if charge_limit_ok %}
+
+          - 🔋 заряд батареи снизился до **{{ charge_limit | float | round(0) |
+          int }} %**
+
+          {% else %}
+
+          - 🔋 порог заряда батареи сейчас недоступен
+
+          {% endif %}
+
+          {% if shutdown_threshold_min is not none %}
+
+          - ⏱️ прогноз оставшегося времени работы снизился до **{{
+          shutdown_threshold_min | round(1) }} мин**
+
+          {% else %}
+
+          - ⏱️ порог по оставшемуся времени сейчас недоступен
+
+          {% endif %}
+
+
+          Пока ни одно из этих условий не выполнено, Proxmox продолжает работать
+          от батареи.
+
+
+          ---
+
+
+          ## 🛑 Что происходит после сигнала выключения
+
+
+          После сигнала решение о shutdown уже принято. Возврат внешнего питания
+          **не отменяет** начатое выключение.
+
+
+          {% if hostsync_ok and finaldelay_ok and guest_ok and host_tail_ok %}
+
+            {% set prep = hostsync | float + finaldelay | float %}
+            {% set guests = guest | float %}
+            {% set tail = host_tail | float %}
+
+            {% set after_prep = prep %}
+            {% set after_guests = prep + guests %}
+            {% set after_host = prep + guests + tail %}
+
+          | Этап | Время этапа | Всего после сигнала |
+
+          |---|---:|---:|
+
+          | 🚨 Сигнал выключения | сразу | **0:00** |
+
+          | 🔗 Подготовка NUT | до **{{ prep | round(0) | int }} с** | **{{
+          (after_prep / 60) | round(1) }} мин** |
+
+          | 📦 Остановка VM / LXC | до **{{ guests | round(0) | int }} с · {{
+          (guests / 60) | round(1) }} мин** | **{{ (after_guests / 60) |
+          round(1) }} мин** |
+
+          | 🖥️ Завершение работы Proxmox | до **{{ tail | round(0) | int }} с**
+          | **{{ (after_host / 60) | round(1) }} мин** |
+
+          | ✅ Proxmox выключен |  | **до {{ (budget | float / 60) | round(1) }}
+          мин** |
+
+
+          {% else %}
+
+
+          Детальная разбивка этапов сейчас недоступна.
+
+
+          {% endif %}
+
+
+          ---
+
+
+          ## 🔄 После выключения Proxmox
+
+
+          | | |
+
+          |---|---:|
+
+          | Отключение выхода UPS | {% if shutdown_delay_ok %}через **{{
+          shutdown_delay | float | round(0) | int }} с**{% else %}нет данных{%
+          endif %} |
+
+          | Включение выхода после возврата сети | {% if start_delay_ok %}через
+          **{{ start_delay | float | round(0) | int }} с**{% else %}нет данных{%
+          endif %} |
+
+          | Запуск Proxmox | автоматически после восстановления питания |
+
+          | Запуск VM / LXC | согласно настройкам запуска Proxmox |
+
+
+          Время отключения и повторного включения выхода UPS **не входит** во
+          время, необходимое Proxmox для корректного shutdown.
+        grid_options:
+          columns: 12
+          rows: auto
+      - type: heading
+        heading: Диагностика
+        heading_style: subtitle
+        icon: mdi:stethoscope
+cards: []
