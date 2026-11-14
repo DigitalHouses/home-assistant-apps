@@ -21,8 +21,8 @@ def claim(product, version, repo=REPO):
             "repository": repo, "product_path": product, "schema": 1, "type": "agent"}
 
 
-def raw_view(name, path, constraint):
-    return (f"# DH-View: dh_pve_agent\n"
+def raw_view(name, path, constraint, view_id="dh_pve_agent"):
+    return (f"# DH-View: {view_id}\n"
             f"# DH-View-Version: 1.0.0\n"
             f"# DH-Compatible-Agent: {constraint}\n\n"
             f"type: sections\ntitle: {name}\npath: {path}\nsections: []\n").encode()
@@ -56,7 +56,7 @@ class PinnedDiscoveryTests(unittest.TestCase):
         viewpath = product + "/dashboards/ru/10_plex.yaml"
         catalog = PreviewCatalog(
             listing=lambda pid,sha:[{"type":"file","name":"10_plex.yaml","path":viewpath}],
-            reader=lambda p,sha:raw_view("Plex","dh-plex-agent",">=0.8.17,<0.8.18")
+            reader=lambda p,sha:raw_view("Plex","dh-plex-agent",">=0.8.17,<0.8.18","dh_plex_agent")
         )
         row = catalog.inspect({product+"/default":claim(product,"0.8.18")})[0]
         self.assertEqual([v["file"] for v in row["views"]],["10_plex.yaml"])
@@ -100,6 +100,18 @@ class PinnedDiscoveryTests(unittest.TestCase):
         )
         row=inspector.inspect({product+"/default":claim(product,"0.5.88")})[0]
         self.assertIn("Unsafe YAML",row["error"])
+
+    def test_mismatched_view_identity_fails_closed(self):
+        product="digitalhouses_plex_agent"
+        inspector=PreviewCatalog(
+            listing=lambda p,sha:[{"type":"file","name":"10_plex.yaml",
+                "path":product+"/dashboards/ru/10_plex.yaml"}],
+            reader=lambda p,sha:raw_view("Plex","dh-plex-agent",
+                ">=0.8.17,<0.8.18","dh_pve_agent"),
+        )
+        row=inspector.inspect({product+"/default":claim(product,"0.8.18")})[0]
+        self.assertIn("mismatched canonical view",row["error"])
+        self.assertEqual(row["views"],[])
 
     def test_get_preview_not_automatic_and_post_still_disabled(self):
         with tempfile.TemporaryDirectory() as tmp:

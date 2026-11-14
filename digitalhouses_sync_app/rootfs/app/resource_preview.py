@@ -111,9 +111,11 @@ def parse_view(raw: bytes, path: str, product: str) -> dict:
                 raise PreviewError("Duplicate metadata header: " + path)
             header[found.group(1)] = found.group(2)
     compatible_key = "DH-Compatible-Agent" if product.endswith("_agent") else "DH-Compatible-App"
-    if (not header.get("DH-View") or not version_tuple(header.get("DH-View-Version"))
+    expected_view = "dh_" + product.removeprefix("digitalhouses_")
+    if (header.get("DH-View") != expected_view
+            or not version_tuple(header.get("DH-View-Version"))
             or not header.get(compatible_key)):
-        raise PreviewError("Missing canonical view metadata: " + path)
+        raise PreviewError("Missing or mismatched canonical view metadata: " + path)
     try:
         view = yaml.safe_load(text)
     except (yaml.YAMLError, RecursionError) as exc:
