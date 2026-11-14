@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.3.0
+
+- Add operator-initiated owner-only GitHub YAML Apply for discovered products, without product, agent-version or compatibility allowlists.
+- Exact pinned commit and source SHA in preview; reject changed local bytes, duplicate paths and Lovelace Storage conflicts before writing.
+- Back up replaced YAML bytes to private persistent /data transaction journal; atomic per-file replacements and explicit rollback, refusing to override newer user edits.
+- Expose per-product preparation, confirmation and rollback in admin-only Supervisor Ingress; POST requires a single-use preview token and an explicit checkbox. No automatic reload, HA API access, .storage writes, packages, agent actions or background updates.
+- Writable HAOS config bind is required only for manual view file Apply; no other HA file modifications.
+- Treat a product without dashboards/ru directory as no published resources rather than GitHub directory error.
+
+
 ## 0.2.2
 
 - Remove DH-Compatible-Agent/App headers from canonical PVE, UPS, Plex and Recorder dashboards; no compatibility declaration is required.

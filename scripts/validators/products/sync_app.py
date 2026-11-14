@@ -1,4 +1,4 @@
-"""Product-specific contract for the DigitalHouses Sync App preview."""
+"""Product-specific contract for DigitalHouses Sync manual YAML Apply."""
 from __future__ import annotations
 
 from pathlib import Path
@@ -20,6 +20,8 @@ def validate_sync_app(root: Path, app: Path, context: dict) -> None:
         app / "rootfs/app/catalog_web.py",
         app / "rootfs/app/resource_preview.py",
         app / "rootfs/app/local_audit.py",
+        app / "rootfs/app/apply_service.py",
+        app / "tests/test_apply_service.py",
         app / "tests/test_local_audit.py",
         app / "tests/test_resource_preview.py",
         app / "tests/test_catalog_web.py",
@@ -61,13 +63,13 @@ def validate_sync_app(root: Path, app: Path, context: dict) -> None:
     if config.get("slug") != "digitalhouses_sync_app":
         fail("DH Sync: incorrect Supervisor slug")
     maps = config.get("map", [])
-    if maps != [{"type": "homeassistant_config", "read_only": True}]:
-        fail("DH Sync v0.2 requires only a read-only HA configuration mount")
+    if maps != [{"type": "homeassistant_config", "read_only": False}]:
+        fail("DH Sync v0.3 uses only an explicitly writable HA configuration bind for manual YAML views")
     if config.get("homeassistant_api"):
-        fail("DH Sync v0.2 must not access HA Core API")
+        fail("DH Sync must not access HA Core API")
     if not config.get("ingress") or config.get("ingress_port") != 8099:
         fail("DH Sync requires admin-only Ingress at port 8099")
     if config.get("panel_admin") is not True:
         fail("DH Sync Ingress must be admin-only")
     if "allow_changes" in config.get("options", {}) or "allow_changes" in config.get("schema", {}):
-        fail("DH Sync v0.2 must not expose an Apply option")
+        fail("DH Sync Apply needs manual Ingress confirmation, not a global toggle")

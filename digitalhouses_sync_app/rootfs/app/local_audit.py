@@ -202,7 +202,7 @@ class LocalAuditor:
         self.require_readonly = require_readonly
 
     def inspect(self, claims: dict[str, dict]) -> dict:
-        """Return a *read-only* status report; no data or backup files created."""
+        """Return a read-only status report; never mutate config while auditing."""
         report = {
             "ready": False, "readonly": True, "issues": [],
             "products": [], "write_enabled": False,
@@ -228,6 +228,7 @@ class LocalAuditor:
         report["storage_files_examined"] = snapshot["storage_count"]
         for product in self.catalog.inspect(claims):
             item = {
+                "identity": product.get("identity", product["product"] + "/default"),
                 "product": product["product"], "version": product["version"],
                 "commit": product["commit"], "source_error": product["error"],
                 "views": [],

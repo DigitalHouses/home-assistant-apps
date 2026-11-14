@@ -28,6 +28,11 @@ class PreviewError(ValueError):
     pass
 
 
+class MissingDirectory(PreviewError):
+    """An owned repository has not published this optional resource directory."""
+    pass
+
+
 def _download(url: str, host: str, max_bytes: int) -> bytes:
     request = urllib.request.Request(url, headers={"User-Agent": "DH-Sync-Preview/0.2"})
     try:
@@ -38,6 +43,10 @@ def _download(url: str, host: str, max_bytes: int) -> bytes:
                     or final.port is not None):
                 raise PreviewError("GitHub redirected outside the fixed source host")
             data = response.read(max_bytes + 1)
+    except urllib.error.HTTPError as exc:
+        if exc.code == 404:
+            raise MissingDirectory("No resource directory") from exc
+        raise PreviewError("GitHub request failed") from exc
     except (OSError, ValueError, urllib.error.URLError) as exc:
         if isinstance(exc, PreviewError):
             raise
@@ -97,6 +106,8 @@ def list_views(repository: str, product_path: str, commit: str) -> list:
     url = _repository_api(repository) + "/contents/" + path + "?ref=" + commit
     try:
         data = json.loads(_download(url, "api.github.com", 150_000))
+    except MissingDirectory:
+        return []
     except (ValueError, UnicodeError) as exc:
         raise PreviewError("Invalid GitHub directory response") from exc
     if not isinstance(data, list):
@@ -127,11 +138,11 @@ def parse_view(raw: bytes, path: str, product: str) -> dict:
         view = yaml.safe_load(text)
     except (UnicodeError, yaml.YAMLError, RecursionError) as exc:
         raise PreviewError("Invalid canonical view YAML: " + path) from exc
-    if (not isinstance(view, dict) or view.get("type") != "sections"
-            or not isinstance(view.get("sections"), list)
-            or not isinstance(view.get("title"), str)
-            or not isinstance(view.get("path"), str) or not view["path"]):
-        raise PreviewError("Not a standalone sections view: " + path)
+    if (not isinstance(view, dict)
+            or not isinstance(view.get("title"), str) or not view["title"]
+            or not isinstance(view.get("path"), str) or not view["path"]
+            or not isinstance(view.get("type", "masonry"), str)):
+        raise PreviewError("Not a standalone Lovelace view: " + path)
     metadata = {}
     for line in text.splitlines()[:15]:
         found = re.fullmatch(
@@ -194,7 +205,7 @@ class PreviewCatalog:
                     view["status"] = "Владелец DigitalHouses · только просмотр"
                     row["views"].append(view)
                 if not row["views"]:
-                    row["error"] = "В GitHub нет dashboards/ru/*.yaml"
+                    row["error"] = "Нет опубликованных ресурсов"
             except (PreviewError, DiscoveryError, ValueError, TypeError, UnicodeError) as exc:
                 row["views"] = []
                 row["error"] = str(exc)[:180]
