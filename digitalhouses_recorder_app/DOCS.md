@@ -52,7 +52,22 @@ DH Sync 0.4 accepts sources based **only** on GitHub owner
 `DigitalHouses` and automatically synchronizes canonical resources from
 GitHub's default branch on discovery and periodically. Recorder publishes
 `dashboards/ru/10_recorder.yaml` with stable Lovelace `path: recorder`.
-No separate Recorder package exists. `examples/` files are not synchronized.
+Two optional canonical HA packages accompany the Recorder dashboard:
+
+- `packages/common/dh_recorder_app.yaml`: existing
+  `dh_recorder_app_package` Recorder include list (12 entities).
+- `packages/locales/ru/dh_recorder_app_notification_package.yaml`:
+  existing `dh_recorder_app_notification_package`, automation
+  `dh_recorder_notifications`, two storage diagnostic MQTT events and
+  direct `script.write2log` actions. The script is a documented shared
+  DigitalHouses prerequisite in all managed homes. Publishing this
+  notification file requires a policy exception to the current standard
+  for public notification resources, which treats write2log as local.
+
+DH Sync matches packages by their single top-level key, preserves local
+paths, backs up old YAML, and updates files automatically. A Home Assistant
+restart may be required for new or modified packages to take effect.
+`examples/` files are not synchronized.
 Metadata version comments are informational, not compatibility gates.
 The previous pinned-commit / Preview / Apply flow is obsolete.
 
