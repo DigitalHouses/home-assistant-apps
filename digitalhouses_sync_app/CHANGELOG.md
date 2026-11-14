@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.2
+
+- Show the installed release version in the Ingress heading and startup log using APP_VERSION instead of hardcoding v0.1.0.
+- Recognize the Sync App's own canonical product-level availability topic and display Online after receiving its retained MQTT status.
+- Add regression tests for release-version rendering, escaped header output, and self availability; no change to YAML, HA API permissions, or MQTT Discovery Contract v1.
+
 ## 0.1.1
 
 - Fix HAOS startup crash with Alpine `py3-paho-mqtt` 1.x, where `mqtt.CallbackAPIVersion` is not available.

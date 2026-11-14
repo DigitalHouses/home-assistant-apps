@@ -16,6 +16,7 @@ TOPIC_PRODUCTS = {
     "digitalhouses_pve_agent": "digitalhouses_pve_agent",
     "digitalhouses_plex_agent": "digitalhouses_plex_agent",
     "digitalhouses_recorder_app": "digitalhouses_recorder_app",
+    "digitalhouses_sync_app": "digitalhouses_sync_app",
     "dh_network_app": "digitalhouses_network_app",
     "dh_zigbee_monitor_app": "digitalhouses_zigbee_monitor_app",
     "speedtest": "digitalhouses_speedtest_app",
