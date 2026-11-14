@@ -29,6 +29,18 @@ def raw_view(name, path, constraint, view_id="dh_pve_agent"):
 
 
 class PinnedDiscoveryTests(unittest.TestCase):
+    def test_release_014_pins_exact_approved_product_commits(self):
+        self.assertEqual(
+            PINS["digitalhouses_pve_agent"].commit,
+            "7a2bc76f7c69312366ea70a6d9236549a978d636",
+        )
+        self.assertEqual(
+            PINS["digitalhouses_plex_agent"].commit,
+            "fd9d257972f0afdf979bfdd27ba7c6c86991fceb",
+        )
+        self.assertTrue(PINS["digitalhouses_pve_agent"].reviewed)
+        self.assertTrue(PINS["digitalhouses_plex_agent"].reviewed)
+
     def test_pve_discovers_both_views_from_directory(self):
         product = "digitalhouses_pve_agent"
         seen = []
