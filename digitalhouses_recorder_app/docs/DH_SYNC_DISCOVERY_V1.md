@@ -54,7 +54,8 @@ controls and optional telemetry consent are unchanged.
 | Lovelace kind | One standalone `sections` view |
 | Stable view identity | `path: recorder` |
 | Optional informational header | `DH-View: dh_recorder_app`, `DH-View-Version: 1.0.0` |
-| Canonical packages | None |
+| Common package | `packages/common/dh_recorder_app.yaml` (`dh_recorder_app_package`) |
+| Russian notification package | `packages/locales/ru/dh_recorder_app_notification_package.yaml` (`dh_recorder_app_notification_package`) |
 | Other locales | Not published; DH Sync 0.4 only synchronizes Russian |
 
 The source contains the original maintained Recorder dashboard from
@@ -65,23 +66,51 @@ byte-for-byte identical to the maintained example (original Git blob
 entity, view title or `path` has been altered for the DH Sync transition.
 
 There is deliberately no `DH-Compatible-App` or `DH-Compatible-Agent` range.
-App version and `DH-View-Version` are informative and must not restrict the
-automatic Sync 0.4 resource fetch. No empty `packages/common` or
-`packages/locales/ru` files are created. Files under `examples/` never
-become DH Sync resources.
+App version and `DH-View-Version` are informational only.
+
+The common package contains **only the existing twelve Recorder include
+entities**, under the unchanged key `dh_recorder_app_package`. It keeps
+database/storage acquisition and event decisions inside the Recorder App.
+The Russian notification package has the existing
+`dh_recorder_app_notification_package` key and
+`dh_recorder_notifications` automation ID. It listens on
+`DigitalHouses/Global/digitalhouses_recorder_app/event/diagnostic` for
+`storage_usage_high` and `storage_usage_normal`, using the established
+event values directly in its Russian messages.
+
+**Global dependency and policy exception:** The notification actions call
+`script.write2log` exactly as in the deployed configuration. The user
+confirms the `write2log` script is a **shared global package installed in
+every DigitalHouses home**, rather than a one-site delivery adapter.
+Nevertheless, the current [Events & Notifications Standard]
+(../../docs/standards/EVENTS_AND_NOTIFICATIONS_STANDARD.md) explicitly
+classifies `script.write2log` as local/noncanonical. This dependency must
+be formally approved as a global exception (or the standard revised) **before
+merging and triggering DH Sync's automatic rollout**. The public Recorder
+App runtime continues to have no dependency on this script.
+
+The two published packages are identified by their *YAML top-level keys*,
+not filenames. DH Sync replaces an existing matching single-key package
+**at its present location** (for example `/config/packages/Global/DH_APP/`)
+and puts newly missing packages under `/config/packages/dh/`.
+Backups and atomic replacement are handled by DH Sync. Changes to packages
+may require a regular Home Assistant restart before becoming active.
+Files under `examples/` never become DH Sync resources.
 
 ## Automatic installation and existing local files
 
 1. DH Sync discovers the Recorder MQTT `/sync` source and periodically
    rechecks its owned GitHub repository.
-2. It reads `digitalhouses_recorder_app/dashboards/ru/10_recorder.yaml` at
-   one Git revision from the default branch.
+2. It reads the Recorder dashboard plus canonical `packages/common/` and
+   `packages/locales/ru/` YAML at one Git revision from the default branch.
 3. It identifies a local YAML view under `/config/dashboards/dh/views/`
-   by Lovelace `path: recorder`, preserving the local filename when present.
+   by Lovelace `path: recorder`, and packages under `/config/packages/`
+   by stable top-level keys, preserving the local filenames when present.
 4. **If bytes differ, it backs up the original and atomically replaces the
    YAML automatically. No Preview, Apply button, confirmation or compatible
    App-version check is involved.** Backup/journal state is maintained by DH
-   Sync under private persistent `/data/dh-sync-auto/`.
+   Sync under private persistent `/data/dh-sync-auto/`. This includes
+   package YAML, which may need an HA restart before its new automations work.
 5. It skips ambiguous duplicate paths, occupied filenames and Lovelace Storage
    conflicts instead of guessing. It never edits `.storage`, deletes YAML
    merely because a GitHub resource disappears, or restarts Home Assistant.
