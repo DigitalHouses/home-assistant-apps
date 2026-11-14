@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.4.0
+
+- Enable zero-click automatic dashboard and Home Assistant package sync after MQTT discovery and hourly.
+- Share free public Git snapshots across products, without GitHub REST API, tokens or product-version gates.
+- Reuse YAML identity for installation: Lovelace path for views and top-level package key for packages. Keep existing local filenames.
+- Back up changed files in persistent /data and atomically replace them; recover interrupted transactions. Never overwrite ambiguous duplicate keys/paths or Lovelace Storage views.
+- Publish existing PVE base package as a canonical resource, alongside the existing Plex package.
+- Replace the running manual Apply/confirmation UI with a minimal status panel. No automatic Home Assistant restart, entity or package registration, .storage changes or agent updates.
+
+
 ## 0.3.1
 
 - Replace per-product unauthenticated GitHub REST API metadata, branch and directory requests with free, public shallow Git transport. No token, GitHub App or paid plan.
