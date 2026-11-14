@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
-from .config import MqttConfig
+from .config import DEFAULT_TOPIC_PREFIX, MqttConfig
 from .identity import HostIdentity
 
 
@@ -12,6 +12,7 @@ class Topics:
     base: str
     state: str
     availability: str
+    sync: str
     refresh: str
     refresh_operation: str
     restart_agent: str
@@ -112,6 +113,7 @@ def build_topics(mqtt: MqttConfig, identity: HostIdentity) -> Topics:
         update_install=f"{base}/update/install",
         update_state=f"{base}/update/state",
         agent_card_state=f"{base}/agent/card",
+        sync=f"{DEFAULT_TOPIC_PREFIX}/{identity.instance_id}/sync",
         legacy_discoveries=(
             f"{discovery_prefix}/device/{legacy_device_id}/config",
             f"{discovery_prefix}/device/{older_legacy_device_id}/config",
