@@ -26,23 +26,16 @@ BASELINE = APP / "examples" / "lovelace" / "dh_recorder_app_dashboard.yaml"
 RELEASE_CONFIG = APP / "config.yaml"
 BASELINE_GIT_BLOB_SHA1 = "45dd279a425c0165deccdb0b53e6d9fe6b37a8af"
 VIEW_VERSION = "1.0.0"
-COMPATIBILITY = ">=0.1.28,<0.1.30"
 VIEW_HEADER = (
     "# DH-View: dh_recorder_app\n"
     "# DH-View-Version: " + VIEW_VERSION + "\n"
     "# DH-View-Date: 2026-11-14\n"
-    "# DH-Compatible-App: " + COMPATIBILITY + "\n"
 )
 HA_SERVICE_ACTIONS = {"button.press", "update.install"}
 SUPERVISOR_ENTITIES = {"update.digitalhouses_recorder_app_update"}
 ENTITY_REFERENCE = re.compile(
     r"\b(?:sensor|binary_sensor|button|number|event|update)\.[a-z0-9_]+\b"
 )
-RANGE_FORMAT = re.compile(
-    r">=([0-9]+\.[0-9]+\.[0-9]+),<([0-9]+\.[0-9]+\.[0-9]+)\Z"
-)
-
-
 def _git_blob_sha1(raw: bytes) -> str:
     """Git's content SHA makes the immutable 0.1.28 source baseline explicit."""
     prefix = b"blob " + str(len(raw)).encode("ascii") + b"\0"
@@ -58,30 +51,18 @@ def _view_body(raw: str) -> str:
 
 
 class RecorderDashboardCompatibilityTests(unittest.TestCase):
-    def test_narrow_metadata_and_unmodified_view_revision(self):
+    def test_owner_only_metadata_and_unmodified_view_revision(self):
         view = CANONICAL.read_text(encoding="utf-8")
         self.assertTrue(view.startswith(VIEW_HEADER))
         self.assertEqual(view.count("# DH-View: "), 1)
         self.assertEqual(view.count("# DH-View-Version: "), 1)
-        self.assertEqual(view.count("# DH-Compatible-App: "), 1)
-        self.assertNotIn("# DH-Compatible-Agent:", view)
+        self.assertNotIn("# DH-Compatible-", view)
         self.assertEqual(view.splitlines()[1], "# DH-View-Version: 1.0.0")
 
-    def test_range_accepts_only_source_checked_0128_and_0129(self):
-        config = RELEASE_CONFIG.read_text(encoding="utf-8")
-        self.assertIn("\nversion: 0.1.29\n", config)
-        match = RANGE_FORMAT.fullmatch(COMPATIBILITY)
-        self.assertIsNotNone(match)
-        low, high = (
-            tuple(int(v) for v in match.group(1).split(".")),
-            tuple(int(v) for v in match.group(2).split(".")),
-        )
-        self.assertEqual((low, high), ((0, 1, 28), (0, 1, 30)))
-        self.assertFalse(low <= (0, 1, 27) < high)
-        self.assertTrue(low <= (0, 1, 28) < high)
-        self.assertTrue(low <= (0, 1, 29) < high)
-        self.assertFalse(low <= (0, 1, 30) < high)
-        self.assertFalse(low <= (0, 2, 0) < high)
+    def test_version_metadata_does_not_create_a_source_gate(self):
+        view = CANONICAL.read_text(encoding="utf-8")
+        self.assertNotIn("# DH-Compatible-", view)
+        self.assertIn("\nversion: 0.1.29\n", RELEASE_CONFIG.read_text(encoding="utf-8"))
 
     def test_exact_tagged_0128_baseline_and_original_view_body(self):
         original = BASELINE.read_bytes()
