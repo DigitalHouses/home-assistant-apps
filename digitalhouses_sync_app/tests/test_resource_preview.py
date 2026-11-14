@@ -127,7 +127,7 @@ class PinnedDiscoveryTests(unittest.TestCase):
                 return PreviewCatalog(
                     listing=lambda p,sha:[{"type":"file","name":"10_plex.yaml",
                          "path":product+"/dashboards/ru/10_plex.yaml"}],
-                    reader=lambda p,sha:raw_view("Plex","dh-plex-agent",">=0.8.17,<0.8.18")
+                    reader=lambda p,sha:raw_view("Plex","dh-plex-agent",">=0.8.17,<0.8.18","dh_plex_agent")
                 ).inspect(records)
             server=make_server(sources,inventory,version="0.1.3",port=0,inspect=inspect)
             server.timeout=2
