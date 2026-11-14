@@ -1,0 +1,24 @@
+name: DigitalHouses Sync App
+version: "0.1.0"
+slug: digitalhouses_sync_app
+description: Read-only DigitalHouses MQTT product and GitHub repository catalog.
+url: https://github.com/DigitalHouses/home-assistant-apps/tree/main/digitalhouses_sync_app
+arch:
+  - amd64
+  - aarch64
+image: ghcr.io/digitalhouses/digitalhouses_sync_app
+startup: application
+boot: auto
+init: false
+stage: experimental
+services:
+  - mqtt:need
+ingress: true
+ingress_port: 8099
+panel_title: DH Sync
+panel_icon: mdi:sync
+panel_admin: true
+options:
+  log_level: info
+schema:
+  log_level: list(debug|info|warning|error)
