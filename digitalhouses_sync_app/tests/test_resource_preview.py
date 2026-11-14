@@ -27,7 +27,7 @@ def claim(product, version, repo=REPO, path=None):
 def raw_view(title, view_path, header=True):
     top = (
         "# DH-View: any_name\n# DH-View-Version: 1.0.0\n"
-        "# DH-Compatible-App: >=0.1.28,<0.1.29\n" if header else ""
+        "" if header else ""
     )
     return (top + f"type: sections\ntitle: {title}\npath: {view_path}\nsections: []\n").encode()
 
@@ -73,10 +73,10 @@ class OwnerOnlyDiscoveryTests(unittest.TestCase):
         self.assertEqual([v["file"] for v in row["views"]],
                          ["10_pve_proxmox.yaml", "11_pve_ups.yaml"])
         self.assertEqual(received, [(REPO, product, SHA)])
-        self.assertTrue(all(v["blocked"] is False for v in row["views"]))
+        self.assertTrue(all("blocked" not in v for v in row["views"]))
         self.assertEqual(row["commit"], SHA)
 
-    def test_unlisted_recorder_works_without_compatible_header(self):
+    def test_unlisted_recorder_works_without_compatibility_gate(self):
         product = "digitalhouses_recorder_app"
         inspector = PreviewCatalog(
             resolver=lambda repo: (SHA, "main"),
@@ -89,8 +89,8 @@ class OwnerOnlyDiscoveryTests(unittest.TestCase):
         result = inspector.inspect({product+"/default":claim(product, "0.1.28")})[0]
         self.assertEqual(result["error"], "")
         self.assertEqual(result["views"][0]["path"], "recorder")
-        self.assertEqual(result["views"][0]["constraint"], "—")
-        self.assertFalse(result["views"][0]["blocked"])
+        self.assertNotIn("constraint", result["views"][0])
+        self.assertNotIn("blocked", result["views"][0])
 
     def test_other_org_owned_repo_and_root_folder(self):
         product = "custom_tool"
@@ -142,11 +142,11 @@ class OwnerOnlyDiscoveryTests(unittest.TestCase):
         self.assertIn("Duplicate Lovelace",row["error"])
         self.assertEqual(row["views"],[])
 
-    def test_view_headers_are_optional_information_only(self):
+    def test_view_version_headers_are_optional_information_only(self):
         output=parse_view(raw_view("Recorder","recorder",header=False),
                           "dashboards/ru/10_recorder.yaml","digitalhouses_recorder_app")
         self.assertEqual(output["revision"],"—")
-        self.assertEqual(output["constraint"],"—")
+        self.assertNotIn("constraint",output)
 
     def test_preview_requires_explicit_get_and_post_stays_disabled(self):
         with tempfile.TemporaryDirectory() as t:
