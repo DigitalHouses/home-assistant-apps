@@ -2,7 +2,7 @@
 
 **Статус:** проект контракта для поэтапного внедрения.  
 **Владелец контракта доставки YAML:** DigitalHouses Sync App.  
-**Область:** все поддерживаемые продукты в `DigitalHouses/home-assistant-apps`, независимо от типа `haos_addon` / `linux_agent`.  
+**Область:** все продукты репозиториев GitHub владельца `DigitalHouses`, независимо от типа `haos_addon` / `linux_agent`.  
 **Приоритет пилота:** `digitalhouses_pve_agent` (две вкладки: Proxmox и Электропитание).
 
 ## 1. Цель
