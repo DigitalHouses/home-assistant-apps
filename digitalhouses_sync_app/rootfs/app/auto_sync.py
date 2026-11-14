@@ -305,6 +305,7 @@ class AutoSync:
                 destinations = set()
                 for source in resources:
                     label = source["product"] + " / " + source["name"]
+                    dest = None
                     try:
                         dest = self._destination(source, views, packages)
                         if dest in destinations:
@@ -328,7 +329,12 @@ class AutoSync:
                     except Exception as exc:
                         outcome = "Skipped: " + str(exc)[:150]
                         report["issues"].append(label + ": " + str(exc)[:150])
-                    report["resources"].append({"name": label, "status": outcome})
+                    report["resources"].append({
+                        "name": label,
+                        "kind": source["kind"],
+                        "local_path": "/config/" + dest.as_posix() if dest else "",
+                        "status": outcome,
+                    })
                 if report["issues"]:
                     report["state"] = "Partial" if report["updated"] or report["unchanged"] else "Error"
             except Exception as exc:
