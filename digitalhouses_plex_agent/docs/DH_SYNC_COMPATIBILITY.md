@@ -14,9 +14,8 @@ Status: product-team Draft PR. HOME baseline and agent v0.8.17 verified; DH Sync
 
 ## DH Sync Discovery Contract v1 — product source MQTT
 
-Starting with the next explicitly approved Plex Agent runtime release,
-the existing Paho MQTT client publishes the new metadata topic on
-successful connect and on every reconnect:
+Plex Agent 0.8.18 uses the existing Paho MQTT client to publish the
+new metadata topic on successful connect and on every reconnect:
 
 - Standard instance (instance_id=plex):
   DigitalHouses/Global/digitalhouses_plex_agent/sync
@@ -47,9 +46,12 @@ MQTT-claimed source metadata: it never authorizes installation or
 uninstallation. DH Sync validates DigitalHouses owner, immutable Git
 resource revisions, compatibility, backup and operator approval separately.
 
-Current deployed Plex Agent 0.8.17 does NOT publish /sync. It becomes
-live only following a separately approved new agent release and upgrade.
-Canonical dashboard/package versions are independent of agent version.
+Plex Agent 0.8.18 publishes this metadata only after the service is
+updated and restarted. The previously verified HOME installation ran
+0.8.17 and does not yet publish /sync. The existing dashboard/package
+compatibility remains >=0.8.17,<0.8.18 and must be reviewed
+independently before DH Sync can auto-apply YAML to an agent running 0.8.18.
+No current Home Assistant YAML has been changed by the agent release.
 
 ## Canonical resources
 

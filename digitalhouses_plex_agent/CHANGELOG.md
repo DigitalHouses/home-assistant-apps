@@ -2,12 +2,24 @@
 
 ## Unreleased
 
-- Prepare DH Sync Discovery Contract v1 for the next approved Plex Agent release:
-  publish the canonical product/source/running version to retained QoS1
-  DigitalHouses/Global/digitalhouses_plex_agent[/<instance_id>]/sync
-  on MQTT connect/reconnect through existing Paho; preserve all existing
-  MQTT/HA identities, availability/LWT and reconnect/backoff behavior.
-  No executable release is created by this source-only PR.
+## 0.8.18
+
+- Publish DH Sync Discovery Contract v1: the canonical Plex Agent product ID,
+  runtime version and owning DigitalHouses repository are announced as exactly
+  six JSON fields over retained QoS 1 MQTT on each successful connect/reconnect.
+  Standard topic: DigitalHouses/Global/digitalhouses_plex_agent/sync;
+  custom instance: DigitalHouses/Global/digitalhouses_plex_agent/<instance_id>/sync.
+- Read the announced version from the same installed VERSION/BUILD_INFO as the
+  existing diagnostics. Use the already configured Paho client, without extra
+  heartbeat or changes to existing availability, retained Last Will, MQTT
+  Discovery, HA entities, reconnect delay, Plex API, GPU or update services.
+- New regression tests cover default/multi-instance topics, immutable source
+  identity, exact payload schema, forbidden information and spoofed repository
+  URLs, connect/reconnect QoS 1 retain, offline behavior and legacy callers.
+- Existing canonical Lovelace view and Recorder package remain at revision
+  1.0.0 with independently validated compatibility only for 0.8.17.
+  DH Sync YAML auto-apply for 0.8.18 is not authorized by this release;
+  evaluate its compatibility in a separate live acceptance step.
 
 ## 0.8.17
 
