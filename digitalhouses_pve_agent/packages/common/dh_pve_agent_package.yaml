@@ -1,7 +1,3 @@
-# DH-Package: dh_pve_agent_package
-# DH-Package-Version: 1.0.0
-# DH-Package-Date: 2026-11-14
-
 # =============================================================================
 # DigitalHouses PVE Apps Package — digitalhouses_pve_agent
 # =============================================================================
@@ -39,15 +35,18 @@ dh_pve_agent_package:
         - sensor.dh_pve_agent_ups_battery_voltage
         - sensor.dh_pve_agent_ups_input_frequency
         - sensor.dh_pve_agent_ups_output_frequency
+        - binary_sensor.dh_pve_agent_cpu_throttling_problem
+        
       entity_globs:
-        - sensor.dh_pve_agent_fan_*_rpm
-        - sensor.dh_pve_agent_fan_*_rpm_percent
         - sensor.dh_pve_agent_disk_*_temperature
         - sensor.dh_pve_agent_disk_*_wear
         - sensor.dh_pve_agent_storage_*_percent_used
         - sensor.dh_pve_agent_gpu_*_temperature
         - sensor.dh_pve_agent_gpu_*_transcoding
 
+        - sensor.dh_pve_agent_fan_*_rpm
+        - sensor.dh_pve_agent_fan_*_rpm_percent
+        
   logbook:
     include:
       entities:
