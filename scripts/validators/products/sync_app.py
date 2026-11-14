@@ -19,6 +19,8 @@ def validate_sync_app(root: Path, app: Path, context: dict) -> None:
         app / "rootfs/app/sync_engine.py",
         app / "rootfs/app/catalog_web.py",
         app / "rootfs/app/resource_preview.py",
+        app / "rootfs/app/local_audit.py",
+        app / "tests/test_local_audit.py",
         app / "tests/test_resource_preview.py",
         app / "tests/test_catalog_web.py",
         app / "rootfs/app/discovery_contract.py",
@@ -59,14 +61,13 @@ def validate_sync_app(root: Path, app: Path, context: dict) -> None:
     if config.get("slug") != "digitalhouses_sync_app":
         fail("DH Sync: incorrect Supervisor slug")
     maps = config.get("map", [])
-    if any(isinstance(x, dict) and x.get("type") == "homeassistant_config"
-           for x in maps):
-        fail("DH Sync v0.1 catalog must not mount HA configuration")
+    if maps != [{"type": "homeassistant_config", "read_only": True}]:
+        fail("DH Sync v0.2 requires only a read-only HA configuration mount")
     if config.get("homeassistant_api"):
-        fail("DH Sync v0.1 catalog must not access HA Core API")
+        fail("DH Sync v0.2 must not access HA Core API")
     if not config.get("ingress") or config.get("ingress_port") != 8099:
         fail("DH Sync requires admin-only Ingress at port 8099")
     if config.get("panel_admin") is not True:
         fail("DH Sync Ingress must be admin-only")
     if "allow_changes" in config.get("options", {}) or "allow_changes" in config.get("schema", {}):
-        fail("DH Sync v0.1 must not expose an Apply option")
+        fail("DH Sync v0.2 must not expose an Apply option")

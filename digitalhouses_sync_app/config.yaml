@@ -1,5 +1,5 @@
 name: DigitalHouses Sync App
-version: "0.1.4"
+version: "0.2.0"
 slug: digitalhouses_sync_app
 description: Read-only DigitalHouses MQTT product and GitHub repository catalog.
 url: https://github.com/DigitalHouses/home-assistant-apps/tree/main/digitalhouses_sync_app
@@ -7,6 +7,9 @@ arch:
   - amd64
   - aarch64
 image: ghcr.io/digitalhouses/digitalhouses_sync_app
+map:
+  - type: homeassistant_config
+    read_only: true
 startup: application
 boot: auto
 init: false
