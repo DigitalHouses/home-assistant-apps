@@ -119,10 +119,14 @@ def main() -> None:
     # Manual Apply writes only DigitalHouses view YAML after explicit consent.
     # No Home Assistant API rights or automatic agent actions are granted.
     catalog = PreviewCatalog()
+    apply_manager = ApplyManager(catalog=catalog)
+    recovered = apply_manager.recover_pending()
+    if recovered:
+        LOG.warning("Recovered interrupted YAML transactions: %s", recovered)
     ingress = make_server(sources, inventory, version=VERSION, port=8099,
                           inspect=catalog.inspect,
                           audit=LocalAuditor(catalog=catalog, require_readonly=False).inspect,
-                          apply_manager=ApplyManager(catalog=catalog))
+                          apply_manager=apply_manager)
     threading.Thread(target=ingress.serve_forever, daemon=True,
                      name="dh-sync-ingress").start()
     LOG.info("DH Sync v%s manual YAML Apply Ingress ready on 8099", VERSION)
