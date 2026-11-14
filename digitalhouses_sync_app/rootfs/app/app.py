@@ -1,8 +1,4 @@
-"""DH Sync v0.2.1: owner-only MQTT catalog and CORE dashboard diff.
-
-Home Assistant configuration is mounted read-only for bounded YAML/Storage
-comparison. No Home Assistant API, file writes, installs or YAML Apply.
-"""
+"""DH Sync v0.3.0: owner-only discovery, manual YAML Apply and rollback."""
 from __future__ import annotations
 
 import json
@@ -19,12 +15,13 @@ from discovery_contract import DiscoveryError, ProductSources
 from inventory import Inventory
 from resource_preview import PreviewCatalog
 from local_audit import LocalAuditor
+from apply_service import ApplyManager
 
 PRODUCT_ID = "digitalhouses_sync_app"
 BASE = "DigitalHouses/Global/" + PRODUCT_ID
 DISCOVERY = "homeassistant/device/" + PRODUCT_ID + "/config"
 STARTED_AT = datetime.now(timezone.utc).isoformat()
-VERSION = os.environ.get("APP_VERSION", "0.2.1-local")
+VERSION = os.environ.get("APP_VERSION", "0.3.0-local")
 STATE_PATH = Path("/data/inventory.json")
 SOURCES_PATH = Path("/data/product_sources.json")
 
@@ -119,14 +116,16 @@ def on_connect(client, userdata, flags, reason_code, properties=None):
 def main() -> None:
     inventory = Inventory(STATE_PATH)
     sources = ProductSources(SOURCES_PATH)
-    # No routes can POST or mutate HA; this port is available only through
-    # Supervisor's admin-only Ingress.
+    # Manual Apply writes only DigitalHouses view YAML after explicit consent.
+    # No Home Assistant API rights or automatic agent actions are granted.
+    catalog = PreviewCatalog()
     ingress = make_server(sources, inventory, version=VERSION, port=8099,
-                          inspect=PreviewCatalog().inspect,
-                          audit=LocalAuditor().inspect)
+                          inspect=catalog.inspect,
+                          audit=LocalAuditor(catalog=catalog, require_readonly=False).inspect,
+                          apply_manager=ApplyManager(catalog=catalog))
     threading.Thread(target=ingress.serve_forever, daemon=True,
                      name="dh-sync-ingress").start()
-    LOG.info("DH Sync v%s read-only catalog Ingress ready on 8099", VERSION)
+    LOG.info("DH Sync v%s manual YAML Apply Ingress ready on 8099", VERSION)
 
     client = create_mqtt_client()
     username = os.environ.get("MQTT_USER") or None
