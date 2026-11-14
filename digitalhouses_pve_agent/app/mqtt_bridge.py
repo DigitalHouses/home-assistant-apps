@@ -11,6 +11,7 @@ from typing import Any
 
 from .config import MqttConfig
 from .runtime_settings import LEGACY_SETTING_KEYS, RuntimeSettingError, RuntimeSettings
+from .sync_discovery import build_sync_payload
 from .topics import (
     Topics,
     UpsTopics,
@@ -263,10 +264,14 @@ class MqttBridge(MqttEvents):
         *,
         client: Any | None = None,
         publish_timeout_seconds: float = 5.0,
+        sync_version: str | None = None,
     ) -> None:
         super().__init__(topics, settings)
         self.config = config
         self.discovery_payload = discovery_payload
+        self.sync_payload = (
+            build_sync_payload(sync_version) if sync_version is not None else None
+        )
         self.publish_timeout_seconds = publish_timeout_seconds
         self.log = logging.getLogger(__name__)
         self.connected = threading.Event()
@@ -347,6 +352,10 @@ class MqttBridge(MqttEvents):
                 retain=True,
             )
         client.publish(self.topics.availability, payload="online", qos=1, retain=True)
+        if self.sync_payload is not None:
+            client.publish(
+                self.topics.sync, payload=self.sync_payload, qos=1, retain=True
+            )
         self.handle_ha_online()
         self.wake_requested.set()
 

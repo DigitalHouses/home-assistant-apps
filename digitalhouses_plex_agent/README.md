@@ -6,7 +6,7 @@
 
 Native Linux agent for Plex Media Server workload, playback, transcoding and library observability in Home Assistant through MQTT Discovery.
 
-Version **0.8.16** adds a compact media server hostname/IP Mushroom card to the Plex Dashboard. Version 0.8.15 makes System/Media storage bars compact like the PVE Agent dashboard. Version 0.8.14 shows the real Plex playback mode in a full-width Work card, alongside separate video/audio transcoding cards. Version 0.8.13 splits video and audio playback transcoding into two independent Mushroom cards while Work remains generic. Version 0.8.12 corrects the Plex Work dashboard tile using Plex API sessions and moves storage progress bars below their labels. Version 0.8.11 adds persistent, acknowledged Discovery lifecycle reconciliation and online recovery every 1800 seconds. Version 0.8.10 adds the VM system volume to the library storage progress bars and hides obsolete unavailable capacity entities. Version 0.8.9 fixes library storage visibility for restricted media folders without expanding agent permissions. Version 0.8.8 distinguishes background loudnorm audio analysis from playback transcoding and shows active scanners/audio analysis in one compact Mushroom card. Version 0.8.7 adds media-library filesystem capacity monitoring and progress bars. Version 0.8.6 introduced the native root/admin CLI, Linux host diagnostics and an event-blocked `MQTT_PAUSED` failure mode. It follows the [DigitalHouses Linux Agent Management Standard](../docs/standards/DH_LINUX_AGENT_MANAGEMENT_STANDARD.md); live VM acceptance and release publication remain separate release checks.
+Version **0.8.18** adds DH Sync Discovery v1 retained MQTT source metadata. Version **0.8.17** introduces native CLI update, Debian 13 virtualenv recovery and self-process CPU overload diagnostics. Version **0.8.16** adds a compact media server hostname/IP Mushroom card to the Plex Dashboard. Version 0.8.15 makes System/Media storage bars compact like the PVE Agent dashboard. Version 0.8.14 shows the real Plex playback mode in a full-width Work card, alongside separate video/audio transcoding cards. Version 0.8.13 splits video and audio playback transcoding into two independent Mushroom cards while Work remains generic. Version 0.8.12 corrects the Plex Work dashboard tile using Plex API sessions and moves storage progress bars below their labels. Version 0.8.11 adds persistent, acknowledged Discovery lifecycle reconciliation and online recovery every 1800 seconds. Version 0.8.10 adds the VM system volume to the library storage progress bars and hides obsolete unavailable capacity entities. Version 0.8.9 fixes library storage visibility for restricted media folders without expanding agent permissions. Version 0.8.8 distinguishes background loudnorm audio analysis from playback transcoding and shows active scanners/audio analysis in one compact Mushroom card. Version 0.8.7 adds media-library filesystem capacity monitoring and progress bars. Version 0.8.6 introduced the native root/admin CLI, Linux host diagnostics and an event-blocked `MQTT_PAUSED` failure mode. It follows the [DigitalHouses Linux Agent Management Standard](../docs/standards/DH_LINUX_AGENT_MANAGEMENT_STANDARD.md); live VM acceptance and release publication remain separate release checks.
 
 [Install / update](#install--update) · [Changelog](CHANGELOG.md) · [Engineering docs](../docs/digitalhouses_plex_agent/) · [Issues](https://github.com/DigitalHouses/home-assistant-apps/issues)
 
@@ -34,6 +34,38 @@ Discovery alone uses retained QoS1 with a bounded two-second PUBACK wait and one
 
 Lovelace example: [plex-dashboard.yaml](examples/lovelace/plex-dashboard.yaml)
 
+### DH Sync Discovery Contract v1 (pending runtime release)
+
+The next approved Plex Agent release will publish canonical product/source
+metadata to DigitalHouses/Global/digitalhouses_plex_agent/sync for the
+default instance, or to
+DigitalHouses/Global/digitalhouses_plex_agent/<instance_id>/sync
+for extra instances, using retained QoS1 on every successful MQTT
+connect/reconnect. The six fields are schema, product_id, type, running
+version, repository and product_path. No credentials, home IP, commit
+authorization, heartbeat or new Home Assistant entities are added.
+See [DH Sync compatibility and metadata contract](docs/DH_SYNC_COMPATIBILITY.md).
+Version 0.8.18 adds this retained announcement. An agent still running
+0.8.17 will not publish it until it is explicitly upgraded.
+
+### DH Sync canonical resources (review preview)
+
+For DH Sync v1, the operator-approved **Russian view** is [dashboards/ru/10_plex.yaml](dashboards/ru/10_plex.yaml) (`DH-View-Version: 1.0.0`, existing `path: dh-plex-agent`). The current **Recorder package** is [packages/common/dh_plex_app_package.yaml](packages/common/dh_plex_app_package.yaml) (`DH-Package-Version: 1.0.0`, preserved `dh_app_plex_monitoring_package` key). Only DH metadata comments differ from the existing examples; no runtime agent or HA installation changes are made.
+
+Do not co-install the canonical Recorder with an existing dh_plex_app_package.yaml or
+legacy dh_plex_agent_recorder_package.yaml; adopt the identical existing package
+with a backup and explicit approval. HOME compatibility is verified for agent
+>=0.8.17,<0.8.18 only; other versions are not approved. The current Plex view
+is inside Storage dashboard_system, so DH Sync must never duplicate its path
+or overwrite the parent dashboard, and needs a supported reversible migration
+before applying anything. Git binary tag 0.8.17 predates this YAML: pin the
+verified immutable merged commit SHA, not just the installed agent release tag.
+EN view and reviewed localized notification packages remain open gaps.
+
+Frontend custom cards used by the existing view: Mushroom (`mushroom-template-card`, `mushroom-chips-card`), `auto-entities`, `button-card` and `entity-progress-card-template`. DH Sync reports missing dependencies but does not install them.
+
+Full identity, MQTT availability/Discovery, YAML provenance and adoption requirements: [DH Sync compatibility handoff](docs/DH_SYNC_COMPATIBILITY.md).
+
 
 ### Background processes (0.8.8)
 
@@ -60,6 +92,10 @@ mounted dataset; no media-group membership or file access is required.
 
 
 ## Install / update
+
+Root CLI: dh-plex-agent update looks up the newest published stable Plex Agent release and invokes the existing independent systemd updater with transactional backup, startup checks and rollback. It works without MQTT, preserves the existing INI and returns UP_TO_DATE when already current.
+
+Independent agent CPU diagnostics (not the Plex Server CPU metric): sensor.dh_plex_agent_process_cpu_usage shows per-core-normalized agent CPU utilization; binary_sensor.dh_plex_agent_cpu_overload shows a sustained 300-second overload above 80%, clearing only after 120 seconds below 40%; event.dh_plex_agent_cpu_diagnostic publishes live state transitions with QoS1 and without retain. A GPU problem retains precedence over CPU in the existing agent card. The sampler runs locally even while MQTT_PAUSED, without generating historical event replay or a new collector process.
 
 **Recommended: install or update to the latest published stable Plex Agent release.** Users do not need to know the version or tag. The small bootstrap hosted on `main` finds the highest stable **Plex Agent** GitHub Release, excluding other products, drafts and prereleases, then downloads the actual installer from that release's canonical tag. The production installer still validates and records the exact tag and commit; `main` is a bootstrap entry point, **not** a production source ref.
 

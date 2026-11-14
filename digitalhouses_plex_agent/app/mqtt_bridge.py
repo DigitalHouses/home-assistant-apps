@@ -18,10 +18,13 @@ class MqttBridge:
         config: AppConfig,
         topics: Topics,
         discovery_payload: dict[str, Any],
+        *,
+        sync_payload: dict[str, object] | None = None,
     ) -> None:
         self.config = config
         self.topics = topics
         self.discovery_payload = discovery_payload
+        self.sync_payload = sync_payload
         self.log = logging.getLogger(__name__)
 
         self.refresh_requested = threading.Event()
@@ -97,6 +100,17 @@ class MqttBridge:
         client.subscribe(self.topics.update_install)
         client.subscribe(self.topics.restart_agent)
         self._publish(self.topics.app_availability, "online")
+        if self.sync_payload is not None:
+            # Callback-safe: enqueue once per successful (re)connect, without
+            # waiting for PUBACK inside Paho's network callback. Retained QoS1
+            # is retransmitted by Paho when the connection is interrupted.
+            self._publish(
+                self.topics.sync,
+                json.dumps(self.sync_payload, ensure_ascii=False,
+                           sort_keys=True, separators=(",", ":")),
+                qos=1,
+                retain=True,
+            )
         self.republish_requested.set()
         self.wake_requested.set()
 
@@ -352,6 +366,29 @@ class MqttBridge:
             return info.is_published()
         except (RuntimeError, ValueError):
             return False
+
+    def publish_cpu_diagnostic_event(self, payload: dict[str, object]) -> bool:
+        """Best-effort QoS1 live transition; never replay offline CPU events.
+
+        The retained CPU problem binary is the authoritative current state.
+        Existing GPU event outbox and topic remain untouched.
+        """
+        if not self.connected.is_set():
+            return False
+        raw = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
+        info = self._publish(self.topics.cpu_diagnostic_event, raw, qos=1, retain=False)
+        if info is None:
+            return False
+        if not self._receipt_acknowledged(info):
+            try:
+                info.wait_for_publish(timeout=2.0)
+            except (RuntimeError, ValueError):
+                return False
+        if not self._receipt_acknowledged(info):
+            return False
+        with self._lock:
+            self._diagnostics.update(last_ack=self._now(), publication_state="qos1_acked")
+        return True
 
     def publish_agent_card(self, payload: dict[str, object]) -> bool:
         if not self.connected.is_set():

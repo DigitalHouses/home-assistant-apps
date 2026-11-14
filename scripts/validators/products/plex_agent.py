@@ -26,6 +26,9 @@ EXPECTED_ENTITY_IDS = {
     "audio_analysis_running": "binary_sensor.dh_plex_agent_audio_analysis_running",
     "background_processes": "sensor.dh_plex_agent_background_processes",
     "cpu": "sensor.dh_plex_agent_cpu",
+    "agent_process_cpu_usage": "sensor.dh_plex_agent_process_cpu_usage",
+    "agent_cpu_overload": "binary_sensor.dh_plex_agent_cpu_overload",
+    "agent_cpu_diagnostic_event": "event.dh_plex_agent_cpu_diagnostic",
     "scanner_cpu": "sensor.dh_plex_agent_scanner_cpu",
     "transcoder_cpu": "sensor.dh_plex_agent_transcoder_cpu",
     "scanner_actions": "sensor.dh_plex_agent_scanner_actions",
@@ -124,6 +127,7 @@ def validate_plex_agent(
             app / "requirements.txt",
             app / "app/config.py",
             app / "app/cli.py",
+            app / "app/agent_process_cpu.py",
             app / "app/runtime_status.py",
             app / "bin/dh-plex-agent",
             app / "app/models.py",
@@ -211,6 +215,7 @@ def validate_plex_agent(
         "update_state": f"{expected_base}/update/state",
         "restart_agent": f"{expected_base}/restart",
         "agent_card_state": f"{expected_base}/agent/card",
+        "cpu_diagnostic_event": f"{expected_base}/events/agent_cpu",
         "discovery": (
             "homeassistant/device/"
             f"{EXPECTED_DEVICE_ID}/config"
@@ -249,6 +254,22 @@ def validate_plex_agent(
         if component.get("default_entity_id") != expected_entity_id:
             fail(f"Plex Agent default_entity_id changed for {key}")
 
+    cpu_sensor = components["agent_process_cpu_usage"]
+    cpu_problem = components["agent_cpu_overload"]
+    cpu_event = components["agent_cpu_diagnostic_event"]
+    if (cpu_sensor.get("state_class") != "measurement"
+            or cpu_sensor.get("unit_of_measurement") != "%"):
+        fail("Plex Agent process CPU must be a numeric percentage")
+    if (cpu_problem.get("device_class") != "problem"
+            or cpu_problem.get("payload_on") != "ON"
+            or cpu_problem.get("payload_off") != "OFF"):
+        fail("Plex Agent CPU overload must be a problem-class binary")
+    if (cpu_event.get("state_topic") != topics.cpu_diagnostic_event
+            or cpu_event.get("event_types") !=
+            ["agent_cpu_overload_started", "agent_cpu_overload_cleared"]
+            or cpu_event.get("qos") != 1):
+        fail("Plex Agent CPU events must retain their dedicated v1 identity")
+
     # The control card and updater deliberately share the canonical MQTT
     # device; their retained state must not be routed to collector groups.
     controls = {
@@ -275,6 +296,8 @@ def validate_plex_agent(
         "ip": "host",
         "activity": "activity",
         "cpu": "cpu",
+        "agent_process_cpu_usage": "agent/process_cpu",
+        "agent_cpu_overload": "agent/process_cpu",
         "playback_count": "playback",
         "playback_started_at": "playback",
         "hardware_transcode_active": "playback",

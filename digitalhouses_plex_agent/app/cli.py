@@ -27,6 +27,8 @@ DEFAULT_CONFIG = Path('/etc/digitalhouses_plex_agent/digitalhouses_plex_agent.co
 RUNTIME_STATUS = Path('/var/lib/digitalhouses_plex_agent/runtime_status.json')
 SERVICE = 'digitalhouses_plex_agent.service'
 REFERENCE = 'https://github.com/DigitalHouses/home-assistant-apps/tree/main/digitalhouses_plex_agent'
+UPDATE_SERVICE = 'digitalhouses_plex_agent-update.service'
+UPDATE_PRIVATE_DIR = Path('/var/lib/digitalhouses-plex-updater')
 
 class CliError(ValueError):
     """An administrator-facing error containing no untrusted input."""
@@ -287,12 +289,86 @@ def print_status(path: Path, runtime_path: Path = RUNTIME_STATUS) -> None:
     print(f'Last publish completion (QoS0 is local send, not broker ACK): {mqtt.get("last_publish") or "unknown"}')
     print(f'Last broker PUBACK (QoS1): {mqtt.get("last_ack") or "unknown"}')
     print(f'Last MQTT error: {mqtt.get("last_error") or "none known"}')
+    agent_cpu = runtime.get('agent_process_cpu', {}) if live else {}
+    if not isinstance(agent_cpu, dict):
+        agent_cpu = {}
+    usage = agent_cpu.get('usage_percent')
+    if isinstance(usage, (int, float)) and not isinstance(usage, bool) and math.isfinite(usage):
+        cpu_text = f'{usage:.0f}%'
+        overload = ('ON' if agent_cpu.get('overloaded') is True else 'OFF'
+                    if agent_cpu.get('overloaded') is False else 'unknown')
+    else:
+        cpu_text, overload = 'unknown', 'unknown'
+    print(f'Agent CPU: {cpu_text} | overload {overload}')
     print(f'Plex API: {runtime.get("plex_api_status", "unknown") if live else "unknown (stale or unavailable)"}')
 
 
+
+def update_agent(
+    *, app_dir: Path = APP_ROOT,
+    state_dir: Path = RUNTIME_STATUS.parent,
+    updater_dir: Path = UPDATE_PRIVATE_DIR,
+) -> None:
+    """Reuse the already-installed independent transactional systemd updater.
+
+    This CLI does not require MQTT and never downloads or installs executable
+    files itself. The existing worker verifies GitHub releases and owns backup,
+    service replacement, startup verification, and rollback.
+    """
+    from .state_store import StateStore
+    from .update_manager import BUSY_PHASES, latest_release, stable_version
+
+    if service_info().get('ActiveState') != 'active':
+        raise CliError('agent service is not running; update requires an active agent')
+    try:
+        current = (app_dir / 'VERSION').read_text(encoding='utf-8').strip()
+        tag, target = latest_release()
+        if tag != f'digitalhouses_plex_agent-v{target}':
+            raise ValueError('Unexpected release tag')
+        if stable_version(target) <= stable_version(current):
+            print(f'UP_TO_DATE {current}')
+            return
+    except (OSError, ValueError) as exc:
+        raise CliError('unable to verify latest stable GitHub Release') from exc
+
+    if subprocess.run(
+        ['systemctl', 'is-active', '--quiet', UPDATE_SERVICE],
+        capture_output=True, timeout=5,
+    ).returncode == 0:
+        raise CliError('update already running')
+
+    worker = StateStore(updater_dir / 'update_worker.json')
+    request = StateStore(state_dir / 'update_request.json')
+    if worker.load().get('state') in BUSY_PHASES:
+        raise CliError('previous update still pending; check update service status')
+
+    requested_at = datetime.now(timezone.utc).isoformat()
+    request.save({'tag': tag, 'version': target, 'requested_at': requested_at})
+    worker.save({'state': 'queued', 'error': None, 'updated_at': requested_at})
+    print(f'UPDATING {current} -> {target}', flush=True)
+    try:
+        result = subprocess.run(
+            ['systemctl', 'start', UPDATE_SERVICE], capture_output=True, timeout=950,
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise RuntimeError(
+            'update is still running; check systemctl status ' + UPDATE_SERVICE
+        ) from exc
+    if result.returncode or worker.load().get('state') != 'completed':
+        raise RuntimeError(
+            'update failed or rolled back; inspect systemctl status ' + UPDATE_SERVICE
+        )
+    try:
+        installed = (app_dir / 'VERSION').read_text(encoding='utf-8').strip()
+    except OSError as exc:
+        raise RuntimeError('unable to verify installed agent VERSION') from exc
+    if installed != target:
+        raise RuntimeError('updater finished but installed version differs')
+    print(f'UPDATED {installed}')
+
 def print_help() -> None:
-    print('Usage: /usr/local/bin/dh-plex-agent status | restart | help | set key=value [key=value ...]')
-    print('Run status/restart/set as root or through sudo. Config: ' + str(DEFAULT_CONFIG))
+    print('Usage: /usr/local/bin/dh-plex-agent status | update | restart | help | set key=value [key=value ...]')
+    print('Run status/update/restart/set as root or through sudo. Config: ' + str(DEFAULT_CONFIG))
     print('set validates the entire batch, updates atomically, and restarts once only when running.')
     print('Keys (native INI mapping):')
     for key, (section, field) in KEYS.items():
@@ -317,6 +393,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             raise PermissionError('run as root or through sudo')
         if args == ['status']:
             print_status(DEFAULT_CONFIG)
+        elif args == ['update']:
+            update_agent()
         elif args == ['restart']:
             restart_service()
             print('Restarted ' + SERVICE)

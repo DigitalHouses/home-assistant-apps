@@ -24,12 +24,31 @@ class Topics:
     restart_agent: str
     agent_card_state: str
     diagnostic_event: str
+    cpu_diagnostic_event: str
+    sync: str
     discovery: str
     ha_status: str
     device_id: str
 
 
 _GROUP_SEGMENT = re.compile(r"^[A-Za-z0-9_.-]+$")
+
+# Canonical registry identity. The existing configurable MQTT namespace must
+# remain unchanged; DH Sync's new metadata namespace is registry-derived.
+SYNC_PRODUCT_ID = "digitalhouses_plex_agent"
+SYNC_REPOSITORY = "https://github.com/DigitalHouses/home-assistant-apps"
+
+
+def build_sync_payload(build: BuildInfo) -> dict[str, object]:
+    """Claim the running release and owning source, not an approved YAML ref."""
+    return {
+        "schema": 1,
+        "product_id": SYNC_PRODUCT_ID,
+        "type": "agent",
+        "version": build.version,
+        "repository": SYNC_REPOSITORY,
+        "product_path": SYNC_PRODUCT_ID,
+    }
 
 
 def state_group_topic(topics: Topics, group: str) -> str:
@@ -44,7 +63,7 @@ def state_group_topic(topics: Topics, group: str) -> str:
 
 def build_topics(config: AppConfig) -> Topics:
     instance = config.general.instance_id
-    device_id = f"digitalhouses_plex_agent_{instance}"
+    device_id = f"{SYNC_PRODUCT_ID}_{instance}"
     topic_prefix = config.mqtt.topic_prefix.rstrip(chr(47))
     base = topic_prefix if instance == "plex" else f"{topic_prefix}/{instance}"
     return Topics(
@@ -60,6 +79,13 @@ def build_topics(config: AppConfig) -> Topics:
         restart_agent=f"{base}/restart",
         agent_card_state=f"{base}/agent/card",
         diagnostic_event=f"{base}/events/diagnostic",
+        cpu_diagnostic_event=f"{base}/events/agent_cpu",
+        # Default instance intentionally has no /plex/ segment; variants do.
+        # Never derive this topic from config.mqtt.topic_prefix: the existing
+        # namespace can be customized, but the /sync contract is canonical.
+        sync=(f"DigitalHouses/Global/{SYNC_PRODUCT_ID}/sync"
+              if instance == "plex" else
+              f"DigitalHouses/Global/{SYNC_PRODUCT_ID}/{instance}/sync"),
         discovery=(
             f"{config.mqtt.discovery_prefix.strip('/')}/device/{device_id}/config"
         ),
@@ -606,6 +632,52 @@ def build_discovery_payload(
         "availability_mode": "all",
         "entity_category": "diagnostic",
         "icon": "mdi:alert-decagram-outline",
+    }
+
+    # This measures the entire Plex Agent process, not Plex Server workload.
+    # Independent from the Plex collector and Plex API availability.
+    agent_cpu_topic = state_group_topic(topics, "agent/process_cpu")
+    components["agent_process_cpu_usage"] = _component(
+        platform="sensor",
+        name="Plex Agent CPU usage",
+        key=uid("agent_process_cpu_usage"),
+        entity_id=f"sensor.{prefix}_process_cpu_usage",
+        state_topic=agent_cpu_topic,
+        value_template="{{ value_json.usage_percent | default(none) }}",
+        app_availability=topics.app_availability,
+        diagnostic=True,
+        unit_of_measurement="%",
+        state_class="measurement",
+        icon="mdi:cpu-64-bit",
+    )
+    components["agent_cpu_overload"] = _component(
+        platform="binary_sensor",
+        name="Plex Agent CPU overload",
+        key=uid("agent_cpu_overload"),
+        entity_id=f"binary_sensor.{prefix}_cpu_overload",
+        state_topic=agent_cpu_topic,
+        value_template="{{ 'ON' if value_json.overloaded else 'OFF' }}",
+        app_availability=topics.app_availability,
+        diagnostic=True,
+        device_class="problem",
+        payload_on="ON",
+        payload_off="OFF",
+        icon="mdi:alert-circle-outline",
+    )
+    # CPU transitions have their own event identity. The existing GPU event
+    # remains unchanged for backward-compatible GPU notification rules.
+    components["agent_cpu_diagnostic_event"] = {
+        "platform": "event",
+        "name": "Agent CPU diagnostic",
+        "unique_id": uid("agent_cpu_diagnostic_event"),
+        "default_entity_id": f"event.{prefix}_cpu_diagnostic",
+        "state_topic": topics.cpu_diagnostic_event,
+        "event_types": ["agent_cpu_overload_started", "agent_cpu_overload_cleared"],
+        "qos": 1,
+        "availability": [_availability(topics.app_availability)],
+        "availability_mode": "all",
+        "entity_category": "diagnostic",
+        "icon": "mdi:alert-circle-outline",
     }
 
     components["last_boot"] = _component(

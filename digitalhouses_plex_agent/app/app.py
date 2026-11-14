@@ -12,12 +12,13 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from .agent_card import AgentCard
+from .agent_process_cpu import AgentProcessCpu
 from .update_manager import UpdateManager
 from .activity_classifier import classify_activity
 from .api_runtime import PlexApiRuntime
 from .build_info import load_build_info
 from .config import AppConfig, load_config
-from .discovery import build_discovery_payload, build_topics
+from .discovery import build_discovery_payload, build_topics, build_sync_payload
 from .discovery_lifecycle import DiscoveryLifecycle
 from .library_storage import LibraryStorageRuntime
 from .gpu_collector import GpuStateReader, gpu_driver_info, gpu_operational_problem
@@ -146,10 +147,16 @@ def run(config: AppConfig) -> int:
         timezone.utc,
     ).isoformat()
     discovery = build_discovery_payload(config, build)
-    mqtt = MqttBridge(config, topics, discovery)
+    mqtt = MqttBridge(config, topics, discovery, sync_payload=build_sync_payload(build))
     discovery_lifecycle = DiscoveryLifecycle(
         mqtt, StateStore(CONTROL_STATE_DIR / "discovery_manifest.json"), topics.base,
     )
+    agent_cpu = AgentProcessCpu()
+    agent_cpu.observe()  # Seed process-wide CPU clock; no new thread.
+    next_agent_cpu_sample = time.monotonic() + 10.0
+    cpu_pending = True
+    gpu_problem: tuple[str | None, str | None] = (None, None)
+    cpu_problem: tuple[str | None, str | None] = (None, None)
     sampler = CpuSampler()
     rolling = RollingCpuMetrics(config.general.cpu_window_seconds)
     publication = PlexPublicationRuntime(
@@ -217,7 +224,7 @@ def run(config: AppConfig) -> int:
     discovery_force = True
 
     def write_status(*, force: bool = False) -> None:
-        runtime_status.update(mqtt.diagnostics(), api_runtime.status, identity.value, force=force)
+        runtime_status.update(mqtt.diagnostics(), api_runtime.status, identity.value, force=force, agent_cpu=agent_cpu.snapshot())
 
     try:
         while not stop_event.is_set():
@@ -227,6 +234,37 @@ def run(config: AppConfig) -> int:
             now = time.monotonic()
             online = mqtt.connected.is_set()
             resumed = online and (paused or not has_connected)
+            # Unlike foreground Plex collection, self-CPU monitoring continues
+            # while MQTT_PAUSED. A single process-time sample every 10s needs
+            # neither a collector subprocess nor another timer/thread.
+            if now >= next_agent_cpu_sample:
+                was_overloaded = agent_cpu.overloaded
+                agent_cpu.observe(now=now)
+                next_agent_cpu_sample = now + 10.0
+                cpu_pending = True
+                if agent_cpu.overloaded != was_overloaded and agent_cpu.usage_percent is not None:
+                    cpu_problem = (
+                        ("agent_cpu_overload",
+                         "Plex Agent CPU >80% одного ядра более 5 минут")
+                        if agent_cpu.overloaded else (None, None)
+                    )
+                    card.set_problem(*(gpu_problem if gpu_problem[0] else cpu_problem))
+                    if online:
+                        observed_at = _utc_now()
+                        mqtt.publish_cpu_diagnostic_event({
+                            "event_type": ("agent_cpu_overload_started"
+                                           if agent_cpu.overloaded else "agent_cpu_overload_cleared"),
+                            "event_id": f"plex-agent-cpu:{observed_at}",
+                            "schema_version": 2,
+                            "severity": "warning" if agent_cpu.overloaded else "info",
+                            "timestamp": observed_at,
+                            "agent_process_cpu_usage_percent": agent_cpu.usage_percent,
+                        })
+                    write_status(force=True)
+            # Publish only the newest snapshot. No offline MQTT queue/backlog.
+            if online and (cpu_pending or resumed):
+                if mqtt.publish_state_group("agent/process_cpu", agent_cpu.snapshot()):
+                    cpu_pending = False
             host_pending = identity.refresh(now=now, force=resumed) or host_pending
             write_status()
             if not online:
@@ -235,7 +273,9 @@ def run(config: AppConfig) -> int:
                 paused = True
                 # Ignore overdue deadlines entirely while offline. Paho's own
                 # network thread reconnects; the helper service is independent.
-                mqtt.wake_requested.wait(STATUS_INTERVAL)
+                mqtt.wake_requested.wait(min(
+                    STATUS_INTERVAL, max(0.0, next_agent_cpu_sample - time.monotonic()),
+                ))
                 continue
             if paused:
                 log.info("MQTT connected: resuming foreground Plex monitoring")
@@ -299,6 +339,7 @@ def run(config: AppConfig) -> int:
                     max(0.0, next_uptime_heartbeat - now),
                     config.general.poll_interval_seconds,
                     STATUS_INTERVAL,
+                    max(0.0, next_agent_cpu_sample - now),
                 )
                 mqtt.wake_requested.wait(wait_for)
                 mqtt.wake_requested.clear()
@@ -402,8 +443,8 @@ def run(config: AppConfig) -> int:
                     continue
                 gpu_payload = gpu_collector.collect()
                 gpu_payload.update(gpu_driver_info(gpu_payload.get("pci_address")))
-                problem_code, problem_message = gpu_operational_problem(gpu_payload)
-                card.set_problem(problem_code, problem_message)
+                gpu_problem = gpu_operational_problem(gpu_payload)
+                card.set_problem(*(gpu_problem if gpu_problem[0] else cpu_problem))
                 gpu_events.observe(gpu_payload)
                 if mqtt.connected.is_set():
                     gpu_events.flush(mqtt.publish_diagnostic_event)
