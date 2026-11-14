@@ -1,3 +1,4 @@
+import json
 import importlib.util
 import logging
 import sys
@@ -5,11 +6,12 @@ import threading
 import types
 import unittest
 from pathlib import Path
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, call, patch
 
 APP_DIR = Path(__file__).resolve().parents[1] / 'rootfs' / 'app'
 sys.path.insert(0, str(APP_DIR))
 
+from sync_discovery import SYNC_TOPIC, build_sync_payload
 from discovery import (
     CHECK_UPDATES_COMMAND_TOPIC,
     DISK_USAGE_THRESHOLD_COMMAND_TOPIC,
@@ -187,6 +189,57 @@ class ManualRefreshTests(unittest.TestCase):
             qos=1,
         )
         app.publish_disk_usage_threshold.assert_called_once_with()
+
+    def test_sync_discovery_republished_after_mqtt_reconnect(self):
+        app = self.make_app()
+        app.mqtt_connected = threading.Event()
+        app.publish_json = Mock()
+        app.publish_text = Mock()
+        client = Mock()
+
+        app._on_connect(client, None, None, 0)
+        app._on_disconnect(client, None, 1)
+        app._on_connect(client, None, None, 0)
+
+        sync_calls = [
+            item for item in app.publish_json.call_args_list
+            if item.args and item.args[0] == SYNC_TOPIC
+        ]
+        self.assertEqual(
+            sync_calls,
+            [
+                call(SYNC_TOPIC, build_sync_payload(app.app_version), retain=True),
+                call(SYNC_TOPIC, build_sync_payload(app.app_version), retain=True),
+            ],
+        )
+        self.assertTrue(app.mqtt_connected.is_set())
+
+    def test_failed_mqtt_connect_does_not_publish_sync(self):
+        app = self.make_app()
+        app.mqtt_connected = threading.Event()
+        app.publish_json = Mock()
+        client = Mock()
+
+        app._on_connect(client, None, None, 5)
+
+        app.publish_json.assert_not_called()
+        client.subscribe.assert_not_called()
+        self.assertFalse(app.mqtt_connected.is_set())
+
+    def test_sync_announcement_uses_existing_qos1_publisher(self):
+        app = self.make_app()
+        app.mqtt_connected = threading.Event()
+        app.mqtt_connected.set()
+        app.client = Mock()
+        app.client.publish.return_value.rc = 0
+        payload = build_sync_payload(app.app_version)
+
+        app.publish_json(SYNC_TOPIC, payload, retain=True)
+
+        published = app.client.publish.call_args
+        self.assertEqual(published.args[0], SYNC_TOPIC)
+        self.assertEqual(published.kwargs, {"qos": 1, "retain": True})
+        self.assertEqual(json.loads(published.args[1]), payload)
 
     def test_cleanup_release_does_not_subscribe_legacy_topics(self):
         app = self.make_app()
