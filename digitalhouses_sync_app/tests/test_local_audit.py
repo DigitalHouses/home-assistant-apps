@@ -99,7 +99,7 @@ class LocalAuditTests(unittest.TestCase):
             "product_path": ".", "version": "0.1.28", "commit": "c"*40,
             "error": "", "views": [{
                 "title": "Recorder", "file": "10_recorder.yaml", "path": "recorder",
-                "revision": "—", "status": "Владелец DigitalHouses · только просмотр",,
+                "revision": "—", "status": "Владелец DigitalHouses · только просмотр",
             }],
         }]
         source = (b"type: sections\ntitle: Recorder\npath: recorder\nsections: []\n")
