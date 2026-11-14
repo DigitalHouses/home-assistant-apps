@@ -108,6 +108,27 @@ class ApplyServiceTests(unittest.TestCase):
         self.manager.rollback(self.manager.rollback_preview()["token"], confirmed=True)
         self.assertEqual(path.read_bytes(), self.old)
 
+    def test_replacement_preserves_file_mode(self):
+        path = self.views / "10_first.yaml"
+        path.write_bytes(self.old)
+        path.chmod(0o640)
+        plan = self.manager.prepare(self.claims, IDENTITY)
+        self.manager.apply(plan["token"], confirmed=True)
+        self.assertEqual(path.stat().st_mode & 0o777, 0o640)
+        self.manager.rollback(self.manager.rollback_preview()["token"], confirmed=True)
+        self.assertEqual(path.stat().st_mode & 0o777, 0o640)
+
+    def test_chmod_after_preview_blocks_batch(self):
+        path = self.views / "10_first.yaml"
+        path.write_bytes(self.old)
+        plan = self.manager.prepare(self.claims, IDENTITY)
+        path.chmod(0o600)
+        if plan["entries"][0]["mode"] == 0o600:
+            path.chmod(0o640)
+        with self.assertRaisesRegex(ApplyError, "permissions changed"):
+            self.manager.apply(plan["token"], confirmed=True)
+        self.assertFalse((self.views / "11_second.yaml").exists())
+
     def test_stale_plan_rejected_before_any_write(self):
         path = self.views / "10_first.yaml"
         path.write_bytes(self.old)
