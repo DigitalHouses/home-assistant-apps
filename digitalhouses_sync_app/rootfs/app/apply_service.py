@@ -45,12 +45,15 @@ def _file_sync(path: Path, data: bytes, mode: int = 0o600) -> None:
         raise
 
 
-def _atomic_replace(path: Path, data: bytes, mode: int = 0o644) -> None:
+def _atomic_replace(path: Path, data: bytes, mode: int = 0o644,
+                    uid: int | None = None, gid: int | None = None) -> None:
     """Atomic replacement inside the pre-validated DigitalHouses views directory."""
     fd, temporary = tempfile.mkstemp(prefix=".dh-sync-", dir=path.parent)
     try:
         with os.fdopen(fd, "wb") as out:
             os.fchmod(out.fileno(), mode & 0o777)
+            if uid is not None and gid is not None:
+                os.fchown(out.fileno(), uid, gid)
             out.write(data)
             out.flush()
             os.fsync(out.fileno())
@@ -168,6 +171,8 @@ class ApplyManager:
                     "action": action, "before": _sha(old) if old is not None else None,
                     "after": _sha(raw), "raw": raw,
                     "mode": stat.S_IMODE(target.stat().st_mode) if old is not None else 0o644,
+                    "uid": target.stat().st_uid if old is not None else os.getuid(),
+                    "gid": target.stat().st_gid if old is not None else os.getgid(),
                     "diff": _diff(old, raw) if old is not None and old != raw else None,
                     "bytes": len(raw),
                 })
@@ -236,14 +241,15 @@ class ApplyManager:
                 manifest["entries"].append({
                     "file": e["filename"], "view_path": e["view_path"],
                     "before": e["before"], "after": e["after"],
-                    "mode": e["mode"], "backup": backup,
+                    "mode": e["mode"], "uid": e["uid"], "gid": e["gid"],
+                "backup": backup,
                 })
             _save_json(txn / "manifest.json", manifest)
             written = []
             try:
                 for e in entries:
                     path = self._target(e["filename"])
-                    _atomic_replace(path, e["raw"], e["mode"])
+                    _atomic_replace(path, e["raw"], e["mode"], e["uid"], e["gid"])
                     written.append(e)
                 manifest["state"] = "applied"
                 _save_json(txn / "manifest.json", manifest)
@@ -257,7 +263,7 @@ class ApplyManager:
                                         if m["file"] == e["filename"])
                         if original["backup"]:
                             _atomic_replace(path, (txn / original["backup"]).read_bytes(),
-                                            original["mode"])
+                                            original["mode"], original["uid"], original["gid"])
                         else:
                             path.unlink()
                     except Exception as rollback_exc:
@@ -321,7 +327,8 @@ class ApplyManager:
                         if state == e["before"]:
                             continue
                         if backup is not None:
-                            _atomic_replace(target, backup.read_bytes(), e["mode"])
+                            _atomic_replace(target, backup.read_bytes(), e["mode"],
+                                            e["uid"], e["gid"])
                         else:
                             target.unlink()
                     manifest["state"] = "recovered"
@@ -384,7 +391,8 @@ class ApplyManager:
                 for e in reversed(manifest["entries"]):
                     path = self._target(e["file"])
                     if e["backup"]:
-                        _atomic_replace(path, (txn / e["backup"]).read_bytes(), e["mode"])
+                        _atomic_replace(path, (txn / e["backup"]).read_bytes(), e["mode"],
+                                        e["uid"], e["gid"])
                     else:
                         path.unlink()
                 manifest["state"] = "rolled_back"
