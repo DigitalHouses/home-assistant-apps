@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.1
+
+- Replace per-product unauthenticated GitHub REST API metadata, branch and directory requests with free, public shallow Git transport. No token, GitHub App or paid plan.
+- Clone a single immutable default-branch snapshot per distinct repository and cache it for five minutes; enumerate and read canonical dashboard YAML from local Git objects. No REST rate-limit dependency.
+- Keep owner `DigitalHouses` as the sole source admission rule, regardless of product, repo or Agent/App version. Missing optional directories remain normal.
+- Add local Git transport tests for SHA pinning, repo sharing, expiry, unknown products and unsafe origins/paths; preserve manual Apply, backup and Rollback behavior.
+
+
 ## 0.3.0
 
 - Add operator-initiated owner-only GitHub YAML Apply for discovered products, without product, agent-version or compatibility allowlists.

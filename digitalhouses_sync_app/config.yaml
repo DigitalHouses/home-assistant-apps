@@ -1,5 +1,5 @@
 name: DigitalHouses Sync App
-version: "0.3.0"
+version: "0.3.1"
 slug: digitalhouses_sync_app
 description: DigitalHouses owner-only dashboard sync with manual apply and rollback.
 url: https://github.com/DigitalHouses/home-assistant-apps/tree/main/digitalhouses_sync_app

@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import json
 import tempfile
-from unittest.mock import patch
 import threading
 import unittest
 from pathlib import Path
@@ -11,7 +10,7 @@ from pathlib import Path
 from catalog_web import make_server
 from discovery_contract import ProductSources
 from inventory import Inventory
-from resource_preview import PreviewCatalog, PreviewError, parse_view
+from resource_preview import PreviewCatalog, parse_view
 from test_catalog_web import fetch
 
 REPO = "https://github.com/DigitalHouses/home-assistant-apps"
@@ -30,30 +29,6 @@ def raw_view(title, view_path, header=True):
 
 
 class OwnerOnlyDiscoveryTests(unittest.TestCase):
-    def test_resolves_owned_repo_to_immutable_default_branch_sha(self):
-        from resource_preview import resolve_revision
-        responses = [
-            json.dumps({"owner":{"login":"DigitalHouses"}, "default_branch":"main"}).encode(),
-            json.dumps({"commit":{"sha":SHA}}).encode(),
-        ]
-        calls = []
-        def download(url, host, limit):
-            calls.append((url,host))
-            return responses.pop(0)
-        with patch("resource_preview._download", side_effect=download):
-            self.assertEqual(resolve_revision(OTHER), (SHA, "main"))
-        self.assertEqual(len(calls), 2)
-        self.assertTrue(all(host == "api.github.com" for _,host in calls))
-        self.assertTrue(calls[1][0].endswith("/branches/main"))
-
-    def test_owner_mismatch_in_github_api_is_rejected(self):
-        from resource_preview import resolve_revision
-        with patch("resource_preview._download", return_value=json.dumps({
-            "owner":{"login":"SomeoneElse"}, "default_branch":"main",
-        }).encode()):
-            with self.assertRaises(PreviewError):
-                resolve_revision(OTHER)
-
     def test_two_pve_views_are_enumerated_without_product_pins(self):
         product = "digitalhouses_pve_agent"
         received = []

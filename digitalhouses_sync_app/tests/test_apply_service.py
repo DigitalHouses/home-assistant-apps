@@ -15,7 +15,7 @@ from apply_service import ApplyError, ApplyManager
 from catalog_web import make_server
 from discovery_contract import ProductSources
 from inventory import Inventory
-from resource_preview import MissingDirectory, list_views, PreviewCatalog
+from resource_preview import list_views, PreviewCatalog
 
 REPO = "https://github.com/DigitalHouses/any-repo"
 SHA = "e" * 40
@@ -218,7 +218,8 @@ class ApplyServiceTests(unittest.TestCase):
             new_instance.prepare(self.claims, IDENTITY)
 
     def test_no_published_directory_is_normal_absence(self):
-        with patch("resource_preview._download", side_effect=MissingDirectory("absent")):
+        with patch("git_source.BACKEND._at_revision", return_value={"path": Path(".")}), \
+             patch("git_source.BACKEND._run", return_value=b""):
             self.assertEqual(list_views(REPO, "dash", SHA), [])
 
 
