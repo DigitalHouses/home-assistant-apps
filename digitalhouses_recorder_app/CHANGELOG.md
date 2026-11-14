@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.29
+- Publish Recorder App 0.1.29 with the existing runtime, MQTT Discovery, retained DH Sync /sync source announcement, database monitoring, telemetry-consent behavior and Home Assistant entity IDs unchanged from 0.1.28.
+- Extend the canonical Russian Recorder Dashboard compatibility metadata to `DH-Compatible-App: >=0.1.28,<0.1.30` after verifying that the executable application and MQTT Discovery contracts have not changed between releases. Preserve dashboard revision 1.0.0, the complete original Lovelace body, `path: recorder`, all cards, graphs and controls.
+- Add regressions covering the exact dashboard baseline and discovery entity sets across both 0.1.28 and 0.1.29. Update product documentation; leave live CORE frontend acceptance, DH Sync pinned-resource registration, adoption, Apply and rollback as separate explicit steps.
+
 ## 0.1.28
 - Announce DH Sync Discovery Contract v1 via a retained QoS 1 `DigitalHouses/Global/digitalhouses_recorder_app/sync` product-source message on every successful MQTT connection and reconnection, using the same validated running version as HA Discovery and the Version sensor.
 - Publish the maintained Russian Recorder dashboard as canonical standalone `dashboards/ru/10_recorder.yaml` view revision 1.0.0, preserving the released Lovelace path, cards, controls and existing MQTT/HA entity identifiers.
