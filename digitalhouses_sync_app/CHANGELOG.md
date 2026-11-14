@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.1
+
+- Reduce source admission to the GitHub repository owner DigitalHouses. Remove the fixed monorepo check, product-specific SHA allowlist, product-path equality rule, agent/app version gates and required DH-Compatible metadata.
+- Resolve each GitHub repository's default branch to a commit SHA on explicit user request. Discover dashboards/ru/*.yaml from that SHA; support Recorder and future products without central registration.
+- Keep dashboard metadata as optional informational text. The local CORE diff works across DigitalHouses repositories and safe relative product paths.
+- Retain technical URL/path parsing to prevent malformed network requests and retain read-only HAOS access; no Apply, automatic YAML writes, updates or restarts.
+
 ## 0.2.0
 
 - Add operator-triggered read-only CORE HAOS YAML audit through Supervisor homeassistant_config map with read_only: true.

@@ -86,13 +86,14 @@ def make_server(sources: ProductSources, inventory: Inventory, *, version: str =
             preview_html = (
                 "<section><h2>Канонические dashboards · RU</h2>"
                 "<p>GitHub-файлы обнаруживаются в dashboards/ru/ из "
-                "закреплённых commit SHA, а не перечисляются в MQTT.</p>"
+                "репозитория организации DigitalHouses. SHA фиксируется для "
+                "каждого просмотра автоматически.</p>"
                 "<p><a href='?resources=1'>Проверить GitHub-ресурсы</a></p>"
             )
             if inspect is not None and parse_qs(urlsplit(self.path).query).get("resources") == ["1"]:
                 preview_html += (
                     "<table class=\'views\'><thead><tr><th>Продукт / Git SHA</th>"
-                    "<th>Dashboard / файл</th><th>Ревизия / совместимость</th>"
+                    "<th>Dashboard / файл</th><th>Ревизия / сведения</th>"
                     "<th>Результат</th></tr></thead><tbody>"
                 )
                 try:
@@ -126,8 +127,9 @@ def make_server(sources: ProductSources, inventory: Inventory, *, version: str =
             preview_html += (
                 "<p class='muted'>Предпросмотр не сравнивает локальные YAML, "
                 "не устанавливает ресурсы и не подтверждает готовность Apply. "
-                "Требуется отдельная проверка установленного HA и согласование "
-                "совместимости с версиями агентов.</p></section>"
+                "Единственное правило допуска источника — владелец "
+                "DigitalHouses. При применении потребуются резервные копии "
+                "и отдельное подтверждение.</p></section>"
             )
             # Local config is read from Supervisor's RO bind only on GET.
             audit_html = (
