@@ -7,15 +7,22 @@ INSTALLER = (Path(__file__).resolve().parents[1] / "install.sh").read_text()
 
 
 class InstallerContractTests(unittest.TestCase):
-    def test_default_instance_is_noninteractive(self):
-        self.assertIn('instance_id="${DIGITALHOUSES_INSTANCE_ID:-plex}"', INSTALLER)
-        self.assertIn('instance_name="${DIGITALHOUSES_INSTANCE_NAME:-$(hostname -s)}"', INSTALLER)
+    def test_default_instance_is_native_ini_and_noninteractive(self):
+        from app.config import load_config
+        with tempfile.TemporaryDirectory() as folder:
+            config = Path(folder) / "native.conf"
+            config.write_text("[mqtt]\nhost = broker.example\n")
+            native = load_config(config)
+        self.assertEqual(native.general.instance_id, "plex")
+        self.assertEqual(native.general.instance_name, "DH Plex")
+        self.assertIn("--non-interactive", INSTALLER)
+        self.assertIn("--set", INSTALLER)
         self.assertNotIn("Instance ID [plex]", INSTALLER)
         self.assertNotIn("Instance name [DH Plex]", INSTALLER)
 
     def test_venv_permissions_are_repaired(self):
-        self.assertIn('previous_umask="$(umask)"', INSTALLER)
-        self.assertIn('umask "${previous_umask}"', INSTALLER)
+        self.assertIn('(umask 0077; printf ', INSTALLER)
+        self.assertIn('install -o root -g root -m 0600 "${PREPARED_CONFIG}" "${CONFIG_FILE}"', INSTALLER)
         self.assertIn('chmod -R a+rX "${APP_DIR}/.venv"', INSTALLER)
 
     def test_default_mqtt_topic_migration_sed_executes(self):
