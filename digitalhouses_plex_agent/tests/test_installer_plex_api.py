@@ -5,11 +5,17 @@ INSTALLER = (Path(__file__).resolve().parents[1] / "install.sh").read_text(encod
 
 
 class InstallerPlexApiTests(unittest.TestCase):
-    def test_first_install_writes_plex_api_defaults_without_token(self):
-        self.assertIn('"[plex_api]"', INSTALLER)
-        self.assertIn('"enabled = true"', INSTALLER)
-        self.assertIn('"base_url = http://127.0.0.1:32400"', INSTALLER)
-        self.assertIn('"library_refresh_seconds = 3600"', INSTALLER)
+    def test_first_install_uses_native_plex_api_defaults_without_inline_token(self):
+        import tempfile
+        from app.config import load_config
+        with tempfile.TemporaryDirectory() as folder:
+            config = Path(folder) / "native.conf"
+            config.write_text("[mqtt]\nhost = broker.example\n")
+            parsed = load_config(config)
+        self.assertTrue(parsed.plex_api.enabled)
+        self.assertEqual(parsed.plex_api.base_url, "http://127.0.0.1:32400")
+        self.assertEqual(parsed.plex_api.library_refresh_seconds, 3600)
+        self.assertEqual(parsed.plex_api.token_file, Path("/etc/digitalhouses_plex_agent/plex_local_admin_token"))
         self.assertNotIn('token = ', INSTALLER)
 
     def test_local_admin_token_is_copied_to_protected_config_file(self):

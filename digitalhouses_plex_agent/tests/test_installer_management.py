@@ -25,19 +25,13 @@ class ManagementInstallerTests(unittest.TestCase):
         self.assertIn('https://github.com/DigitalHouses/home-assistant-apps/tree/main/digitalhouses_plex_agent', body)
         self.assertIn('chmod 0600 "/root/dh-plex-agent.txt"', source)
 
-    def test_unattended_requires_native_config_before_side_effects(self):
+    def test_unattended_preflights_native_config_before_side_effects(self):
         source = (ROOT / 'install.sh').read_text()
-        block = source.split('# Native configuration preflight', 1)[1].split('need_apt=0', 1)[0]
-        with tempfile.TemporaryDirectory() as tmp:
-            config = Path(tmp) / 'config'
-            legacy = Path(tmp) / 'legacy'
-            script = 'CONFIG_FILE="$1"\nLEGACY_CONFIG_FILE="$2"\n' + block
-            absent = subprocess.run(['bash', '-c', script, 'test', str(config), str(legacy)], capture_output=True, text=True, start_new_session=True)
-            self.assertNotEqual(absent.returncode, 0)
-            self.assertIn('native INI', absent.stdout)
-            self.assertFalse(config.exists())
-            content = '[mqtt]\nhost = broker.example\n# preserved\n'
-            config.write_text(content)
-            configured = subprocess.run(['bash', '-c', script, 'test', str(config), str(legacy)], capture_output=True, text=True, start_new_session=True)
-            self.assertEqual(configured.returncode, 0, configured.stderr)
-            self.assertEqual(config.read_text(), content)
+        self.assertIn('PREPARED_CONFIG="${tmp_dir}/native.conf"', source)
+        self.assertIn('CONFIG_BASE_SHA="$(sha256sum "${CONFIG_FILE}"', source)
+        self.assertIn('PYTHONPATH="${SOURCE_APP}" python3 -m app.install_config', source)
+        self.assertIn('--non-interactive', source)
+        self.assertIn('--mqtt-password-stdin', source)
+        self.assertLess(source.index('PREPARED_CONFIG='), source.index('groupadd --system'))
+        self.assertLess(source.index('PREPARED_CONFIG='), source.index('cp -a "${SOURCE_APP}/."'))
+        self.assertNotIn('read -r -s mqtt_password', source)

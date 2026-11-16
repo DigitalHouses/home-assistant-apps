@@ -4,7 +4,7 @@ import re
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
-VIEW = ROOT / "dashboards" / "ru" / "10_plex.yaml"
+VIEW = ROOT / "dashboards" / "ru" / "12_plex.yaml"
 VIEW_EXAMPLE = ROOT / "examples" / "lovelace" / "plex-dashboard.yaml"
 PACKAGE = ROOT / "packages" / "common" / "dh_plex_app_package.yaml"
 PACKAGE_EXAMPLE = ROOT / "examples" / "packages" / "dh_plex_app_package.yaml"

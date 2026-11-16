@@ -79,4 +79,4 @@ if [[ "$(head -n 1 "${installer}")" != '#!/usr/bin/env bash' ]]; then
     echo "Downloaded release installer has an unexpected format." >&2
     exit 1
 fi
-DIGITALHOUSES_SOURCE_REF="${RELEASE_TAG}" bash "${installer}"
+DIGITALHOUSES_SOURCE_REF="${RELEASE_TAG}" bash "${installer}" "$@"

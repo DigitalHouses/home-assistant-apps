@@ -119,11 +119,22 @@ When working from the **Proxmox root console**, execute the installer **inside t
 qm guest exec 2250 --timeout 0 -- /bin/bash -lc 'set -o pipefail; curl -fsSL https://raw.githubusercontent.com/DigitalHouses/home-assistant-apps/main/digitalhouses_plex_agent/install-latest.sh | bash'
 ```
 
-The guest must have QEMU Guest Agent, Python 3 and curl for the bootstrap. Unattended `qm guest exec` also needs an existing native config because it cannot answer first-install prompts. The installer preserves existing settings.
+The guest must have QEMU Guest Agent, Python 3 and curl for the bootstrap. Unattended `qm guest exec` can now pass `--non-interactive --set mqtt_ip=...` or use a prepared native INI; no terminal is required. The installer preserves existing settings.
 
 **For deliberate rollback or reproducible installs only**, an administrator can still choose a previously published, exact release tag through the original `install.sh` interface. Normal installs do not require it.
 
-For unattended first installation, provision the **native INI** at `/etc/digitalhouses_plex_agent/digitalhouses_plex_agent.conf` before running the same installer. Use the complete [example INI](examples/digitalhouses_plex_agent.conf.example), set `[mqtt] host` to your broker, and protect credentials (root owner, mode `0600` before installation). Ansible can manage that same file with `become: true`, `mode: "0600"`, and **`no_log: true`** for tasks carrying secrets. The installer grants the existing service group read access and validates the INI before activating the agent. No installer-specific MQTT variable schema is needed. Existing config is preserved, including on unattended updates. Without an existing native config or a terminal for first-time prompts, installation fails before changing services; it never starts an unconfigured agent.
+**Unattended first install / Ansible (v0.8.19+):** The installer accepts the same native CLI setting names as `dh-plex-agent set`. It supports `--non-interactive`, repeated `--set key=value` and `--mqtt-password-stdin`. The MQTT password must be streamed via stdin, **never** supplied as a literal CLI argument. Example invocation after fetching the canonical `0.8.19` release installer on the guest:
+
+```bash
+DIGITALHOUSES_SOURCE_REF=digitalhouses_plex_agent-v0.8.19 \
+  bash ./install.sh --non-interactive \
+  --set mqtt_ip=192.0.2.24 --set mqtt_port=1883 \
+  --mqtt-password-stdin < /run/secrets/dh_mqtt_password
+```
+
+Alternatively, Ansible can provision the native INI at `/etc/digitalhouses_plex_agent/digitalhouses_plex_agent.conf` (root-owned, mode `0600`) using the [example INI](examples/digitalhouses_plex_agent.conf.example) and then install without `--set`. The single native INI remains the source of truth; no second installer-specific settings contract was added. Existing settings and comments survive an update. Validation runs before installation changes services, and the prepared configuration is committed atomically. Tasks carrying credentials must use Ansible `no_log: true`. No interactive MQTT prompt is required in automated deployments, and a missing MQTT host fails before modifying the running agent.
+
+The `install-latest.sh` bootstrap forwards these flags to the selected release installer; for reproducible Ansible provisioning, use an explicit published release tag. Run this installer **inside the Debian Media VM**, not on Proxmox PVE.
 
 Every successful install/update adds `/usr/local/bin/dh-plex-agent` (root/admin executable) and the short `/root/dh-plex-agent.txt` reference. The CLI uses the installed virtualenv and works from any working directory.
 
