@@ -26,6 +26,25 @@ SOURCE_REF="${DIGITALHOUSES_SOURCE_REF:-}"
 ALLOW_NON_RELEASE_REF="${DIGITALHOUSES_ALLOW_NON_RELEASE_REF:-0}"
 EXPECTED_VERSION=""
 
+# Same native-INI contract as PVE Agent: CLI --set aliases, with secrets
+# supplied through stdin (never --set mqtt_password=literal).
+NON_INTERACTIVE=0
+CONFIG_SETTINGS=()
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --non-interactive) NON_INTERACTIVE=1; shift ;;
+        --set)
+            if [[ $# -lt 2 ]]; then echo "ERROR: --set requires key=value" >&2; exit 2; fi
+            CONFIG_SETTINGS+=("$2"); shift 2 ;;
+        --mqtt-password-stdin) CONFIG_SETTINGS+=("mqtt_password=-"); shift ;;
+        --help|-h)
+            echo 'Usage: install.sh [--non-interactive] [--set key=value ...] [--mqtt-password-stdin]'
+            echo 'Values map to dh-plex-agent set keys; use stdin for MQTT password. No password argument.'
+            exit 0 ;;
+        *) echo "ERROR: unknown installer argument" >&2; exit 2 ;;
+    esac
+done
+
 SEMVER_RE='(0|[1-9][0-9]*)[.](0|[1-9][0-9]*)[.](0|[1-9][0-9]*)(-[0-9A-Za-z-]+([.][0-9A-Za-z-]+)*)?([+][0-9A-Za-z-]+([.][0-9A-Za-z-]+)*)?'
 
 if [[ -z "${SOURCE_REF}" ]]; then
@@ -83,16 +102,6 @@ HA_MQTT_MIGRATION_SOURCE_CONFIG="${BACKUP_DIR}/ha-mqtt-migration-source.conf"
 if [[ "${EUID}" -ne 0 ]]; then
     echo "This installer must run as root."
     echo "See the product README for the canonical release-tag install command."
-    exit 1
-fi
-
-# Native configuration preflight: unattended provisioning uses the existing INI,
-# not an installer-specific MQTT settings interface. Fail before changing services.
-if [[ ! -f "${CONFIG_FILE}" && ! -f "${LEGACY_CONFIG_FILE}" ]] && \
-    ! ( : </dev/tty ) 2>/dev/null; then
-    echo "Unattended installation requires the native INI at ${CONFIG_FILE}."
-    echo "Provision it first (for example with Ansible); existing configuration is preserved."
-    echo "No unconfigured agent will be started. See the product README."
     exit 1
 fi
 
@@ -166,6 +175,27 @@ if [[ -n "${EXPECTED_VERSION}" && "${SOURCE_VERSION}" != "${EXPECTED_VERSION}" ]
     echo "Release tag/version mismatch: ${SOURCE_REF} contains VERSION=${SOURCE_VERSION}."
     exit 1
 fi
+
+# Stage the full native INI before creating the service user, replacing source,
+# changing the installed config or restarting any service. This is exactly the
+# PVE Agent --non-interactive/--set/--mqtt-password-stdin deployment contract.
+PREPARED_CONFIG="${tmp_dir}/native.conf"
+CONFIG_BASE_SHA="-"
+if [[ -f "${CONFIG_FILE}" ]]; then
+    CONFIG_BASE_SHA="$(sha256sum "${CONFIG_FILE}" | cut -d ' ' -f1)"
+    cp -p "${CONFIG_FILE}" "${PREPARED_CONFIG}"
+elif [[ -f "${LEGACY_CONFIG_FILE}" ]]; then
+    cp -p "${LEGACY_CONFIG_FILE}" "${PREPARED_CONFIG}"
+    sed -i -E \
+        's#^([[:space:]]*token_file[[:space:]]*=[[:space:]]*)/etc/digitalhouses_plex_monitoring/plex_local_admin_token[[:space:]]*$#\1/etc/digitalhouses_plex_agent/plex_local_admin_token#' \
+        "${PREPARED_CONFIG}"
+else
+    (umask 0077; printf '[general]\ninstance_id = plex\ninstance_name = DH Plex\n\n[mqtt]\nhost =\n' >"${PREPARED_CONFIG}")
+fi
+PREPARE_FLAGS=()
+[[ "${NON_INTERACTIVE}" -eq 1 ]] && PREPARE_FLAGS+=(--non-interactive)
+PYTHONPATH="${SOURCE_APP}" python3 -m app.install_config \
+    "${PREPARED_CONFIG}" "${PREPARE_FLAGS[@]}" "${CONFIG_SETTINGS[@]}"
 
 if ! getent group "${SERVICE_GROUP}" >/dev/null 2>&1; then
     groupadd --system "${SERVICE_GROUP}"
@@ -330,76 +360,16 @@ find "${APP_DIR}" \
 cp -a "${SOURCE_APP}/." "${APP_DIR}/"
 chown -R root:root "${APP_DIR}"
 
+# Commit the validated staged configuration only after canonical source is in
+# place. Existing comments, unrelated fields and file metadata survive.
+# A changed config during installation fails closed instead of being clobbered.
 config_created=0
 if [[ ! -f "${CONFIG_FILE}" ]]; then
-    if ! ( : </dev/tty ) 2>/dev/null; then
-        echo "Provision the native INI at ${CONFIG_FILE} before unattended installation."
-        if [[ "${rollback_needed}" -eq 1 ]]; then
-            restore_legacy_runtime "migrated configuration is unavailable"
-            rollback_needed=0
-        fi
-        exit 1
-    fi
-
-    instance_id="${DIGITALHOUSES_INSTANCE_ID:-plex}"
-    instance_name="${DIGITALHOUSES_INSTANCE_NAME:-$(hostname -s)}"
-    mqtt_port="1883"
-    mqtt_host=""
-    mqtt_user=""
-    mqtt_password=""
-
-    while [[ -z "${mqtt_host}" ]]; do
-        printf "MQTT host: " >/dev/tty
-        IFS= read -r mqtt_host </dev/tty
-    done
-
-    printf "MQTT port [1883]: " >/dev/tty
-    IFS= read -r answer </dev/tty
-    [[ -n "${answer}" ]] && mqtt_port="${answer}"
-
-    printf "MQTT username [optional]: " >/dev/tty
-    IFS= read -r mqtt_user </dev/tty
-
-    printf "MQTT password [optional]: " >/dev/tty
-    IFS= read -r -s mqtt_password </dev/tty
-    printf "\n" >/dev/tty
-
-    previous_umask="$(umask)"
-    umask 0027
-    {
-        printf '%s\n' "[general]"
-        printf 'instance_id = %s\n' "${instance_id}"
-        printf 'instance_name = %s\n' "${instance_name}"
-        printf '%s\n' "poll_interval_seconds = 10"
-        printf '%s\n' "cpu_window_seconds = 60"
-        printf '%s\n' "log_level = info"
-        printf '\n'
-        printf '%s\n' "[telemetry]"
-        printf '%s\n' "# Voluntary product telemetry. Default is OFF."
-        printf '%s\n' "# Policy: https://github.com/DigitalHouses/home-assistant-apps/blob/main/docs/standards/PRODUCT_TELEMETRY_POLICY.md"
-        printf '%s\n' "enabled = false"
-        printf '%s\n' "cpu_change_threshold = 5"
-        printf '%s\n' "high_load_threshold = 80"
-        printf '%s\n' "high_load_publish_interval_seconds = 60"
-        printf '\n'
-        printf '%s\n' "[plex_api]"
-        printf '%s\n' "enabled = true"
-        printf '%s\n' "base_url = http://127.0.0.1:32400"
-        printf 'token_file = %s\n' "${PLEX_API_TOKEN_FILE}"
-        printf '%s\n' "timeout_seconds = 3"
-        printf '%s\n' "library_refresh_seconds = 3600"
-        printf '\n'
-        printf '%s\n' "[mqtt]"
-        printf 'host = %s\n' "${mqtt_host}"
-        printf 'port = %s\n' "${mqtt_port}"
-        printf 'username = %s\n' "${mqtt_user}"
-        printf 'password = %s\n' "${mqtt_password}"
-        printf '%s\n' "topic_prefix = ${CANONICAL_TOPIC_PREFIX}"
-        printf '%s\n' "discovery_prefix = homeassistant"
-        printf '%s\n' "keepalive_seconds = 60"
-    } >"${CONFIG_FILE}"
-    umask "${previous_umask}"
+    install -o root -g root -m 0600 "${PREPARED_CONFIG}" "${CONFIG_FILE}"
     config_created=1
+else
+    PYTHONPATH="${SOURCE_APP}" python3 -m app.install_config \
+        --commit "${PREPARED_CONFIG}" "${CONFIG_FILE}" "${CONFIG_BASE_SHA}"
 fi
 
 ha_mqtt_identity_migration=0

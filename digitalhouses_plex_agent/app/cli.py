@@ -159,7 +159,7 @@ def _validate(path: Path):
     return config
 
 
-def set_config(path: Path, pairs: Sequence[str]) -> bool:
+def set_config(path: Path, pairs: Sequence[str], *, prepare: bool = False) -> bool:
     if not pairs:
         raise CliError('set requires key=value arguments')
     changes: dict[tuple[str, str], str] = {}
@@ -220,7 +220,7 @@ def set_config(path: Path, pairs: Sequence[str]) -> bool:
             candidate.unlink(missing_ok=True)
         if config == old:
             return False
-        active = service_info().get('ActiveState') == 'active'
+        active = not prepare and service_info().get('ActiveState') == 'active'
         _atomic_write(path, proposed, metadata)
         if active:
             try:
