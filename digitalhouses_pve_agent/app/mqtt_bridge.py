@@ -75,6 +75,7 @@ class MqttEvents:
         self.restart_requested = threading.Event()
         self.check_updates_requested = threading.Event()
         self.install_update_requested = threading.Event()
+        self.auto_update_updates: queue.SimpleQueue[bool] = queue.SimpleQueue()
         self.refresh_in_progress = threading.Event()
         self.reconnect_requested = threading.Event()
         self.ups_scan_requested = threading.Event()
@@ -125,6 +126,11 @@ class MqttEvents:
                 else self.install_update_requested
             )
             request.set()
+            return True
+        if topic == self.topics.update_auto_set:
+            if text not in {"ON", "OFF"}:
+                return False
+            self.auto_update_updates.put(text == "ON")
             return True
         if topic == self.topics.ups_scan:
             if text.upper() == "PRESS":
@@ -326,6 +332,7 @@ class MqttBridge(MqttEvents):
         client.subscribe(self.topics.restart_agent, qos=1)
         client.subscribe(self.topics.update_check, qos=1)
         client.subscribe(self.topics.update_install, qos=1)
+        client.subscribe(self.topics.update_auto_set, qos=1)
         client.subscribe(self.topics.ups_scan, qos=1)
         client.subscribe(f"{self.topics.fan_max_rpm_prefix}/+/max_rpm/set", qos=1)
         client.subscribe(f"{self.topics.base}/ups/refresh", qos=1)
@@ -402,9 +409,10 @@ class MqttBridge(MqttEvents):
         payload = bytes(message.payload)
         text = payload.decode("utf-8", errors="replace").strip()
         if message.topic in {
-            self.topics.restart_agent, self.topics.update_check, self.topics.update_install
+            self.topics.restart_agent, self.topics.update_check, self.topics.update_install,
+            self.topics.update_auto_set,
         } and getattr(message, "retain", False):
-            self.log.warning("Отклонена retained MQTT-команда перезапуска агента")
+            self.log.warning("Rejected retained agent control command")
             return
         if (getattr(self, "ups_topics", None) is not None
                 and message.topic == self.ups_topics.debug_set

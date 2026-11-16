@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.90
+
+- Add `dh-pve-agent auto-update on|off|status` and `switch.dh_pve_agent_auto_update` to the existing PVE MQTT Discovery device. Both control the same persistent OFF-by-default preference in `/var/lib/digitalhouses_pve_agent` without restarting the monitoring agent.
+- Reuse the existing 24-hour published-release checker and the existing UPS-gated systemd updater/rollback. Trigger one automatic installation attempt after a fresh successful check when enabled; do not add a timer, another update mechanism, or repeat denied installation attempts on each polling tick.
+- Reject retained and malformed MQTT switch commands, publish authoritative retained state from the agent and preserve existing CLI and Home Assistant manual update controls.
+
 ## 0.5.89
 
 - Publish DH Sync Discovery Contract v1 source metadata at `DigitalHouses/Global/digitalhouses_pve_agent/<instance_id>/sync` via the existing MQTT client, using QoS 1 with retained delivery on every successful connect or reconnect. The instance ID remains the existing configured ID or stable machine ID.

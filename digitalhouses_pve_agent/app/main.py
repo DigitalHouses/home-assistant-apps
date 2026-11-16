@@ -520,6 +520,14 @@ def run(config: AppConfig, *, state_dir: Path = DEFAULT_STATE_DIR) -> int:
                     restart_requested = True
                     log.warning("Ручной перезапуск агента через MQTT")
                     break
+            # MQTT and CLI share one persistent switch. Changing the preference
+            # never restarts the PVE monitor or modifies /etc under its sandbox.
+            while not bridge.auto_update_updates.empty():
+                enabled = bridge.auto_update_updates.get_nowait()
+                try:
+                    update_manager.auto_update_preference.set(enabled)
+                except Exception as exc:
+                    log.error("Cannot persist MQTT auto-update setting: %s", exc)
             # Handle incoming user actions before background PVE/UPS diagnostics,
             # which can take seconds and otherwise delay the first card ACK.
             # The MQTT callback sets events and wakes this loop immediately.
@@ -538,6 +546,7 @@ def run(config: AppConfig, *, state_dir: Path = DEFAULT_STATE_DIR) -> int:
                 bridge,
                 check=check_updates,
                 install=install_update,
+                allow_auto_install=card.state != "running",
                 denial_reason=lambda: _restart_denial_reason(
                     ups_runtime, ups_startup_attempted=ups_startup_attempted
                 ),

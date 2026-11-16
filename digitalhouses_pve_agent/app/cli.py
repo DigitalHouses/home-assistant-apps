@@ -22,6 +22,7 @@ from typing import Mapping, Sequence
 from .runtime_status import load_build_info
 from .restart_safety import guard_restart
 from .config import ConfigError, load_config
+from .auto_update import AutoUpdatePreference
 
 APP_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_CONFIG = Path('/etc/digitalhouses_pve_agent/digitalhouses_pve_agent.conf')
@@ -583,10 +584,23 @@ def update_agent(*, state_dir: Path = STATE_DIR, app_dir: Path = APP_ROOT) -> No
     print(f'UPDATED {actual}')
 
 
+def auto_update_cli(action: str, *, state_dir: Path = STATE_DIR) -> None:
+    preference = AutoUpdatePreference(state_dir)
+    if action == 'status':
+        print('ON' if preference.enabled() else 'OFF')
+    elif action in {'on', 'off'}:
+        desired = action == 'on'
+        changed = preference.set(desired)
+        print(('CHANGED' if changed else 'UNCHANGED') + (' ON' if desired else ' OFF'))
+    else:
+        raise CliError('auto-update requires on, off or status')
+
+
 def print_help() -> None:
-    print('Usage: /usr/local/bin/dh-pve-agent status | update | restart | help | set key=value [key=value ...]')
+    print('Usage: /usr/local/bin/dh-pve-agent status | update | auto-update on|off|status | restart | help | set key=value [key=value ...]')
     print('Run status/update/restart/set as root or through sudo. Config: ' + str(DEFAULT_CONFIG))
     print('set validates the entire batch, updates atomically, and restarts once only when running.')
+    print('auto-update changes the local persistent preference without restarting the agent; default OFF.')
     print('Keys (native INI mapping):')
     for key, (section, field) in KEYS.items():
         print(f'  {key}: [{section}] {field}')
@@ -613,6 +627,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             print_status(DEFAULT_CONFIG)
         elif args == ['update']:
             update_agent()
+        elif len(args) == 2 and args[0] == 'auto-update':
+            auto_update_cli(args[1])
         elif args == ['restart']:
             if service_info().get('ActiveState') != 'active':
                 raise CliError('service is not running; restart never starts an inactive service')
