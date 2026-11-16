@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 0.8.19
+
+- Align first-install provisioning of Plex Agent with PVE Agent: `--non-interactive`, repeatable `--set key=value` using the existing native CLI aliases, and `--mqtt-password-stdin` without exposing secrets as process arguments.
+- Validate the complete native configuration before touching the installed service; stage changes in a temporary INI and commit atomically, preserving existing settings and metadata while refusing concurrent modifications.
+- Forward installer arguments from the versionless `install-latest.sh` bootstrap. Preserve the interactive setup and pre-provisioned native INI paths for existing hosts.
+- Publish the canonical Plex Lovelace view as `dashboards/ru/12_plex.yaml` (same view bytes and `path: dh-plex-agent`), after `10_pve_proxmox.yaml` and `11_pve_ups.yaml`. Existing local view filenames are maintained by DH Sync; renaming an already installed view is handled by the DH Sync owner, not this product release.
+- Add regression tests covering first-install configuration, stdin credentials, validation/rollback, and stable dashboard numbering. No changes to MQTT Discovery, runtime telemetry, Recorder package, or GPU diagnostics.
+
 ## 0.8.18
 
 - Publish DH Sync Discovery Contract v1: the canonical Plex Agent product ID,
