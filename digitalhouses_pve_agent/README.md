@@ -8,7 +8,7 @@ Native Linux agent for **Proxmox VE 8.x** that publishes host, CPU, memory, stor
 
 ## Native CLI and unattended installation (development source)
 
-The source tree implements the [DigitalHouses Linux Agent Management Standard](../docs/standards/DH_LINUX_AGENT_MANAGEMENT_STANDARD.md). Version 0.5.89 publishes the DH Sync Discovery v1 metadata on MQTT connect/reconnect; production installation requires the canonical released tag.
+The source tree implements the [DigitalHouses Linux Agent Management Standard](../docs/standards/DH_LINUX_AGENT_MANAGEMENT_STANDARD.md). Version 0.5.90 publishes the DH Sync Discovery v1 metadata on MQTT connect/reconnect; production installation requires the canonical released tag.
 
 Root/admin commands after installing a release that includes the feature:
 
@@ -49,7 +49,7 @@ The installed `/root/dh-pve-agent.txt` guide is mode `0600`. The existing MQTT D
 
 The canonical product and runtime identity is **DigitalHouses PVE Agent** / `digitalhouses_pve_agent`: systemd service `digitalhouses_pve_agent.service`, filesystem roots under `/opt/digitalhouses/digitalhouses_pve_agent`, `/etc/digitalhouses_pve_agent` and `/var/lib/digitalhouses_pve_agent`, MQTT base `DigitalHouses/Global/digitalhouses_pve_agent/<instance>`, and Home Assistant entity prefix `dh_pve_agent_*`. Version 0.5.30 performs the corrected one-time controlled migration from the former `dh_pve_app` / `dh_app_pve_*` runtime, including deterministic cleanup of retained data owned by the legacy MQTT instance namespace.
 
-Current source version: `VERSION` is `0.5.89`.
+Current source version: `VERSION` is `0.5.90`.
 DH Sync v1 product source is announced as retained MQTT metadata at the existing instance ID under `/sync`; see [DH Sync Discovery v1](docs/DH_SYNC_DISCOVERY_V1.md). This metadata does not authorize dashboard installation.
 Agent CPU self-monitoring (v0.5.88): Home Assistant sensor.dh_pve_agent_process_cpu_usage measures the agent process independently of the existing host CPU usage sensor, where 100% means one entire CPU core. binary_sensor.dh_pve_agent_cpu_overload has device_class: problem and becomes ON after strictly above 80% for 300 seconds, then OFF after strictly below 40% for 120 seconds. The condition is part of the existing PVE Problems aggregate. Measurement is performed every 10 seconds in the existing main loop (including while MQTT is disconnected), without new subprocesses. The local dh-pve-agent status reports the latest usage and overload state. MQTT connectivity remains necessary for Home Assistant to receive fresh readings.
 
@@ -146,7 +146,7 @@ The PVE Agent exposes two non-retained MQTT commands in the existing DH PVE devi
 - `sensor.dh_pve_agent_latest_version` shows the latest release version (unknown if GitHub is unreachable).
 - `sensor.dh_pve_agent_update_status` shows checking, queued, downloading, installing, verifying, rolling_back, idle, completed or error; details include the last error, check time, and separate historical `installation_status`/`installation_error`. After a fresh successful check, `idle` and `update_available=off` mean the installed version is current: a previous installation's `completed` must not override the latest check.
 
-A release check runs at startup and every 24 hours, in a background thread. No automatic installation occurs, and unrelated monorepo products, prereleases, drafts, tags without published GitHub Releases, branches and arbitrary commits are never offered.
+A release check runs at startup and every 24 hours, in a background thread. Automatic installation is disabled by default and can be enabled with `dh-pve-agent auto-update on` or `switch.dh_pve_agent_auto_update` in the existing PVE MQTT device. Both controls use one persistent preference at `/var/lib/digitalhouses_pve_agent/auto_update.json` (no restart, no new timer). `dh-pve-agent auto-update off` disables it; `dh-pve-agent auto-update status` reports ON/OFF. A successful new release check can trigger exactly one automatic installation attempt through the existing updater and UPS preflight. A denied or failed attempt is not repeated in a tight loop. Manual check/update controls remain unchanged; other PVE agent operations keep priority. When auto-update is OFF, no automatic installation occurs, and and unrelated monorepo products, prereleases, drafts, tags without published GitHub Releases, branches and arbitrary commits are never offered.
 
 Updates are carried out by a separate `digitalhouses_pve_agent-update.service` unit. Its small independent runner lives in `/usr/local/libexec`, outside the source tree being replaced. Before installation it verifies the Release and live NUT/UPS power, then copies the old agent runtime, configuration and units into `/var/lib/digitalhouses_pve_agent/update-backup`. A failed install/startup restores the previous installation. An interrupted transaction is recovered by the separate
 `digitalhouses_pve_agent-update-recover.service`, required and started
@@ -466,7 +466,7 @@ Production install/update is release-tag only. Version 0.5.30 is the corrected c
 For the canonical runtime, install/update/reinstall never clears the current canonical MQTT namespace. Canonical retained MQTT cleanup is owned exclusively by the supported uninstaller.
 
 ```bash
-TAG=digitalhouses_pve_agent-v0.5.89
+TAG=digitalhouses_pve_agent-v0.5.90
 DIGITALHOUSES_SOURCE_REF="$TAG" \
   bash <(curl -fsSL "https://raw.githubusercontent.com/DigitalHouses/home-assistant-apps/$TAG/digitalhouses_pve_agent/install.sh")
 ```

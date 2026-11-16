@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Callable
 
 from .state_store import StateStore, StateStoreError
+from .auto_update import AutoUpdatePreference
 
 log = logging.getLogger(__name__)
 PRODUCT = "digitalhouses_pve_agent"
@@ -68,6 +69,10 @@ class UpdateManager:
         self.cache = StateStore(state_dir / "update_check.json")
         self.request = StateStore(state_dir / "update_request.json")
         self.worker = StateStore(state_dir / "update_worker.json")
+        self.auto_update_preference = AutoUpdatePreference(state_dir)
+        self.auto_update = False
+        self._auto_install_pending = False
+        self._auto_preference_error: str | None = None
         self._lock = threading.Lock()
         self._last_check = 0.0
         self._checking = False
@@ -129,10 +134,10 @@ class UpdateManager:
         except Exception:
             return True  # Fail closed if install status cannot be read.
 
-    def _apply_check(self) -> None:
+    def _apply_check(self) -> bool:
         with self._lock:
             if self._checking or (self._check_result is None and self._check_error is None):
-                return
+                return False
             result, error = self._check_result, self._check_error
             self._check_result, self._check_error = None, None
         self.checked = datetime.now(timezone.utc).isoformat()
@@ -152,6 +157,7 @@ class UpdateManager:
             })
         except Exception as exc:
             log.warning("Update cache save failed: %s", exc)
+        return error is None
 
     def _worker_status(self) -> dict[str, object]:
         try:
@@ -199,6 +205,7 @@ class UpdateManager:
             "check_started_at": self._check_started_at,
             "check_duration_seconds": self._check_duration,
             "installed_version": self.version,
+            "auto_update": self.auto_update,
             "installation_status": worker_state,
             "installation_error": worker.get("error"),
         }
@@ -263,8 +270,29 @@ class UpdateManager:
         return None
 
     def tick(self, bridge: object, *, check: bool = False, install: bool = False,
-             denial_reason: Callable[[], str | None] | None = None) -> None:
-        self._apply_check()
+             denial_reason: Callable[[], str | None] | None = None,
+             allow_auto_install: bool = True) -> None:
+        # Read the same persisted preference as CLI, even if CLI changed it
+        # while the agent was running. Fail closed on invalid state.
+        try:
+            self.auto_update = self.auto_update_preference.enabled()
+            self._auto_preference_error = None
+        except (StateStoreError, OSError) as exc:
+            self.auto_update = False
+            error = str(exc)
+            if error != self._auto_preference_error:
+                log.error("Auto-update disabled: %s", error)
+            self._auto_preference_error = error
+        checked_successfully = self._apply_check()
+        if not self.auto_update:
+            self._auto_install_pending = False
+        elif checked_successfully and self._payload()["available"]:
+            self._auto_install_pending = True
+        # Consume once after a fresh check; a denied UPS preflight must not
+        # spin an update attempt on every collector iteration.
+        if allow_auto_install and self._auto_install_pending:
+            self._auto_install_pending = False
+            install = True
         if check or self._last_check == 0 or (
             time.monotonic() - self._last_check >= CHECK_INTERVAL
         ):
