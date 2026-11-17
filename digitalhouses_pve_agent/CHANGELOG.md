@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.5.91
+
+- Add GMKtec NucBox K15 DMI-gated, read-only EC RPM fallback for the existing fan collector: CPU FAN (EC 0x35–0x36) and FAN2 (0x37–0x38). Retain hwmon/IPMI precedence, existing MQTT/CLI fan IDs, two-positive-sample confirmation, and fail-closed unavailable readings.
+- Double-read exactly four EC bytes per existing fan cycle to reject torn/out-of-range observations; never enable EC writes, PWM control, arbitrary EC scans, or maximum-RPM calibration.
+- On exact K15 installer detection, load ec_sys with write_support=N and persist its module load across reboot; remove only the owned module-load file on uninstall.
+- Add PVE 8/9 version and additive pmxcfs schema regression tests under Python 3.13, plus live PVE 9.2 and PVE 8.4 acceptance checklist. PVE 9.2 native RRD/PCI/UPS live validation remains required before claiming verified platform support.
+
 ## 0.5.90
 
 - Add `dh-pve-agent auto-update on|off|status` and `switch.dh_pve_agent_auto_update` to the existing PVE MQTT Discovery device. Both control the same persistent OFF-by-default preference in `/var/lib/digitalhouses_pve_agent` without restarting the monitoring agent.
