@@ -148,17 +148,20 @@ Scheduling fields may differ internally, but restart storms must be prevented.
 
 ## 5. Простое согласие через существующий переключатель
 
-В штатной конфигурации App уже есть один `telemetry_enabled: false` (`schema: telemetry_enabled: bool`). Для Linux Agent — `[telemetry] enabled = false`. **Новых параметров и интерфейсов не вводить.** По умолчанию переключатель выключен.
+Начальные значения различаются по типу продукта:
 
-Рядом показать: «Для статистики DigitalHouses отправляются: название приложения/агента, версия и случайный идентификатор установки.» и ссылку на полные условия обработки данных.
+- **Home Assistant App:** существующий `telemetry_enabled: false` (`schema: telemetry_enabled: bool`) сохраняется **выключенным по умолчанию**, как прежде. Явное `true` подтверждает условия.
+- **Linux Agent:** существующий `[telemetry] enabled = true` — **включено по умолчанию при новой установке**; `false` задаётся оператором для отключения. Никаких дополнительных переключателей и интерфейсов не вводить.
+
+Для HA App возле переключателя, а для Linux Agent в штатной документации/инструкции установки указать: «Для статистики DigitalHouses отправляются: название приложения/агента, версия и случайный идентификатор установки.» и ссылку на полную политику.
 
 При запуске:
 
-- `telemetry_enabled = false` или `[telemetry] enabled = false`: журнал «Не принято условие передачи статистики DigitalHouses — завершение работы»; штатно завершить запуск без отправки телеметрии и не запускать рабочий runtime.
-- `telemetry_enabled = true` или `[telemetry] enabled = true`: запуск обычного runtime и обязательная телеметрия; повторных вопросов нет.
-- Если переключатель снят позднее, при следующем запуске снова завершить работу. Ошибки DNS/сервера статистики не влияют на уже разрешённый runtime.
+- `telemetry_enabled = false` либо `[telemetry] enabled = false`: вывести причину отключения обязательной телеметрии в журнал, не запускать нормальный runtime, ничего не отправлять. Для App это также означает отсутствие принятия условий.
+- `telemetry_enabled = true` либо `[telemetry] enabled = true`: обычный runtime с обязательной телеметрией.
+- Если переключатель изменён на `false`, не позднее следующего запуска продукт прекращает работу. Ошибки сети и сервера статистики никогда не блокируют разрешённый runtime.
 
-Не создавать отдельные consent-state-файлы, Ingress/веб-страницы активации, версии `accept_v2` или дополнительные переключатели. Текущее состояние переключателя является техническим признаком подтверждения. Не считать установку, обновление или наличие конфигурации подтверждением, если ключ имеет значение `false`.
+Не создавать отдельные consent-state-файлы, Ingress/веб-страницы активации, версии `accept_v2` или дополнительные переключатели. Для HA App принятие условий остаётся явным; для Linux Agent начальное `true` не считается юридическим согласием само по себе. Публичный rollout агентов с этим default ограничен общим legal gate и требованиями к правовому основанию. Не считать обновление уже существующей установки разрешением менять сохранённый оператором параметр.
 
 Имеющийся протокол v1 передаёт случайный UUID установки, поэтому его нужно указать среди отправляемых данных. Рядом с переключателем описывать только данные, которые отправляет App/Agent; определение страны и другие внутренние операции сервера здесь не описывать. При законодательной необходимости отдельного механизма отзыва/удаления данных действуют требования Product Telemetry Policy и legal review; это не дополнительная кнопка штатного интерфейса.
 
@@ -374,7 +377,9 @@ Any future retention change must update, together:
 Every product telemetry integration must cover at least:
 
 ```text
-fresh install with telemetry_enabled false -> log missing consent, exit without starting runtime or transmitting telemetry
+fresh HA App install with telemetry_enabled false -> log missing consent, exit without starting runtime or transmitting telemetry
+fresh Linux Agent install -> enabled defaults true (subject to legal rollout gate)
+agent explicitly configured enabled=false -> log disabled mandatory telemetry, exit without runtime or heartbeat
 user sets telemetry_enabled true -> runtime starts, identity generated and heartbeat scheduled
 only actual boolean state controls activation; no separate accept_v2, consent file, or UI
 switch set to false -> next start logs refusal and stops runtime
@@ -411,7 +416,8 @@ Before implementation:
 - [ ] confirm product version source;
 - [ ] define persistent telemetry state location;
 - [ ] retain existing telemetry_enabled bool (Agent: [telemetry] enabled);
-- [ ] default false; log refusal and terminate startup when false;
+- [ ] HA App default false (explicit acceptance); Linux Agent default true for fresh installs (legal gate applies);
+- [ ] log refusal and terminate startup without telemetry when explicitly set to false;
 - [ ] show accurate disclosure of all sent/derived fields next to switch, with link to shared telemetry policy.
 
 Implementation:
@@ -435,8 +441,8 @@ Verification:
 - [ ] country derived by server;
 - [ ] no client country field;
 - [ ] no IP persisted;
-- [ ] no telemetry is sent before explicit acceptance;
-- [ ] refusal logs lack of consent and exits without starting runtime;
+- [ ] HA App: no telemetry is sent before explicit acceptance; Linux Agent: public default-on rollout is legally cleared before enabling;
+- [ ] refusal/disabled telemetry is logged and exits without starting runtime;
 - [ ] true allows normal product and telemetry; false stops product, not telemetry alone;
 - [ ] deletion removes installation/history and rotates local identity;
 - [ ] continued use after deletion resumes later under a fresh identity.
@@ -473,7 +479,7 @@ docs/standards/RELEASE_POLICY.md
 First audit the current product implementation and report any contract mismatch.
 
 Required constraints:
-- existing telemetry_enabled bool is the single consent switch (Agent [telemetry] enabled): false -> log and exit; true -> normal runtime and mandatory telemetry;
+- existing telemetry_enabled bool (Agent [telemetry] enabled) remains the only switch: HA App default false, Linux Agent fresh-install default true; false -> log and exit; true -> normal runtime with mandatory telemetry; public default-on agent rollout remains legally gated;
 - protocol v1 payload is exact with telemetry_policy_version=2; do not add product-specific fields;
 - country is never sent by the client;
 - persistent UUIDv4 + 256-bit token survive restart/upgrade/restore;

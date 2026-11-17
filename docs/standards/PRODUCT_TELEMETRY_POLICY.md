@@ -34,31 +34,31 @@ Telemetry is not a remote-management channel and must not become one.
 
 Telemetry is part of normal operation for supported official DigitalHouses product releases.
 
-A supported product must:
+Supported products must send the minimum protocol heartbeat when telemetry participation is enabled and lawful, and must continue normal operation when the telemetry transport is temporarily unavailable. **Initial configuration depends on the product type:**
 
-- require explicit acceptance of the current DigitalHouses telemetry/privacy terms before entering normal supported runtime;
-- create and persist its telemetry installation identity only after, or as part of, that accepted activation flow;
-- send the minimum protocol heartbeat on the shared cadence after acceptance;
-- continue normal product operation when telemetry transport is temporarily unavailable.
+| Product type | Existing configuration key | Fresh-install default | Activation |
+| --- | --- | --- | --- |
+| Home Assistant App | `telemetry_enabled` | `false` | The user explicitly accepts the telemetry/privacy terms by setting `true` before normal runtime |
+| Linux Agent | `[telemetry] enabled` | `true` | Telemetry is enabled by default for a new agent installation; the operator is informed of what is sent and can explicitly set `false` |
 
-Telemetry is mandatory **after acceptance**, but acceptance itself is explicit.
+В обоих типах продуктов `false` при запуске означает: завершить запуск агента/приложения без отправки телеметрии, с записью в журнал причины отказа. При `true` — обычный runtime и обязательная телеметрия. Отключение после запуска применяется не позднее следующего старта. **Нет поддерживаемого режима работы продукта с намеренно отключённой телеметрией.** Недоступность сервера, DNS или сети не блокирует запуск и работу.
 
-Подтверждение выполняется одним существующим переключателем `telemetry_enabled` в штатной конфигурации Home Assistant App или в секции `[telemetry]` Linux Agent (`enabled = false|true`). Начальное значение — `false`. Рядом с переключателем показывается текст: «Для статистики DigitalHouses отправляются: название приложения/агента, версия и случайный идентификатор установки.» и ссылка на полную политику.
+Для HA App сохраняется прежняя модель: начальное значение `false`, явное принятие условий и текст возле переключателя: «Для статистики DigitalHouses отправляются: название приложения/агента, версия и случайный идентификатор установки.» со ссылкой на полную политику. Для Linux Agent те же сведения и ссылка должны быть доступны в штатной документации/инструкции установки. Не вводить новый интерфейс подтверждения, отдельные ключи, файлы принятия, Ingress или второй переключатель.
 
-`false` при запуске — записать в журнал «Не принято условие передачи статистики DigitalHouses — завершение работы» и завершить запуск продукта без отправки данных. `true` — запустить продукт и обязательную телеметрию. Никаких дополнительных экранов, Ingress, новых ключей подтверждения, кнопок, файлов принятия или второй проверки. Если после принятия переключатель снимают, при следующем запуске продукт также завершает работу. При недоступности сервера статистики продукт продолжает работать; это не проверка доступности сервера.
+**Юридическое ограничение:** значение `enabled = true` по умолчанию у агента само по себе **не является доказательством согласия**. Публичное включение новой модели допускается только после закрытия общего legal gate и подтверждения применимого правового основания / требований согласия. Телеметрийный идентификатор создаётся и heartbeat отправляется только в рамках разрешённой активации. Существующие критичные PVE/UPS установки не переводить на остановку при `false` без безопасной процедуры миграции. Изменение этой политики само по себе не меняет конфигурацию уже развёрнутых агентов.
 
-Текст возле переключателя описывает только передаваемые клиентом данные. Серверная обработка и определение страны в этом коротком тексте не описываются; полная политика раскрывает обработку данных отдельно. Пока клиент передаёт случайный идентификатор установки, его необходимо указывать среди отправляемых данных. Критические существующие установки (в частности UPS/PVE) не переводить на поведение «завершить работу» без безопасной процедуры обновления. Публичный rollout по-прежнему ограничен юридическим gate.
+Текст около переключателя/в документации перечисляет отправляемые клиентом поля, включая случайный идентификатор установки; серверная обработка страны раскрывается отдельно в полной политике.
 
-The user-facing model is:
+The Home Assistant App activation model remains:
 
 ```text
 review telemetry/privacy terms
-→ accept
+→ explicitly enable telemetry
 → product activates
 → mandatory telemetry operates
 ```
 
-If the user does not accept, the supported product must not enter its normal operating state and must not transmit telemetry.
+For Linux Agents, enabled-by-default is an installation configuration choice, not proof of consent. Legal clearance remains a prerequisite for public rollout.
 
 Where applicable law requires withdrawal of consent, withdrawal must stop future telemetry. The product may then move to an explicit `consent_required` / unsupported state rather than silently continuing normal supported operation without telemetry. Jurisdictions where conditioning product use on this consent is not legally valid remain blocked by the shared legal gate.
 
