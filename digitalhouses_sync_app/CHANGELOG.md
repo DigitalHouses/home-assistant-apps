@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.4.4
+
+- Automatically configure `homeassistant.packages: !include_dir_merge_named packages/` when canonical packages are published and the loader is missing.
+- Preserve existing configuration.yaml formatting and unrelated packages; safely reject conflicting loaders instead of overwriting them.
+- Back up and atomically update configuration.yaml through the existing transaction journal; reuse prior paths by package identity.
+- Request one Home Assistant quick YAML reload after changed packages without restarting HA. Report installation and reload state separately; newly added integrations can still require a normal HA restart.
+
 ## 0.4.3
 
 - Register a visible DigitalHouses panel using the supported Home Assistant Lovelace WebSocket API. Previous file-only sync did not register a panel.

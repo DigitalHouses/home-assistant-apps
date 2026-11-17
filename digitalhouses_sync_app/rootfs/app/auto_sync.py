@@ -33,8 +33,7 @@ DEFAULT_PACKAGE_DIR = PACKAGE_DIR / "dh"
 MAX_BYTES = 1_000_000
 MAX_FILES = 300
 FILE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]*\.yaml\Z", re.ASCII)
-PACKAGE_LOADER = re.compile(
-    r"(?m)^\s+packages:\s*!include_dir_merge_named\s+packages/?\s*(?:#.*)?$")
+PACKAGE_INCLUDE = "  packages: !include_dir_merge_named packages/\n"
 CATEGORIES = ("dashboards/ru", "packages/common", "packages/locales/ru")
 
 
@@ -75,6 +74,72 @@ def package_identity(raw: bytes) -> str:
     return keys[0]
 
 
+def configured_packages(raw: bytes) -> bytes | None:
+    """Add the canonical HA package include without reformatting user YAML.
+
+    Returns None when already configured. Unknown or conflicting configurations
+    are never overwritten; the caller reports a visible error instead.
+    """
+    try:
+        content = raw.decode("utf-8", "strict")
+        doc = yaml.compose(content, Loader=yaml.BaseLoader)
+    except (UnicodeError, yaml.YAMLError, RecursionError) as exc:
+        raise SyncError("configuration.yaml is invalid") from exc
+    if doc is not None and not isinstance(doc, yaml.MappingNode):
+        raise SyncError("configuration.yaml must be a YAML mapping")
+    home = []
+    if doc is not None:
+        for key, value in doc.value:
+            if not isinstance(key, yaml.ScalarNode):
+                raise SyncError("configuration.yaml has an invalid YAML key")
+            if key.value == "homeassistant":
+                home.append((key, value))
+    if len(home) > 1:
+        raise SyncError("Multiple homeassistant sections in configuration.yaml")
+    if not home:
+        separator = "" if not content else ("\n" if content.endswith("\n") else "\n\n")
+        return (content + separator + "homeassistant:\n" + PACKAGE_INCLUDE).encode("utf-8")
+
+    key, section = home[0]
+    if isinstance(section, yaml.MappingNode):
+        if section.flow_style:
+            raise SyncError("Inline homeassistant configuration must be preserved")
+        members = []
+        for subkey, subvalue in section.value:
+            if not isinstance(subkey, yaml.ScalarNode):
+                raise SyncError("Invalid homeassistant configuration")
+            if subkey.value == "packages":
+                members.append((subkey, subvalue))
+        if len(members) > 1:
+            raise SyncError("Multiple packages declarations in configuration.yaml")
+        if members:
+            value = members[0][1]
+            if (isinstance(value, yaml.ScalarNode)
+                    and value.tag == "!include_dir_merge_named"
+                    and value.value.strip().rstrip("/") == "packages"):
+                return None
+            raise SyncError("Existing packages configuration is not merge_named packages/")
+        indent = section.value[0][0].start_mark.column if section.value else key.start_mark.column + 2
+    elif (isinstance(section, yaml.ScalarNode) and
+          section.value == "" and section.style is None):
+        indent = key.start_mark.column + 2
+    else:
+        raise SyncError("Existing homeassistant configuration cannot be modified safely")
+
+    lines = content.splitlines(keepends=True)
+    line = key.start_mark.line
+    if line >= len(lines) or not lines[line].endswith("\n"):
+        raise SyncError("Unsupported homeassistant YAML layout")
+    # Preserve the surrounding YAML and comments verbatim.
+    lines.insert(line + 1, " " * indent + PACKAGE_INCLUDE.lstrip())
+    updated = "".join(lines).encode("utf-8")
+    try:
+        yaml.compose(updated.decode("utf-8"), Loader=yaml.BaseLoader)
+    except yaml.YAMLError as exc:
+        raise SyncError("Cannot safely update configuration.yaml") from exc
+    return updated
+
+
 def _safe_file(root: Path, relative: Path) -> Path:
     path = root / relative
     _safe_path(root, path)
@@ -86,15 +151,17 @@ def _safe_file(root: Path, relative: Path) -> Path:
 class AutoSync:
     def __init__(self, root: Path = Path("/homeassistant"),
                  data: Path = Path("/data/dh-sync-auto"), *, backend=None,
-                 publisher=None):
+                 publisher=None, reloader=None):
         self.root = Path(root)
         self.data = Path(data)
         self.backend = backend if backend is not None else BACKEND
         self.publisher = publisher
+        self.reloader = reloader
         self.lock = threading.RLock()
         self.report = {
             "last_run": "", "state": "Ожидание MQTT", "updated": 0,
             "unchanged": 0, "issues": [], "resources": [], "dashboard": None,
+            "packages": None,
         }
 
     def status(self) -> dict:
@@ -223,10 +290,21 @@ class AutoSync:
             if len(package_keys(_safe_file(self.root, matches[0]).read_bytes())) != 1:
                 raise SyncError("Shared local package file cannot be replaced")
             return matches[0]
-        if not PACKAGE_LOADER.search(
-                (self.root / "configuration.yaml").read_text(encoding="utf-8")):
-            raise SyncError("Home Assistant packages loader is not configured")
         return DEFAULT_PACKAGE_DIR / name
+
+    def _ensure_package_loader(self) -> str:
+        """Install the HA packages include with the ordinary backup transaction."""
+        file = _safe_file(self.root, Path("configuration.yaml"))
+        old = file.read_bytes() if file.exists() else b""
+        new = configured_packages(old)
+        if new is None:
+            return "Current"
+        source = {
+            "bytes": new, "source": "dh-sync/package-loader",
+            "commit": "local-configuration",
+        }
+        self._apply_one(Path("configuration.yaml"), source)
+        return "Configured"
 
     def _apply_one(self, relative: Path, source: dict) -> bool:
         """One durable file transaction. Failure restores original automatically."""
@@ -315,6 +393,7 @@ class AutoSync:
                 "last_run": datetime.now(timezone.utc).isoformat(),
                 "state": "OK", "updated": 0, "unchanged": 0,
                 "issues": [], "resources": [], "dashboard": None,
+                "packages": None,
             }
             try:
                 self._check_root()
@@ -324,9 +403,21 @@ class AutoSync:
                 views = self._local_views()
                 packages = self._local_packages()
                 destinations = set()
+                package_sources = [s for s in resources if s["kind"] == "package"]
+                loader_problem = None
+                if package_sources:
+                    try:
+                        loader_state = self._ensure_package_loader()
+                        report["packages"] = {"loader": loader_state, "reload": "Not needed"}
+                    except Exception as exc:
+                        loader_problem = str(exc)[:150]
+                        report["packages"] = {"loader": "Unavailable", "reload": "Not needed"}
+                changed_packages = 0
                 for source in resources:
                     label = source["product"] + " / " + source["name"]
                     try:
+                        if source["kind"] == "package" and loader_problem:
+                            raise SyncError("Packages configuration: " + loader_problem)
                         dest = self._destination(source, views, packages)
                         if dest in destinations:
                             raise SyncError("Two resources have same destination")
@@ -337,6 +428,8 @@ class AutoSync:
                                 raise SyncError("Destination package has another key")
                         if self._apply_one(dest, source):
                             report["updated"] += 1
+                            if source["kind"] == "package":
+                                changed_packages += 1
                             outcome = "Updated"
                             # Refresh identities for subsequent files in same pass.
                             if source["kind"] == "view":
@@ -350,6 +443,17 @@ class AutoSync:
                         outcome = "Skipped: " + str(exc)[:150]
                         report["issues"].append(label + ": " + str(exc)[:150])
                     report["resources"].append({"name": label, "status": outcome})
+                if changed_packages or (report["packages"] and
+                                        report["packages"]["loader"] == "Configured"):
+                    if self.reloader is not None:
+                        try:
+                            self.reloader()
+                            report["packages"]["reload"] = "Requested"
+                        except Exception as exc:
+                            report["packages"]["reload"] = "Unavailable"
+                            report["issues"].append("Packages quick reload: " + str(exc)[:150])
+                    else:
+                        report["packages"]["reload"] = "Not available"
                 if self.publisher is not None:
                     try:
                         report["dashboard"] = self.publisher.sync()

@@ -7,8 +7,9 @@ import shutil
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
-from auto_sync import AutoSync, package_identity, package_keys
+from auto_sync import AutoSync, configured_packages, package_identity, package_keys
 
 REPO = "https://github.com/DigitalHouses/any-repo"
 CLAIMS = {
@@ -89,6 +90,93 @@ class AutomaticSyncTests(unittest.TestCase):
         result = self.app.sync(CLAIMS)
         self.assertEqual(result["state"], "OK", result["issues"])
         self.assertEqual(ui.read_bytes(), original)
+
+    def test_missing_loader_is_installed_without_confirmation(self):
+        config = self.root / "configuration.yaml"
+        config.write_text(
+            "default_config:\n\n# local note\nhomeassistant:\n"
+            "  name: Existing Home\n  time_zone: Asia/Almaty\n")
+        called = []
+        self.app.reloader = lambda: called.append("reload")
+        report = self.app.sync(CLAIMS)
+        self.assertEqual(report["state"], "OK", report["issues"])
+        self.assertEqual(report["updated"], 2)
+        self.assertEqual(report["packages"],
+                         {"loader": "Configured", "reload": "Requested"})
+        self.assertEqual(called, ["reload"])
+        self.assertIn("  packages: !include_dir_merge_named packages/\n",
+                      config.read_text())
+        self.assertIn("name: Existing Home", config.read_text())
+        self.assertIn("# local note", config.read_text())
+        self.assertEqual((self.root / "packages/dh/dh_example_package.yaml").read_bytes(),
+                         PACKAGE)
+        backup = [j / "original.yaml" for j in self.app.data.glob("tx-*")
+                  if json.loads((j / "manifest.json").read_text())["path"]
+                  == "configuration.yaml"]
+        self.assertEqual(len(backup), 1)
+        self.assertIn(b"time_zone: Asia/Almaty", backup[0].read_bytes())
+        again = self.app.sync(CLAIMS)
+        self.assertEqual(again["unchanged"], 2)
+        self.assertEqual(again["packages"], {"loader": "Current", "reload": "Not needed"})
+        self.assertEqual(called, ["reload"])
+
+    def test_no_homeassistant_block_adds_package_loader(self):
+        (self.root / "configuration.yaml").write_text(
+            "default_config:\nlogger:\n  default: info\n")
+        report = self.app.sync(CLAIMS)
+        self.assertEqual(report["updated"], 2, report["issues"])
+        self.assertIn("homeassistant:\n  packages: !include_dir_merge_named packages/",
+                      (self.root / "configuration.yaml").read_text())
+
+    def test_missing_configuration_yaml_created_automatically(self):
+        (self.root / "configuration.yaml").unlink()
+        report = self.app.sync(CLAIMS)
+        self.assertEqual(report["state"], "OK", report["issues"])
+        self.assertEqual((self.root / "configuration.yaml").read_text(),
+                         "homeassistant:\n  packages: !include_dir_merge_named packages/\n")
+
+    def test_conflicting_packages_loader_never_overwritten(self):
+        config = self.root / "configuration.yaml"
+        old = "homeassistant:\n  packages: !include_dir_named packages/\n"
+        config.write_text(old)
+        report = self.app.sync(CLAIMS)
+        self.assertEqual(report["state"], "Partial", report["issues"])
+        self.assertEqual(report["updated"], 1)
+        self.assertIn("packages configuration", report["issues"][0].lower())
+        self.assertEqual(config.read_text(), old)
+        self.assertFalse((self.root / "packages/dh/dh_example_package.yaml").exists())
+
+    def test_unrelated_packages_and_missing_source_are_preserved(self):
+        root = self.root / "packages/Global"
+        root.mkdir(parents=True)
+        local = root / "private.yaml"
+        local.write_text("private_automation:\n  automation: []\n")
+        self.backend.raw.clear()
+        config = self.root / "configuration.yaml"
+        config.write_text("default_config:\n")
+        before = config.read_bytes()
+        report = self.app.sync(CLAIMS)
+        self.assertEqual(report["state"], "OK", report["issues"])
+        self.assertEqual(report["updated"], 0)
+        self.assertEqual(config.read_bytes(), before)
+        self.assertTrue(local.exists())
+
+    def test_loader_write_not_performed_on_duplicate_homeassistant(self):
+        config = self.root / "configuration.yaml"
+        old = "homeassistant:\n  name: One\nhomeassistant:\n  name: Two\n"
+        config.write_text(old)
+        report = self.app.sync(CLAIMS)
+        self.assertEqual(report["state"], "Partial")
+        self.assertEqual(config.read_text(), old)
+        self.assertIn("Multiple homeassistant", report["issues"][0])
+
+    def test_quick_reload_failure_reports_partial_but_keeps_files(self):
+        self.app.reloader = lambda: (_ for _ in ()).throw(RuntimeError("API offline"))
+        report = self.app.sync(CLAIMS)
+        self.assertEqual(report["state"], "Partial", report["issues"])
+        self.assertEqual(report["packages"]["reload"], "Unavailable")
+        self.assertEqual((self.root / "packages/dh/dh_example_package.yaml").read_bytes(),
+                         PACKAGE)
 
     def test_zero_click_install_and_second_pass_no_changes(self):
         first = self.app.sync(CLAIMS)
@@ -220,6 +308,43 @@ class AutomaticSyncTests(unittest.TestCase):
         self.assertEqual(report["updated"], 0)
         self.assertTrue((self.views / "10_first.yaml").exists())
         self.assertTrue((self.root / "packages/dh/dh_example_package.yaml").exists())
+
+
+class PackageLoaderParsingTests(unittest.TestCase):
+    def test_quick_reload_uses_official_core_action(self):
+        from ha_core import CoreAPI
+        api = CoreAPI(token="unit-test-only")
+        with patch.object(api, "_rest", return_value=[]) as request:
+            api.reload_configuration()
+        request.assert_called_once_with(
+            "services/homeassistant/reload_all", post=True, timeout=45)
+
+    def test_quick_reload_response_must_be_valid(self):
+        from ha_core import CoreAPI
+        api = CoreAPI(token="unit-test-only")
+        with patch.object(api, "_rest", return_value={}) as request:
+            with self.assertRaisesRegex(ValueError, "reload_all"):
+                api.reload_configuration()
+
+    def test_loader_variations(self):
+        for base in ("packages", "packages/"):
+            with self.subTest(base=base):
+                self.assertIsNone(configured_packages(
+                    ("homeassistant:\n  packages: !include_dir_merge_named " +
+                     base + "\n").encode()))
+
+    def test_empty_homeassistant_mapping(self):
+        self.assertEqual(configured_packages(b"homeassistant:\n"),
+                         b"homeassistant:\n  packages: !include_dir_merge_named packages/\n")
+
+    def test_reject_unmanaged_include_and_flow_mappings(self):
+        for config in (b"homeassistant: !include home.yaml\n",
+                       b"homeassistant: {}\n",
+                       b"homeassistant: null\n",
+                       b"homeassistant:\n  packages: !include packages.yaml\n"):
+            with self.subTest(config=config):
+                with self.assertRaisesRegex(ValueError, "homeassistant|packages"):
+                    configured_packages(config)
 
 
 if __name__ == "__main__":

@@ -22,7 +22,7 @@ class CoreAPI:
             raise SyncError("Only Supervisor's local Core API proxy is supported")
         self.host = host
 
-    def _rest(self, path: str, *, post: bool = False):
+    def _rest(self, path: str, *, post: bool = False, timeout: int = 12):
         req = urllib.request.Request(
             self.host + "/core/api/" + path,
             data=b"{}" if post else None,
@@ -33,7 +33,7 @@ class CoreAPI:
             method="POST" if post else "GET",
         )
         try:
-            with urllib.request.urlopen(req, timeout=12) as response:
+            with urllib.request.urlopen(req, timeout=timeout) as response:
                 if response.status != 200:
                     raise SyncError("HA API returned HTTP " + str(response.status))
                 return json.loads(response.read(2_000_000))
@@ -57,6 +57,12 @@ class CoreAPI:
     def check_config(self) -> bool:
         value = self._rest("config/core/check_config", post=True)
         return isinstance(value, dict) and value.get("result") == "valid"
+
+    def reload_configuration(self) -> None:
+        """Apply reloadable YAML changes without restarting Home Assistant."""
+        result = self._rest("services/homeassistant/reload_all", post=True, timeout=45)
+        if not isinstance(result, list):
+            raise SyncError("Invalid Home Assistant reload_all response")
 
     def dashboard(self) -> dict:
         try:

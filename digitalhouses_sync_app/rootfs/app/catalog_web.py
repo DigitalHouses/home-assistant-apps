@@ -195,6 +195,22 @@ def make_server(sources: ProductSources, inventory: Inventory, *, version: str =
                     _h(status.get("last_run") or "ожидание первого запуска") +
                     "</small></p>"
                 )
+                packages = status.get("packages")
+                if isinstance(packages, dict):
+                    loader = {"Configured": "подключение создано", "Current": "подключены",
+                              "Unavailable": "ошибка подключения"}.get(
+                                  packages.get("loader"), "—")
+                    reload = {"Requested": "YAML-перезагрузка запрошена",
+                              "Unavailable": "YAML-перезагрузка недоступна",
+                              "Not available": "YAML-перезагрузка недоступна",
+                              "Not needed": "изменений нет"}.get(
+                                  packages.get("reload"), "—")
+                    summary += ("<p>Packages: <b>" + _h(loader) +
+                                "</b> · " + _h(reload) + "</p>")
+                    if packages.get("reload") != "Not needed":
+                        summary += ("<p class='muted'>Новые интеграции в пакетах "
+                                    "могут потребовать обычного перезапуска HA. "
+                                    "DH Sync не перезапускает Home Assistant.</p>")
                 dashboard = status.get("dashboard")
                 if isinstance(dashboard, dict) and dashboard.get("url"):
                     summary += ("<p>Панель DigitalHouses: <b>" +
