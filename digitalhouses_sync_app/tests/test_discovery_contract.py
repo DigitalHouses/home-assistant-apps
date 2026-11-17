@@ -6,7 +6,7 @@ from pathlib import Path
 
 from discovery_contract import (
     DiscoveryError, ProductSources, canonical_repository,
-    parse_sync_topic, safe_product_path, validate_sync_message,
+    parse_sync_topic, safe_dashboard_slug, safe_product_path, validate_sync_message,
 )
 
 PVE = "DigitalHouses/Global/digitalhouses_pve_agent/server-1/sync"
@@ -104,6 +104,30 @@ class SourceOwnershipTests(unittest.TestCase):
             )
             self.assertEqual(item["product_path"], folder)
         self.assertEqual(safe_product_path("../secrets", "recorder"), "recorder")
+
+    def test_dashboard_field_is_optional_and_persisted(self):
+        _, legacy = validate_sync_message(PVE, payload())
+        self.assertNotIn("dashboard", legacy)
+        topic, source = validate_sync_message(PVE, payload(dashboard="dh-system"))
+        self.assertEqual(topic, "digitalhouses_pve_agent/server-1")
+        self.assertEqual(source["dashboard"], "dh-system")
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / "sources.json"
+            registry = ProductSources(path)
+            self.assertTrue(registry.apply(PVE, payload(dashboard="dh-system")))
+            registry.save()
+            self.assertEqual(ProductSources(path).snapshot()[topic]["dashboard"],
+                             "dh-system")
+
+    def test_invalid_dashboard_is_fallback_with_warning(self):
+        for candidate in ("../dh-system", "DH SYSTEM", "dh_system", "dh-system/",
+                          "", 42, ["dh-system"], "a" * 65):
+            with self.subTest(dashboard=candidate):
+                _, item = validate_sync_message(PVE, payload(dashboard=candidate))
+                self.assertEqual(item["dashboard"], "digital-houses")
+                self.assertIn("dashboard_warning", item)
+        self.assertEqual(safe_dashboard_slug("dh-climate"), "dh-climate")
+        self.assertEqual(safe_dashboard_slug("dh-system"), "dh-system")
 
     def test_non_owner_is_always_rejected(self):
         with self.assertRaises(DiscoveryError):

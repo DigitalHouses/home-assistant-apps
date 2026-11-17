@@ -21,7 +21,8 @@ from pathlib import Path
 import yaml
 
 from apply_service import _atomic_replace, _file_sync, _save_json
-from discovery_contract import canonical_repository, safe_product_path
+from discovery_contract import (DEFAULT_DASHBOARD, canonical_repository,
+                                safe_product_path, safe_dashboard_slug)
 from git_source import BACKEND
 from local_audit import _local_snapshot, _safe_path
 from resource_preview import parse_view
@@ -223,6 +224,28 @@ class AutoSync:
         """Resolve each Git repository once; any owned product is eligible."""
         resources, issues = [], []
         seen_products = set()
+        routes_by_source = {}
+        conflicts = set()
+        # Multiple instances of one agent share the same views. Explicit
+        # routing wins over legacy instances; inconsistent explicit routes
+        # are reported rather than assigning the same view arbitrarily.
+        for identity, claim in sorted(claims.items()):
+            try:
+                key = (canonical_repository(claim["repository"]),
+                       safe_product_path(claim.get("product_path"), claim["product_id"]))
+            except (KeyError, TypeError, ValueError):
+                continue
+            explicit = "dashboard" in claim
+            route = safe_dashboard_slug(claim.get("dashboard"))
+            previous = routes_by_source.get(key)
+            if previous is None or (explicit and not previous[1]):
+                routes_by_source[key] = (route, explicit)
+            elif explicit and previous[1] and previous[0] != route:
+                conflicts.add(key)
+            if claim.get("dashboard_warning"):
+                issues.append(identity + ": " + str(claim["dashboard_warning"])[:100])
+        for key in sorted(conflicts):
+            issues.append(key[1] + ": conflicting MQTT dashboard routing")
         for identity, claim in sorted(claims.items()):
             try:
                 repository = canonical_repository(claim["repository"])
@@ -244,6 +267,8 @@ class AutoSync:
                         if not raw or len(raw) > MAX_BYTES:
                             raise SyncError("Git YAML file missing or too large")
                         if category == "dashboards/ru":
+                            if source_id in conflicts:
+                                continue
                             metadata = parse_view(raw, source, product)
                             key = metadata["path"]
                             kind = "view"
@@ -254,6 +279,8 @@ class AutoSync:
                             "product": product, "repository": repository,
                             "source": source, "commit": commit, "kind": kind,
                             "identity": key, "name": name, "bytes": raw,
+                            "dashboard": routes_by_source[source_id][0]
+                            if kind == "view" else None,
                         })
             except Exception as exc:
                 issues.append(identity + ": " + str(exc)[:100])
@@ -413,6 +440,7 @@ class AutoSync:
                         loader_problem = str(exc)[:150]
                         report["packages"] = {"loader": "Unavailable", "reload": "Not needed"}
                 changed_packages = 0
+                view_routes = {}
                 for source in resources:
                     label = source["product"] + " / " + source["name"]
                     try:
@@ -439,6 +467,8 @@ class AutoSync:
                         else:
                             report["unchanged"] += 1
                             outcome = "Current"
+                        if source["kind"] == "view":
+                            view_routes[source["identity"]] = source["dashboard"]
                     except Exception as exc:
                         outcome = "Skipped: " + str(exc)[:150]
                         report["issues"].append(label + ": " + str(exc)[:150])
@@ -456,7 +486,8 @@ class AutoSync:
                         report["packages"]["reload"] = "Not available"
                 if self.publisher is not None:
                     try:
-                        report["dashboard"] = self.publisher.sync()
+                        report["dashboard"] = self.publisher.sync(view_routes)
+                        report["issues"].extend(report["dashboard"].get("issues", []))
                     except Exception as exc:
                         report["issues"].append("DigitalHouses Dashboard: " + str(exc)[:150])
                 if report["issues"]:
