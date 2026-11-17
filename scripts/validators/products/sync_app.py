@@ -22,7 +22,9 @@ def validate_sync_app(root: Path, app: Path, context: dict) -> None:
         app / "rootfs/app/resource_preview.py",
         app / "rootfs/app/git_source.py",
         app / "rootfs/app/auto_sync.py",
+        app / "rootfs/app/dashboard_runtime.py",
         app / "tests/test_auto_sync.py",
+        app / "tests/test_dashboard_runtime.py",
         app / "tests/test_git_source.py",
         app / "rootfs/app/local_audit.py",
         app / "rootfs/app/apply_service.py",
@@ -68,8 +70,10 @@ def validate_sync_app(root: Path, app: Path, context: dict) -> None:
     maps = config.get("map", [])
     if maps != [{"type": "homeassistant_config", "read_only": False}]:
         fail("DH Sync requires a writable HA configuration bind for automatic YAML sync")
-    if config.get("homeassistant_api"):
-        fail("DH Sync must not access HA Core API")
+    # Registered dashboards require the official HA WebSocket API. The
+    # Supervisor token is used only for the managed DigitalHouses panel.
+    if config.get("homeassistant_api") is not True:
+        fail("DH Sync requires Home Assistant Core API for Dashboard registration")
     if not config.get("ingress") or config.get("ingress_port") != 8099:
         fail("DH Sync requires admin-only Ingress at port 8099")
     if config.get("panel_admin") is not True:
