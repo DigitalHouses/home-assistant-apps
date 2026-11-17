@@ -118,6 +118,7 @@ def test_payload_schema_identity_from_registry_and_running_version():
         "version": version,
         "repository": "https://github.com/DigitalHouses/home-assistant-apps",
         "product_path": "digitalhouses_pve_agent",
+        "dashboard": "dh-system",
     }
     assert type(payload["schema"]) is int
     assert payload["schema"] == 1
@@ -149,9 +150,20 @@ def test_connect_and_reconnect_publish_one_retained_qos1_sync_message_each():
     assert first[0][2:] == (1, True)
     payload = json.loads(first[0][1])
     assert payload["version"] == "9.8.7"  # not copied from VERSION or example
+    assert payload["dashboard"] == "dh-system"
+    assert {key: payload[key] for key in (
+        "schema", "product_id", "type", "version", "repository", "product_path"
+    )} == {
+        "schema": 1,
+        "product_id": "digitalhouses_pve_agent",
+        "type": "agent",
+        "version": "9.8.7",
+        "repository": "https://github.com/DigitalHouses/home-assistant-apps",
+        "product_path": "digitalhouses_pve_agent",
+    }
     assert payload["product_id"] == topics.sync.split("/")[2]
     assert set(payload) == {
-        "schema", "product_id", "type", "version", "repository", "product_path"
+        "schema", "product_id", "type", "version", "repository", "product_path", "dashboard"
     }
     assert all(secret not in first[0][1] for secret in (
         "test_password", "test_user", "node_a", "localhost", "192.168",
@@ -166,7 +178,10 @@ def test_connect_and_reconnect_publish_one_retained_qos1_sync_message_each():
     assert not bridge.connected.is_set()
     assert len([p for p in client.published if p[0] == topics.sync]) == 1
     bridge._on_connect(client, None, None, SimpleNamespace(is_failure=False), None)
-    assert len([p for p in client.published if p[0] == topics.sync]) == 2
+    sync_messages = [p for p in client.published if p[0] == topics.sync]
+    assert len(sync_messages) == 2
+    assert all((qos, retain) == (1, True) for _, _, qos, retain in sync_messages)
+    assert json.loads(sync_messages[0][1]) == json.loads(sync_messages[1][1])
 
 
 def test_connect_rejected_does_not_publish_or_schedule_extra_retries():
