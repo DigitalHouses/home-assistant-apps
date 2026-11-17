@@ -1,0 +1,141 @@
+# DigitalHouses — DH Sync: стандарт публикации для разработчиков App/Agent
+
+**Статус:** обязательный, целевая архитектура DH Sync 0.6.0 (18.11.2026).
+**Область:** любые DigitalHouses Apps/Agents, публикующие ресурсы для Home Assistant через DH Sync.
+**Единственный действующий контракт DH Sync:** этот файл заменяет прежние Resource Standard, Discovery Contract v1 и отдельные описания маршрутизации Dashboard/View.
+
+## 1. Разделение ответственности
+
+| Компонент | За что отвечает |
+| --- | --- |
+| App/Agent | Работа продукта, MQTT retained `/sync`, собственные канонические Views и Packages в GitHub |
+| DH Sync | Обнаружение продуктов по MQTT, получение GitHub YAML, установка Packages и публикация Views |
+| `digitalhouses_sync_app/dashboards/*.yaml` | Создание Dashboard (панели), доступ, название, иконка, перечень и **порядок** Views |
+| Home Assistant | Отображение Dashboard → View (вкладка) → Section → Card и штатное применение YAML |
+
+Продукт **не** создаёт Dashboard и не управляет размещением своих Views. Одна каноническая View может присутствовать в нескольких панелях; место, порядок и внешний вид вкладки задаются **только в файле панели DH Sync**.
+
+## 2. MQTT — единственный реестр продуктов
+
+App/Agent публикует объявление **на каждом успешном подключении и переподключении** к своему существующему MQTT-клиенту: **QoS 1, retain=true**.
+
+Один экземпляр:
+
+```text
+DigitalHouses/Global/<product_id>/sync
+```
+
+Несколько экземпляров одного агента:
+
+```text
+DigitalHouses/Global/<product_id>/<instance_id>/sync
+```
+
+Пример содержимого (не фиксировать версию в коде):
+
+```json
+{
+  "schema": 1,
+  "product_id": "digitalhouses_internet_app",
+  "type": "app",
+  "version": "0.1.25",
+  "repository": "https://github.com/DigitalHouses/home-assistant-apps",
+  "product_path": "digitalhouses_internet_app"
+}
+```
+
+- `product_id` должен соответствовать продукту в MQTT topic. Для DH Sync идентичность определяет **сам topic**.
+- `repository` — прямой HTTPS GitHub URL с владельцем **DigitalHouses**; это единственное правило допуска источника.
+- `product_path` — реальный относительный путь к каталогу продукта в репозитории; `.` допустим для отдельного репозитория продукта.
+- `type` и `version` отражают выполняющийся продукт, но **не** ограничивают синхронизацию. `schema` — информационное поле текущего формата.
+- Не включать в `/sync` `dashboard`, `panel`, `view`, `order`, права доступа, URL файлов или Git SHA. Старые `dashboard` в уже опубликованных retained-сообщениях **игнорируются** DH Sync 0.6.0; срочно обновлять из-за них агент не требуется.
+- `availability` и LWT живут отдельно от `/sync`. Offline не означает удаление продукта; при обычном отключении **не очищать** retained `/sync`.
+- Не добавлять отдельный MQTT-клиент, heartbeat или таймер только ради DH Sync. Не передавать пароли, токены, IP дома и другие секреты в `/sync`.
+
+## 3. Что публикует разработчик в GitHub
+
+```text
+<product_path>/
+  dashboards/
+    ru/
+      <descriptive_view>.yaml
+      <another_view>.yaml
+  packages/
+    common/
+      <base_package>.yaml
+    locales/
+      ru/
+        <notification_package>.yaml
+  examples/
+    ...                         # Не устанавливается DH Sync
+```
+
+Каталог Views и/или Packages может отсутствовать: пустые YAML-файлы создавать не нужно. Файлы размещаются в **основной ветке** GitHub-репозитория продукта. Достаточно нового коммита с изменением содержимого YAML — отдельные регистрации и release продукта для обновления Views/Packages не нужны.
+
+### Views
+
+Каждый `dashboards/ru/*.yaml` содержит **одну самостоятельную Lovelace View**, а не целую Dashboard. Используйте только штатную структуру Home Assistant (например, `type: sections`, `sections`, `cards`).
+
+```yaml
+# DH-View-Version: 1.0.1
+# DH-View-Date: 2026-11-18
+title: Internet
+path: internet
+icon: mdi:web
+type: sections
+max_columns: 4
+sections: []
+```
+
+- `title` и стабильный `path` обязательны. Пара **`product_id + path`** определяет View для DH Sync. Не переименовывайте `path` без осознанной замены ссылки в файле панели.
+- Дата и `DH-View-Version` в комментариях — **необязательная справочная информация**, не условия установки; Git commit обеспечивает историю.
+- Не указывайте в шапке View `DH-Dashboard`, `DH-Order`, `dh_dashboard_admin_only` или другие способы размещения и управления панелью.
+- Для администраторов и обычных пользователей можно публиковать **две отдельные Views одного продукта**: полную и сокращённую. Публикация одной полной View в публичной панели не обеспечивает разграничения доступа.
+
+### Packages
+
+`packages/common/*.yaml` — переносимые пакеты; `packages/locales/ru/*.yaml` — русские локализованные пакеты (включая уведомления). **Один уникальный верхнеуровневый package key на файл**. Не меняйте устоявшиеся `entity_id` и automation IDs без действительной необходимости.
+
+Не включайте в канонический Package адреса конкретного дома, секреты, персональные `notify.*`, частные скрипты и неподдерживаемые зависимости. Для событий и уведомлений также действует [DigitalHouses Events & Notifications Standard](EVENTS_AND_NOTIFICATIONS_STANDARD.md).
+
+DH Sync автоматически устанавливает/обновляет Packages и запрашивает штатную быструю перезагрузку YAML. Некоторые интеграции активируются лишь после обычного перезапуска Home Assistant; сам DH Sync его не делает.
+
+## 4. Как View попадает в панель
+
+Файл Dashboard **не принадлежит продукту**. Его редактируют в профильном чате/модуле **DH Sync**:
+
+```text
+digitalhouses_sync_app/dashboards/dh-system.yaml
+digitalhouses_sync_app/dashboards/dh-home.yaml
+digitalhouses_sync_app/dashboards/dh-climate.yaml
+```
+
+В файле панели используются **название, иконка, `show_in_sidebar`, `require_admin`** и упорядоченный список ссылок `product + path`. Порядок строк в `views` = порядок вкладок; **отдельного `order` нет**. Параметры `title`, `icon`, `show_icon_and_title` можно переопределять отдельно в каждом размещении средствами штатного Lovelace.
+
+Разработчик продукта публикует свою View и передаёт DH Sync её `product_id` и `path` для включения в нужную панель. **Код приложения/агента и его MQTT объявление из-за изменения панелей не меняют.**
+
+Пример ссылки в YAML панели (это пример для понимания, не файл продукта):
+
+```yaml
+views:
+  - product: digitalhouses_internet_app
+    path: internet
+    title: Internet
+    icon: mdi:web
+    show_icon_and_title: true
+```
+
+В панели отображаются только Views продуктов из retained MQTT `/sync`. Продукт без записи в панели остаётся в реестре, а его Packages продолжают устанавливаться. Несколько панелей могут использовать одну и ту же View. Не пытайтесь регистрировать Dashboard через `configuration.yaml`, `.storage` или код App/Agent.
+
+## 5. Граница изменений и приёмка
+
+Разработчик **меняет только свой App/Agent и его канонические файлы**. Общие панели, DH Sync и другие продукты — ответственность профильного чата DH Sync. Не добавлять проверки установленной версии, `availability`, список разрешённых продуктов, ручной Apply или совместимость по версиям.
+
+Перед PR или выпуском проверить:
+1. После обычного MQTT connect/reconnect есть правильный retained `/sync` (QoS 1), с актуальными `repository` и `product_path`.
+2. Отсутствуют требования `availability=online`, `dashboard`, `order`, разрешения/версии от DH Sync.
+3. Все опубликованные Views — самостоятельные валидные YAML с уникальными стабильными `path`; тексты/иконки — штатные Lovelace.
+4. Каждый опубликованный Package переносим и имеет свой уникальный верхнеуровневый ключ; `examples/` не участвуют.
+5. Тесты самого продукта и `python scripts/validate_repository.py` проходят; остальные Apps/Agents не меняются.
+
+**Принцип:** MQTT сообщает **кто есть**, GitHub продукта содержит **что показывать/устанавливать**, а YAML панелей DH Sync определяет **где, в каком порядке и с каким доступом показывать**. История изменений — GitHub. Миграция старых панелей и YAML не требуется.

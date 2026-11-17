@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.6.0
+
+- Declarative GitHub panels in `digitalhouses_sync_app/dashboards/*.yaml`, ordered Views and native HA title/icon/sidebar/admin properties.
+- One canonical product View can be displayed in multiple panels. A product is discovered only from retained MQTT `/sync`.
+- Ignore all old MQTT `dashboard` routing; no legacy panel or view migrations.
+- Publish Views directly to Lovelace Storage via the supported WebSocket API; continue safe automatic package synchronization.
+- Single [DH Sync Developer Standard](../docs/standards/DH_SYNC_DEVELOPER_STANDARD.md) for App/Agent MQTT, canonical Views and Packages; obsolete standalone Sync contracts removed.
+- Tests for reusable Views, ordering, admin access, idempotence and absent products.
+
 ## 0.5.1
 
 - MQTT retained `DigitalHouses/Global/+/sync` and `+/+/sync` are the sole product registry: no disk-loaded `product_sources.json` and no local product discovery fallback.

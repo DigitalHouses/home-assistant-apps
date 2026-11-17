@@ -1,4 +1,4 @@
-"""Live Dashboard registration: YAML files -> HA official WebSocket API."""
+"""GitHub panel YAML -> HA Storage dashboards via official WebSocket."""
 from __future__ import annotations
 
 import json
@@ -6,296 +6,173 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from dashboard_runtime import DashboardPublisher, DashboardError, URL_PATH
-from auto_sync import AutoSync
-from test_auto_sync import FakeBackend, CLAIMS
+from dashboard_runtime import DashboardPublisher, DashboardError
+from panel_config import parse_panel, PanelError
 
 
-class FakeSession:
-    def __init__(self, backend):
-        self.backend = backend
+def panel(slug="dh-system", refs=None, *, admin=True, title="DH System"):
+    refs = refs if refs is not None else [{"product": "pve", "path": "proxmox"}]
+    return {"slug": slug, "title": title, "icon": "mdi:server",
+            "show_in_sidebar": True, "require_admin": admin, "views": refs}
+
+
+def source(product="pve", path="proxmox", title="Proxmox"):
+    return {(product, path): {"bytes": (
+        f"title: {title}\npath: {path}\ntype: sections\nsections: []\n"
+    ).encode()}}
+
+
+class FakeWS:
+    def __init__(self):
+        self.entries = []
+        self.configs = {}
+        self.calls = []
+        self.fail_save = False
+
+    def session(self):
+        return self
 
     def __enter__(self):
         return self
 
-    def __exit__(self, *args):
+    def __exit__(self, *_):
         return False
 
     def request(self, kind, **kwargs):
-        self.backend.calls.append((kind, kwargs))
+        self.calls.append((kind, kwargs))
         if kind == "lovelace/dashboards/list":
-            return list(self.backend.dashboards)
+            return json.loads(json.dumps(self.entries))
         if kind == "lovelace/dashboards/create":
-            if self.backend.create_fail:
-                raise DashboardError("creation failed")
-            self.backend.dashboards.append(
-                {"url_path": kwargs["url_path"], "mode": "storage",
-                 "title": kwargs["title"], "show_in_sidebar": kwargs["show_in_sidebar"]})
-            return {"id": "digital-houses"}
+            entry = {"id": len(self.entries) + 1, "mode": "storage", **kwargs}
+            self.entries.append(entry)
+            return {"id": entry["id"]}
+        if kind == "lovelace/dashboards/update":
+            entry = next(e for e in self.entries if e.get("id") == kwargs["dashboard_id"])
+            entry.update({k: v for k, v in kwargs.items() if k != "dashboard_id"})
+            return {}
         if kind == "lovelace/config":
-            config = self.backend.configs.get(kwargs.get("url_path", URL_PATH))
-            if config is None:
+            slug = kwargs["url_path"]
+            if slug not in self.configs:
                 raise DashboardError("lovelace/config: config_not_found")
-            return json.loads(json.dumps(config))
+            return json.loads(json.dumps(self.configs[slug]))
         if kind == "lovelace/config/save":
-            if self.backend.save_fail:
+            if self.fail_save:
                 raise DashboardError("save failed")
-            self.backend.configs[kwargs["url_path"]] = json.loads(
-                json.dumps(kwargs["config"]))
+            self.configs[kwargs["url_path"]] = json.loads(json.dumps(kwargs["config"]))
             return None
         raise AssertionError(kind)
 
 
-class FakeTransport:
-    def __init__(self):
-        self.dashboards = [{"url_path": "lovelace", "mode": "storage", "title": "Overview"}]
-        self.configs = {}
-        self.calls = []
-        self.create_fail = False
-        self.save_fail = False
-
-    @property
-    def config(self):
-        return self.configs.get(URL_PATH)
-
-    @config.setter
-    def config(self, value):
-        self.configs[URL_PATH] = value
-
-    def session(self):
-        return FakeSession(self)
-
-
-class DashboardRuntimeTests(unittest.TestCase):
+class DeclarativeDashboardTests(unittest.TestCase):
     def setUp(self):
-        temp = tempfile.TemporaryDirectory()
-        self.addCleanup(temp.cleanup)
-        base = Path(temp.name)
-        self.root = base / "homeassistant"
-        self.views = self.root / "dashboards/dh/views"
-        self.views.mkdir(parents=True)
-        self.data = base / "data"
-        self.transport = FakeTransport()
-        self.publisher = DashboardPublisher(self.root, self.data, transport=self.transport)
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        path = Path(self.tmp.name)
+        self.ws = FakeWS()
+        self.publisher = DashboardPublisher(path, path / "data", transport=self.ws)
 
-    def view(self, name, path, *, extra=""):
-        (self.views / name).write_text(
-            f"title: {path}\npath: {path}\ntype: sections\nsections: []\n" + extra
-        )
+    def test_panel_parser_preserves_list_order(self):
+        raw = (b"title: DH System\nrequire_admin: true\nviews:\n"
+               b"  - product: plex\n    path: plex\n"
+               b"  - product: pve\n    path: proxmox\n")
+        parsed = parse_panel("dh-system.yaml", raw)
+        self.assertEqual([r["path"] for r in parsed["views"]], ["plex", "proxmox"])
 
-    def test_registers_dashboard_and_publishes_two_views(self):
-        self.view("10_pve_proxmox.yaml", "dh_pve_agent")
-        self.view("11_pve_ups.yaml", "dh_pve_agent_ups")
-        first = self.publisher.sync()
-        self.assertEqual(first["state"], "Updated")
-        self.assertEqual(first["url"], "/digital-houses/")
-        self.assertEqual(first["dashboards"][0]["views"], 2)
-        self.assertEqual(len(self.transport.config["views"]), 2)
-        self.assertEqual([x["path"] for x in self.transport.config["views"]],
-                         ["dh_pve_agent", "dh_pve_agent_ups"])
-        self.assertEqual(self.transport.dashboards[-1]["title"], "DigitalHouses")
-        self.assertTrue(self.transport.dashboards[-1]["show_in_sidebar"])
-        second = self.publisher.sync()
-        self.assertEqual(second["state"], "Current")
-        self.assertEqual([x[0] for x in self.transport.calls].count(
-            "lovelace/dashboards/create"), 1)
-        self.assertEqual([x[0] for x in self.transport.calls].count(
-            "lovelace/config/save"), 1)
-
-    def test_same_view_path_in_another_dashboard_does_not_block(self):
-        self.transport.dashboards.append(
-            {"url_path": "user-dashboard", "mode": "storage", "title": "User"})
-        self.view("10_pve_proxmox.yaml", "dh_pve_agent")
-        self.assertEqual(self.publisher.sync()["state"], "Updated")
-        self.assertEqual(len(self.transport.dashboards), 3)
-
-    def test_update_preserves_unmanaged_storage_view_and_backs_up(self):
-        self.view("10_pve_proxmox.yaml", "dh_pve_agent")
-        self.publisher.sync()
-        self.transport.config["views"].append({"title": "Local", "path": "local"})
-        self.view("10_pve_proxmox.yaml", "dh_pve_agent", extra="icon: mdi:server\n")
-        self.publisher.sync()
-        self.assertEqual(self.transport.config["views"][0]["icon"], "mdi:server")
-        self.assertEqual(self.transport.config["views"][1]["path"], "local")
-        self.assertGreaterEqual(len(list(self.data.glob("dashboard-backup-*.json"))), 2)
-
-    def test_occupied_unmanaged_panel_is_not_overwritten(self):
-        self.view("10_pve_proxmox.yaml", "dh_pve_agent")
-        self.transport.dashboards.append(
-            {"url_path": URL_PATH, "mode": "storage", "title": "User"})
-        result = self.publisher.sync()
-        self.assertEqual(result["state"], "Partial")
-        self.assertIn("not owned", result["issues"][0])
-        self.assertIsNone(self.transport.config)
-        self.assertFalse((self.data / "dashboard-managed.json").exists())
-
-    def test_occupied_unmanaged_view_is_not_overwritten(self):
-        self.view("10_pve_proxmox.yaml", "dh_pve_agent")
-        self.publisher.sync()
-        self.transport.config["views"].append({"path": "manual", "title": "Local"})
-        self.view("12_manual.yaml", "manual")
-        result = self.publisher.sync()
-        self.assertEqual(result["state"], "Partial")
-        self.assertIn("Unmanaged view", result["issues"][0])
-        self.assertEqual(self.transport.config["views"][-1]["title"], "Local")
-
-    def test_existing_yaml_dashboard_is_preserved(self):
-        self.view("10_pve_proxmox.yaml", "dh_pve_agent")
-        self.transport.dashboards.append(
-            {"url_path": "digital-houses", "mode": "yaml", "title": "DigitalHouses"})
-        self.transport.config = {"views": [{"path": "dh_pve_agent", "title": "Existing"}]}
-        self.assertEqual(self.publisher.sync()["state"], "YAML registered")
-        self.assertFalse(any(c[0] == "lovelace/config/save" for c in self.transport.calls))
-
-    def test_alternate_legacy_yaml_dashboard_not_duplicated(self):
-        self.view("10_pve.yaml", "dh_pve_agent")
-        self.transport.dashboards.append(
-            {"url_path": "digitalhouses", "mode": "yaml", "title": "DigitalHouses"})
-        self.transport.configs["digitalhouses"] = {
-            "views": [{"path": "dh_pve_agent", "title": "Existing"}]}
-        result = self.publisher.sync()
-        self.assertEqual(result["state"], "YAML registered", result["issues"])
-        self.assertEqual(result["url"], "/digitalhouses/")
-        self.assertEqual([row for row in self.transport.dashboards
-                          if row["url_path"] == URL_PATH], [])
-
-    def test_destination_save_failure_does_not_remove_old_managed_view(self):
-        self.view("10_pve.yaml", "dh_pve_agent")
-        self.publisher.sync()
-        self.transport.save_fail = True
-        result = self.publisher.sync({"dh_pve_agent": "dh-system"})
-        self.assertEqual(result["state"], "Partial", result["issues"])
-        self.assertEqual(self.transport.config["views"][0]["path"], "dh_pve_agent")
-
-    def test_yaml_dashboard_must_really_contain_the_views(self):
-        self.view("10_pve_proxmox.yaml", "dh_pve_agent")
-        self.transport.dashboards.append(
-            {"url_path": "digital-houses", "mode": "yaml", "title": "DigitalHouses"})
-        self.transport.config = {"views": [{"path": "other", "title": "Other"}]}
-        result = self.publisher.sync()
-        self.assertEqual(result["state"], "Partial")
-        self.assertIn("does not include", result["issues"][0])
-
-    def test_no_published_views_does_not_create_empty_panel(self):
-        self.assertEqual(self.publisher.sync()["state"], "No published views")
-        self.assertFalse(self.transport.calls)
-
-    def test_creates_two_named_panels_and_preserves_separate_views(self):
-        self.view("10_pve.yaml", "dh_pve_agent")
-        self.view("11_ups.yaml", "dh_pve_agent_ups")
-        self.view("30_climate.yaml", "dh_climate_room")
-        result = self.publisher.sync({
-            "dh_pve_agent": "dh-system",
-            "dh_pve_agent_ups": "dh-system",
-            "dh_climate_room": "dh-climate",
-        })
-        self.assertEqual(result["state"], "Updated", result["issues"])
-        self.assertEqual({row["slug"] for row in result["dashboards"]},
-                         {"dh-system", "dh-climate"})
-        self.assertEqual([row["path"] for row in self.transport.configs["dh-system"]["views"]],
-                         ["dh_pve_agent", "dh_pve_agent_ups"])
-        self.assertEqual([row["path"] for row in self.transport.configs["dh-climate"]["views"]],
-                         ["dh_climate_room"])
-        again = self.publisher.sync({
-            "dh_pve_agent": "dh-system", "dh_pve_agent_ups": "dh-system",
-            "dh_climate_room": "dh-climate",
-        })
-        self.assertEqual(again["state"], "Current", again["issues"])
-        self.assertEqual([kind for kind, _ in self.transport.calls].count(
-            "lovelace/dashboards/create"), 2)
-
-    def test_migrates_legacy_views_after_target_is_saved(self):
-        self.view("10_pve.yaml", "dh_pve_agent")
-        self.view("11_ups.yaml", "dh_pve_agent_ups")
-        self.view("12_manual.yaml", "manual_view")
-        self.publisher.sync()
-        self.transport.config["views"].append({"path": "user_view", "title": "Keep me"})
-        # Simulate persisted single-panel ownership from version 0.4.4.
-        legacy = self.data / "dashboard-managed.json"
-        current_marker = self.data / "dashboard-managed/digital-houses.json"
-        legacy.write_bytes(current_marker.read_bytes())
-        current_marker.unlink()
-        result = self.publisher.sync({
-            "dh_pve_agent": "dh-system", "dh_pve_agent_ups": "dh-system",
-            "manual_view": "digital-houses",
-        })
-        self.assertEqual(result["state"], "Updated", result["issues"])
-        self.assertEqual([row["path"] for row in self.transport.configs["dh-system"]["views"]],
-                         ["dh_pve_agent", "dh_pve_agent_ups"])
-        self.assertEqual([row["path"] for row in self.transport.config["views"]],
-                         ["manual_view", "user_view"])
-        self.assertEqual(result["issues"], [])
-        self.assertEqual(self.publisher.sync({
-            "dh_pve_agent": "dh-system", "dh_pve_agent_ups": "dh-system",
-            "manual_view": "digital-houses",
-        })["state"], "Current")
-
-    def test_failed_destination_does_not_remove_legacy_view(self):
-        self.view("10_pve.yaml", "dh_pve_agent")
-        self.publisher.sync()
-        self.transport.dashboards.append(
-            {"url_path": "dh-system", "mode": "storage", "title": "Unmanaged"})
-        result = self.publisher.sync({"dh_pve_agent": "dh-system"})
-        self.assertEqual(result["state"], "Partial")
-        self.assertIn("not owned", result["issues"][0])
-        self.assertEqual(self.transport.config["views"][0]["path"], "dh_pve_agent")
-
-    def test_two_products_share_system_panel(self):
-        self.view("10_pve.yaml", "dh_pve_agent")
-        self.view("12_plex.yaml", "dh-plex-agent")
-        result = self.publisher.sync({"dh_pve_agent": "dh-system",
-                                      "dh-plex-agent": "dh-system"})
+    def test_native_panel_metadata_and_view_order(self):
+        p = panel(refs=[
+            {"product": "internet", "path": "internet", "overrides": {"title": "Internet"}},
+            {"product": "pve", "path": "proxmox", "overrides": {"icon": None}},
+        ])
+        sources = {**source("pve", "proxmox"), **source("internet", "internet")}
+        result = self.publisher.sync([p], sources)
         self.assertEqual(result["state"], "Updated")
-        self.assertEqual(len(self.transport.configs["dh-system"]["views"]), 2)
-        self.assertEqual(len([x for x in self.transport.dashboards
-                              if x.get("url_path") == "dh-system"]), 1)
+        self.assertEqual([x["path"] for x in self.ws.configs["dh-system"]["views"]],
+                         ["internet", "proxmox"])
+        self.assertEqual(self.ws.configs["dh-system"]["views"][0]["title"], "Internet")
+        self.assertTrue(self.ws.entries[0]["require_admin"])
+        self.assertEqual(self.publisher.sync([p], sources)["state"], "Current")
 
-    def test_legacy_without_dashboard_stays_in_original_panel(self):
-        self.view("10_pve.yaml", "dh_pve_agent")
-        self.view("12_legacy.yaml", "legacy")
-        result = self.publisher.sync({"dh_pve_agent": "dh-system"})
-        self.assertEqual(result["state"], "Updated", result["issues"])
-        self.assertEqual([row["path"] for row in self.transport.config["views"]],
-                         ["legacy"])
+    def test_same_view_can_be_reused_in_two_panels(self):
+        src = source("internet", "internet")
+        refs = [{"product": "internet", "path": "internet",
+                 "overrides": {"show_icon_and_title": True}}]
+        public = panel("dh-home", refs, admin=False, title="DH Home")
+        admin = panel("dh-system", refs, admin=True)
+        self.assertEqual(self.publisher.sync([admin, public], src)["state"], "Updated")
+        self.assertEqual([x["path"] for x in self.ws.configs["dh-system"]["views"]], ["internet"])
+        self.assertEqual([x["path"] for x in self.ws.configs["dh-home"]["views"]], ["internet"])
+        self.assertTrue(next(e for e in self.ws.entries if e["url_path"] == "dh-system")["require_admin"])
+        self.assertFalse(next(e for e in self.ws.entries if e["url_path"] == "dh-home")["require_admin"])
 
-    def test_one_dashboard_failure_does_not_block_other_panels(self):
-        self.view("10_pve.yaml", "dh_pve_agent")
-        self.view("30_climate.yaml", "dh_climate")
-        self.transport.dashboards.append(
-            {"url_path": "dh-climate", "mode": "storage", "title": "Personal"})
-        report = self.publisher.sync({"dh_pve_agent": "dh-system",
-                                      "dh_climate": "dh-climate"})
+    def test_panel_metadata_updates_without_recreating(self):
+        src = source()
+        self.publisher.sync([panel()], src)
+        changed = panel(title="Core Servers", admin=False)
+        changed["icon"] = "mdi:lan"
+        result = self.publisher.sync([changed], src)
+        self.assertEqual(result["state"], "Updated")  # Dashboard metadata changed.
+        entry = self.ws.entries[0]
+        self.assertEqual(entry["title"], "Core Servers")
+        self.assertEqual(entry["icon"], "mdi:lan")
+        self.assertFalse(entry["require_admin"])
+        self.assertEqual(sum(k == "lovelace/dashboards/create" for k, _ in self.ws.calls), 1)
+
+    def test_removed_reference_removes_previous_view_only_in_that_panel(self):
+        src = source()
+        self.publisher.sync([panel()], src)
+        self.publisher.sync([panel(refs=[])], src)
+        self.assertEqual(self.ws.configs["dh-system"]["views"], [])
+
+    def test_no_mqtt_product_means_no_view_and_no_new_panel(self):
+        report = self.publisher.sync([panel()], {})
+        self.assertEqual(report["dashboards"][0]["state"], "No active views")
+        self.assertEqual(self.ws.entries, [])
+
+    def test_duplicate_path_in_same_panel_is_error(self):
+        refs = [{"product": "pve", "path": "same", "overrides": {}},
+                {"product": "plex", "path": "same", "overrides": {}}]
+        src = {**source("pve", "same"), **source("plex", "same")}
+        report = self.publisher.sync([panel(refs=refs)], src)
         self.assertEqual(report["state"], "Partial")
-        self.assertEqual(self.transport.configs["dh-system"]["views"][0]["path"],
-                         "dh_pve_agent")
-        self.assertEqual(len(report["issues"]), 1)
+        self.assertIn("Duplicate view path", report["issues"][0])
 
-    def test_route_absent_keeps_previous_managed_panel(self):
-        self.view("10_pve.yaml", "dh_pve_agent")
-        self.publisher.sync({"dh_pve_agent": "dh-system"})
-        report = self.publisher.sync()
-        self.assertEqual(report["state"], "Current", report["issues"])
-        self.assertIsNone(self.transport.config)
+    def test_one_broken_panel_does_not_block_others(self):
+        bad = panel("dh-bad", [{"product": "pve", "path": "nope", "overrides": {}},
+                               {"product": "plex", "path": "nope", "overrides": {}}])
+        good = panel("dh-good", [{"product": "pve", "path": "proxmox", "overrides": {}}])
+        src = {**source("pve", "nope"), **source("plex", "nope"), **source()}
+        report = self.publisher.sync([bad, good], src)
+        self.assertEqual(report["state"], "Partial")
+        self.assertEqual(self.ws.configs["dh-good"]["views"][0]["path"], "proxmox")
 
-    def test_dashboard_error_propagates_into_sync_status(self):
-        self.transport.create_fail = True
-        app = AutoSync(self.root, self.data, backend=FakeBackend(), publisher=self.publisher)
-        (self.root / "configuration.yaml").write_text(
-            "homeassistant:\n  packages: !include_dir_merge_named packages/\n")
-        result = app.sync(CLAIMS)
+    def test_yaml_managed_panel_is_not_overwritten(self):
+        self.ws.entries.append({"id": 8, "url_path": "dh-system", "mode": "yaml"})
+        result = self.publisher.sync([panel()], source())
         self.assertEqual(result["state"], "Partial")
-        self.assertEqual(result["updated"], 2)
-        self.assertTrue(any("creation failed" in issue for issue in result["issues"]))
+        self.assertEqual(self.ws.configs, {})
 
-    def test_dashboard_status_is_visible_after_success(self):
-        app = AutoSync(self.root, self.data, backend=FakeBackend(), publisher=self.publisher)
-        (self.root / "configuration.yaml").write_text(
-            "homeassistant:\n  packages: !include_dir_merge_named packages/\n")
-        result = app.sync(CLAIMS)
-        self.assertEqual(result["state"], "OK", result["issues"])
-        self.assertEqual(result["dashboard"]["url"], "/digital-houses/")
-        again = app.sync(CLAIMS)
-        self.assertEqual(again["dashboard"]["state"], "Current")
+    def test_save_failure_is_reported_without_removing_existing_config(self):
+        self.publisher.sync([panel()], source())
+        existing = self.ws.configs["dh-system"]
+        self.ws.fail_save = True
+        report = self.publisher.sync([panel(refs=[])], source())
+        self.assertEqual(report["state"], "Partial")
+        self.assertEqual(self.ws.configs["dh-system"], existing)
+
+    def test_no_panel_files_does_not_touch_unrelated_panels(self):
+        self.ws.entries.append({"id": 3, "url_path": "user-dashboard", "mode": "storage"})
+        self.assertEqual(self.publisher.sync([], source())["state"], "No panel YAML")
+        self.assertEqual(len(self.ws.calls), 0)
+
+    def test_parser_rejects_bad_access_and_duplicate_references(self):
+        for raw in (b"title: X\nviews: []\n",
+                    b'title: X\nrequire_admin: "yes"\nviews: []\n',
+                    b"title: X\nrequire_admin: true\nviews:\n"
+                    b"  - product: pve\n    path: x\n"
+                    b"  - product: pve\n    path: x\n"):
+            with self.subTest(raw=raw):
+                with self.assertRaises(PanelError):
+                    parse_panel("dh-system.yaml", raw)
 
 
 if __name__ == "__main__":

@@ -64,7 +64,7 @@ product update, HACS installation or deletion of missing resources is performed.
 Availability, LWT, MQTT Discovery identities, DB/storage monitoring, and
 telemetry consent are unchanged. See
 [Recorder DH Sync integration](docs/DH_SYNC_DISCOVERY_V1.md) and the
-[resource standard](../docs/standards/DH_SYNC_RESOURCES_STANDARD.md).
+[resource standard](../docs/standards/DH_SYNC_DEVELOPER_STANDARD.md).
 
 ## Common runtime diagnostics
 

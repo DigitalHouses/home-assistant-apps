@@ -6,7 +6,7 @@
 
 This standard complements [DigitalHouses Contract Data Policy](CONTRACT_DATA_POLICY.md).
 
-Canonical notification YAML paths and automatic delivery are defined in [DH Sync Resources Standard](DH_SYNC_RESOURCES_STANDARD.md). Resource-version comment headers are optional.
+Canonical notification YAML paths and automatic delivery are defined in [DH Sync Developer Standard](DH_SYNC_DEVELOPER_STANDARD.md). Resource-version comment headers are optional.
 
 ---
 
@@ -153,7 +153,7 @@ notification service.
 
 For optional **automatic DH Sync distribution**, a portable Russian notification
 package belongs in the product's `packages/locales/ru/` directory, as defined
-in [DH Sync Resources Standard](DH_SYNC_RESOURCES_STANDARD.md). Use a standard
+in [DH Sync Developer Standard](DH_SYNC_DEVELOPER_STANDARD.md). Use a standard
 HA delivery action, such as `persistent_notification.create`, that does not
 require private scripts, personal recipients or secrets.
 

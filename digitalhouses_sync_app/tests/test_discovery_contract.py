@@ -105,27 +105,27 @@ class SourceOwnershipTests(unittest.TestCase):
             self.assertEqual(item["product_path"], folder)
         self.assertEqual(safe_product_path("../secrets", "recorder"), "recorder")
 
-    def test_dashboard_field_is_optional_and_kept_in_mqtt_snapshot(self):
+    def test_dashboard_field_is_ignored_even_when_present(self):
         _, legacy = validate_sync_message(PVE, payload())
         self.assertNotIn("dashboard", legacy)
         key, item = validate_sync_message(PVE, payload(dashboard="dh-system"))
-        self.assertEqual(item["dashboard"], "dh-system")
+        self.assertNotIn("dashboard", item)
         with tempfile.TemporaryDirectory() as temp:
             path = Path(temp) / "sources.json"
             registry = ProductSources(path)
             self.assertTrue(registry.apply(PVE, payload(dashboard="dh-system")))
-            self.assertEqual(registry.snapshot()[key]["dashboard"], "dh-system")
+            self.assertNotIn("dashboard", registry.snapshot()[key])
             # A new process waits for retained MQTT; there is no disk fallback.
             self.assertFalse(path.exists())
             self.assertEqual(ProductSources(path).snapshot(), {})
 
-    def test_invalid_dashboard_is_fallback_with_warning(self):
+    def test_old_dashboard_payload_never_controls_panels(self):
         for candidate in ("../dh-system", "DH SYSTEM", "dh_system", "dh-system/",
                           "", 42, ["dh-system"], "a" * 65):
             with self.subTest(dashboard=candidate):
                 _, item = validate_sync_message(PVE, payload(dashboard=candidate))
-                self.assertEqual(item["dashboard"], "digital-houses")
-                self.assertIn("dashboard_warning", item)
+                self.assertNotIn("dashboard", item)
+                self.assertNotIn("dashboard_warning", item)
         self.assertEqual(safe_dashboard_slug("dh-climate"), "dh-climate")
         self.assertEqual(safe_dashboard_slug("dh-system"), "dh-system")
 
@@ -184,8 +184,7 @@ class SourceOwnershipTests(unittest.TestCase):
             "version": "any",
             "dashboard": "dh-system",
         })))
-        self.assertEqual(source.snapshot()["digitalhouses_internet_app/default"]["dashboard"],
-                         "dh-system")
+        self.assertNotIn("dashboard", source.snapshot()["digitalhouses_internet_app/default"])
 
     def test_claimed_download_and_revision_are_not_used(self):
         data = json.loads(payload())

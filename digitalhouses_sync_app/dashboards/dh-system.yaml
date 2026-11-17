@@ -1,0 +1,34 @@
+# Canonical panel; view-list order is HA tab order.
+title: DH System
+icon: mdi:server
+show_in_sidebar: true
+require_admin: true
+
+views:
+  - product: digitalhouses_pve_agent
+    path: dh_pve_agent
+    icon: mdi:server
+    show_icon_and_title: false
+
+  - product: digitalhouses_pve_agent
+    path: dh_pve_agent_ups
+    icon: mdi:power-plug-battery
+    show_icon_and_title: false
+
+  - product: digitalhouses_plex_agent
+    path: dh-plex-agent
+    title: Plex
+    icon: mdi:plex
+    show_icon_and_title: true
+
+  - product: digitalhouses_recorder_app
+    path: recorder
+    title: Recorder
+    icon: mdi:database
+    show_icon_and_title: true
+
+  - product: digitalhouses_internet_app
+    path: internet
+    title: Internet
+    icon: mdi:web
+    show_icon_and_title: true

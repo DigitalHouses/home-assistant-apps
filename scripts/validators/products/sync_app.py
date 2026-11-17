@@ -8,7 +8,7 @@ from validators.common import fail, require_files
 
 def validate_sync_app(root: Path, app: Path, context: dict) -> None:
     require_files(root, [
-        Path("docs/standards/DH_SYNC_RESOURCES_STANDARD.md"),
+        Path("docs/standards/DH_SYNC_DEVELOPER_STANDARD.md"),
         app / "docs/ARCHITECTURE.md",
         app / "docs/ADOPTION.md",
         app / "docs/STORAGE_MIGRATION.md",
@@ -23,6 +23,8 @@ def validate_sync_app(root: Path, app: Path, context: dict) -> None:
         app / "rootfs/app/git_source.py",
         app / "rootfs/app/auto_sync.py",
         app / "rootfs/app/dashboard_runtime.py",
+        app / "rootfs/app/panel_config.py",
+        app / "dashboards/dh-system.yaml",
         app / "tests/test_auto_sync.py",
         app / "tests/test_dashboard_runtime.py",
         app / "tests/test_git_source.py",
@@ -34,7 +36,6 @@ def validate_sync_app(root: Path, app: Path, context: dict) -> None:
         app / "tests/test_catalog_web.py",
         app / "rootfs/app/discovery_contract.py",
         app / "tests/test_discovery_contract.py",
-        app / "docs/DH_SYNC_DISCOVERY_CONTRACT_V1.md",
         app / "rootfs/app/ha_core.py",
         app / "rootfs/app/sync_web.py",
         app / "tests/test_sync_engine.py",
@@ -42,7 +43,6 @@ def validate_sync_app(root: Path, app: Path, context: dict) -> None:
         app / "docs/FIRST_VERSION.md",
         app / "rootfs/app/adoption.py",
         app / "tests/test_adoption.py",
-        app / "docs/MQTT_INVENTORY.md",
         app / "rootfs/app/inventory.py",
         app / "rootfs/app/app.py",
         app / "tests/test_inventory.py",

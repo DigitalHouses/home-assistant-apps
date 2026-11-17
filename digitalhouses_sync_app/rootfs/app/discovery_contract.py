@@ -116,10 +116,6 @@ def validate_sync_message(topic: str, payload: bytes | str) -> tuple[str, dict]:
         "repository": repo,
         "product_path": safe_product_path(message.get("product_path"), product),
     }
-    if "dashboard" in message:
-        result["dashboard"] = safe_dashboard_slug(message["dashboard"])
-        if result["dashboard"] != message["dashboard"]:
-            result["dashboard_warning"] = "Invalid MQTT dashboard; using digital-houses"
     return product + "/" + instance, result
 
 

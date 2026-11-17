@@ -1,6 +1,6 @@
-# DigitalHouses Recorder App — DH Sync 0.4 integration
+# DigitalHouses Recorder App — DH Sync 0.4 integration (исторический документ)
 
-**Current standard:** [DH Sync Resources Standard](../../docs/standards/DH_SYNC_RESOURCES_STANDARD.md).
+**Актуальный контракт для новых изменений:** [DH Sync Developer Standard](../../docs/standards/DH_SYNC_DEVELOPER_STANDARD.md).
 DH Sync 0.4 automatically maintains canonical GitHub YAML. This document
 supersedes Recorder's earlier pinned-commit, version-range, Preview/Apply and
 manual-acceptance procedure. The **only source admission rule** is a public
