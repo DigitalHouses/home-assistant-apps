@@ -16,24 +16,25 @@ This is a new product. It does not migrate or reuse the stable MQTT identities o
 
 ## DH Sync
 
-Начиная с версии **0.1.25**, Internet App публикует MQTT Discovery Contract v1:
+Начиная с версии **0.1.25**, Internet App публикует retained MQTT-объявление
+`DigitalHouses/Global/digitalhouses_internet_app/sync` (QoS 1) на каждом
+успешном подключении и переподключении к существующему MQTT-клиенту.
 
-```text
-DigitalHouses/Global/digitalhouses_internet_app/sync
-```
+С версии **0.1.26** объявление соответствует **DH Sync 0.6.0**: содержит только
+`schema=1`, `product_id=digitalhouses_internet_app`, `type=app`, текущую
+`version`, `repository=https://github.com/DigitalHouses/home-assistant-apps`
+и `product_path=digitalhouses_internet_app`. Поля `dashboard` в нём нет.
 
-QoS 1, retained, при каждом подключении и переподключении к MQTT. В сообщении:
-`schema=1`, `product_id=digitalhouses_internet_app`, `type=app`, текущая
-`version`, `repository=https://github.com/DigitalHouses/home-assistant-apps`,
-`product_path=digitalhouses_internet_app`, `dashboard=dh-system`.
+Каноническая View **Internet** (`path: internet`) хранится в
+`dashboards/ru/13_internet.yaml`; Recorder и русские уведомления — в
+`packages/common/` и `packages/locales/ru/`. DH Sync получает эти файлы
+из GitHub; `examples/` остаётся справочным каталогом. Размещение View,
+название и доступность панелей настраиваются **только** в YAML DH Sync,
+по паре `product_id + path`, без изменения кода Internet App.
 
-DH Sync автоматически публикует вкладку **Internet** (`path: internet`) в панели
-`/dh-system/` и синхронизирует Recorder и русский пакет уведомлений из
-`dashboards/ru/`, `packages/common/`, `packages/locales/ru/`.
-`examples/` остаётся только справочными примерами.
-
-Этот новый `/sync` топик не заменяет существующий
-`DigitalHouses/Global/dh_internet_app/` и не меняет `entity_id`.
+MQTT namespace `DigitalHouses/Global/dh_internet_app/` и существующие
+`entity_id` не меняются. Старые retained `/sync` с полем `dashboard`
+совместимы с DH Sync 0.6.0, миграция не требуется.
 Подробности: [DH_SYNC_COMPATIBILITY.md](docs/DH_SYNC_COMPATIBILITY.md).
 
 ## Recovery
