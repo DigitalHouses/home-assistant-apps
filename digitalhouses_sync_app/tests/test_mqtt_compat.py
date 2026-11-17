@@ -42,7 +42,12 @@ class MqttCompatTests(unittest.TestCase):
                 self.assertEqual(payload["product_id"], "digitalhouses_sync_app")
                 self.assertEqual(payload["repository"],
                                  "https://github.com/DigitalHouses/home-assistant-apps")
-                self.assertEqual(client.subscribe.call_count, 4)
+                self.assertEqual(client.subscribe.call_count, 2)
+                topics = [call.args[0] for call in client.subscribe.call_args_list]
+                self.assertEqual(topics, [
+                    "DigitalHouses/Global/+/sync",
+                    "DigitalHouses/Global/+/+/sync",
+                ])
 
     def test_failure_reason_does_not_publish_or_subscribe(self):
         client = Mock()

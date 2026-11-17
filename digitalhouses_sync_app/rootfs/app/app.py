@@ -1,4 +1,4 @@
-"""DH Sync 0.5.0: autonomous owner-only dashboards and packages sync."""
+"""DH Sync 0.5.1: autonomous owner-only dashboards and packages sync."""
 from __future__ import annotations
 
 import json
@@ -7,13 +7,10 @@ import os
 import threading
 import time
 from datetime import datetime, timezone
-from pathlib import Path
-
 import paho.mqtt.client as mqtt
 
 from catalog_web import make_server
 from discovery_contract import DiscoveryError, ProductSources
-from inventory import Inventory
 from resource_preview import PreviewCatalog
 from local_audit import LocalAuditor
 from auto_sync import AutoSync
@@ -24,10 +21,7 @@ PRODUCT_ID = "digitalhouses_sync_app"
 BASE = "DigitalHouses/Global/" + PRODUCT_ID
 DISCOVERY = "homeassistant/device/" + PRODUCT_ID + "/config"
 STARTED_AT = datetime.now(timezone.utc).isoformat()
-VERSION = os.environ.get("APP_VERSION", "0.5.0-local")
-STATE_PATH = Path("/data/inventory.json")
-SOURCES_PATH = Path("/data/product_sources.json")
-
+VERSION = os.environ.get("APP_VERSION", "0.5.1-local")
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 LOG = logging.getLogger("dh_sync")
 
@@ -111,21 +105,18 @@ def on_connect(client, userdata, flags, reason_code, properties=None):
     )
     client.subscribe("DigitalHouses/Global/+/sync", qos=1)
     client.subscribe("DigitalHouses/Global/+/+/sync", qos=1)
-    client.subscribe("DigitalHouses/Global/+/availability", qos=1)
-    client.subscribe("DigitalHouses/Global/+/+/availability", qos=1)
     LOG.info("Subscribed to retained product metadata (auto-sync)")
 
 
 def main() -> None:
-    inventory = Inventory(STATE_PATH)
-    sources = ProductSources(SOURCES_PATH)
+    sources = ProductSources()  # In-memory only; MQTT is the registry.
     # Publish YAML files and register the DigitalHouses panel over HA API.
     # No direct .storage edits, HA restart, or operator interaction.
     auto = AutoSync()
     auto.publisher = DashboardPublisher(auto.root, auto.data)
     auto.reloader = lambda: CoreAPI().reload_configuration()
     wake = threading.Event()
-    ingress = make_server(sources, inventory, version=VERSION, port=8099,
+    ingress = make_server(sources, version=VERSION, port=8099,
                           auto_status=auto.status)
     threading.Thread(target=ingress.serve_forever, daemon=True,
                      name="dh-sync-ingress").start()
@@ -134,10 +125,11 @@ def main() -> None:
     def auto_loop() -> None:
         first = True
         while True:
-            wake.wait(timeout=20 if first else 3600)
+            # Never publish from local YAML before the first MQTT subscription.
+            wake.wait(timeout=None if first else 3600)
             wake.clear()
             if first:
-                time.sleep(8)  # Batch retained MQTT /sync messages at boot.
+                time.sleep(8)  # Batch the broker's retained /sync messages.
             first = False
             auto.sync(sources.snapshot())
 
@@ -154,19 +146,19 @@ def main() -> None:
         if message.topic.endswith("/sync"):
             try:
                 if sources.apply(message.topic, message.payload):
-                    sources.save()
-                    LOG.info("Accepted product source: %s", message.topic)
+                    LOG.info("MQTT product registry changed: %s", message.topic)
                     wake.set()
             except DiscoveryError as exc:
                 LOG.warning("Rejected MQTT source (%s): %s", message.topic, exc)
             return
-        if inventory.apply(
-            message.topic, message.payload.decode("utf-8", errors="replace").strip()
-        ):
-            inventory.save()
-            LOG.info("Inventory changed: %s", sorted(inventory.known))
+    def subscribed(client, userdata, flags, reason_code, properties=None):
+        if reason_code == 0:
+            # Rebuild from the broker's retained /sync set on every reconnect.
+            sources.reset()
+            wake.set()
+        on_connect(client, userdata, flags, reason_code, properties)
 
-    client.on_connect = on_connect
+    client.on_connect = subscribed
     client.on_message = on_message
     client.connect_async(
         os.environ["MQTT_HOST"],

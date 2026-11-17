@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.5.1
+
+- MQTT retained `DigitalHouses/Global/+/sync` and `+/+/sync` are the sole product registry: no disk-loaded `product_sources.json` and no local product discovery fallback.
+- Build a fresh in-memory registry from each broker subscription; handle empty retained MQTT tombstones. Products are accepted by their topic and DigitalHouses-owned GitHub repository, regardless of `availability`, reported version or product name.
+- Stop subscribing to or displaying product `availability`. The product list reflects only MQTT `/sync`; version is informational.
+- Skip dashboard/package publication when the MQTT registry is empty. Preserve existing installed resources, without inventing products from old YAML.
+
 ## 0.5.0
 
 - Use the optional retained MQTT `/sync.dashboard` slug to route each product's canonical YAML views to a named Home Assistant panel (e.g. `dh-system`, `dh-climate`).

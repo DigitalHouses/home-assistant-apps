@@ -57,19 +57,21 @@ class CatalogTests(unittest.TestCase):
                 self.assertEqual(status, 200)
                 for expected in (
                     "digitalhouses_pve_agent", "digitalhouses_plex_agent",
-                    "0.5.89", "0.8.18", "Online",
+                    "0.5.89", "0.8.18", "Источник реестра: MQTT /sync.",
                     "home-assistant-apps", "0123456789abcdef0123456789abcdef",
                     "DigitalHouses Sync · v0.1.2",
                 ):
                     self.assertIn(expected, body)
                 self.assertNotIn("<form", body)
                 self.assertNotIn("Применить", body)
+                self.assertNotIn("<th>Доступность</th>", body)
+                self.assertNotIn("Online</span>", body)
                 self.assertEqual(fetch(server, "POST")[0], 405)
             finally:
                 server.server_close()
                 thread.join(timeout=4)
 
-    def test_self_availability_is_online_in_catalog(self):
+    def test_catalog_does_not_consult_availability(self):
         import json
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -97,8 +99,8 @@ class CatalogTests(unittest.TestCase):
                 self.assertEqual(status, 200)
                 self.assertIn("digitalhouses_sync_app", body)
                 self.assertIn("DigitalHouses Sync · v0.1.2", body)
-                self.assertIn("Online", body)
-                self.assertNotIn("Unknown</span>", body)
+                self.assertNotIn("Online</span>", body)
+                self.assertNotIn("Доступность", body)
             finally:
                 server.server_close()
                 thread.join(timeout=3)

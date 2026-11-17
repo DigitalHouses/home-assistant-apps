@@ -422,6 +422,12 @@ class AutoSync:
                 "issues": [], "resources": [], "dashboard": None,
                 "packages": None,
             }
+            if not claims:
+                # No retained MQTT declarations => no resources to install.
+                # Old local YAML never creates a phantom product.
+                report["state"] = "No MQTT sources"
+                self.report = report
+                return self.status()
             try:
                 self._check_root()
                 self.recover()

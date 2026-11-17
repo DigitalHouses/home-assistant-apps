@@ -6,7 +6,6 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlsplit, parse_qs, quote
 
 from discovery_contract import ProductSources
-from inventory import Inventory
 
 STYLE = """body{background:#121619;color:#e5e9eb;font:15px system-ui,sans-serif;
 margin:0;line-height:1.5}a{color:#8dcaf1}header{padding:22px;border-bottom:1px solid #343d43}
@@ -31,7 +30,7 @@ details{margin-top:8px}summary{cursor:pointer;color:#91caed}
 def _h(value: object) -> str:
     return html.escape(str(value), quote=True)
 
-def make_server(sources: ProductSources, inventory: Inventory, *, version: str = 'development', port: int = 8099, inspect=None, audit=None, apply_manager=None, auto_status=None):
+def make_server(sources: ProductSources, inventory=None, *, version: str = 'development', port: int = 8099, inspect=None, audit=None, apply_manager=None, auto_status=None):
     class Handler(BaseHTTPRequestHandler):
         server_version = "DHSync/" + version
 
@@ -161,23 +160,17 @@ def make_server(sources: ProductSources, inventory: Inventory, *, version: str =
             records = sources.snapshot()
             rows = ""
             for identity, item in records.items():
-                online = inventory.known.get(identity, "unknown")
-                label = {
-                    "online": "Online", "offline": "Offline", "unknown": "Unknown",
-                }.get(online, "Unknown")
                 rows += (
                     "<tr><td><b>" + _h(item["product_id"]) +
                     "</b><br><small>" + _h(identity.split("/", 1)[1]) +
                     "</small></td><td><code>" + _h(item["version"]) +
                     "</code><br><small>" + _h(item["type"]) +
-                    "</small></td><td><span class='" +
-                    ("ok" if online == "online" else "muted") + "'>" +
-                    _h(label) + "</span></td><td><code>" +
+                    "</small></td><td><code>" +
                     _h(item["repository"]) + "</code><br><small>" +
                     _h(item["product_path"]) + "</small></td></tr>"
                 )
             if not records:
-                rows = ("<tr><td colspan='4' class='muted'>"
+                rows = ("<tr><td colspan='3' class='muted'>"
                         "MQTT metadata пока не обнаружены. Ожидаются retained /sync."
                         "</td></tr>")
             if auto_status is not None:
@@ -246,9 +239,12 @@ def make_server(sources: ProductSources, inventory: Inventory, *, version: str =
                     "</style></head><body><header><h1>DigitalHouses Sync · v" +
                     _h(version) + "</h1><small>Автоматически · GitHub DigitalHouses"
                     "</small></header><main><section><h2>Продукты (" +
-                    str(len(records)) + ")</h2><table><thead><tr>"
+                    str(len(records)) + ")</h2>"
+                    "<p class='muted'>Источник реестра: MQTT /sync. "
+                    "Никаких проверок online или версии.</p>"
+                    "<table><thead><tr>"
                     "<th>Продукт / Instance</th><th>Версия</th>"
-                    "<th>Доступность</th><th>Источник</th></tr></thead><tbody>" +
+                    "<th>Источник</th></tr></thead><tbody>" +
                     rows + "</tbody></table></section>" + summary + "</main></body></html>"
                 )
                 self._send(200, page)
@@ -390,8 +386,10 @@ def make_server(sources: ProductSources, inventory: Inventory, *, version: str =
                 "</style></head><body><header><h1>DigitalHouses Sync · v" + _h(version) + "</h1>"
                 "<small>MQTT · предпросмотр · ручной Apply и Rollback</small></header><main>"
                 "<section><h2>Обнаруженные агенты и приложения (" +
-                str(len(records)) + ")</h2><table><thead><tr>"
-                "<th>Продукт / Instance</th><th>Версия</th><th>Доступность</th>"
+                str(len(records)) + ")</h2>"
+                "<p class='muted'>Источник реестра: MQTT /sync. "
+                "Никаких проверок online или версии.</p>"
+                "<table><thead><tr><th>Продукт / Instance</th><th>Версия</th>"
                 "<th>Репозиторий / Каталог</th></tr></thead><tbody>" +
                 rows + "</tbody></table></section>" + preview_html + audit_html + "<section>"
                 "<p>Принимаются только репозитории GitHub организации "

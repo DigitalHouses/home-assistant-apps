@@ -6,9 +6,7 @@ Never pass an MQTT URL directly to urllib, git, or a dynamic download routine.
 from __future__ import annotations
 
 import json
-import os
 import re
-import tempfile
 import threading
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -126,36 +124,29 @@ def validate_sync_message(topic: str, payload: bytes | str) -> tuple[str, dict]:
 
 
 class ProductSources:
-    """Persist accepted *claims* for read-only UI; no installation authority."""
+    """Current MQTT /sync subscription snapshot: no filesystem registry."""
 
-    def __init__(self, path: Path):
-        self.path = path
+    def __init__(self, path: Path | None = None):
+        # path is accepted for older callers, but never loaded or written.
         self._lock = threading.RLock()
         self._items: dict[str, dict] = {}
-        try:
-            stored = json.loads(path.read_text(encoding="utf-8"))
-            if isinstance(stored, dict):
-                for key, value in stored.items():
-                    if not isinstance(value, dict):
-                        continue
-                    product, sep, instance = key.partition("/")
-                    if not sep or not instance:
-                        continue
-                    topic = SOURCE_ROOT + product + (
-                        "/" + instance if instance != "default" else ""
-                    ) + "/sync"
-                    try:
-                        valid_key, canonical = validate_sync_message(
-                            topic, json.dumps(value).encode()
-                        )
-                    except (DiscoveryError, TypeError, ValueError):
-                        continue
-                    if valid_key == key:
-                        self._items[key] = canonical
-        except (FileNotFoundError, OSError, ValueError):
-            pass
+
+    def reset(self) -> bool:
+        """Discard the previous broker snapshot before each new subscription."""
+        with self._lock:
+            had_items = bool(self._items)
+            self._items.clear()
+            return had_items
 
     def apply(self, topic: str, payload: bytes | str) -> bool:
+        # MQTT retained tombstone: empty payload deletes the broker record.
+        if payload == b"" or payload == "":
+            identity = parse_sync_topic(topic)
+            if identity is None:
+                return False
+            key = "/".join(identity)
+            with self._lock:
+                return self._items.pop(key, None) is not None
         key, value = validate_sync_message(topic, payload)
         with self._lock:
             if self._items.get(key) == value:
@@ -166,19 +157,3 @@ class ProductSources:
     def snapshot(self) -> dict[str, dict]:
         with self._lock:
             return {key: value.copy() for key, value in sorted(self._items.items())}
-
-    def save(self) -> None:
-        with self._lock:
-            self.path.parent.mkdir(parents=True, exist_ok=True)
-            fd, tmp = tempfile.mkstemp(prefix=".dh-sources-", dir=self.path.parent)
-            try:
-                os.fchmod(fd, 0o600)
-                with os.fdopen(fd, "w", encoding="utf-8") as stream:
-                    json.dump(self._items, stream, sort_keys=True, indent=2)
-                    stream.write("\n")
-                    stream.flush()
-                    os.fsync(stream.fileno())
-                os.replace(tmp, self.path)
-            finally:
-                if os.path.exists(tmp):
-                    os.unlink(tmp)
