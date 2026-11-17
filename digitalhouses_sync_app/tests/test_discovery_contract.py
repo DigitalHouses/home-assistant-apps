@@ -105,19 +105,19 @@ class SourceOwnershipTests(unittest.TestCase):
             self.assertEqual(item["product_path"], folder)
         self.assertEqual(safe_product_path("../secrets", "recorder"), "recorder")
 
-    def test_dashboard_field_is_optional_and_persisted(self):
+    def test_dashboard_field_is_optional_and_kept_in_mqtt_snapshot(self):
         _, legacy = validate_sync_message(PVE, payload())
         self.assertNotIn("dashboard", legacy)
-        topic, source = validate_sync_message(PVE, payload(dashboard="dh-system"))
-        self.assertEqual(topic, "digitalhouses_pve_agent/server-1")
-        self.assertEqual(source["dashboard"], "dh-system")
+        key, item = validate_sync_message(PVE, payload(dashboard="dh-system"))
+        self.assertEqual(item["dashboard"], "dh-system")
         with tempfile.TemporaryDirectory() as temp:
             path = Path(temp) / "sources.json"
             registry = ProductSources(path)
             self.assertTrue(registry.apply(PVE, payload(dashboard="dh-system")))
-            registry.save()
-            self.assertEqual(ProductSources(path).snapshot()[topic]["dashboard"],
-                             "dh-system")
+            self.assertEqual(registry.snapshot()[key]["dashboard"], "dh-system")
+            # A new process waits for retained MQTT; there is no disk fallback.
+            self.assertFalse(path.exists())
+            self.assertEqual(ProductSources(path).snapshot(), {})
 
     def test_invalid_dashboard_is_fallback_with_warning(self):
         for candidate in ("../dh-system", "DH SYSTEM", "dh_system", "dh-system/",
@@ -142,22 +142,50 @@ class SourceOwnershipTests(unittest.TestCase):
                 with self.assertRaises(DiscoveryError):
                     validate_sync_message(PVE, raw)
 
-    def test_snapshot_persistence_and_owner_revalidation(self):
-        with tempfile.TemporaryDirectory() as t:
-            path = Path(t) / "sources.json"
+    def test_mqtt_only_snapshot_reconnect_and_retained_tombstone(self):
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / "sources.json"
+            # Legacy disk registry must not fabricate MQTT messages.
+            path.write_text(json.dumps({
+                "digitalhouses_recorder_app/default": {
+                    "repository": "https://github.com/DigitalHouses/recorder",
+                    "version": "stale"
+                }
+            }))
             src = ProductSources(path)
-            self.assertTrue(src.apply(RECORDER, payload(
-                repository="https://github.com/DigitalHouses/recorder")))
-            self.assertFalse(src.apply(RECORDER, payload(
-                repository="https://github.com/DigitalHouses/recorder")))
-            src.save()
-            self.assertEqual(ProductSources(path).snapshot(), src.snapshot())
-            bad = src.snapshot()
-            bad["digitalhouses_recorder_app/default"]["repository"] = (
-                "https://github.com/attacker/repo"
-            )
-            path.write_text(json.dumps(bad))
-            self.assertEqual(ProductSources(path).snapshot(), {})
+            self.assertEqual(src.snapshot(), {})
+            self.assertTrue(src.apply(RECORDER, payload()))
+            self.assertFalse(src.apply(RECORDER, payload()))
+            self.assertEqual(len(src.snapshot()), 1)
+            # A broker tombstone deletes the record, independently of
+            # availability or installed agent versions.
+            self.assertTrue(src.apply(RECORDER, b""))
+            self.assertEqual(src.snapshot(), {})
+            self.assertFalse(src.apply(RECORDER, b""))
+            self.assertTrue(src.apply(PVE, payload(version="old")))
+            self.assertTrue(src.reset())
+            self.assertEqual(src.snapshot(), {})
+            self.assertFalse(src.reset())
+            self.assertTrue(src.apply(PVE, payload(version="new")))
+            self.assertEqual(src.snapshot()["digitalhouses_pve_agent/server-1"]["version"],
+                             "new")
+            self.assertFalse(src.apply("DigitalHouses/Global/other/topic", b""))
+            self.assertTrue(src.reset())
+            # No I/O by ProductSources: previous file remains unchanged.
+            self.assertIn("stale", path.read_text())
+
+    def test_internet_contract_has_no_product_whitelist_or_online_check(self):
+        topic = "DigitalHouses/Global/digitalhouses_internet_app/sync"
+        source = ProductSources()
+        self.assertTrue(source.apply(topic, json.dumps({
+            "repository": "https://github.com/DigitalHouses/home-assistant-apps",
+            "product_path": "digitalhouses_internet_app",
+            "type": "app",
+            "version": "any",
+            "dashboard": "dh-system",
+        })))
+        self.assertEqual(source.snapshot()["digitalhouses_internet_app/default"]["dashboard"],
+                         "dh-system")
 
     def test_claimed_download_and_revision_are_not_used(self):
         data = json.loads(payload())

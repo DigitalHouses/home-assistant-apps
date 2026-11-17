@@ -61,6 +61,16 @@ class AutomaticSyncTests(unittest.TestCase):
         self.backend = FakeBackend()
         self.app = AutoSync(self.root, base / "journal", backend=self.backend)
 
+    def test_empty_mqtt_registry_does_not_publish_local_views(self):
+        (self.root / "dashboards/dh/views/20_old.yaml").write_text(
+            "title: Old\npath: old-view\n")
+        result = self.app.sync({})
+        self.assertEqual(result["state"], "No MQTT sources")
+        self.assertEqual(result["updated"], 0)
+        self.assertEqual(result["resources"], [])
+        self.assertEqual(self.backend.calls, 0)
+        self.assertIsNone(result["dashboard"])
+
     def test_empty_dashboard_and_packages_trees_are_bootstrapped(self):
         shutil.rmtree(self.root / "dashboards")
         self.assertFalse((self.root / "packages").exists())

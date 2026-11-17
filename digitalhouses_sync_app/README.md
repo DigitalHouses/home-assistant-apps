@@ -1,4 +1,4 @@
-# DigitalHouses Sync App — 0.5.0
+# DigitalHouses Sync App — 0.5.1
 
 **Единый стандарт публикации YAML:** [DH Sync Resources Standard](../docs/standards/DH_SYNC_RESOURCES_STANDARD.md).
 
@@ -6,6 +6,8 @@ DH Sync automatically maintains Home Assistant dashboards and packages from publ
 
 ## How it works
 
+- Product registry comes **only** from broker MQTT `DigitalHouses/Global/+/sync` and `DigitalHouses/Global/+/+/sync` (retained, QoS 1). It is rebuilt on reconnect and kept in memory, not loaded from disk.
+- No `availability` checks, product-name or version allowlists. Only canonical GitHub owner `DigitalHouses` is admitted. An empty MQTT registry installs nothing; old YAML cannot create phantom products.
 - On MQTT discovery and every hour, read a shared shallow public Git snapshot.
 - Find canonical `dashboards/ru/*.yaml`, `packages/common/*.yaml`, and `packages/locales/ru/*.yaml` for every discovered product.
 - Find local views by their Lovelace `path` and packages by their top-level YAML key. Preserve existing local filenames/paths.
@@ -31,6 +33,6 @@ Site-specific notification variants stay locally managed until a single portable
 
 ## Rollout
 
-Installing DH Sync 0.5.0 enables automatic synchronization of published resources. Its Ingress panel shows last scan, updated/current counts, skipped conflicts and resource status. The old 0.3.x manual Apply/Rollback flow is no longer used by the running app.
+Installing DH Sync 0.5.1 enables automatic synchronization of published resources. Its Ingress panel shows last scan, updated/current counts, skipped conflicts and resource status. The old 0.3.x manual Apply/Rollback flow is no longer used by the running app.
 
 Tests: `python -m unittest discover -s digitalhouses_sync_app/tests -p 'test_*.py'`, plus repository CI.

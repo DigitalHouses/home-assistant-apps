@@ -38,15 +38,14 @@ PLEX_MESSAGE = (
 
 
 class SourceFixtures(unittest.TestCase):
-    def test_both_live_payload_shapes_are_accepted_and_persisted(self):
+    def test_both_live_payload_shapes_are_accepted_without_disk_registry(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "product_sources.json"
             sources = ProductSources(path)
             self.assertTrue(sources.apply(PVE_TOPIC, PVE_MESSAGE.encode()))
             self.assertTrue(sources.apply(PLEX_TOPIC, PLEX_MESSAGE.encode()))
             self.assertFalse(sources.apply(PLEX_TOPIC, PLEX_MESSAGE.encode()))
-            sources.save()
-            sources = ProductSources(path)
+            self.assertFalse(path.exists())
             records = sources.snapshot()
             self.assertEqual(len(records), 2)
             self.assertEqual(
