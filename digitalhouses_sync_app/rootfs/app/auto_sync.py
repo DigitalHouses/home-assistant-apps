@@ -24,11 +24,11 @@ from apply_service import _atomic_replace, _file_sync, _save_json
 from discovery_contract import (DEFAULT_DASHBOARD, canonical_repository,
                                 safe_product_path, safe_dashboard_slug)
 from git_source import BACKEND
-from local_audit import _local_snapshot, _safe_path
+from local_audit import _safe_path
 from resource_preview import parse_view
+from panel_config import PANEL_DIRECTORY, PANEL_REPOSITORY, parse_panel
 
 LOG = logging.getLogger("dh_sync.auto")
-VIEW_DIR = Path("dashboards/dh/views")
 PACKAGE_DIR = Path("packages")
 DEFAULT_PACKAGE_DIR = PACKAGE_DIR / "dh"
 MAX_BYTES = 1_000_000
@@ -174,9 +174,8 @@ class AutoSync:
             raise SyncError("Home Assistant configuration unavailable")
         if os.statvfs(self.root).f_flag & getattr(os, "ST_RDONLY", 1):
             raise SyncError("Home Assistant configuration is read-only")
-        # A newly installed HA instance may have no DH dashboard or package tree.
-        # Bootstrap only missing paths; do not replace existing local resources.
-        for relative in (VIEW_DIR, DEFAULT_PACKAGE_DIR):
+        # Bootstrap packages only. Panels are Storage dashboards, not local YAML files.
+        for relative in (DEFAULT_PACKAGE_DIR,):
             folder = self.root / relative
             _safe_path(self.root, folder)
             if folder.exists() and not folder.is_dir():
@@ -186,22 +185,6 @@ class AutoSync:
             except OSError as exc:
                 raise SyncError("Cannot create YAML directory: " + relative.as_posix()) from exc
             _safe_path(self.root, folder)
-
-        ui = self.root / "dashboards/dh/ui.yaml"
-        _safe_path(self.root, ui)
-        if not ui.exists():
-            _atomic_replace(
-                ui, b"title: DigitalHouses\nviews: !include_dir_list views/\n",
-                0o644, os.getuid(), os.getgid(),
-            )
-        elif not ui.is_file():
-            raise SyncError("DigitalHouses ui.yaml is not a file")
-
-    def _local_views(self) -> tuple[dict, dict, set]:
-        snap = _local_snapshot(self.root, include_storage=False)
-        if snap["issues"]:
-            raise SyncError("; ".join(snap["issues"])[:180])
-        return snap["by_path"], snap["by_name"]
 
     def _local_packages(self) -> dict[str, list[Path]]:
         root = self.root / PACKAGE_DIR
@@ -224,28 +207,6 @@ class AutoSync:
         """Resolve each Git repository once; any owned product is eligible."""
         resources, issues = [], []
         seen_products = set()
-        routes_by_source = {}
-        conflicts = set()
-        # Multiple instances of one agent share the same views. Explicit
-        # routing wins over legacy instances; inconsistent explicit routes
-        # are reported rather than assigning the same view arbitrarily.
-        for identity, claim in sorted(claims.items()):
-            try:
-                key = (canonical_repository(claim["repository"]),
-                       safe_product_path(claim.get("product_path"), claim["product_id"]))
-            except (KeyError, TypeError, ValueError):
-                continue
-            explicit = "dashboard" in claim
-            route = safe_dashboard_slug(claim.get("dashboard"))
-            previous = routes_by_source.get(key)
-            if previous is None or (explicit and not previous[1]):
-                routes_by_source[key] = (route, explicit)
-            elif explicit and previous[1] and previous[0] != route:
-                conflicts.add(key)
-            if claim.get("dashboard_warning"):
-                issues.append(identity + ": " + str(claim["dashboard_warning"])[:100])
-        for key in sorted(conflicts):
-            issues.append(key[1] + ": conflicting MQTT dashboard routing")
         for identity, claim in sorted(claims.items()):
             try:
                 repository = canonical_repository(claim["repository"])
@@ -267,8 +228,6 @@ class AutoSync:
                         if not raw or len(raw) > MAX_BYTES:
                             raise SyncError("Git YAML file missing or too large")
                         if category == "dashboards/ru":
-                            if source_id in conflicts:
-                                continue
                             metadata = parse_view(raw, source, product)
                             key = metadata["path"]
                             kind = "view"
@@ -279,37 +238,30 @@ class AutoSync:
                             "product": product, "repository": repository,
                             "source": source, "commit": commit, "kind": kind,
                             "identity": key, "name": name, "bytes": raw,
-                            "dashboard": routes_by_source[source_id][0]
-                            if kind == "view" else None,
                         })
             except Exception as exc:
                 issues.append(identity + ": " + str(exc)[:100])
                 LOG.warning("Source skipped: %s: %s", identity, exc)
         # Do not let two different Git resources fight for one local identity.
-        count: dict[tuple[str, str], int] = {}
+        count: dict[tuple[str, str, str], int] = {}
         for r in resources:
-            key = r["kind"], r["identity"]
+            key = (r["kind"], r["product"] if r["kind"] == "view" else "", r["identity"])
             count[key] = count.get(key, 0) + 1
         for r in resources:
-            if count[r["kind"], r["identity"]] > 1:
+            if count[r["kind"], r["product"] if r["kind"] == "view" else "", r["identity"]] > 1:
                 issues.append(r["product"] + ": conflicting canonical " + r["identity"])
-        return [r for r in resources if count[r["kind"], r["identity"]] == 1], issues
+        return [r for r in resources if count[r["kind"], r["product"] if r["kind"] == "view" else "", r["identity"]] == 1], issues
 
-    def _destination(self, item: dict, views: tuple,
-                     packages: dict) -> Path:
+    def _panels(self) -> list[dict]:
+        commit, _ = self.backend.resolve_revision(PANEL_REPOSITORY)
+        result = []
+        for item in self.backend.list_yaml(PANEL_REPOSITORY, PANEL_DIRECTORY, commit):
+            raw = self.backend.read_view(PANEL_REPOSITORY, item["path"], commit)
+            result.append(parse_panel(item["name"], raw))
+        return result
+
+    def _destination(self, item: dict, packages: dict) -> Path:
         key, name = item["identity"], item["name"]
-        if item["kind"] == "view":
-            by_path, by_name = views
-            # Paths in other dashboards (including Storage dashboards) have
-            # distinct URL prefixes and do not collide with DigitalHouses YAML.
-            matches = by_path.get(key, [])
-            if len(matches) > 1:
-                raise SyncError("Duplicate local view path: " + key)
-            matching = matches[0] if matches else None
-            collision = by_name.get(name)
-            if collision is not None and collision is not matching:
-                raise SyncError("Dashboard filename occupied: " + name)
-            return VIEW_DIR / (matching["name"] if matching else name)
         matches = packages.get(key, [])
         if len(matches) > 1:
             raise SyncError("Duplicate local package key: " + key)
@@ -422,18 +374,11 @@ class AutoSync:
                 "issues": [], "resources": [], "dashboard": None,
                 "packages": None,
             }
-            if not claims:
-                # No retained MQTT declarations => no resources to install.
-                # Old local YAML never creates a phantom product.
-                report["state"] = "No MQTT sources"
-                self.report = report
-                return self.status()
             try:
                 self._check_root()
                 self.recover()
                 resources, issues = self._published(claims)
                 report["issues"].extend(issues)
-                views = self._local_views()
                 packages = self._local_packages()
                 destinations = set()
                 package_sources = [s for s in resources if s["kind"] == "package"]
@@ -446,13 +391,12 @@ class AutoSync:
                         loader_problem = str(exc)[:150]
                         report["packages"] = {"loader": "Unavailable", "reload": "Not needed"}
                 changed_packages = 0
-                view_routes = {}
-                for source in resources:
+                for source in package_sources:
                     label = source["product"] + " / " + source["name"]
                     try:
                         if source["kind"] == "package" and loader_problem:
                             raise SyncError("Packages configuration: " + loader_problem)
-                        dest = self._destination(source, views, packages)
+                        dest = self._destination(source, packages)
                         if dest in destinations:
                             raise SyncError("Two resources have same destination")
                         destinations.add(dest)
@@ -466,15 +410,10 @@ class AutoSync:
                                 changed_packages += 1
                             outcome = "Updated"
                             # Refresh identities for subsequent files in same pass.
-                            if source["kind"] == "view":
-                                views = self._local_views()
-                            else:
-                                packages = self._local_packages()
+                            packages = self._local_packages()
                         else:
                             report["unchanged"] += 1
                             outcome = "Current"
-                        if source["kind"] == "view":
-                            view_routes[source["identity"]] = source["dashboard"]
                     except Exception as exc:
                         outcome = "Skipped: " + str(exc)[:150]
                         report["issues"].append(label + ": " + str(exc)[:150])
@@ -492,10 +431,13 @@ class AutoSync:
                         report["packages"]["reload"] = "Not available"
                 if self.publisher is not None:
                     try:
-                        report["dashboard"] = self.publisher.sync(view_routes)
+                        panels = self._panels()
+                        available = {(r["product"], r["identity"]): r
+                                     for r in resources if r["kind"] == "view"}
+                        report["dashboard"] = self.publisher.sync(panels, available)
                         report["issues"].extend(report["dashboard"].get("issues", []))
                     except Exception as exc:
-                        report["issues"].append("DigitalHouses Dashboard: " + str(exc)[:150])
+                        report["issues"].append("DigitalHouses panels: " + str(exc)[:150])
                 if report["issues"]:
                     report["state"] = "Partial" if report["updated"] or report["unchanged"] else "Error"
             except Exception as exc:

@@ -1,99 +1,66 @@
-# Стандарт DH Sync — размещение Dashboards и Packages
+# DigitalHouses — DH Sync Resources Standard
 
-**Статус: действующий.** Единый стандарт для всех продуктов DigitalHouses.
-Заменяет прежние правила публикации YAML для DH Sync и отдельный стандарт версий HA packages.
+**Current contract: DH Sync 0.6.0.** Supersedes prior dashboard routing, local view adoption and migration rules.
 
-## 1. Единственный источник
+## 1. Registry and sources
 
-DH Sync автоматически синхронизирует YAML из публичных GitHub-репозиториев владельца **DigitalHouses**.
-Продукт объявляет свой репозиторий и каталог через существующее MQTT `/sync` Discovery.
+The sole product registry is retained MQTT `DigitalHouses/Global/+/sync` and `DigitalHouses/Global/+/+/sync`. It contains only product identity and GitHub source location. Existing MQTT `dashboard` fields are ignored.
 
-- Единственный реестр продуктов — retained MQTT `DigitalHouses/Global/+/sync` и `DigitalHouses/Global/+/+/sync`. При новом подключении реестр читается заново из брокера, без локального кэша источников.
-- Поля `availability`, версия продукта и установленность агента не определяют допуск или синхронизацию. Удаление retained записи `/sync` убирает запись из реестра без удаления уже установленного YAML.
-- Никаких списков разрешённых продуктов, диапазонов версий и ручных подтверждений.
-- GitHub — источник истины для **опубликованных** YAML.
-- `examples/` — только примеры. Они **никогда не являются ресурсами DH Sync**.
+The single source-admission rule is GitHub owner `DigitalHouses`. No product allowlist, `availability` requirement, version gate, manual approval, or product-side UI registration.
 
-## 2. Где публиковать YAML в GitHub
+GitHub is the canonical source for both product resources and panel layout. DH Sync checks on MQTT changes and hourly, then applies changed content. Version comments are informational only.
 
-Все рабочие файлы лежат **внутри каталога своего продукта**:
+## 2. Canonical files
 
 ```text
-<product>/
-  dashboards/
-    ru/
-      10_<name>.yaml
-      11_<name>.yaml
-  packages/
-    common/
-      <base_package>.yaml
-    locales/
-      ru/
-        <notification_package>.yaml
-  examples/                  # только примеры; DH Sync игнорирует
+digitalhouses_sync_app/dashboards/
+  dh-system.yaml                   # Dashboard metadata and ordered View references
+  dh-home.yaml                     # Optional future panel
+<product_path>/
+  dashboards/ru/*.yaml             # Standalone Home Assistant Lovelace Views
+  packages/common/*.yaml          # Portable packages
+  packages/locales/ru/*.yaml      # Portable Russian notifications
+  examples/**                      # Ignored
 ```
 
-| Каталог | Назначение |
-| --- | --- |
-| `dashboards/ru/*.yaml` | Рабочие русские Lovelace-вкладки |
-| `packages/common/*.yaml` | Пакеты без привязки к языку: Recorder, Logbook, helpers, automations |
-| `packages/locales/ru/*.yaml` | Рабочие русские пакеты уведомлений и другой локализованный YAML |
-| `examples/**` | Документация и образцы, **не устанавливаются** |
+One panel YAML file is one Dashboard. Its basename is the HA URL: `dh-system.yaml` → `/dh-system/`. The Dashboard is an item in the HA sidebar; a View is its top tab; Sections are card groups inside a View.
 
-Для других языков возможны `dashboards/<locale>/` и
-`packages/locales/<locale>/`. **Текущая DH Sync 0.4.0 синхронизирует только `ru`**;
-английские каталоги до поддержки выбора языка не устанавливаются.
+## 3. Panel YAML
 
-Продукту не обязательно иметь оба типа ресурсов. Не создавать пустые YAML «для галочки».
+```yaml
+title: DH System
+icon: mdi:server
+show_in_sidebar: true
+require_admin: true
 
-## 3. Требования к содержимому
+views:
+  - product: digitalhouses_pve_agent
+    path: dh_pve_agent
+    icon: mdi:server
+    show_icon_and_title: false
 
-**Dashboard:** один самостоятельный Lovelace view на файл, обязательно с
-уникальным `path`. Не включать в него `lovelace:` или общий dashboard `ui.yaml`.
-Единую панель DigitalHouses ведёт DH Sync.
+  - product: digitalhouses_internet_app
+    path: internet
+    title: Internet
+    icon: mdi:web
+    show_icon_and_title: true
+```
 
-**Package:** один стабильный уникальный верхнеуровневый YAML-ключ на файл.
-Не менять существующие `entity_id`, `automation id` и ключи пакетов без реальной
-миграции; не выпускать два файла с одним package key.
+Rules:
+- **Order of the `views` list is the tab order.** No `order` or separate sorting.
+- `product + path` identifies a canonical View, and the product must be present in retained MQTT. Missing products/resources are simply not displayed.
+- The same canonical View may appear in multiple panel YAML files, with independent tab title/icon presentation.
+- Native HA View fields `title`, `icon` and `show_icon_and_title` may be overridden per placement; omit `icon` to inherit from the View, or use `icon: null` to show title only.
+- `require_admin` is explicit for every panel. For user-facing summary content, publish a separate reduced View within the owning product; do not expose an admin View in a public panel.
+- Two Views with the same `path` cannot coexist in one panel; identical paths across different panels are fine.
+- All other fields and Sections/Cards remain native Lovelace YAML owned by the product.
 
-**Уведомления:** готовый к использованию, переносимый русский пакет размещать
-в `packages/locales/ru/`. Он должен использовать общедоступные средства HA
-(например, `persistent_notification.create`) и не зависеть от частного
-`script.write2admins`, личных `notify.*`, IP, секретов или имени дома.
-Варианты с местной доставкой остаются только локальными файлами либо примерами
-в `examples/`; DH Sync не должен считать их каноническими.
-**Не публиковать несколько альтернатив доставки с одинаковым package key.**
+## 4. Applying in Home Assistant
 
-Заголовки `DH-View-Version`, `DH-Package-Version` и даты допускаются
-**как справочная информация**, но не обязательны и не ограничивают синхронизацию.
-Для обновления достаточно изменения содержимого опубликованного файла.
+DH Sync reads product Views from GitHub and publishes their contents into its declared **Storage dashboards** through the official HA WebSocket API. It updates dashboard title, icon, sidebar visibility, admin restriction and ordered Views when YAML changes. No local copies of Views are required and no direct `.storage` edits are made.
 
-## 4. Куда DH Sync устанавливает на Home Assistant
+Packages are still installed under `/config/packages/dh/` (or updated in their existing `/config/packages/` location by package key), with atomic writes and backups. DH Sync configures `homeassistant.packages: !include_dir_merge_named packages/` when necessary and asks HA for a quick YAML reload. Some integrations require a normal restart; DH Sync never restarts HA.
 
-| Ресурс | Локальное расположение |
-| --- | --- |
-| Dashboard | `/config/dashboards/dh/views/` |
-| Новый package | `/config/packages/dh/` |
-| Уже существующий package | **На старом месте** в `/config/packages/`, найден по верхнеуровневому ключу |
+**No legacy migration.** Older YAML panels, local View files and unrelated manually maintained dashboards are not adopted or automatically removed. A declared Storage dashboard at the same URL is updated from new YAML; an existing YAML-mode dashboard cannot be managed by the Storage API.
 
-- При первом запуске DH Sync **сам создаёт** отсутствующие каталоги Dashboard и Packages, а также `dashboards/dh/ui.yaml`, если его ещё нет. Существующие файлы не перезаписываются без сравнения.
-- При публикации пакетов DH Sync автоматически добавляет `homeassistant.packages: !include_dir_merge_named packages/` в `configuration.yaml`, если подключения нет, сохраняя остальную конфигурацию и резервную копию. Конфликтующее подключение не перезаписывается.
-- После изменения пакета DH Sync запрашивает штатную быструю перезагрузку YAML. Некоторые новые интеграции всё равно активируются только после обычного перезапуска Home Assistant — DH Sync сам его не выполняет.
-- DH Sync находит dashboard по `path`, а package — по его YAML-ключу.
-- При различии содержимого файл обновляется **автоматически**, перед записью сохраняется backup.
-- Конфликт одинаковых `path` проверяется только внутри YAML Dashboard DigitalHouses; другие Storage Dashboard имеют отдельные URL и не блокируют синхронизацию. Конфликты package key в `/config/packages/` по-прежнему блокируются.
-- Чужие файлы не трогаются. Исчезновение ресурса из GitHub не удаляет его с HA.
-- Исполняемые Apps/Agents и пользовательские настройки не изменяются. `.storage` напрямую не редактируется: только собственный Dashboard DigitalHouses создаётся и обновляется через штатный API Home Assistant.
-- Продукт может указать необязательный MQTT `/sync.dashboard` (slug, например `dh-system` или `dh-climate`). DH Sync автоматически создаёт панель по адресу `/<slug>/` и размещает в ней опубликованные Views. Если поле отсутствует, используется `/digital-houses/`.
-- Создание и обновление панелей происходит через официальный WebSocket API Home Assistant. Панели работают в Storage-режиме; GitHub YAML остаётся источником истины. При смене панели DH Sync переносит только собственные Views, сохраняя пользовательские вкладки и панели. Перезапуск HA не требуется.
-- **DH Sync не перезапускает Home Assistant.** После замены package его новая логика
-  может начать работать только после обычного перезапуска HA.
-
-## 5. Правило публикации
-
-**Хотите, чтобы файл автоматически получали дома — публикуйте его в одном из
-канонических каталогов выше. Хотите оставить только пример — храните в `examples/`.**
-
-Проверяйте рабочий YAML и его существующие идентификаторы **до merge в main**:
-после merge DH Sync может распространить изменение автоматически.
-Никакого отдельного шага регистрации, версии продукта или подтверждения Apply нет.
+Changes in GitHub are deployed automatically with no Apply confirmation. The Git commit history provides versioning and rollback of source files.

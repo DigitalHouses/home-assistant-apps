@@ -1,18 +1,5 @@
-# DH Sync v0.1.0 — устройство и эксплуатация
+# DH Sync 0.6.0 — Documentation
 
-Это экспериментальная версия HAOS App, **пока без опубликованного образа**.
+The active specification is [DH Sync Resources Standard](../docs/standards/DH_SYNC_RESOURCES_STANDARD.md).
 
-App использует Supervisor MQTT service и Supervisor Core API proxy для чтения версий и проверки загруженной панели.
-Не нужно создавать пользовательский Home Assistant token. Внутренний Ingress доступен только администраторам.
-
-Режим при установке: allow_changes: false. Просмотр плана не изменяет /config; для Apply и Rollback требуется включить настройку и нажать кнопку с подтверждением.
-
-Источник — три зафиксированных Git SHA; ресурсы только ru. Все другие продукты остаются нетронутыми.
-Установленные PVE/UPS обновляются только если соответствуют проверенным CORE v3 SHA, установленный Plex сравнивается и не переписывается, если совпадает.
-Дубликаты view path, Lovelace Storage, несовместимые версии, незнакомые локальные изменения и некорректная конфигурация HA блокируют операцию.
-
-Откат из /data/sync-v01/transactions/ восстанавливает исходные байты. Не перезаписывать пользовательские изменения после применения.
-
-Не поддерживаются packages, уведомления, установка HACS, обновления Apps/Agents, автообновление по расписанию и перезапуск HA.
-
-Перед публикацией: пройти требования [FIRST_VERSION.md](docs/FIRST_VERSION.md).
+MQTT retained `/sync` supplies product identity; GitHub YAML supplies panel composition and product resources. No migrations, compatibility gates, manual confirmation, or source-provided panel routing. Views are published through HA's supported Storage dashboard WebSocket API; packages use atomic file sync. Other Apps/Agents are not changed.

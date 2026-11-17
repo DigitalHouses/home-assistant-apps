@@ -1,4 +1,4 @@
-"""DH Sync 0.5.1: autonomous owner-only dashboards and packages sync."""
+"""DH Sync 0.6.0: autonomous owner-only dashboards and packages sync."""
 from __future__ import annotations
 
 import json

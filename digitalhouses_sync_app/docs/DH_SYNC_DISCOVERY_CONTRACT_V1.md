@@ -35,6 +35,9 @@ File locations and simple identity rules are defined only by
 The App reads `dashboards/ru/*.yaml`, `packages/common/*.yaml` and
 `packages/locales/ru/*.yaml`, never `examples/`.
 
-Git transport/path safety, duplicate-path/key checks, backups and atomic
-file replacement protect the local HA configuration. No HA restart,
-Lovelace Storage edits, product binary update or automatic deletion occurs.
+Git transport/path integrity, per-panel duplicate-path checks and package backups
+protect the HA configuration. Panel YAML in `digitalhouses_sync_app/dashboards/`
+controls View placement and native HA dashboard metadata. Any legacy MQTT
+`dashboard` property is ignored. Views are published through HA WebSocket
+Storage APIs (never direct `.storage` writes); packages are atomically updated.
+No HA restart or product binary update occurs.

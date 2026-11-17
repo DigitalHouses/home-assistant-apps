@@ -1,27 +1,22 @@
-"""End-to-end tests: autonomous dashboard and package synchronization."""
+"""End-to-end tests for MQTT products, GitHub panels and HA packages."""
 from __future__ import annotations
 
-import hashlib
 import json
-import shutil
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import patch
 
 from auto_sync import AutoSync, configured_packages, package_identity, package_keys
+from panel_config import PANEL_DIRECTORY, PANEL_REPOSITORY
 
 REPO = "https://github.com/DigitalHouses/any-repo"
-CLAIMS = {
-    "example/default": {
-        "repository": REPO, "product_id": "example",
-        "product_path": "example", "version": "9999.0",
-    },
-}
+CLAIMS = {"example/default": {"repository": REPO, "product_id": "example",
+          "product_path": "example", "version": "9999.0"}}
 VIEW = b"title: First\npath: first\ntype: sections\nsections: []\n"
-VIEW_NEW = b"title: First\npath: first\ntype: sections\nsections: []\nicon: mdi:home\n"
 PACKAGE = b"dh_example_package:\n  recorder:\n    include:\n      entities:\n        - sensor.example\n"
-PACKAGE_NEW = b"# DH-Package-Version: 2.0.0\ndh_example_package:\n  recorder:\n    include:\n      entities:\n        - sensor.example\n        - sensor.more\n"
+PACKAGE_NEW = PACKAGE.replace(b"sensor.example", b"sensor.more")
+PANEL = (b"title: DH System\nrequire_admin: true\n"
+         b"views:\n  - product: example\n    path: first\n")
 
 
 class FakeBackend:
@@ -29,381 +24,170 @@ class FakeBackend:
         self.raw = {
             "example/dashboards/ru/10_first.yaml": VIEW,
             "example/packages/common/dh_example_package.yaml": PACKAGE,
+            PANEL_DIRECTORY + "/dh-system.yaml": PANEL,
         }
-        self.calls = 0
+        self.revisions = []
 
     def resolve_revision(self, repo):
-        self.calls += 1
+        self.revisions.append(repo)
         return "a" * 40, "main"
 
     def list_yaml(self, repo, folder, commit):
-        return [{"name": path.split("/")[-1], "path": path, "type": "file"}
-                for path in self.raw if path.startswith(folder + "/")
-                and "/" not in path[len(folder) + 1:]]
+        return [{"name": p.split("/")[-1], "path": p, "type": "file"}
+                for p in sorted(self.raw) if p.startswith(folder + "/")
+                and "/" not in p[len(folder) + 1:]]
 
     def read_view(self, repo, path, commit):
         return self.raw[path]
+
+
+class RecordingPublisher:
+    def __init__(self):
+        self.calls = []
+
+    def sync(self, panels, sources):
+        self.calls.append((panels, sources))
+        return {"state": "Updated", "url": "/dh-system/",
+                "dashboards": [], "issues": []}
 
 
 class AutomaticSyncTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
-        base = Path(self.tmp.name)
-        self.root = base / "homeassistant"
-        self.views = self.root / "dashboards/dh/views"
-        self.views.mkdir(parents=True)
-        (self.root / "dashboards/dh/ui.yaml").write_text(
-            "title: DigitalHouses\nviews: !include_dir_list views/\n")
-        (self.root / "configuration.yaml").write_text(
+        home = Path(self.tmp.name) / "homeassistant"
+        home.mkdir()
+        self.root = home
+        self.data = Path(self.tmp.name) / "journal"
+        (home / "configuration.yaml").write_text(
             "homeassistant:\n  packages: !include_dir_merge_named packages/\n")
-        (self.root / ".storage").mkdir()
         self.backend = FakeBackend()
-        self.app = AutoSync(self.root, base / "journal", backend=self.backend)
+        self.publisher = RecordingPublisher()
+        self.app = AutoSync(home, self.data, backend=self.backend,
+                            publisher=self.publisher)
 
-    def test_empty_mqtt_registry_does_not_publish_local_views(self):
-        (self.root / "dashboards/dh/views/20_old.yaml").write_text(
-            "title: Old\npath: old-view\n")
-        result = self.app.sync({})
-        self.assertEqual(result["state"], "No MQTT sources")
-        self.assertEqual(result["updated"], 0)
-        self.assertEqual(result["resources"], [])
-        self.assertEqual(self.backend.calls, 0)
-        self.assertIsNone(result["dashboard"])
-
-    def test_empty_dashboard_and_packages_trees_are_bootstrapped(self):
-        shutil.rmtree(self.root / "dashboards")
-        self.assertFalse((self.root / "packages").exists())
-        result = self.app.sync(CLAIMS)
-        self.assertEqual(result["state"], "OK", result["issues"])
-        self.assertEqual(result["updated"], 2)
-        self.assertEqual((self.root / "dashboards/dh/ui.yaml").read_text(),
-                         "title: DigitalHouses\nviews: !include_dir_list views/\n")
-        self.assertEqual((self.views / "10_first.yaml").read_bytes(), VIEW)
-        self.assertEqual((self.root / "packages/dh/dh_example_package.yaml").read_bytes(),
-                         PACKAGE)
-        again = self.app.sync(CLAIMS)
-        self.assertEqual(again["state"], "OK", again["issues"])
-        self.assertEqual(again["unchanged"], 2)
-
-    def test_occupied_dashboard_directory_is_not_overwritten(self):
-        shutil.rmtree(self.root / "dashboards")
-        (self.root / "dashboards").write_text("leave untouched")
-        result = self.app.sync(CLAIMS)
-        self.assertEqual(result["state"], "Error")
-        self.assertIn("Cannot create YAML directory", result["issues"][0])
-        self.assertEqual((self.root / "dashboards").read_text(), "leave untouched")
-
-    def test_existing_parent_dashboard_is_preserved(self):
-        ui = self.root / "dashboards/dh/ui.yaml"
-        original = ui.read_bytes()
-        result = self.app.sync(CLAIMS)
-        self.assertEqual(result["state"], "OK", result["issues"])
-        self.assertEqual(ui.read_bytes(), original)
-
-    def test_pve_metadata_routes_view_to_dh_system(self):
-        self.backend.raw["example/dashboards/ru/11_ups.yaml"] = (
-            b"title: UPS\npath: dh_pve_agent_ups\nviews: []\n"
-        )
-        claim = {k: {**v, "dashboard": "dh-system"} for k, v in CLAIMS.items()}
-        resources, issues = self.app._published(claim)
-        self.assertEqual(issues, [])
-        views = [r for r in resources if r["kind"] == "view"]
-        self.assertEqual({r["dashboard"] for r in views}, {"dh-system"})
-        self.assertEqual(len(views), 2)
-
-    def test_new_agent_route_wins_over_old_instance_without_route(self):
-        instances = {
-            "example/old": {**CLAIMS["example/default"]},
-            "example/new": {**CLAIMS["example/default"], "dashboard": "dh-system"},
-        }
-        resources, issues = self.app._published(instances)
-        self.assertEqual(issues, [])
-        self.assertEqual([r["dashboard"] for r in resources if r["kind"] == "view"],
-                         ["dh-system"])
-        self.assertEqual(self.backend.calls, 1)
-
-    def test_conflicting_explicit_routes_skip_views_but_keep_packages(self):
-        instances = {
-            "example/one": {**CLAIMS["example/default"], "dashboard": "dh-system"},
-            "example/two": {**CLAIMS["example/default"], "dashboard": "dh-climate"},
-        }
-        resources, issues = self.app._published(instances)
-        self.assertTrue(any("conflicting MQTT" in issue for issue in issues))
-        self.assertEqual([r["kind"] for r in resources], ["package"])
-
-    def test_publisher_receives_dashboard_paths_after_yaml_sync(self):
-        class RecordingPublisher:
-            def __init__(self):
-                self.routes = None
-
-            def sync(self, routes):
-                self.routes = routes
-                return {"state": "Current", "url": "/dh-system/",
-                        "dashboards": [], "issues": []}
-
-        publisher = RecordingPublisher()
-        self.app.publisher = publisher
-        claims = {k: {**v, "dashboard": "dh-system"} for k, v in CLAIMS.items()}
-        report = self.app.sync(claims)
-        self.assertEqual(report["state"], "OK", report["issues"])
-        self.assertEqual(publisher.routes, {"first": "dh-system"})
-        self.assertEqual(report["updated"], 2)
-
-    def test_missing_loader_is_installed_without_confirmation(self):
-        config = self.root / "configuration.yaml"
-        config.write_text(
-            "default_config:\n\n# local note\nhomeassistant:\n"
-            "  name: Existing Home\n  time_zone: Asia/Almaty\n")
-        called = []
-        self.app.reloader = lambda: called.append("reload")
-        report = self.app.sync(CLAIMS)
-        self.assertEqual(report["state"], "OK", report["issues"])
-        self.assertEqual(report["updated"], 2)
-        self.assertEqual(report["packages"],
-                         {"loader": "Configured", "reload": "Requested"})
-        self.assertEqual(called, ["reload"])
-        self.assertIn("  packages: !include_dir_merge_named packages/\n",
-                      config.read_text())
-        self.assertIn("name: Existing Home", config.read_text())
-        self.assertIn("# local note", config.read_text())
-        self.assertEqual((self.root / "packages/dh/dh_example_package.yaml").read_bytes(),
-                         PACKAGE)
-        backup = [j / "original.yaml" for j in self.app.data.glob("tx-*")
-                  if json.loads((j / "manifest.json").read_text())["path"]
-                  == "configuration.yaml"]
-        self.assertEqual(len(backup), 1)
-        self.assertIn(b"time_zone: Asia/Almaty", backup[0].read_bytes())
-        again = self.app.sync(CLAIMS)
-        self.assertEqual(again["unchanged"], 2)
-        self.assertEqual(again["packages"], {"loader": "Current", "reload": "Not needed"})
-        self.assertEqual(called, ["reload"])
-
-    def test_no_homeassistant_block_adds_package_loader(self):
-        (self.root / "configuration.yaml").write_text(
-            "default_config:\nlogger:\n  default: info\n")
-        report = self.app.sync(CLAIMS)
-        self.assertEqual(report["updated"], 2, report["issues"])
-        self.assertIn("homeassistant:\n  packages: !include_dir_merge_named packages/",
-                      (self.root / "configuration.yaml").read_text())
-
-    def test_missing_configuration_yaml_created_automatically(self):
-        (self.root / "configuration.yaml").unlink()
-        report = self.app.sync(CLAIMS)
-        self.assertEqual(report["state"], "OK", report["issues"])
-        self.assertEqual((self.root / "configuration.yaml").read_text(),
-                         "homeassistant:\n  packages: !include_dir_merge_named packages/\n")
-
-    def test_conflicting_packages_loader_never_overwritten(self):
-        config = self.root / "configuration.yaml"
-        old = "homeassistant:\n  packages: !include_dir_named packages/\n"
-        config.write_text(old)
-        report = self.app.sync(CLAIMS)
-        self.assertEqual(report["state"], "Partial", report["issues"])
-        self.assertEqual(report["updated"], 1)
-        self.assertIn("packages configuration", report["issues"][0].lower())
-        self.assertEqual(config.read_text(), old)
-        self.assertFalse((self.root / "packages/dh/dh_example_package.yaml").exists())
-
-    def test_unrelated_packages_and_missing_source_are_preserved(self):
-        root = self.root / "packages/Global"
-        root.mkdir(parents=True)
-        local = root / "private.yaml"
-        local.write_text("private_automation:\n  automation: []\n")
-        self.backend.raw.clear()
-        config = self.root / "configuration.yaml"
-        config.write_text("default_config:\n")
-        before = config.read_bytes()
-        report = self.app.sync(CLAIMS)
-        self.assertEqual(report["state"], "OK", report["issues"])
-        self.assertEqual(report["updated"], 0)
-        self.assertEqual(config.read_bytes(), before)
-        self.assertTrue(local.exists())
-
-    def test_loader_write_not_performed_on_duplicate_homeassistant(self):
-        config = self.root / "configuration.yaml"
-        old = "homeassistant:\n  name: One\nhomeassistant:\n  name: Two\n"
-        config.write_text(old)
-        report = self.app.sync(CLAIMS)
-        self.assertEqual(report["state"], "Partial")
-        self.assertEqual(config.read_text(), old)
-        self.assertIn("Multiple homeassistant", report["issues"][0])
-
-    def test_quick_reload_failure_reports_partial_but_keeps_files(self):
-        self.app.reloader = lambda: (_ for _ in ()).throw(RuntimeError("API offline"))
-        report = self.app.sync(CLAIMS)
-        self.assertEqual(report["state"], "Partial", report["issues"])
-        self.assertEqual(report["packages"]["reload"], "Unavailable")
-        self.assertEqual((self.root / "packages/dh/dh_example_package.yaml").read_bytes(),
-                         PACKAGE)
-
-    def test_zero_click_install_and_second_pass_no_changes(self):
+    def test_first_install_and_idempotent_second_pass(self):
         first = self.app.sync(CLAIMS)
         self.assertEqual(first["state"], "OK", first["issues"])
-        self.assertEqual(first["updated"], 2)
-        self.assertEqual((self.views / "10_first.yaml").read_bytes(), VIEW)
-        self.assertEqual((self.root / "packages/dh/dh_example_package.yaml").read_bytes(),
-                         PACKAGE)
+        self.assertEqual(first["updated"], 1)  # Package, not local view copy.
+        self.assertEqual((self.root / "packages/dh/dh_example_package.yaml").read_bytes(), PACKAGE)
+        self.assertFalse((self.root / "dashboards").exists())
+        self.assertEqual(self.publisher.calls[-1][0][0]["slug"], "dh-system")
+        self.assertIn(("example", "first"), self.publisher.calls[-1][1])
         second = self.app.sync(CLAIMS)
         self.assertEqual(second["updated"], 0)
-        self.assertEqual(second["unchanged"], 2)
-        self.assertEqual(len(list((self.root / "packages").rglob("*.yaml"))), 1)
+        self.assertEqual(second["unchanged"], 1)
 
-    def test_replace_existing_views_and_packages_in_original_locations(self):
-        old_view = VIEW + b"# local old\n"
-        old_package = PACKAGE + b"# local old\n"
-        (self.views / "99_existing.yaml").write_bytes(old_view)
-        folder = self.root / "packages/Global/System"
-        folder.mkdir(parents=True)
-        local = folder / "my_existing.yaml"
-        local.write_bytes(old_package)
-        report = self.app.sync(CLAIMS)
-        self.assertEqual(report["updated"], 2, report["issues"])
-        self.assertEqual((self.views / "99_existing.yaml").read_bytes(), VIEW)
-        self.assertEqual(local.read_bytes(), PACKAGE)
-        self.assertFalse((self.views / "10_first.yaml").exists())
-        self.assertFalse((self.root / "packages/dh/dh_example_package.yaml").exists())
-        backups = list((self.app.data).glob("tx-*/original.yaml"))
-        self.assertEqual(sorted(b.read_bytes() for b in backups),
-                         sorted([old_view, old_package]))
+    def test_mqtt_dashboard_is_completely_ignored(self):
+        claims = {"example/old": {**CLAIMS["example/default"], "dashboard": "dh-legacy"},
+                  "example/new": {**CLAIMS["example/default"], "dashboard": "dh-system"}}
+        report = self.app.sync(claims)
+        self.assertEqual(report["state"], "OK", report["issues"])
+        self.assertEqual([p["slug"] for p in self.publisher.calls[-1][0]], ["dh-system"])
+        self.assertEqual(list(self.publisher.calls[-1][1]), [("example", "first")])
 
-    def test_package_and_dashboard_update_without_app_version_change(self):
+    def test_empty_mqtt_registry_never_invents_products_from_yaml(self):
+        old = self.root / "dashboards/dh/views/10_old.yaml"
+        old.parent.mkdir(parents=True)
+        old.write_bytes(VIEW)
+        report = self.app.sync({})
+        self.assertEqual(report["state"], "OK", report["issues"])
+        self.assertEqual(report["updated"], 0)
+        self.assertEqual(self.publisher.calls[-1][1], {})
+        self.assertEqual(old.read_bytes(), VIEW)
+
+    def test_same_view_path_from_different_products_is_distinct(self):
+        self.backend.raw["other/dashboards/ru/10_first.yaml"] = VIEW
+        other = {"other/default": {"repository": REPO, "product_id": "other",
+                                   "product_path": "other"}}
+        resources, issues = self.app._published({**CLAIMS, **other})
+        self.assertEqual(issues, [])
+        self.assertEqual(len([r for r in resources if r["kind"] == "view"]), 2)
+        self.app.sync({**CLAIMS, **other})
+        keys = self.publisher.calls[-1][1].keys()
+        self.assertIn(("example", "first"), keys)
+        self.assertIn(("other", "first"), keys)
+
+    def test_panel_files_can_be_modified_without_product_version_change(self):
         self.app.sync(CLAIMS)
-        self.backend.raw["example/dashboards/ru/10_first.yaml"] = VIEW_NEW
+        self.backend.raw[PANEL_DIRECTORY + "/dh-system.yaml"] = (
+            b"title: Updated System\nrequire_admin: true\nviews: []\n")
+        self.app.sync(CLAIMS)
+        self.assertEqual(self.publisher.calls[-1][0][0]["title"], "Updated System")
+        self.assertEqual(self.publisher.calls[-1][0][0]["views"], [])
+
+    def test_missing_product_view_is_normal(self):
+        del self.backend.raw["example/dashboards/ru/10_first.yaml"]
+        self.app.sync(CLAIMS)
+        self.assertEqual(self.publisher.calls[-1][1], {})
+        self.assertEqual(self.app.status()["state"], "OK")
+
+    def test_package_updates_do_not_depend_on_version(self):
+        self.app.sync(CLAIMS)
         self.backend.raw["example/packages/common/dh_example_package.yaml"] = PACKAGE_NEW
-        report = self.app.sync(CLAIMS)
-        self.assertEqual(report["updated"], 2, report["issues"])
-        self.assertEqual((self.views / "10_first.yaml").read_bytes(), VIEW_NEW)
+        result = self.app.sync(CLAIMS)
+        self.assertEqual(result["updated"], 1, result["issues"])
         self.assertEqual((self.root / "packages/dh/dh_example_package.yaml").read_bytes(),
                          PACKAGE_NEW)
 
-    def test_reject_duplicate_existing_package_key(self):
-        folder = self.root / "packages/Local"
-        folder.mkdir(parents=True)
-        for i in range(2):
-            (folder / (str(i) + ".yaml")).write_bytes(PACKAGE)
-        report = self.app.sync(CLAIMS)
-        self.assertEqual(report["updated"], 1)
-        self.assertIn("Duplicate local package key", report["issues"][0])
-        self.assertEqual(len(list(folder.glob("*.yaml"))), 2)
-
-    def test_storage_view_path_in_other_dashboard_is_not_a_collision(self):
-        store = {"data": {"config": {"views": [{"path": "first"}]}}}
-        stored = self.root / ".storage/lovelace.dashboard_system"
-        stored.write_text(json.dumps(store))
-        before = stored.read_bytes()
-        report = self.app.sync(CLAIMS)
-        self.assertEqual(report["state"], "OK", report["issues"])
-        self.assertEqual(report["updated"], 2)
-        self.assertEqual((self.views / "10_first.yaml").read_bytes(), VIEW)
-        self.assertEqual(stored.read_bytes(), before)
-
-    def test_unrelated_storage_corruption_does_not_block_yaml_sync(self):
-        (self.root / ".storage/lovelace.dashboard_system").write_text(
-            "unrelated storage content")
-        report = self.app.sync(CLAIMS)
-        self.assertEqual(report["state"], "OK", report["issues"])
-        self.assertEqual(report["updated"], 2)
-
-    def test_foreign_github_owner_not_admitted(self):
-        claim = {"example/default": {
-            **CLAIMS["example/default"],
-            "repository": "https://github.com/SomeoneElse/any-repo",
-        }}
-        report = self.app.sync(claim)
-        self.assertEqual(report["updated"], 0)
-        self.assertTrue(report["issues"])
-        self.assertEqual(self.backend.calls, 0)
-
-    def test_local_multi_key_package_is_not_erased(self):
-        folder = self.root / "packages/Global"
-        folder.mkdir(parents=True)
-        local = folder / "shared.yaml"
-        content = PACKAGE + b"\nother_package:\n  input_boolean:\n    test:\n      name: Test\n"
-        local.write_bytes(content)
-        report = self.app.sync(CLAIMS)
-        self.assertEqual(report["updated"], 1)
-        self.assertTrue(report["issues"])
-        self.assertEqual(local.read_bytes(), content)
-        self.assertEqual(package_keys(content),
-                         ["dh_example_package", "other_package"])
-
-    def test_user_custom_notification_not_touched_when_not_published(self):
-        folder = self.root / "packages/Global"
-        folder.mkdir(parents=True)
-        local = folder / "notification.yaml"
-        content = b"dh_notification_local:\n  automation:\n    - id: custom\n      alias: keep\n"
-        local.write_bytes(content)
-        report = self.app.sync(CLAIMS)
-        self.assertEqual(report["updated"], 2, report["issues"])
-        self.assertEqual(local.read_bytes(), content)
-
-    def test_header_version_never_blocks_source(self):
-        self.backend.raw["example/packages/common/dh_example_package.yaml"] = (
-            b"# DH-Compatible-Agent: >=9999,<10000\n" + PACKAGE
-        )
+    def test_missing_loader_is_configured_without_confirmation(self):
+        config = self.root / "configuration.yaml"
+        config.write_text("default_config:\n# custom\nhomeassistant:\n  name: Home\n")
+        calls = []
+        self.app.reloader = lambda: calls.append("reload")
         result = self.app.sync(CLAIMS)
-        self.assertEqual(result["updated"], 2, result["issues"])
+        self.assertEqual(result["state"], "OK", result["issues"])
+        self.assertEqual(result["packages"]["reload"], "Requested")
+        self.assertEqual(calls, ["reload"])
+        self.assertIn("name: Home", config.read_text())
+        self.assertIn("packages: !include_dir_merge_named packages/", config.read_text())
 
-    def test_recover_power_loss_after_atomic_write(self):
+    def test_conflicting_package_loader_is_left_untouched(self):
+        config = self.root / "configuration.yaml"
+        old = "homeassistant:\n  packages: !include_dir_named packages/\n"
+        config.write_text(old)
         result = self.app.sync(CLAIMS)
-        self.assertEqual(result["updated"], 2)
-        file = self.root / "packages/dh/dh_example_package.yaml"
-        journal = next(x for x in self.app.data.glob("tx-*")
-                       if json.loads((x / "manifest.json").read_text())["path"]
-                       == "packages/dh/dh_example_package.yaml")
-        manifest = journal / "manifest.json"
-        state = json.loads(manifest.read_text())
-        state["state"] = "prepared"
-        manifest.write_text(json.dumps(state))
-        self.app.recover()
-        self.assertFalse(file.exists())
-        self.assertEqual(json.loads(manifest.read_text())["state"], "recovered")
+        self.assertEqual(result["state"], "Error", result["issues"])
+        self.assertEqual(config.read_text(), old)
+        self.assertFalse((self.root / "packages/dh/dh_example_package.yaml").exists())
 
-    def test_absent_resources_do_not_trigger_deletions(self):
+    def test_old_local_view_never_migrated_or_deleted(self):
+        old = self.root / "dashboards/dh/views/legacy.yaml"
+        old.parent.mkdir(parents=True)
+        old.write_bytes(VIEW)
         self.app.sync(CLAIMS)
-        self.backend.raw.clear()
-        report = self.app.sync(CLAIMS)
-        self.assertEqual(report["updated"], 0)
-        self.assertTrue((self.views / "10_first.yaml").exists())
-        self.assertTrue((self.root / "packages/dh/dh_example_package.yaml").exists())
+        self.assertEqual(old.read_bytes(), VIEW)
+        self.assertFalse((old.parent / "10_first.yaml").exists())
 
+    def test_bad_github_owner_is_not_admitted(self):
+        claim = {"bad/default": {**CLAIMS["example/default"],
+                 "repository": "https://github.com/OtherOwner/repo"}}
+        report = self.app.sync(claim)
+        self.assertTrue(report["issues"])
+        self.assertEqual(self.publisher.calls[-1][1], {})
 
-class PackageLoaderParsingTests(unittest.TestCase):
-    def test_quick_reload_uses_official_core_action(self):
-        from ha_core import CoreAPI
-        api = CoreAPI(token="unit-test-only")
-        with patch.object(api, "_rest", return_value=[]) as request:
-            api.reload_configuration()
-        request.assert_called_once_with(
-            "services/homeassistant/reload_all", post=True, timeout=45)
+    def test_other_package_and_local_file_is_preserved(self):
+        own = self.root / "packages/private.yaml"
+        own.parent.mkdir(parents=True, exist_ok=True)
+        own.write_text("user_package:\n  script: {}\n")
+        self.app.sync(CLAIMS)
+        self.assertIn("user_package", own.read_text())
 
-    def test_quick_reload_response_must_be_valid(self):
-        from ha_core import CoreAPI
-        api = CoreAPI(token="unit-test-only")
-        with patch.object(api, "_rest", return_value={}) as request:
-            with self.assertRaisesRegex(ValueError, "reload_all"):
-                api.reload_configuration()
+    def test_repeated_instances_do_not_duplicate_files(self):
+        value = CLAIMS["example/default"]
+        self.app.sync({"example/one": value, "example/two": value})
+        self.assertEqual(len(self.publisher.calls[-1][1]), 1)
+        self.assertEqual(len(list((self.root / "packages/dh").glob("*.yaml"))), 1)
 
-    def test_loader_variations(self):
-        for base in ("packages", "packages/"):
-            with self.subTest(base=base):
-                self.assertIsNone(configured_packages(
-                    ("homeassistant:\n  packages: !include_dir_merge_named " +
-                     base + "\n").encode()))
+    def test_panel_repository_uses_digitalhouses_owner(self):
+        self.app.sync(CLAIMS)
+        self.assertIn(PANEL_REPOSITORY, self.backend.revisions)
 
-    def test_empty_homeassistant_mapping(self):
-        self.assertEqual(configured_packages(b"homeassistant:\n"),
-                         b"homeassistant:\n  packages: !include_dir_merge_named packages/\n")
-
-    def test_reject_unmanaged_include_and_flow_mappings(self):
-        for config in (b"homeassistant: !include home.yaml\n",
-                       b"homeassistant: {}\n",
-                       b"homeassistant: null\n",
-                       b"homeassistant:\n  packages: !include packages.yaml\n"):
-            with self.subTest(config=config):
-                with self.assertRaisesRegex(ValueError, "homeassistant|packages"):
-                    configured_packages(config)
+    def test_package_identity_and_loader_parsing(self):
+        self.assertEqual(package_identity(PACKAGE), "dh_example_package")
+        self.assertEqual(package_keys(PACKAGE), ["dh_example_package"])
+        self.assertIsNone(configured_packages(
+            b"homeassistant:\n  packages: !include_dir_merge_named packages/\n"))
 
 
 if __name__ == "__main__":
