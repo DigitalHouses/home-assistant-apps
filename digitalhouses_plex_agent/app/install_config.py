@@ -6,6 +6,7 @@ installer-specific configuration namespace. Secrets arrive only via stdin.
 from __future__ import annotations
 
 import configparser
+from contextlib import nullcontext
 import fcntl
 import getpass
 import hashlib
@@ -38,48 +39,61 @@ def prepare(path: Path, pairs: list[str], *, non_interactive: bool) -> None:
     if not host:
         if unattended:
             raise CliError("mqtt.host is required for non-interactive installation")
+        # A pipe-fed installer can lose /dev/tty in some SSH/web consoles.
+        # Reuse an actual terminal on stdin when one exists; never consume an
+        # installer-script pipe as answers, and never echo credentials.
         try:
-            with open("/dev/tty", "r+") as tty:
-                def ask(prompt: str) -> str:
-                    tty.write(prompt)
-                    tty.flush()
-                    response = tty.readline()
-                    if not response:
-                        raise CliError("terminal input ended")
-                    return response.rstrip("\r\n")
+            terminal = open("/dev/tty", "r+")
+        except OSError:
+            if not sys.stdin.isatty():
+                raise CliError(
+                    "interactive MQTT setup needs terminal input; run "
+                    "'bash <(curl -fsSL URL)' from an interactive Bash shell "
+                    "or pass --set mqtt_ip=HOST for unattended setup"
+                ) from None
+            terminal = nullcontext(sys.stdin)
+            prompt_output = sys.stderr
+        else:
+            prompt_output = terminal
 
-                if ("mqtt", "host") in supplied:
-                    raise CliError("mqtt.host must not be empty")
-                pairs = list(pairs) + ["mqtt_host=" + ask("MQTT host: ")]
-                if ("mqtt", "port") not in supplied:
-                    pairs.append("mqtt_port=" + (ask("MQTT port [1883]: ") or "1883"))
-                if ("mqtt", "username") not in supplied:
-                    pairs.append("mqtt_username=" + ask("MQTT username [optional]: "))
-                if ("mqtt", "password") not in supplied:
-                    try:
-                        with warnings.catch_warnings():
-                            warnings.simplefilter("error", getpass.GetPassWarning)
-                            secret = getpass.getpass("MQTT password [optional]: ", stream=tty)
-                    except (getpass.GetPassWarning, EOFError) as exc:
-                        raise CliError("cannot securely read MQTT password") from exc
-                    # Don't put the password into arguments or config logs.
-                    # The existing native editor reads the one-line stdin sentinel.
-                    from io import StringIO
-                    old_stdin = sys.stdin
-                    try:
-                        sys.stdin = StringIO(secret + "\n")
-                        pairs.append("mqtt_password=-")
-                        if ask("Confirm MQTT settings (password hidden)? [y/N]: ").lower() not in ("y", "yes"):
-                            raise CliError("MQTT configuration was not confirmed")
-                        set_config(path, pairs, prepare=True)
-                    finally:
-                        sys.stdin = old_stdin
-                    return
-                if ask("Confirm MQTT settings? [y/N]: ").lower() not in ("y", "yes"):
-                    raise CliError("MQTT configuration was not confirmed")
-        except OSError as exc:
-            raise CliError("interactive MQTT setup requires a terminal; use --set mqtt_ip=HOST for unattended installation") from exc
+        with terminal as tty:
+            def ask(prompt: str) -> str:
+                prompt_output.write(prompt)
+                prompt_output.flush()
+                response = tty.readline()
+                if not response:
+                    raise CliError("terminal input ended")
+                return response.rstrip("\r\n")
 
+            if ("mqtt", "host") in supplied:
+                raise CliError("mqtt.host must not be empty")
+            pairs = list(pairs) + ["mqtt_host=" + ask("MQTT host: ")]
+            if ("mqtt", "port") not in supplied:
+                pairs.append("mqtt_port=" + (ask("MQTT port [1883]: ") or "1883"))
+            if ("mqtt", "username") not in supplied:
+                pairs.append("mqtt_username=" + ask("MQTT username [optional]: "))
+            if ("mqtt", "password") not in supplied:
+                try:
+                    with warnings.catch_warnings():
+                        warnings.simplefilter("error", getpass.GetPassWarning)
+                        secret = getpass.getpass("MQTT password [optional]: ", stream=prompt_output)
+                except (getpass.GetPassWarning, EOFError) as exc:
+                    raise CliError("cannot securely read MQTT password") from exc
+                # Don't put the password into arguments or config logs.
+                # The existing native editor reads the one-line stdin sentinel.
+                from io import StringIO
+                old_stdin = sys.stdin
+                try:
+                    sys.stdin = StringIO(secret + "\n")
+                    pairs.append("mqtt_password=-")
+                    if ask("Confirm MQTT settings (password hidden)? [y/N]: ").lower() not in ("y", "yes"):
+                        raise CliError("MQTT configuration was not confirmed")
+                    set_config(path, pairs, prepare=True)
+                finally:
+                    sys.stdin = old_stdin
+                return
+            if ask("Confirm MQTT settings? [y/N]: ").lower() not in ("y", "yes"):
+                raise CliError("MQTT configuration was not confirmed")
     if pairs:
         set_config(path, pairs, prepare=True)
     else:
