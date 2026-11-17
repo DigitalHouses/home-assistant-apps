@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.95
+
+- Announce `"dashboard":"dh-system"` in the existing retained MQTT `/sync` metadata for DH Sync multi-dashboard routing. Preserve the exact canonical instance-qualified topic, all previous metadata fields, QoS 1 and retained publication on connect/reconnect.
+- Do not modify PVE/UPS Lovelace Views or Packages; DH Sync owns dashboard creation and placement. Add contract regression coverage, no new timers, MQTT connections or Home Assistant configuration steps.
+
 ## 0.5.94
 
 - Immediately initiate the existing stable GitHub Release check when automatic updates are switched OFF -> ON via CLI or Home Assistant MQTT switch, instead of waiting up to 24 hours. An already running check is reused; a check temporarily blocked by an active updater is retried when the updater becomes available.
