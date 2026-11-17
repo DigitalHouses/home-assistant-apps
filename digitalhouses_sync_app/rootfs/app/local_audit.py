@@ -146,7 +146,7 @@ def _storage_view_paths(root: Path) -> tuple[set[str], list[str]]:
     return paths, sources
 
 
-def _local_snapshot(root: Path) -> dict:
+def _local_snapshot(root: Path, *, include_storage: bool = True) -> dict:
     ui = root / PARENT_UI
     issues = []
     if ui.is_symlink():
@@ -185,7 +185,10 @@ def _local_snapshot(root: Path) -> dict:
                 issues.append("Duplicate local YAML view path: " + path)
     else:
         issues.append("DigitalHouses YAML views directory is absent")
-    storage_paths, storage_sources = _storage_view_paths(root)
+    # Storage dashboards have their own URL prefix. Automatic YAML sync does
+    # not need to inspect (or depend on) any other dashboard's Storage state.
+    storage_paths, storage_sources = (_storage_view_paths(root) if include_storage
+                                      else (set(), []))
     return {
         "by_name": by_name, "by_path": by_path,
         "storage_paths": storage_paths, "storage_count": len(storage_sources),
@@ -255,9 +258,9 @@ class LocalAuditor:
                     row["source_sha256"] = _hash(raw)
                     matches = snapshot["by_path"].get(view["path"], [])
                     collision = snapshot["by_name"].get(view["file"])
-                    if view["path"] in snapshot["storage_paths"]:
-                        row["kind"], row["status"] = "storage", "Путь обнаружен в Lovelace Storage — требуется ручная проверка"
-                    elif len(matches) > 1 or (collision and collision not in matches):
+                    # View paths are scoped to a dashboard URL. A matching
+                    # path under a separate Storage dashboard is not a collision.
+                    if len(matches) > 1 or (collision and collision not in matches):
                         row["kind"], row["status"] = "collision", "Конфликт локального YAML пути или имени"
                     elif not matches:
                         row["kind"], row["status"] = "missing", "Локальный YAML отсутствует"

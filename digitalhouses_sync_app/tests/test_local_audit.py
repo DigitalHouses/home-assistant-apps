@@ -156,14 +156,14 @@ class LocalAuditTests(unittest.TestCase):
         self.assertTrue(any("Duplicate" in issue for issue in report["issues"]))
         self.assertEqual(report["products"][0]["views"][0]["kind"], "collision")
 
-    def test_storage_mode_plex_path_prevents_false_missing(self):
+    def test_storage_view_path_in_other_dashboard_does_not_replace_yaml_view(self):
         storage = {
             "version": 1, "key": "lovelace.plex", "private_token": "PRIVATE_SHOULD_NOT_LEAK",
             "data": {"config": {"views": [{"path": "dh-plex-agent", "title": "Plex"}]}}
         }
         (self.root/".storage/lovelace.plex").write_text(json.dumps(storage))
         report = self.audit()
-        self.assertEqual(report["products"][1]["views"][0]["kind"], "storage")
+        self.assertEqual(report["products"][1]["views"][0]["kind"], "missing")
         self.assertEqual(report["storage_files_examined"], 1)
         self.assertNotIn("PRIVATE_SHOULD_NOT_LEAK", json.dumps(report))
         self.assertNotIn("lovelace.plex", json.dumps(report))

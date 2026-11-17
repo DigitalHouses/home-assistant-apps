@@ -128,10 +128,10 @@ class AutoSync:
             raise SyncError("DigitalHouses ui.yaml is not a file")
 
     def _local_views(self) -> tuple[dict, dict, set]:
-        snap = _local_snapshot(self.root)
+        snap = _local_snapshot(self.root, include_storage=False)
         if snap["issues"]:
             raise SyncError("; ".join(snap["issues"])[:180])
-        return snap["by_path"], snap["by_name"], snap["storage_paths"]
+        return snap["by_path"], snap["by_name"]
 
     def _local_packages(self) -> dict[str, list[Path]]:
         root = self.root / PACKAGE_DIR
@@ -203,9 +203,9 @@ class AutoSync:
                      packages: dict) -> Path:
         key, name = item["identity"], item["name"]
         if item["kind"] == "view":
-            by_path, by_name, storage = views
-            if key in storage:
-                raise SyncError("Lovelace Storage path collision: " + key)
+            by_path, by_name = views
+            # Paths in other dashboards (including Storage dashboards) have
+            # distinct URL prefixes and do not collide with DigitalHouses YAML.
             matches = by_path.get(key, [])
             if len(matches) > 1:
                 raise SyncError("Duplicate local view path: " + key)

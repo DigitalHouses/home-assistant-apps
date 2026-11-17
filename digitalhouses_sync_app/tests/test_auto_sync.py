@@ -140,15 +140,23 @@ class AutomaticSyncTests(unittest.TestCase):
         self.assertIn("Duplicate local package key", report["issues"][0])
         self.assertEqual(len(list(folder.glob("*.yaml"))), 2)
 
-    def test_storage_collision_skips_view_not_package(self):
+    def test_storage_view_path_in_other_dashboard_is_not_a_collision(self):
         store = {"data": {"config": {"views": [{"path": "first"}]}}}
-        (self.root / ".storage/lovelace.dashboard_system").write_text(
-            json.dumps(store))
+        stored = self.root / ".storage/lovelace.dashboard_system"
+        stored.write_text(json.dumps(store))
+        before = stored.read_bytes()
         report = self.app.sync(CLAIMS)
-        self.assertEqual(report["updated"], 1, report["issues"])
-        self.assertTrue(report["issues"])
-        self.assertFalse((self.views / "10_first.yaml").exists())
-        self.assertTrue((self.root / "packages/dh/dh_example_package.yaml").exists())
+        self.assertEqual(report["state"], "OK", report["issues"])
+        self.assertEqual(report["updated"], 2)
+        self.assertEqual((self.views / "10_first.yaml").read_bytes(), VIEW)
+        self.assertEqual(stored.read_bytes(), before)
+
+    def test_unrelated_storage_corruption_does_not_block_yaml_sync(self):
+        (self.root / ".storage/lovelace.dashboard_system").write_text(
+            "unrelated storage content")
+        report = self.app.sync(CLAIMS)
+        self.assertEqual(report["state"], "OK", report["issues"])
+        self.assertEqual(report["updated"], 2)
 
     def test_foreign_github_owner_not_admitted(self):
         claim = {"example/default": {
