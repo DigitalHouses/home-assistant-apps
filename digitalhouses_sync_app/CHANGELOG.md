@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.5.0
+
+- Use the optional retained MQTT `/sync.dashboard` slug to route each product's canonical YAML views to a named Home Assistant panel (e.g. `dh-system`, `dh-climate`).
+- Create named dashboard panels automatically through HA's supported WebSocket API, with per-panel ownership markers and backups. Products without the field retain `digital-houses`.
+- Migrate only DH Sync-owned views from the legacy panel after their new destination has been saved; preserve manually added views, user dashboards and package behavior.
+- Deduplicate multi-instance source announcements: explicit routing wins over legacy announcements, while conflicting explicit routes are reported.
+- Display each panel, view count and update status in the Ingress catalog.
+
 ## 0.4.4
 
 - Automatically configure `homeassistant.packages: !include_dir_merge_named packages/` when canonical packages are published and the loader is missing.

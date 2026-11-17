@@ -212,7 +212,16 @@ def make_server(sources: ProductSources, inventory: Inventory, *, version: str =
                                     "могут потребовать обычного перезапуска HA. "
                                     "DH Sync не перезапускает Home Assistant.</p>")
                 dashboard = status.get("dashboard")
-                if isinstance(dashboard, dict) and dashboard.get("url"):
+                if isinstance(dashboard, dict) and dashboard.get("dashboards"):
+                    summary += "<p><b>Панели Dashboard</b></p><ul>"
+                    for panel in dashboard["dashboards"]:
+                        slug = str(panel.get("slug", ""))
+                        summary += ("<li><a href='" + _h(panel.get("url", "#")) +
+                                    "' target='_top'>" + _h(slug) + "</a> · " +
+                                    _h(panel.get("state", "—")) + " · " +
+                                    str(int(panel.get("views", 0))) + " view</li>")
+                    summary += "</ul>"
+                elif isinstance(dashboard, dict) and dashboard.get("url"):
                     summary += ("<p>Панель DigitalHouses: <b>" +
                                 _h(dashboard.get("state", "")) +
                                 "</b> · <a href='" + _h(dashboard["url"]) +

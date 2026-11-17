@@ -91,6 +91,55 @@ class AutomaticSyncTests(unittest.TestCase):
         self.assertEqual(result["state"], "OK", result["issues"])
         self.assertEqual(ui.read_bytes(), original)
 
+    def test_pve_metadata_routes_view_to_dh_system(self):
+        self.backend.raw["example/dashboards/ru/11_ups.yaml"] = (
+            b"title: UPS\npath: dh_pve_agent_ups\nviews: []\n"
+        )
+        claim = {k: {**v, "dashboard": "dh-system"} for k, v in CLAIMS.items()}
+        resources, issues = self.app._published(claim)
+        self.assertEqual(issues, [])
+        views = [r for r in resources if r["kind"] == "view"]
+        self.assertEqual({r["dashboard"] for r in views}, {"dh-system"})
+        self.assertEqual(len(views), 2)
+
+    def test_new_agent_route_wins_over_old_instance_without_route(self):
+        instances = {
+            "example/old": {**CLAIMS["example/default"]},
+            "example/new": {**CLAIMS["example/default"], "dashboard": "dh-system"},
+        }
+        resources, issues = self.app._published(instances)
+        self.assertEqual(issues, [])
+        self.assertEqual([r["dashboard"] for r in resources if r["kind"] == "view"],
+                         ["dh-system"])
+        self.assertEqual(self.backend.calls, 1)
+
+    def test_conflicting_explicit_routes_skip_views_but_keep_packages(self):
+        instances = {
+            "example/one": {**CLAIMS["example/default"], "dashboard": "dh-system"},
+            "example/two": {**CLAIMS["example/default"], "dashboard": "dh-climate"},
+        }
+        resources, issues = self.app._published(instances)
+        self.assertTrue(any("conflicting MQTT" in issue for issue in issues))
+        self.assertEqual([r["kind"] for r in resources], ["package"])
+
+    def test_publisher_receives_dashboard_paths_after_yaml_sync(self):
+        class RecordingPublisher:
+            def __init__(self):
+                self.routes = None
+
+            def sync(self, routes):
+                self.routes = routes
+                return {"state": "Current", "url": "/dh-system/",
+                        "dashboards": [], "issues": []}
+
+        publisher = RecordingPublisher()
+        self.app.publisher = publisher
+        claims = {k: {**v, "dashboard": "dh-system"} for k, v in CLAIMS.items()}
+        report = self.app.sync(claims)
+        self.assertEqual(report["state"], "OK", report["issues"])
+        self.assertEqual(publisher.routes, {"first": "dh-system"})
+        self.assertEqual(report["updated"], 2)
+
     def test_missing_loader_is_installed_without_confirmation(self):
         config = self.root / "configuration.yaml"
         config.write_text(

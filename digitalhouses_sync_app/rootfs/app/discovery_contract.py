@@ -21,6 +21,14 @@ FOLDER_PART = re.compile(r"[A-Za-z0-9_][A-Za-z0-9_.-]{0,99}\Z", re.ASCII)
 SOURCE_ROOT = "DigitalHouses/Global/"
 EXPECTED_OWNER = "DigitalHouses"
 MAX_PAYLOAD = 4096
+DASHBOARD_SLUG = re.compile(r"[a-z0-9][a-z0-9-]{0,63}\Z", re.ASCII)
+DEFAULT_DASHBOARD = "digital-houses"
+
+
+def safe_dashboard_slug(value: object) -> str:
+    """Untrusted MQTT dashboard slug; invalid values use the legacy panel."""
+    return value if isinstance(value, str) and DASHBOARD_SLUG.fullmatch(value) else DEFAULT_DASHBOARD
+
 
 
 class DiscoveryError(ValueError):
@@ -102,7 +110,7 @@ def validate_sync_message(topic: str, payload: bytes | str) -> tuple[str, dict]:
     product, instance = identity
     version = message.get("version")
     product_type = message.get("type")
-    return product + "/" + instance, {
+    result = {
         "schema": 1,
         "product_id": product,  # the topic is authoritative for the identity
         "type": product_type if isinstance(product_type, str) else "unknown",
@@ -110,6 +118,11 @@ def validate_sync_message(topic: str, payload: bytes | str) -> tuple[str, dict]:
         "repository": repo,
         "product_path": safe_product_path(message.get("product_path"), product),
     }
+    if "dashboard" in message:
+        result["dashboard"] = safe_dashboard_slug(message["dashboard"])
+        if result["dashboard"] != message["dashboard"]:
+            result["dashboard_warning"] = "Invalid MQTT dashboard; using digital-houses"
+    return product + "/" + instance, result
 
 
 class ProductSources:
