@@ -97,6 +97,23 @@ mounted dataset; no media-group membership or file access is required.
 
 ## Install / update
 
+### First-install setup modes (v0.8.21+)
+
+- **Interactive:** run `install-latest.sh` without installer options in a real terminal.
+  If there is no saved MQTT configuration, the installer asks for broker host,
+  port, username, password (hidden) and confirmation. The prompts read
+  `/dev/tty`, so they work when the installer script is downloaded through
+  `curl | bash`.
+- **Unattended:** passing any `--set key=value` or `--mqtt-password-stdin`
+  automatically disables all prompts. Pass `--set mqtt_ip=HOST` for a first
+  install; other unspecified keys use defaults or saved native INI settings.
+  `--non-interactive` remains supported but is not required with `--set`.
+  Missing required host fails clearly without making changes to services.
+
+Existing native INI is reused during upgrades. Secret passwords must use
+`--mqtt-password-stdin` with a secure stdin source, not a literal CLI argument.
+
+
 Root CLI: dh-plex-agent update looks up the newest published stable Plex Agent release and invokes the existing independent systemd updater with transactional backup, startup checks and rollback. It works without MQTT, preserves the existing INI and returns UP_TO_DATE when already current.
 
 Independent agent CPU diagnostics (not the Plex Server CPU metric): sensor.dh_plex_agent_process_cpu_usage shows per-core-normalized agent CPU utilization; binary_sensor.dh_plex_agent_cpu_overload shows a sustained 300-second overload above 80%, clearing only after 120 seconds below 40%; event.dh_plex_agent_cpu_diagnostic publishes live state transitions with QoS1 and without retain. A GPU problem retains precedence over CPU in the existing agent card. The sampler runs locally even while MQTT_PAUSED, without generating historical event replay or a new collector process.
@@ -127,10 +144,10 @@ The guest must have QEMU Guest Agent, Python 3 and curl for the bootstrap. Unatt
 
 **For deliberate rollback or reproducible installs only**, an administrator can still choose a previously published, exact release tag through the original `install.sh` interface. Normal installs do not require it.
 
-**Unattended first install / Ansible (v0.8.19+):** The installer accepts the same native CLI setting names as `dh-plex-agent set`. It supports `--non-interactive`, repeated `--set key=value` and `--mqtt-password-stdin`. The MQTT password must be streamed via stdin, **never** supplied as a literal CLI argument. Example invocation after fetching the canonical `0.8.20` release installer on the guest:
+**Unattended first install / Ansible (v0.8.19+, automatic mode in 0.8.21):** The installer accepts the same native CLI setting names as `dh-plex-agent set`. It supports `--non-interactive`, repeated `--set key=value` and `--mqtt-password-stdin`. The MQTT password must be streamed via stdin, **never** supplied as a literal CLI argument. Example invocation after fetching the canonical `0.8.21` release installer on the guest:
 
 ```bash
-DIGITALHOUSES_SOURCE_REF=digitalhouses_plex_agent-v0.8.20 \
+DIGITALHOUSES_SOURCE_REF=digitalhouses_plex_agent-v0.8.21 \
   bash ./install.sh --non-interactive \
   --set mqtt_ip=192.0.2.24 --set mqtt_port=1883 \
   --mqtt-password-stdin < /run/secrets/dh_mqtt_password

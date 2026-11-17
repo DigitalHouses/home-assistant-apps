@@ -35,10 +35,11 @@ while [[ $# -gt 0 ]]; do
         --non-interactive) NON_INTERACTIVE=1; shift ;;
         --set)
             if [[ $# -lt 2 ]]; then echo "ERROR: --set requires key=value" >&2; exit 2; fi
-            CONFIG_SETTINGS+=("$2"); shift 2 ;;
-        --mqtt-password-stdin) CONFIG_SETTINGS+=("mqtt_password=-"); shift ;;
+            CONFIG_SETTINGS+=("$2"); NON_INTERACTIVE=1; shift 2 ;;
+        --mqtt-password-stdin) CONFIG_SETTINGS+=("mqtt_password=-"); NON_INTERACTIVE=1; shift ;;
         --help|-h)
             echo 'Usage: install.sh [--non-interactive] [--set key=value ...] [--mqtt-password-stdin]'
+            echo 'No settings: interactive MQTT setup on a real terminal. Any --set: unattended setup, no prompts.'
             echo 'Values map to dh-plex-agent set keys; use stdin for MQTT password. No password argument.'
             exit 0 ;;
         *) echo "ERROR: unknown installer argument" >&2; exit 2 ;;

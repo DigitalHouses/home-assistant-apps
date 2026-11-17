@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import hashlib
 from io import StringIO
+import contextlib
+import io
 from pathlib import Path
 import tempfile
 import unittest
@@ -10,7 +12,7 @@ from unittest.mock import patch
 
 from app.cli import CliError, set_config
 from app.config import load_config
-from app.install_config import commit, prepare
+from app.install_config import commit, prepare, main
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -83,11 +85,85 @@ class UnattendedInstallTests(unittest.TestCase):
             commit(prepared, target, expected)
         self.assertEqual(target.read_bytes(), prepared.read_bytes())
 
+    def test_plain_install_prompts_on_controlling_terminal(self) -> None:
+        # Source downloaded with curl | bash uses stdin; prompts use /dev/tty.
+        import builtins
+        native_open = builtins.open
+        class DuplexTTY:
+            def __init__(self) -> None:
+                self.answers = StringIO("broker.local\n\noperator\ny\n")
+                self.prompts: list[str] = []
+                self.closed = False
+            def __enter__(self):
+                return self
+            def __exit__(self, *_args):
+                self.closed = True
+            def write(self, value: str) -> None:
+                self.prompts.append(value)
+            def flush(self) -> None:
+                pass
+            def readline(self) -> str:
+                return self.answers.readline()
+        tty = DuplexTTY()
+        def tty_open(path, *args, **kwargs):
+            if str(path) == "/dev/tty":
+                return tty
+            return native_open(path, *args, **kwargs)
+        with patch("builtins.open", side_effect=tty_open) as opened, \
+             patch("app.install_config.getpass.getpass", return_value="secret-value") as getpass:
+            prepare(self.conf, [], non_interactive=False)
+        cfg = load_config(self.conf)
+        self.assertEqual((cfg.mqtt.host, cfg.mqtt.port, cfg.mqtt.username),
+                         ("broker.local", 1883, "operator"))
+        self.assertEqual(cfg.mqtt.password, "secret-value")
+        self.assertTrue(any(call.args[0] == "/dev/tty" for call in opened.call_args_list))
+        getpass.assert_called_once()
+        self.assertTrue(tty.closed)
+        self.assertIn("Confirm MQTT settings", "".join(tty.prompts))
+
+    def test_any_cli_setting_never_prompts_even_with_missing_host(self) -> None:
+        import builtins
+        native_open = builtins.open
+        def fail_tty_only(path, *args, **kwargs):
+            if str(path) == "/dev/tty":
+                raise AssertionError("must not open /dev/tty")
+            return native_open(path, *args, **kwargs)
+        with patch("builtins.open", side_effect=fail_tty_only):
+            with self.assertRaisesRegex(CliError, "mqtt.host is required"):
+                prepare(self.conf, ["mqtt_port=1884"], non_interactive=False)
+            prepare(self.conf, ["mqtt_ip=192.0.2.25", "mqtt_port=1884"],
+                    non_interactive=False)
+        self.assertEqual(load_config(self.conf).mqtt.host, "192.0.2.25")
+        self.assertEqual(load_config(self.conf).mqtt.port, 1884)
+
+    def test_plain_install_without_terminal_explains_mode(self) -> None:
+        import builtins
+        native_open = builtins.open
+        def missing_tty(path, *args, **kwargs):
+            if str(path) == "/dev/tty":
+                raise OSError("no controlling terminal")
+            return native_open(path, *args, **kwargs)
+        with patch("builtins.open", side_effect=missing_tty):
+            with self.assertRaisesRegex(CliError, "interactive MQTT setup requires a terminal"):
+                prepare(self.conf, [], non_interactive=False)
+
+    def test_invalid_configuration_error_redacts_raw_values(self) -> None:
+        self.conf.write_text("[mqtt]\nhost = broker.local\nport = 654321\n")
+        with patch("sys.argv", ["install_config", str(self.conf)]), \
+             patch("app.install_config.os.geteuid", return_value=0):
+            stream = io.StringIO()
+            with contextlib.redirect_stderr(stream):
+                result = main()
+        self.assertEqual(result, 1)
+        self.assertIn("mqtt.port", stream.getvalue())
+        self.assertNotIn("654321", stream.getvalue())
+
     def test_installer_stages_config_before_mutating_services(self) -> None:
         script = (ROOT / "install.sh").read_text()
         self.assertIn("--non-interactive", script)
         self.assertIn("--mqtt-password-stdin", script)
-        self.assertIn('CONFIG_SETTINGS+=("$2")', script)
+        self.assertIn('CONFIG_SETTINGS+=("$2"); NON_INTERACTIVE=1', script)
+        self.assertIn('CONFIG_SETTINGS+=("mqtt_password=-"); NON_INTERACTIVE=1', script)
         self.assertIn("python3 -m app.install_config", script)
         self.assertLess(script.index('PREPARED_CONFIG='), script.index('groupadd --system'))
         self.assertLess(script.index('PREPARED_CONFIG='), script.index('cp -a "${SOURCE_APP}/."'))

@@ -11,6 +11,7 @@ import getpass
 import hashlib
 import os
 from pathlib import Path
+import re
 import sys
 import warnings
 
@@ -31,8 +32,11 @@ def prepare(path: Path, pairs: list[str], *, non_interactive: bool) -> None:
         if target == ("mqtt", "host") and sep:
             host = value.strip()
 
+    # Any CLI-provided setting opts into automation; never prompt for missing
+    # values in this mode, even without an explicit --non-interactive switch.
+    unattended = non_interactive or bool(pairs)
     if not host:
-        if non_interactive:
+        if unattended:
             raise CliError("mqtt.host is required for non-interactive installation")
         try:
             with open("/dev/tty", "r+") as tty:
@@ -74,7 +78,7 @@ def prepare(path: Path, pairs: list[str], *, non_interactive: bool) -> None:
                 if ask("Confirm MQTT settings? [y/N]: ").lower() not in ("y", "yes"):
                     raise CliError("MQTT configuration was not confirmed")
         except OSError as exc:
-            raise CliError("mqtt.host is required; pass --set mqtt_ip=HOST --non-interactive") from exc
+            raise CliError("interactive MQTT setup requires a terminal; use --set mqtt_ip=HOST for unattended installation") from exc
 
     if pairs:
         set_config(path, pairs, prepare=True)
@@ -115,9 +119,19 @@ def main() -> int:
                 argv.pop(0)
             prepare(path, argv, non_interactive=non_interactive)
         return 0
-    except (CliError, RuntimeError, ValueError, OSError, IndexError, configparser.Error):
-        # Avoid echoing user-supplied INI lines; they may contain credentials.
-        print("ERROR: native configuration preflight/commit failed; check MQTT host and configuration constraints", file=sys.stderr)
+    except CliError as exc:
+        # CliError messages are curated static diagnostics: safe to show.
+        print(f"ERROR: {exc}", file=sys.stderr)
+        return 1
+    except ValueError as exc:
+        # Config validation may quote a raw field value (including secrets).
+        # Only reveal the section/key identifier, never the supplied value.
+        match = re.search(r"\b(?:general|mqtt|telemetry|plex_api)\.[a-z_]+\b", str(exc))
+        field = f" ({match.group(0)})" if match else ""
+        print(f"ERROR: invalid native configuration{field}; check settings", file=sys.stderr)
+        return 1
+    except (RuntimeError, OSError, IndexError, configparser.Error):
+        print("ERROR: native configuration preflight/commit failed; inspect configuration and filesystem", file=sys.stderr)
         return 1
 
 
