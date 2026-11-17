@@ -195,6 +195,14 @@ def make_server(sources: ProductSources, inventory: Inventory, *, version: str =
                     _h(status.get("last_run") or "ожидание первого запуска") +
                     "</small></p>"
                 )
+                dashboard = status.get("dashboard")
+                if isinstance(dashboard, dict) and dashboard.get("url"):
+                    summary += ("<p>Панель DigitalHouses: <b>" +
+                                _h(dashboard.get("state", "")) +
+                                "</b> · <a href='" + _h(dashboard["url"]) +
+                                "' target='_top'>Открыть Dashboard</a></p>")
+                elif isinstance(dashboard, dict):
+                    summary += "<p>Панель DigitalHouses: " + _h(dashboard.get("state", "")) + "</p>"
                 if issues:
                     summary += "<details><summary class='warn'>Пропущенные ресурсы (" + str(
                         len(issues)) + ")</summary><ul>" + "".join(

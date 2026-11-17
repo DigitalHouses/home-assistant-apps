@@ -1,4 +1,4 @@
-"""DH Sync 0.4.2: autonomous owner-only dashboards and packages sync."""
+"""DH Sync 0.4.3: autonomous owner-only dashboards and packages sync."""
 from __future__ import annotations
 
 import json
@@ -17,12 +17,13 @@ from inventory import Inventory
 from resource_preview import PreviewCatalog
 from local_audit import LocalAuditor
 from auto_sync import AutoSync
+from dashboard_runtime import DashboardPublisher
 
 PRODUCT_ID = "digitalhouses_sync_app"
 BASE = "DigitalHouses/Global/" + PRODUCT_ID
 DISCOVERY = "homeassistant/device/" + PRODUCT_ID + "/config"
 STARTED_AT = datetime.now(timezone.utc).isoformat()
-VERSION = os.environ.get("APP_VERSION", "0.4.2-local")
+VERSION = os.environ.get("APP_VERSION", "0.4.3-local")
 STATE_PATH = Path("/data/inventory.json")
 SOURCES_PATH = Path("/data/product_sources.json")
 
@@ -117,9 +118,10 @@ def on_connect(client, userdata, flags, reason_code, properties=None):
 def main() -> None:
     inventory = Inventory(STATE_PATH)
     sources = ProductSources(SOURCES_PATH)
-    # Existing HA file changes are performed automatically only for
-    # published DigitalHouses YAML resources; no .storage/API/restarts.
+    # Publish YAML files and register the DigitalHouses panel over HA API.
+    # No direct .storage edits, HA restart, or operator interaction.
     auto = AutoSync()
+    auto.publisher = DashboardPublisher(auto.root, auto.data)
     wake = threading.Event()
     ingress = make_server(sources, inventory, version=VERSION, port=8099,
                           auto_status=auto.status)
