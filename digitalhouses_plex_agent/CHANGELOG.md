@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Align retained MQTT `/sync` with DH Sync 0.6.0: publish six identity/source fields without the obsolete `dashboard` field, preserving QoS 1, retain and connect/reconnect behavior.
+- Update Plex-owned contract tests and documentation; leave canonical View, Recorder Package, DH Sync and other products unchanged.
+
 ## 0.8.23
 
 - Fresh Linux Agent installs default to mandatory telemetry enabled; the installer records `[telemetry] enabled = true` in its new native INI. Existing explicit configuration is preserved on upgrades.
