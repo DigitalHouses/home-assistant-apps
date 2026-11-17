@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 0.8.21
+
+- Support both first-install modes without extra switches: no CLI settings opens interactive MQTT setup on the controlling terminal (works even when installer source is piped into bash); any `--set` or `--mqtt-password-stdin` selects unattended provisioning with no prompts.
+- An unattended invocation with an incomplete required MQTT host fails explicitly instead of unexpectedly entering interactive mode. Existing native configurations continue to be reused on updates.
+- Replace the generic setup error with safe, actionable diagnostics; never print supplied passwords or raw configuration values.
+- Add regression tests for interactive first-install, implicit unattended mode, missing host and error redaction.
+
 ## 0.8.20
 
 - Publish `dashboard: dh-system` in retained QoS 1 DH Sync `/sync` metadata, matching PVE Agent and DH Sync 0.5.0 panel routing.
