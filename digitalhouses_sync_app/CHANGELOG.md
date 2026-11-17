@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.1
+
+- Automatically create missing /config/dashboards/dh/views and /config/packages/dh directories on first sync.
+- Create the minimal DigitalHouses parent ui.yaml only when absent; retain existing files and fail on occupied or unsafe paths.
+- Synchronize published dashboard and package YAML on a fresh HA installation without manual mkdir, confirmation or HA restart.
+
 ## 0.4.0
 
 - Enable zero-click automatic dashboard and Home Assistant package sync after MQTT discovery and hourly.

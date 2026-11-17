@@ -1,4 +1,4 @@
-# DigitalHouses Sync App — 0.4.0
+# DigitalHouses Sync App — 0.4.1
 
 **Единый стандарт публикации YAML:** [DH Sync Resources Standard](../docs/standards/DH_SYNC_RESOURCES_STANDARD.md).
 
@@ -27,6 +27,6 @@ Site-specific notification variants stay locally managed until a single portable
 
 ## Rollout
 
-Installing DH Sync 0.4.0 enables automatic synchronization of published resources. Its Ingress panel shows last scan, updated/current counts, skipped conflicts and resource status. The old 0.3.x manual Apply/Rollback flow is no longer used by the running app.
+Installing DH Sync 0.4.1 enables automatic synchronization of published resources. Its Ingress panel shows last scan, updated/current counts, skipped conflicts and resource status. The old 0.3.x manual Apply/Rollback flow is no longer used by the running app.
 
 Tests: `python -m unittest discover -s digitalhouses_sync_app/tests -p 'test_*.py'`, plus repository CI.
