@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.5.92
+
+- Support the Proxmox VE 9.0 RRD key schema (`pve-node-9.0`, `pve-vm-9.0`, `pve-storage-9.0`) alongside PVE 8 keys. PVE 9 appends data columns, so retain the existing parsing positions.
+- Prefer current PVE 9 samples when both key generations exist during an upgrade, without treating stale samples as valid; keep PVE 8 read paths unchanged.
+- Fix storage usage/availability reported as inactive or Unknown when the PVE 9 RRD cache publishes only the new keys.
+- Add read-only parser and storage collector regressions for PVE 8/9, with no changes to MQTT entity IDs or other products. Live K15 acceptance still requires local host access.
+
 ## 0.5.91
 
 - Add GMKtec NucBox K15 DMI-gated, read-only EC RPM fallback for the existing fan collector: CPU FAN (EC 0x35–0x36) and FAN2 (0x37–0x38). Retain hwmon/IPMI precedence, existing MQTT/CLI fan IDs, two-positive-sample confirmation, and fail-closed unavailable readings.

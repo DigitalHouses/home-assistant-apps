@@ -329,25 +329,35 @@ def read_pve_rrd(
     node: PveNodeRrd | None = None
     guests: dict[str, PveGuestRrd] = {}
     storages: dict[str, PveStorageRrd] = {}
+    # PVE 9 adds columns at the end and uses new RRD keys. Prefer the new
+    # schema when both generations are present during a rolling upgrade.
+    node_is_new = False
+    new_guests: set[str] = set()
+    new_storages: set[str] = set()
 
     for raw_line in path.read_text(encoding="utf-8").splitlines():
         line = raw_line.strip()
         if not line or ":" not in line:
             continue
         key, *fields = line.split(":")
-        if key == f"pve2-node/{node_name}":
+        if key in (f"pve2-node/{node_name}", f"pve-node-9.0/{node_name}"):
+            is_new = key.startswith("pve-node-9.0/")
             parsed_node = _parse_node_rrd(
                 node_name,
                 fields,
                 now_epoch=now_epoch,
                 stale_after_seconds=stale_after_seconds,
             )
-            if parsed_node is not None:
-                node = parsed_node
+            if parsed_node is not None and (is_new or not node_is_new):
+                node, node_is_new = parsed_node, is_new
             continue
-        vm_prefix = "pve2.3-vm/"
-        if key.startswith(vm_prefix):
-            vmid = key[len(vm_prefix) :]
+
+        vm_prefix = next(
+            (prefix for prefix in ("pve2.3-vm/", "pve-vm-9.0/") if key.startswith(prefix)),
+            None,
+        )
+        if vm_prefix is not None:
+            vmid = key[len(vm_prefix):]
             if not vmid.isdigit():
                 continue
             guest = _parse_guest_rrd(
@@ -356,12 +366,22 @@ def read_pve_rrd(
                 now_epoch=now_epoch,
                 stale_after_seconds=stale_after_seconds,
             )
-            if guest is not None:
+            is_new = vm_prefix == "pve-vm-9.0/"
+            if guest is not None and (is_new or vmid not in new_guests):
                 guests[vmid] = guest
+                if is_new:
+                    new_guests.add(vmid)
             continue
-        storage_prefix = f"pve2-storage/{node_name}/"
-        if key.startswith(storage_prefix):
-            storage_id = key[len(storage_prefix) :]
+
+        storage_prefix = next(
+            (prefix for prefix in (
+                f"pve2-storage/{node_name}/",
+                f"pve-storage-9.0/{node_name}/",
+            ) if key.startswith(prefix)),
+            None,
+        )
+        if storage_prefix is not None:
+            storage_id = key[len(storage_prefix):]
             if not storage_id:
                 continue
             storage = _parse_storage_rrd(
@@ -371,8 +391,11 @@ def read_pve_rrd(
                 now_epoch=now_epoch,
                 stale_after_seconds=stale_after_seconds,
             )
-            if storage is not None:
+            is_new = storage_prefix.startswith("pve-storage-9.0/")
+            if storage is not None and (is_new or storage_id not in new_storages):
                 storages[storage_id] = storage
+                if is_new:
+                    new_storages.add(storage_id)
 
     return PveRrdSnapshot(node=node, guests=guests, storages=storages)
 
