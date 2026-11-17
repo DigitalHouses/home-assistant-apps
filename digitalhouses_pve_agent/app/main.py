@@ -611,8 +611,6 @@ def run(config: AppConfig, *, state_dir: Path = DEFAULT_STATE_DIR) -> int:
                 if published:
                     bridge.publish_ups_scan_operation(operation_payload("idle"))
                     update_manager.publish(bridge)
-                    if card.state == "running" and card.operation == "restart":
-                        card.finish("restart")
                     card.publish()
                     log.info("Первичная публикация MQTT завершена")
                 else:
@@ -625,6 +623,12 @@ def run(config: AppConfig, *, state_dir: Path = DEFAULT_STATE_DIR) -> int:
                 if bridge.reconnect_requested.is_set():
                     update_manager.publish(bridge)
                     card.publish()
+                # A restart is complete once this new agent process has
+                # initialized and MQTT is connected. It must not depend on
+                # every unrelated startup collector publishing successfully.
+                if (card.state == "running" and card.operation == "restart"
+                        and bridge.connected.is_set()):
+                    card.finish("restart")
                 memory_reconnected = bridge.reconnect_requested.is_set()
                 if card.state == "running" and card.operation in {"check", "install"}:
                     # Avoid starting an unrelated operation behind the active card.

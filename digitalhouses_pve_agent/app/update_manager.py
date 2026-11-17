@@ -218,7 +218,9 @@ class UpdateManager:
         The updater writes its *final* worker state after restarting the agent.
         A later automatic GitHub check may already have made the aggregate
         update status idle, so it cannot be used to complete an install card.
-        Return (success, error) only for the matching, terminal transaction.
+        Return success only for the matching, terminal transaction. If a
+        terminal result is unrelated or unreadable, finish the card with an
+        explicit error instead of leaving its UI timer running forever.
         """
         worker = self._worker_status()
         state = worker.get("state")
@@ -234,9 +236,8 @@ class UpdateManager:
                     and requested >= started and finished >= requested
                     and isinstance(target, str) and target
                 ):
-                    return (
-                        (False, str(self._status_error or "Update failed"))
-                        if self._status == "error" else None
+                    return False, str(
+                        self._status_error or "No matching installation transaction for this UI card"
                     )
             except (OSError, ValueError, TypeError, StateStoreError):
                 return (
@@ -267,7 +268,10 @@ class UpdateManager:
         # is reported directly by UpdateManager, not by update_worker.json.
         if self._status == "error":
             return False, str(self._status_error or "Update failed")
-        return None
+        # Without a live or terminal updater transaction an install card can
+        # never complete. Report the missing result instead of showing a
+        # perpetual foreground timer on a healthy agent.
+        return False, "No installation transaction is active"
 
     def tick(self, bridge: object, *, check: bool = False, install: bool = False,
              denial_reason: Callable[[], str | None] | None = None,
