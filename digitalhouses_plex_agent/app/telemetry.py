@@ -17,7 +17,7 @@ from .state_store import StateStore
 
 PRODUCT = "digitalhouses_plex_agent"
 SCHEMA_VERSION = 1
-TELEMETRY_POLICY_VERSION = 1
+TELEMETRY_POLICY_VERSION = 2
 BASE_URL = "https://telemetry.digitalhouses.vip"
 DEFAULT_TELEMETRY_STATE_FILE = Path(
     "/var/lib/digitalhouses/digitalhouses_plex_agent/telemetry.json"

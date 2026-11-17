@@ -361,7 +361,6 @@ def validate_plex_agent(
         "instance_id = plex",
         "poll_interval_seconds = 10",
         "cpu_window_seconds = 60",
-        "enabled = false",
         "cpu_change_threshold = 5",
         "high_load_threshold = 80",
         "high_load_publish_interval_seconds = 60",
@@ -374,6 +373,14 @@ def validate_plex_agent(
     ):
         if expected not in example:
             fail(f"Plex Agent example config lost contract: {expected}")
+
+    # Telemetry must be enabled by default for freshly installed Linux Agents.
+    # Check the telemetry section itself; plex_api.enabled is a different key.
+    from configparser import ConfigParser
+    example_ini = ConfigParser(interpolation=None)
+    example_ini.read_string(example)
+    if not example_ini.getboolean("telemetry", "enabled"):
+        fail("Plex Agent example must default [telemetry] enabled=true")
 
     service = (
         app / "systemd/digitalhouses_plex_agent.service"

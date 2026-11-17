@@ -145,7 +145,7 @@ def load_config(path: Path) -> AppConfig:
             f"general.log_level must be one of {sorted(LOG_LEVELS)}, got {log_level!r}"
         )
 
-    telemetry_enabled = _get_bool(parser, "telemetry", "enabled", False)
+    telemetry_enabled = _get_bool(parser, "telemetry", "enabled", True)
     cpu_change = _get_float(parser, "telemetry", "cpu_change_threshold", 5.0)
     high_load = _get_float(parser, "telemetry", "high_load_threshold", 80.0)
     high_interval = _get_float(

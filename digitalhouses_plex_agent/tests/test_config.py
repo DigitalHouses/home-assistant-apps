@@ -25,7 +25,7 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(config.general.instance_id, "plex")
         self.assertEqual(config.general.poll_interval_seconds, 10.0)
         self.assertEqual(config.general.cpu_window_seconds, 60.0)
-        self.assertFalse(config.telemetry.enabled)
+        self.assertTrue(config.telemetry.enabled)
         self.assertEqual(config.telemetry.cpu_change_threshold, 5.0)
         self.assertEqual(config.telemetry.high_load_threshold, 80.0)
         self.assertEqual(
@@ -42,6 +42,10 @@ class ConfigTests(unittest.TestCase):
             entity_prefix("plex_guest"),
             "dh_plex_agent_plex_guest",
         )
+
+    def test_telemetry_can_be_disabled_explicitly(self):
+        config = load_config(self._write(self._base("[telemetry]\nenabled = false\n")))
+        self.assertFalse(config.telemetry.enabled)
 
     def test_telemetry_can_be_enabled_explicitly(self):
         config = load_config(

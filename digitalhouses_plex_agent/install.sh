@@ -177,6 +177,10 @@ if [[ -n "${EXPECTED_VERSION}" && "${SOURCE_VERSION}" != "${EXPECTED_VERSION}" ]
     exit 1
 fi
 
+echo "DigitalHouses telemetry: enabled by default for new Plex Agent installs."
+echo "Reports only product, released version and random installation ID (policy v2)."
+echo "Policy: https://github.com/DigitalHouses/home-assistant-apps/blob/main/docs/standards/PRODUCT_TELEMETRY_POLICY.md"
+
 # Stage the full native INI before creating the service user, replacing source,
 # changing the installed config or restarting any service. This is exactly the
 # PVE Agent --non-interactive/--set/--mqtt-password-stdin deployment contract.
@@ -191,7 +195,7 @@ elif [[ -f "${LEGACY_CONFIG_FILE}" ]]; then
         's#^([[:space:]]*token_file[[:space:]]*=[[:space:]]*)/etc/digitalhouses_plex_monitoring/plex_local_admin_token[[:space:]]*$#\1/etc/digitalhouses_plex_agent/plex_local_admin_token#' \
         "${PREPARED_CONFIG}"
 else
-    (umask 0077; printf '[general]\ninstance_id = plex\ninstance_name = DH Plex\n\n[mqtt]\nhost =\n' >"${PREPARED_CONFIG}")
+    (umask 0077; printf '[general]\ninstance_id = plex\ninstance_name = DH Plex\n\n[telemetry]\nenabled = true\n\n[mqtt]\nhost =\n' >"${PREPARED_CONFIG}")
 fi
 PREPARE_FLAGS=()
 [[ "${NON_INTERACTIVE}" -eq 1 ]] && PREPARE_FLAGS+=(--non-interactive)

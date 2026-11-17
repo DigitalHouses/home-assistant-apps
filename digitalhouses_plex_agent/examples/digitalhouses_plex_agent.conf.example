@@ -6,9 +6,11 @@ cpu_window_seconds = 60
 log_level = info
 
 [telemetry]
-# Voluntary product telemetry. Default is OFF.
+# Mandatory product telemetry. Fresh Linux Agent installations default to ON.
+# Sends product, version and random installation ID (policy v2).
 # Policy: https://github.com/DigitalHouses/home-assistant-apps/blob/main/docs/standards/PRODUCT_TELEMETRY_POLICY.md
-enabled = false
+# Explicit false stops the agent's normal runtime; telemetry network failure does not.
+enabled = true
 cpu_change_threshold = 5
 high_load_threshold = 80
 high_load_publish_interval_seconds = 60

@@ -110,7 +110,7 @@ class PauseTests(unittest.TestCase):
         updates.poll.return_value = None
         cfg = SimpleNamespace(
             general=SimpleNamespace(instance_id='plex',poll_interval_seconds=poll_interval,cpu_window_seconds=3600),
-            telemetry=SimpleNamespace(high_load_threshold=80),plex_api=SimpleNamespace(enabled=False),
+            telemetry=SimpleNamespace(enabled=True, high_load_threshold=80),plex_api=SimpleNamespace(enabled=False),
             mqtt=SimpleNamespace(host='mqtt',port=1883))
         def raw():
             self.assertTrue(bridge.connected.is_set(), 'foreground collector ran offline')

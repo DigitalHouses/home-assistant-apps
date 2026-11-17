@@ -107,7 +107,7 @@ class CliTests(unittest.TestCase):
         values = {
             'instance_id': 'plex_test', 'instance_name': 'Friendly agent',
             'poll_interval': '12', 'cpu_window': '120', 'log_level': 'debug',
-            'telemetry_enabled': 'true', 'cpu_change_threshold': '3',
+            'telemetry_enabled': 'false', 'cpu_change_threshold': '3',
             'high_load_threshold': '85', 'high_load_interval': '120',
             'plex_api_enabled': 'false', 'plex_api_url': 'http://localhost:32400',
             'plex_api_token_file': '/etc/token', 'plex_api_timeout': '4',
