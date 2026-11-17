@@ -66,7 +66,7 @@ def test_payload_is_exact_protocol_v1_without_country_or_host_data(tmp_path: Pat
 
     assert client.payload() == {
         "schema": 1,
-        "telemetry_policy_version": 1,
+        "telemetry_policy_version": 2,
         "installation_id": client.installation_id,
         "product": "digitalhouses_pve_agent",
         "version": "0.5.8",
