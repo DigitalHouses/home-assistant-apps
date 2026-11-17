@@ -169,3 +169,18 @@ The reusable Home Assistant layer does not calculate Internet state, recovery de
 `dh_internet_app_notification_local_package.yaml` and `locales/ru/dh_internet_app_notification_local_package.yaml` consume schema-v2 machine Events from `event.dh_internet_app_event` directly. Each user-visible `event_type` has a readable `trigger.id` and one matching `choose` branch. Both public locale examples call `persistent_notification.create` directly; installations may replace that final action with their own local delivery service.
 
 There is no Notification Envelope, secondary notification event, adapter or duplicated schema-validation layer in Home Assistant. If the producer violates a required event contract, fix the producer and its tests rather than manufacturing fallback notification data.
+
+
+## DH Sync — автоматическая синхронизация
+
+С версии **0.1.25** App публикует retained MQTT `DigitalHouses/Global/digitalhouses_internet_app/sync` (QoS 1) при каждом успешном подключении или переподключении к брокеру. `dashboard` равен `dh-system`, так что отдельная панель Internet не создаётся: вкладка `path: internet` размещается в системной панели `/dh-system/`.
+
+Рабочие ресурсы читаются DH Sync из GitHub `main` по каноническим каталогам:
+
+- `dashboards/ru/13_internet.yaml` — вкладка Internet;
+- `packages/common/dh_internet_app_global_package.yaml` — Recorder;
+- `packages/locales/ru/dh_internet_app_notification_local_package.yaml` — уведомления через `persistent_notification.create`.
+
+Файлы из `examples/` больше не нужно вручную копировать для новых установок с DH Sync: они остаются только примерами. Уже существующие пакеты DH Sync определяет по верхнеуровневому ключу и обновляет на прежнем месте. Internet App не создаёт панели, не пишет YAML в Home Assistant и не требует дополнительных настроек MQTT.
+
+**Совместимость:** старые топики `DigitalHouses/Global/dh_internet_app/*`, MQTT Discovery, `entity_id`, история Recorder и настройки App не изменены. Новый `/sync` — дополнительное объявление источника. При `telemetry_enabled=false` App не запускается по текущему контракту, поэтому не публикует `/sync`.
