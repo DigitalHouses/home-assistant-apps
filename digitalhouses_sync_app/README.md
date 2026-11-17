@@ -1,6 +1,6 @@
 # DigitalHouses Sync App — 0.6.0
 
-**Single standard:** [DH Sync Resources Standard](../docs/standards/DH_SYNC_RESOURCES_STANDARD.md).
+**Single standard:** [DH Sync Developer Standard](../docs/standards/DH_SYNC_DEVELOPER_STANDARD.md).
 
 DH Sync publishes GitHub-owned Home Assistant panels and packages, using retained MQTT `/sync` as its **only product registry**.
 

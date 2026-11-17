@@ -49,6 +49,7 @@ Engineering documentation is separated into shared standards and product-specifi
 - [DigitalHouses Application Standard](docs/standards/DIGITALHOUSES_APP_STANDARD.md)
 - [DigitalHouses Product Naming Standard](docs/standards/PRODUCT_NAMING_STANDARD.md)
 - [DigitalHouses Contract Data Policy](docs/standards/CONTRACT_DATA_POLICY.md)
+- [DH Sync Developer Standard — публикация MQTT /sync, Views и Packages](docs/standards/DH_SYNC_DEVELOPER_STANDARD.md)
 - [DigitalHouses Events & Notifications Standard](docs/standards/EVENTS_AND_NOTIFICATIONS_STANDARD.md)
 - [DigitalHouses Unified Product Status Card Standard](docs/standards/UNIFIED_PRODUCT_STATUS_CARD_STANDARD.md)
 - [DigitalHouses Release Policy](docs/standards/RELEASE_POLICY.md)

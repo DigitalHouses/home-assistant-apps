@@ -2,7 +2,8 @@
 
 Status: product PR candidate. No release or deployment to live PVE/HA
 performed. Canonical spec:
-[DH Sync Discovery Contract v1](https://github.com/DigitalHouses/home-assistant-apps/blob/feature/digitalhouses-sync-app-contract/digitalhouses_sync_app/docs/DH_SYNC_DISCOVERY_CONTRACT_V1.md).
+**Исторический документ о первоначальной реализации; не использовать как действующий стандарт.**
+Актуальный контракт: [DH Sync Developer Standard](../../docs/standards/DH_SYNC_DEVELOPER_STANDARD.md).
 
 ## Identity and source
 

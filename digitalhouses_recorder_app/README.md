@@ -57,7 +57,7 @@ entity-progress-card (`custom:entity-progress-card-template`) already
 installed in Home Assistant; DH Sync does not provide these frontend dependencies.
 
 See [Recorder DH Sync integration](docs/DH_SYNC_DISCOVERY_V1.md) and the
-[repository resource standard](../docs/standards/DH_SYNC_RESOURCES_STANDARD.md).
+[repository resource standard](../docs/standards/DH_SYNC_DEVELOPER_STANDARD.md).
 
 ## Quick start
 

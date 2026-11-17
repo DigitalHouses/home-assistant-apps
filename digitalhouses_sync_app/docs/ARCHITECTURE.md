@@ -1,6 +1,6 @@
 # DH Sync 0.6.0 — Current architecture
 
-Authoritative standard: [DH Sync Resources Standard](../../docs/standards/DH_SYNC_RESOURCES_STANDARD.md).
+Authoritative standard: [DH Sync Developer Standard](../../docs/standards/DH_SYNC_DEVELOPER_STANDARD.md).
 
 - Product registry: broker retained MQTT `/sync` only, rebuilt on reconnection.
 - Source admission: GitHub repository owner `DigitalHouses` only.
