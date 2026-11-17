@@ -72,6 +72,9 @@ def test_mqtt_switch_uses_existing_update_state_and_rejects_retained_commands():
 def test_autoinstall_only_after_new_verified_check_and_only_once(tmp_path):
     manager = UpdateManager(tmp_path, '0.5.89')
     manager._last_check = time.monotonic()
+    # Keep the asynchronous checker deterministic; verified results below are
+    # injected explicitly rather than fetched from GitHub during unit tests.
+    manager.start_check = Mock(return_value=True)
     manager._launch_update = Mock()
     bridge = Mock()
     bridge.publish_update_state.return_value = True
@@ -123,3 +126,81 @@ def test_check_error_and_invalid_preference_never_install(tmp_path):
     manager.tick(bridge, denial_reason=lambda: None)
     manager._launch_update.assert_not_called()
     assert bridge.publish_update_state.call_args.args[0]['auto_update'] is False
+
+
+def test_enabling_after_old_check_requests_fresh_release_check_immediately(tmp_path):
+    """CLI and MQTT both persist the same flag; tick must not wait 24 hours."""
+    manager = UpdateManager(tmp_path, '0.5.93')
+    manager._last_check = time.monotonic()
+    manager.tag, manager.latest, manager.known = (
+        'digitalhouses_pve_agent-v0.5.94', '0.5.94', True
+    )  # Old cached result is not sufficient to install.
+    manager.start_check = Mock(return_value=True)
+    manager._launch_update = Mock()
+    bridge = Mock()
+    bridge.publish_update_state.return_value = True
+    manager.tick(bridge, denial_reason=lambda: None)
+    manager.start_check.assert_not_called()
+    AutoUpdatePreference(tmp_path).set(True)
+    manager.tick(bridge, denial_reason=lambda: None)
+    manager.start_check.assert_called_once_with()
+    manager._launch_update.assert_not_called()
+    manager.tick(bridge, denial_reason=lambda: None)
+    manager.start_check.assert_called_once_with()
+    manager._check_result = ('digitalhouses_pve_agent-v0.5.94', '0.5.94')
+    manager.tick(bridge, denial_reason=lambda: None)
+    manager._launch_update.assert_called_once_with()
+
+
+def test_enable_while_check_running_does_not_duplicate_and_auto_installs(tmp_path):
+    manager = UpdateManager(tmp_path, '0.5.93')
+    manager._last_check = time.monotonic()
+    manager._checking = True
+    manager.start_check = Mock(return_value=True)
+    manager._launch_update = Mock()
+    bridge = Mock()
+    bridge.publish_update_state.return_value = True
+    AutoUpdatePreference(tmp_path).set(True)
+    manager.tick(bridge, denial_reason=lambda: None)
+    manager.start_check.assert_not_called()
+    manager._checking = False
+    manager._check_result = ('digitalhouses_pve_agent-v0.5.94', '0.5.94')
+    manager.tick(bridge, denial_reason=lambda: None)
+    manager.start_check.assert_not_called()
+    manager._launch_update.assert_called_once_with()
+
+
+def test_enabling_retries_check_when_updater_was_busy(tmp_path):
+    manager = UpdateManager(tmp_path, '0.5.93')
+    manager._last_check = time.monotonic()
+    manager.start_check = Mock(side_effect=[False, True])
+    bridge = Mock()
+    bridge.publish_update_state.return_value = True
+    AutoUpdatePreference(tmp_path).set(True)
+    manager.tick(bridge)
+    assert manager._check_on_enable_pending is True
+    manager.tick(bridge)
+    assert manager._check_on_enable_pending is False
+    assert manager.start_check.call_count == 2
+    manager.tick(bridge)
+    assert manager.start_check.call_count == 2
+
+
+def test_disabling_cancels_pending_enable_check_and_reenable_triggers_again(tmp_path):
+    manager = UpdateManager(tmp_path, '0.5.93')
+    manager._last_check = time.monotonic()
+    manager.start_check = Mock(return_value=False)
+    bridge = Mock()
+    bridge.publish_update_state.return_value = True
+    preference = AutoUpdatePreference(tmp_path)
+    preference.set(True)
+    manager.tick(bridge)
+    assert manager._check_on_enable_pending is True
+    preference.set(False)
+    manager.tick(bridge)
+    assert manager._check_on_enable_pending is False
+    manager.start_check.reset_mock()
+    manager.start_check.return_value = True
+    preference.set(True)
+    manager.tick(bridge)
+    manager.start_check.assert_called_once_with()
