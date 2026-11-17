@@ -8,11 +8,33 @@ from pathlib import Path
 
 PRODUCT = Path(__file__).resolve().parents[1]
 DASHBOARDS = PRODUCT / "dashboards" / "ru"
-HEADER = (
-    "# DH-View: dh_pve_agent\n"
-    "# DH-View-Version: 1.0.0\n"
-    "# DH-View-Date: 2026-11-14\n"
-    "\n"
+HEADERS = {
+    "10_pve_proxmox.yaml": (
+        "# DH-View: dh_pve_agent\n"
+        "# DH-View-Version: 1.0.1\n"
+        "# DH-View-Date: 2026-11-17\n"
+        "\n"
+    ),
+    "11_pve_ups.yaml": (
+        "# DH-View: dh_pve_agent\n"
+        "# DH-View-Version: 1.0.0\n"
+        "# DH-View-Date: 2026-11-14\n"
+        "\n"
+    ),
+}
+AUTO_UPDATE_CARD = (
+    "      - type: custom:mushroom-entity-card\n"
+    "        entity: switch.dh_pve_agent_auto_update\n"
+    "        name: Автообновление PVE Agent\n"
+    "        icon: mdi:autorenew\n"
+    "        primary_info: name\n"
+    "        secondary_info: state\n"
+    "        tap_action:\n"
+    "          action: toggle\n"
+    "        hold_action:\n"
+    "          action: more-info\n"
+    "        grid_options:\n"
+    "          columns: 12\n"
 )
 BASELINES = {
     "10_pve_proxmox.yaml": {
@@ -36,8 +58,19 @@ class DhSyncCanonicalPveResourcesTests(unittest.TestCase):
         for filename, expected in BASELINES.items():
             with self.subTest(filename=filename):
                 resource = (DASHBOARDS / filename).read_text(encoding="utf-8")
-                self.assertTrue(resource.startswith(HEADER))
-                body = resource[len(HEADER):]
+                header = HEADERS[filename]
+                self.assertTrue(resource.startswith(header))
+                body = resource[len(header):]
+                if filename == "10_pve_proxmox.yaml":
+                    # Preserve the exact v3 CORE baseline except for the
+                    # intentional, narrowly scoped Diagnostics UI update.
+                    self.assertEqual(body.count("        heading: Диагностика\n"), 1)
+                    self.assertEqual(body.count(AUTO_UPDATE_CARD), 1)
+                    body = body.replace(
+                        "        heading: Диагностика\n",
+                        "        heading: Приложение\n",
+                        1,
+                    ).replace(AUTO_UPDATE_CARD, "", 1)
                 self.assertEqual(body.count("show_icon_and_title: false"), 1)
                 restored = body.replace(
                     "show_icon_and_title: false\n",
@@ -96,6 +129,37 @@ class DhSyncCanonicalPveResourcesTests(unittest.TestCase):
             self.assertIn(marker, pve)
         for marker in ("binary_sensor.dh_pve_agent_ups_configured", "UPS", "sections:"):
             self.assertIn(marker, ups)
+
+    def test_proxmox_diagnostics_exposes_existing_auto_update_switch(self):
+        pve = (DASHBOARDS / "10_pve_proxmox.yaml").read_text(encoding="utf-8")
+        self.assertEqual(pve.count("switch.dh_pve_agent_auto_update"), 1)
+        self.assertIn(AUTO_UPDATE_CARD, pve)
+        self.assertLess(
+            pve.index("        heading: Диагностика"),
+            pve.index(AUTO_UPDATE_CARD),
+        )
+        self.assertIn("action: toggle", AUTO_UPDATE_CARD)
+        self.assertIn("secondary_info: state", AUTO_UPDATE_CARD)
+        # Existing MQTT switch owns state and command; no extra entity or
+        # custom scripts are required for the canonical DH Sync view.
+        from app.discovery import build_discovery_payload
+        from app.config import AppConfig, GeneralConfig, MqttConfig
+        from app.identity import HostIdentity
+        config = AppConfig(
+            general=GeneralConfig(instance_id="pve_test", node_name="PVE", log_level="info"),
+            mqtt=MqttConfig(host="mqtt", port=1883, username="", password="",
+                            topic_prefix="DigitalHouses/Global/digitalhouses_pve_agent",
+                            discovery_prefix="homeassistant", keepalive_seconds=60),
+        )
+        identity = HostIdentity(
+            machine_id="0123456789abcdef0123456789abcdef",
+            instance_id="pve_test", hostname="pve", node_name="PVE",
+        )
+        switch = build_discovery_payload(config, identity, version="0.5.93")["components"]["auto_update"]
+        self.assertEqual(switch["platform"], "switch")
+        self.assertEqual(switch["default_entity_id"], "switch.dh_pve_agent_auto_update")
+        self.assertTrue(switch["command_topic"].endswith("/update/auto/set"))
+        self.assertEqual(switch["state_topic"].split("/")[-1], "state")
 
     def test_no_placeholder_english_translation(self):
         self.assertFalse((PRODUCT / "dashboards" / "en" / "10_pve_proxmox.yaml").exists())
