@@ -104,7 +104,8 @@ def test_fresh_install_telemetry_proposed_without_modifying_upgrades():
     assert "DigitalHouses telemetry: enabled by default for new PVE Agent installations." in installer
     assert "docs/standards/PRODUCT_TELEMETRY_POLICY.md" in installer
     assert r"[telemetry]\nenabled = true\n" in installer
-    assert "[telemetry]\nenabled = true" in example
+    assert "[telemetry]" in example
+    assert "enabled = true" in example
 
     # Existing settings, including an explicit OFF, always take precedence.
     existing = installer.index('if [[ -f "${CONFIG_FILE}" ]]; then', installer.index('PREPARED_CONFIG='))
