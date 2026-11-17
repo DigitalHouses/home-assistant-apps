@@ -30,10 +30,10 @@ DH Sync, update Linux Agent, or grant permission for automatic adoption.
 
 | File, relative to `digitalhouses_pve_agent/` | Revision | View path | Navigation |
 | --- | --- | --- | --- |
-| `dashboards/ru/10_pve_proxmox.yaml` | `DH-View-Version: 1.0.0` | `dh_pve_agent` | `mdi:server`, icon-only |
+| `dashboards/ru/10_pve_proxmox.yaml` | `DH-View-Version: 1.0.1` | `dh_pve_agent` | `mdi:server`, icon-only |
 | `dashboards/ru/11_pve_ups.yaml` | `DH-View-Version: 1.0.0` | `dh_pve_agent_ups` | `mdi:power-plug-battery`, icon-only |
 
-- `DH-View: dh_pve_agent`; `DH-View-Date: 2026-11-14`.
+- `DH-View: dh_pve_agent`; Proxmox view date `2026-11-17`, UPS view date `2026-11-14`.
 - **Текущее правило DH Sync:** допуск источника определяется только владельцем GitHub `DigitalHouses`. Версии Agent и диапазоны `DH-Compatible-*` не являются правилами допуска. CORE v3 view и MQTT Agent 0.5.89 проверялись отдельно как функциональные данные.
 - HA view revisions are independent of the Linux Agent binary release.
   Do **not** release a new Agent version for navigation-only YAML changes.
@@ -45,6 +45,21 @@ DH Sync, update Linux Agent, or grant permission for automatic adoption.
   before they can be made canonical; do not silently co-install a second
   Recorder package.
 
+## Diagnostics UI change — 2026-11-17
+
+The canonical Proxmox view `dashboards/ru/10_pve_proxmox.yaml` now has
+`DH-View-Version: 1.0.1`. Its existing `Приложение` heading is renamed
+`Диагностика`, and it displays the **already discovered** PVE Agent
+`switch.dh_pve_agent_auto_update` as a Mushroom entity card. Its current
+ON/OFF value is visible; tapping toggles the same persisted MQTT preference,
+and holding shows Home Assistant more-info. No new entities, MQTT topics,
+polling loops, backend code or Linux Agent release are introduced.
+
+The historic CORE v3 body checksum remains enforced by reversing this
+approved small view delta. UPS view `11_pve_ups.yaml` is unchanged.
+The updated dashboard is repository source until DH Sync actually applies it
+on a Home Assistant instance; publication does not establish live UI acceptance.
+
 ## Agent 0.5.89 source review — historical QA
 
 Merged Agent PR #503 was inspected against 0.5.88, the working CORE v3 baseline.
@@ -53,10 +68,10 @@ source metadata in app/mqtt_bridge.py, an independent sync field in topics.py,
 and app/sync_discovery.py. Existing HA entity IDs, availability, FAN readings,
 UPS/NUT logic and discovery data remain unchanged by this release.
 
-Both original CORE v3 view bodies remain exactly the pinned historical SHA-256
-baselines (after reversing previously approved icon-only navigation changes).
+Both original CORE v3 view body baselines remain protected by the pinned historical SHA-256
+checks (after reversing approved navigation changes and the later Proxmox diagnostics addition).
 The old compatibility-range comment headers have been removed; DH Sync now
-admits any product source owned by DigitalHouses. View revisions remain 1.0.0.
+admits any product source owned by DigitalHouses. Current view revisions are Proxmox `1.0.1` and UPS `1.0.0`.
 
 Live CORE MQTT confirmed PVE Agent 0.5.89 Online. This validates discovery,
 not card rendering. Before leaving Draft, the PVE product owner must confirm
@@ -93,6 +108,9 @@ Only approved differences from those working CORE files:
    not the text, in the DigitalHouses tab bar; preserve each view's `title`.
 3. In the UPS view only, use `mdi:power-plug-battery` instead of
    `mdi:power-plug-battery-outline`.
+4. In the Proxmox view only, rename the `Приложение` subtitle to `Диагностика`
+   and append the existing MQTT auto-update switch as one diagnostic control
+   (Proxmox view revision `1.0.1`).
 
 The original Proxmox graph's simple `auto-entities` FAN % filter and
 FAN 1/FAN 3 presentation, dynamic VM/LXC/disks, entity IDs, section order,

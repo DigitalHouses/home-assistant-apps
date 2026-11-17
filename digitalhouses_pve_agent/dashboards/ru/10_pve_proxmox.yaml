@@ -1,6 +1,6 @@
 # DH-View: dh_pve_agent
-# DH-View-Version: 1.0.0
-# DH-View-Date: 2026-11-14
+# DH-View-Version: 1.0.1
+# DH-View-Date: 2026-11-17
 
 title: Proxmox
 path: dh_pve_agent
@@ -2041,7 +2041,7 @@ sections:
       - type: heading
         heading_style: subtitle
         icon: mdi:server
-        heading: Приложение
+        heading: Диагностика
       - type: custom:mushroom-template-card
         entity: sensor.dh_pve_agent_last_boot
         primary: Время работы PVE сервера
@@ -2143,6 +2143,18 @@ sections:
               'off') %} green {% else %} grey {% endif %}
             tap_action:
               action: more-info
+      - type: custom:mushroom-entity-card
+        entity: switch.dh_pve_agent_auto_update
+        name: Автообновление PVE Agent
+        icon: mdi:autorenew
+        primary_info: name
+        secondary_info: state
+        tap_action:
+          action: toggle
+        hold_action:
+          action: more-info
+        grid_options:
+          columns: 12
   - type: grid
     cards:
       - type: heading
