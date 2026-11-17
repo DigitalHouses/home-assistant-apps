@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.96
+
+- Follow DH Sync 0.6.0 with identity-only retained MQTT `/sync`: remove the obsolete `dashboard` field, keeping the existing per-instance topic, QoS 1, retain and connect/reconnect publication.
+- Publish portable Russian PVE/UPS notifications in `packages/locales/ru/dh_pve_agent_notification_local_package.yaml`; keep the optional site-specific `script.write2admins` example outside synchronization.
+- Preserve the standalone Proxmox/UPS Views, shared HA package, existing MQTT telemetry and PVE/NUT monitoring. Replace obsolete Sync v1 documentation and add contract regressions; panel composition belongs to DH Sync.
+
 ## 0.5.95
 
 - Announce `"dashboard":"dh-system"` in the existing retained MQTT `/sync` metadata for DH Sync multi-dashboard routing. Preserve the exact canonical instance-qualified topic, all previous metadata fields, QoS 1 and retained publication on connect/reconnect.

@@ -1,4 +1,4 @@
-"""DH Sync v1 product-source announcement (not an installation authorization)."""
+"""DH Sync 0.6.0 product-source announcement (not an installation authorization)."""
 from __future__ import annotations
 
 import json
@@ -18,7 +18,6 @@ def build_sync_payload(version: str) -> str:
             "version": version,
             "repository": REPOSITORY,
             "product_path": PRODUCT_PATH,
-            "dashboard": "dh-system",
         },
         separators=(",", ":"),
     )

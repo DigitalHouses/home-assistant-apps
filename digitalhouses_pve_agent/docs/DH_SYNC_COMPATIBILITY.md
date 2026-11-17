@@ -1,178 +1,71 @@
-# DH PVE Agent → DH Sync v1: canonical YAML contract
+# DigitalHouses PVE Agent — DH Sync 0.6.0 resources
 
-Status: product-team candidate. This change **does not deploy** to HAOS, install
-DH Sync, update Linux Agent, or grant permission for automatic adoption.
+**Normative specification:** [DH Sync Developer Standard](../../docs/standards/DH_SYNC_DEVELOPER_STANDARD.md).
+**Notifications:** [Events & Notifications Standard](../../docs/standards/EVENTS_AND_NOTIFICATIONS_STANDARD.md).
 
-## Product identity and MQTT detection
+## Product identity (MQTT)
 
-- Canonical product ID: `digitalhouses_pve_agent`, registry type `agent`
-  (`digitalhouses-stats/digitalhouses_stats/product_registry.json`).
-- Product-level MQTT availability:
-  `DigitalHouses/Global/digitalhouses_pve_agent/<instance_id>/availability`.
-  The existing PVE `build_topics` derives `instance_id` from host identity;
-  **do not** assume one universal fixed instance suffix.
-- The agent publishes retained `online` with QoS 1 after connecting.
-  Existing Last Will publishes retained `offline` with QoS 1. UPS subsystem
-  availability `.../<instance_id>/ups/availability` is **not** an agent
-  installation or uninstall signal.
-- Existing retained MQTT Discovery topic:
-  `homeassistant/device/dh_pve_agent_<instance_id>/config`, preserving the
-  existing device identifiers, `unique_id` and entity IDs.
-- Existing release diagnostic: `sensor.dh_pve_agent_version`; existing
-  process timestamp: `sensor.dh_pve_agent_started`. Both are defined by the
-  established PVE MQTT Discovery contract.
-- Offline, MQTT reconnect and UPS-not-configured **never** mean uninstall.
-  DH Sync should retain the last known product and both managed views.
-  A removal of DH Sync-managed files needs an explicitly confirmed uninstall,
-  with backup. No new MQTT heartbeat or identity protocol is introduced here.
+The existing MQTT client publishes on every successful connect/reconnect:
 
-## Canonical views (RU only)
-
-| File, relative to `digitalhouses_pve_agent/` | Revision | View path | Navigation |
-| --- | --- | --- | --- |
-| `dashboards/ru/10_pve_proxmox.yaml` | `DH-View-Version: 1.0.1` | `dh_pve_agent` | `mdi:server`, icon-only |
-| `dashboards/ru/11_pve_ups.yaml` | `DH-View-Version: 1.0.0` | `dh_pve_agent_ups` | `mdi:power-plug-battery`, icon-only |
-
-- `DH-View: dh_pve_agent`; Proxmox view date `2026-11-17`, UPS view date `2026-11-14`.
-- **Текущее правило DH Sync:** допуск источника определяется только владельцем GitHub `DigitalHouses`. Версии Agent и диапазоны `DH-Compatible-*` не являются правилами допуска. CORE v3 view и MQTT Agent 0.5.89 проверялись отдельно как функциональные данные.
-- HA view revisions are independent of the Linux Agent binary release.
-  Do **not** release a new Agent version for navigation-only YAML changes.
-- English UI has **not** been verified or translated; no placeholder EN files
-  are supplied. Existing `examples/` remain in place for legacy users but
-  **are not** the approved v3 source.
-- No `packages/` have been changed here. The existing PVE Recorder, global
-  helpers and localized notifications need a separate product-led audit
-  before they can be made canonical; do not silently co-install a second
-  Recorder package.
-
-## Diagnostics UI change — 2026-11-17
-
-The canonical Proxmox view `dashboards/ru/10_pve_proxmox.yaml` now has
-`DH-View-Version: 1.0.1`. Its existing `Приложение` heading is renamed
-`Диагностика`, and it displays the **already discovered** PVE Agent
-`switch.dh_pve_agent_auto_update` as a Mushroom entity card. Its current
-ON/OFF value is visible; tapping toggles the same persisted MQTT preference,
-and holding shows Home Assistant more-info. No new entities, MQTT topics,
-polling loops, backend code or Linux Agent release are introduced.
-
-The historic CORE v3 body checksum remains enforced by reversing this
-approved small view delta. UPS view `11_pve_ups.yaml` is unchanged.
-The updated dashboard is repository source until DH Sync actually applies it
-on a Home Assistant instance; publication does not establish live UI acceptance.
-
-## Agent 0.5.89 source review — historical QA
-
-Merged Agent PR #503 was inspected against 0.5.88, the working CORE v3 baseline.
-The source diff only adds sync_version in app/main.py, retained QoS1 /sync
-source metadata in app/mqtt_bridge.py, an independent sync field in topics.py,
-and app/sync_discovery.py. Existing HA entity IDs, availability, FAN readings,
-UPS/NUT logic and discovery data remain unchanged by this release.
-
-Both original CORE v3 view body baselines remain protected by the pinned historical SHA-256
-checks (after reversing approved navigation changes and the later Proxmox diagnostics addition).
-The old compatibility-range comment headers have been removed; DH Sync now
-admits any product source owned by DigitalHouses. Current view revisions are Proxmox `1.0.1` and UPS `1.0.0`.
-
-Live CORE MQTT confirmed PVE Agent 0.5.89 Online. This validates discovery,
-not card rendering. Before leaving Draft, the PVE product owner must confirm
-both Proxmox (including FAN% graph) and UPS views on live Agent 0.5.89.
-Do not approve DH Sync Apply, touch HOME/CORE files, or merge solely because
-the agent's MQTT /sync metadata is correct.
-
-## Live operator acceptance — 2026-11-14
-
-After the CORE MQTT /sync record confirmed running PVE Agent v0.5.89,
-the operator was asked to inspect the existing DigitalHouses Proxmox
-(including FAN% graph) and Электропитание / UPS views in CORE HAOS.
-The operator replied «все видно», confirming the visible dashboards.
-This is a visual functional acceptance of existing dashboards, not an
-end-to-end DH Sync file-apply/rollback acceptance or a new YAML deployment.
-Canonical source views, entity IDs, FAN/UPS cards and local installed files
-were not modified during this check.
-
-## Provenance — exact working CORE v3 source
-
-The original **read-only** snapshots were retrieved on 2026-11-14 from
-CORE HA VM2242, `/mnt/data/supervisor/homeassistant/dashboards/dh/views/`.
-Their SHA-256 values were independently checked in the guest:
-
-- `10_pve_proxmox.yaml`:
-  `e41b1f9fe0736f8cf80f31e58214d3e1483200b091f4d8dee086e02e8966626d`
-- `11_pve_ups.yaml`:
-  `5aef50ab9e4d5db307e1c66a2924a20f38638a77ebd70d06311aa697fd082f96`
-
-Only approved differences from those working CORE files:
-
-1. Add DH Sync **comment** metadata headers.
-2. In both views, `show_icon_and_title: true` → `false` to show the icon,
-   not the text, in the DigitalHouses tab bar; preserve each view's `title`.
-3. In the UPS view only, use `mdi:power-plug-battery` instead of
-   `mdi:power-plug-battery-outline`.
-4. In the Proxmox view only, rename the `Приложение` subtitle to `Диагностика`
-   and append the existing MQTT auto-update switch as one diagnostic control
-   (Proxmox view revision `1.0.1`).
-
-The original Proxmox graph's simple `auto-entities` FAN % filter and
-FAN 1/FAN 3 presentation, dynamic VM/LXC/disks, entity IDs, section order,
-actions, Jinja, Recorder contract and UPS/NUT protection remain **byte-for-byte
-the same otherwise**. Product tests reverse these approved changes and
-validate the exact baseline SHA-256 to prevent accidentally publishing the
-older, broken v2 graph.
-
-HACS/frontend dependencies found in the actual views:
-`auto-entities`, `button-card`, `entity-progress-card-template`,
-`mini-graph-card`, Mushroom cards (`template`, `entity`, `number`,
-`chips`, `title`) and `phu:proxmox` icon support. DH Sync may warn about
-missing frontend resources, but must not silently install HACS dependencies.
-
-## Safe adoption and in-place update on CORE HA
-
-Existing dashboard registration is owned by the central DigitalHouses panel:
-
-```yaml
-title: DigitalHouses
-views: !include_dir_list views/
+```text
+DigitalHouses/Global/digitalhouses_pve_agent/<instance_id>/sync
 ```
 
-Existing live files (do **not** change them in this PR):
+Publish options: **QoS 1**, **retain=true**. Payload:
 
-- `/config/dashboards/dh/views/10_pve_proxmox.yaml`
-- `/config/dashboards/dh/views/11_pve_ups.yaml`
+```json
+{
+  "schema": 1,
+  "product_id": "digitalhouses_pve_agent",
+  "type": "agent",
+  "version": "<running agent version>",
+  "repository": "https://github.com/DigitalHouses/home-assistant-apps",
+  "product_path": "digitalhouses_pve_agent"
+}
+```
 
-1. DH Sync resolves the repository default branch to a concrete Git commit SHA
-   for each read-only preview. This SHA is a consistent file snapshot, not a
-   product allowlist or version-compatibility gate.
-2. Preflight: confirm registered `digital-houses` YAML dashboard and
-   `!include_dir_list views/`, matching two paths, no duplicate views,
-   running Agent version as information, required frontend dependencies,
-   and compare each existing view to the known v3 baseline ignoring only
-   header comments and the three explicitly approved navigation differences.
-   If locally customized or unknown: display diff, **stop**, ask operator.
-3. Do **not** register a new sidebar, overwrite `ui.yaml`, edit `.storage`,
-   change either view `path`, rename files, or create duplicates.
-4. On explicit approval, snapshot exact bytes, owner/mode and SHA-256 of the
-   existing two files. Stage two new YAML files, validate syntax and selected
-   content/paths, and replace **only** the two corresponding paths in place.
-   Do not touch unrelated cards/packages or alter local users' files.
-5. Validate Home Assistant config and dashboard loading, then have the
-   operator verify icon-only Proxmox/UPS tabs and the graph + UPS controls.
-   If validation fails, restore the exact backups and verify their hashes.
-   Preserve the backup/journal until acceptance. Do not auto-restart HA.
-6. Retain both tabs on agent `offline` or UPS not configured. Uninstall
-   requires an explicit user action and removes only DH Sync-managed assets.
+The agent reuses its existing stable `instance_id` and MQTT connection.
+No `dashboard`, `panel`, `view`, `order`, permissions, secrets, or Git SHA
+are sent. Availability/LWT remain separate and do not control DH Sync discovery;
+disconnect does not clear the retained `/sync`.
 
-No end-to-end DH Sync CORE HA deployment, Agent 0.5.89 live rendering, adoption rollback or
-cross-HA regression has been run in this product PR. Those are acceptance
-gates for the **DH Sync** implementation, not permissions to edit CORE now.
+## Canonical resources
+
+All paths below are relative to `digitalhouses_pve_agent/`:
+
+| Resource | File | Stable View path |
+| --- | --- | --- |
+| Proxmox View | `dashboards/ru/10_pve_proxmox.yaml` | `dh_pve_agent` |
+| UPS View | `dashboards/ru/11_pve_ups.yaml` | `dh_pve_agent_ups` |
+| Common Package | `packages/common/dh_pve_agent_package.yaml` | — |
+| Russian notifications | `packages/locales/ru/dh_pve_agent_notification_local_package.yaml` | — |
+
+The notifications package uses portable `persistent_notification.create`.
+Private `script.write2admins` delivery is an **opt-in example only**, under
+`examples/`; it is never distributed by DH Sync. Do not install both the
+canonical notification package and a local copy of the same automation.
+
+Each canonical View is a self-contained Lovelace View with a stable `path`.
+View metadata comments are informational; GitHub commit history tracks changes.
+View/Package updates do not require a Linux Agent release.
+
+## Ownership
+
+The PVE Agent owns its MQTT declaration, two Views and Packages. Only DH Sync
+owns Dashboard panel files, View placement and order, sidebar labels/icons and
+access controls. A View can be referenced from multiple panels.
+
+For panel registration, provide to DH Sync:
+
+- `digitalhouses_pve_agent` + `dh_pve_agent`
+- `digitalhouses_pve_agent` + `dh_pve_agent_ups`
+
+No compatibility allowlist, online requirement, version matching, manual Apply
+approval, or legacy-YAML migration belongs in the PVE Agent.
 
 ## Validation
 
 ```bash
-PYTHONPATH=digitalhouses_pve_agent python -m pytest digitalhouses_pve_agent/tests/test_dh_sync_canonical_resources.py -q
+PYTHONPATH=digitalhouses_pve_agent python -m pytest digitalhouses_pve_agent/tests -q
 python scripts/validate_repository.py
 ```
-
-The product regression tests assert metadata, stable top-level view structure,
-unique existing paths, icon-only navigation, exact v3 body hashes, FAN graph markers and
-absence of fake EN files. Existing agent/executable code, MQTT, Recorder and
-UPS/NUT protection files are intentionally untouched.
