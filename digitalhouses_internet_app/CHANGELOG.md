@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.25
+
+- Publish the DH Sync Discovery Contract v1 source at `DigitalHouses/Global/digitalhouses_internet_app/sync` (QoS 1, retained) on every successful MQTT connect and reconnect; include `dashboard=dh-system` and the running App version.
+- Promote the existing standalone Internet dashboard to `dashboards/ru/13_internet.yaml`, Recorder whitelist to `packages/common/` and portable Russian notifications to `packages/locales/ru/`. DH Sync now owns YAML installation and updates; `examples/` remains reference-only.
+- Preserve the historical `DigitalHouses/Global/dh_internet_app/` namespace, discovery identities, entity IDs, configuration, runtime state, and notification behavior unchanged.
+
 ## 0.1.24
 
 - Fix the Home Assistant configuration form for `speedtest.server_ids`: replace the numeric-list field that the frontend incorrectly renders as a single number with a validated multi-entry numeric-text field.

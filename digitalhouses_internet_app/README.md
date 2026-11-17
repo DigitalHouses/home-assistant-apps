@@ -14,6 +14,28 @@ This is a new product. It does not migrate or reuse the stable MQTT identities o
 - MQTT base: `DigitalHouses/Global/dh_internet_app`
 - Home Assistant entity / unique-id prefix: `dh_internet_app_`
 
+## DH Sync
+
+Начиная с версии **0.1.25**, Internet App публикует MQTT Discovery Contract v1:
+
+```text
+DigitalHouses/Global/digitalhouses_internet_app/sync
+```
+
+QoS 1, retained, при каждом подключении и переподключении к MQTT. В сообщении:
+`schema=1`, `product_id=digitalhouses_internet_app`, `type=app`, текущая
+`version`, `repository=https://github.com/DigitalHouses/home-assistant-apps`,
+`product_path=digitalhouses_internet_app`, `dashboard=dh-system`.
+
+DH Sync автоматически публикует вкладку **Internet** (`path: internet`) в панели
+`/dh-system/` и синхронизирует Recorder и русский пакет уведомлений из
+`dashboards/ru/`, `packages/common/`, `packages/locales/ru/`.
+`examples/` остаётся только справочными примерами.
+
+Этот новый `/sync` топик не заменяет существующий
+`DigitalHouses/Global/dh_internet_app/` и не меняет `entity_id`.
+Подробности: [DH_SYNC_COMPATIBILITY.md](docs/DH_SYNC_COMPATIBILITY.md).
+
 ## Recovery
 
 Recovery is intentionally limited to two user-facing modes:
@@ -34,7 +56,7 @@ All recovery timing belongs to App configuration: maximum cycles, retry interval
 
 ## Current product state
 
-Version `0.1.24` fixes editing multiple preferred Ookla server IDs in the Home Assistant configuration form. Version `0.1.23` introduced App-owned compact-card controls and stable release checks while keeping update installation and restart under Home Assistant Supervisor. The canonical Supervisor identity is permanent, the temporary migration runtime has been removed, and the App remains stable in Home Assistant. The product provides:
+Version `0.1.25` adds DH Sync Discovery and canonical YAML resources. Version `0.1.24` fixes editing multiple preferred Ookla server IDs in the Home Assistant configuration form. Version `0.1.23` introduced App-owned compact-card controls and stable release checks while keeping update installation and restart under Home Assistant Supervisor. The canonical Supervisor identity is permanent, the temporary migration runtime has been removed, and the App remains stable in Home Assistant. The product provides:
 
 - Internet and router reachability;
 - legacy `binary_sensor.internet_status` compatibility alias mirroring `binary_sensor.dh_internet_app_internet`;

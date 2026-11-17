@@ -29,6 +29,7 @@ from discovery import (
 )
 from ha_api import HomeAssistantApi
 from mqtt_compat import create_mqtt_client
+from sync_discovery import SYNC_TOPIC, build_sync_payload
 from quality import (
     evaluate_performance,
     load_thresholds,
@@ -205,6 +206,9 @@ class InternetApp:
         client.subscribe(TOPICS["minimum_download_command"], qos=1)
         client.subscribe(TOPICS["minimum_upload_command"], qos=1)
         client.subscribe(TOPICS["maximum_ping_command"], qos=1)
+        client.publish(
+            SYNC_TOPIC, build_sync_payload(APP_VERSION), qos=1, retain=True
+        )
         discovery_payload = build_discovery_payload(
             APP_VERSION,
             traffic_enabled=self.config.traffic.enabled,
