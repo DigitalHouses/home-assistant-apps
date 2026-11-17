@@ -1,5 +1,5 @@
 name: DigitalHouses Sync App
-version: "0.4.2"
+version: "0.4.3"
 slug: digitalhouses_sync_app
 description: Automatic DigitalHouses dashboards and Home Assistant package sync.
 url: https://github.com/DigitalHouses/home-assistant-apps/tree/main/digitalhouses_sync_app
@@ -13,6 +13,7 @@ map:
 startup: application
 boot: auto
 init: false
+homeassistant_api: true
 stage: experimental
 services:
   - mqtt:need

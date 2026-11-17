@@ -85,14 +85,16 @@ def _safe_file(root: Path, relative: Path) -> Path:
 
 class AutoSync:
     def __init__(self, root: Path = Path("/homeassistant"),
-                 data: Path = Path("/data/dh-sync-auto"), *, backend=None):
+                 data: Path = Path("/data/dh-sync-auto"), *, backend=None,
+                 publisher=None):
         self.root = Path(root)
         self.data = Path(data)
         self.backend = backend if backend is not None else BACKEND
+        self.publisher = publisher
         self.lock = threading.RLock()
         self.report = {
             "last_run": "", "state": "Ожидание MQTT", "updated": 0,
-            "unchanged": 0, "issues": [], "resources": [],
+            "unchanged": 0, "issues": [], "resources": [], "dashboard": None,
         }
 
     def status(self) -> dict:
@@ -312,7 +314,7 @@ class AutoSync:
             report = {
                 "last_run": datetime.now(timezone.utc).isoformat(),
                 "state": "OK", "updated": 0, "unchanged": 0,
-                "issues": [], "resources": [],
+                "issues": [], "resources": [], "dashboard": None,
             }
             try:
                 self._check_root()
@@ -348,6 +350,11 @@ class AutoSync:
                         outcome = "Skipped: " + str(exc)[:150]
                         report["issues"].append(label + ": " + str(exc)[:150])
                     report["resources"].append({"name": label, "status": outcome})
+                if self.publisher is not None:
+                    try:
+                        report["dashboard"] = self.publisher.sync()
+                    except Exception as exc:
+                        report["issues"].append("DigitalHouses Dashboard: " + str(exc)[:150])
                 if report["issues"]:
                     report["state"] = "Partial" if report["updated"] or report["unchanged"] else "Error"
             except Exception as exc:

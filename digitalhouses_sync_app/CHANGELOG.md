@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.4.3
+
+- Register a visible DigitalHouses panel using the supported Home Assistant Lovelace WebSocket API. Previous file-only sync did not register a panel.
+- Display canonical YAML views in the panel without restarting HA, and preserve unrelated dashboards and user-only views.
+- Use the Supervisor Core API proxy with private backup and an ownership marker; never edit .storage directly.
+- Report panel errors in DH Sync rather than reporting OK for files only.
+
 ## 0.4.2
 
 - Fix a false Lovelace view collision when a Storage dashboard in a different URL namespace uses the same view path as DigitalHouses YAML.
