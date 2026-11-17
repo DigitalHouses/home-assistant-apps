@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.26
+
+- Align retained `/sync` with DH Sync 0.6.0: remove the obsolete `dashboard` field; leave only the running product identity and GitHub source.
+- Keep QoS 1, retain=true and publication on every MQTT connect/reconnect; preserve MQTT Discovery, entity IDs and all monitoring behavior.
+- Update canonical View header, product tests and documentation to clarify that panel placement and permissions belong exclusively to DH Sync YAML.
+
 ## 0.1.25
 
 - Publish the DH Sync Discovery Contract v1 source at `DigitalHouses/Global/digitalhouses_internet_app/sync` (QoS 1, retained) on every successful MQTT connect and reconnect; include `dashboard=dh-system` and the running App version.

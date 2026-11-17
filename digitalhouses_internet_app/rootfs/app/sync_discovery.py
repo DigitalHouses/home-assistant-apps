@@ -1,4 +1,4 @@
-"""DigitalHouses Internet App — DH Sync Discovery Contract v1.
+"""DigitalHouses Internet App — DH Sync 0.6.0 source announcement.
 
 This source announcement is independent of the historical Internet App MQTT
 telemetry namespace. No device, entity, availability or runtime topic changes.
@@ -12,7 +12,6 @@ SYNC_TOPIC = "DigitalHouses/Global/digitalhouses_internet_app/sync"
 PRODUCT_ID = "digitalhouses_internet_app"
 REPOSITORY = "https://github.com/DigitalHouses/home-assistant-apps"
 PRODUCT_PATH = "digitalhouses_internet_app"
-DASHBOARD = "dh-system"
 
 
 def build_sync_payload(version: str) -> str:
@@ -25,7 +24,6 @@ def build_sync_payload(version: str) -> str:
             "version": version,
             "repository": REPOSITORY,
             "product_path": PRODUCT_PATH,
-            "dashboard": DASHBOARD,
         },
         separators=(",", ":"),
     )

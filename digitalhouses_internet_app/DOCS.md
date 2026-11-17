@@ -173,14 +173,14 @@ There is no Notification Envelope, secondary notification event, adapter or dupl
 
 ## DH Sync — автоматическая синхронизация
 
-С версии **0.1.25** App публикует retained MQTT `DigitalHouses/Global/digitalhouses_internet_app/sync` (QoS 1) при каждом успешном подключении или переподключении к брокеру. `dashboard` равен `dh-system`, так что отдельная панель Internet не создаётся: вкладка `path: internet` размещается в системной панели `/dh-system/`.
+Начиная с 0.1.25 App публикует retained MQTT `DigitalHouses/Global/digitalhouses_internet_app/sync` с QoS 1 при каждом успешном подключении/переподключении. С версии **0.1.26** полезная нагрузка следует стандарту **DH Sync 0.6.0** и содержит только идентификацию продукта (`schema`, `product_id`, `type`, текущую `version`) и источник YAML (`repository`, `product_path`). Размещение Views, панели, порядок и права доступа в MQTT не передаются. Старое поле `dashboard` в retained-сообщениях DH Sync 0.6.0 игнорирует.
 
-Рабочие ресурсы читаются DH Sync из GitHub `main` по каноническим каталогам:
+DH Sync читает канонические YAML из GitHub `main`:
 
-- `dashboards/ru/13_internet.yaml` — вкладка Internet;
+- `dashboards/ru/13_internet.yaml` — самостоятельная вкладка Internet со стабильным `path: internet`;
 - `packages/common/dh_internet_app_global_package.yaml` — Recorder;
 - `packages/locales/ru/dh_internet_app_notification_local_package.yaml` — уведомления через `persistent_notification.create`.
 
-Файлы из `examples/` больше не нужно вручную копировать для новых установок с DH Sync: они остаются только примерами. Уже существующие пакеты DH Sync определяет по верхнеуровневому ключу и обновляет на прежнем месте. Internet App не создаёт панели, не пишет YAML в Home Assistant и не требует дополнительных настроек MQTT.
+Состав Dashboard, место View, порядок вкладок, иконки и права доступа задаются исключительно в `digitalhouses_sync_app/dashboards/*.yaml`; одна View может присутствовать в нескольких панелях. Для включения Internet View в панель передайте в DH Sync `product_id=digitalhouses_internet_app` и `path=internet`. Internet App не создаёт панели и не изменяет файлы DH Sync. `examples/` — только примеры; новые редакции канонических YAML не требуют release App.
 
-**Совместимость:** старые топики `DigitalHouses/Global/dh_internet_app/*`, MQTT Discovery, `entity_id`, история Recorder и настройки App не изменены. Новый `/sync` — дополнительное объявление источника. При `telemetry_enabled=false` App не запускается по текущему контракту, поэтому не публикует `/sync`.
+**Совместимость:** прежние `DigitalHouses/Global/dh_internet_app/*`, MQTT Discovery, `entity_id`, история Recorder и настройки App не изменены. Статус `availability` отдельно от `/sync` и не влияет на обнаружение DH Sync; при отключении приложения retained `/sync` не очищается. При `telemetry_enabled=false` App не запускается по текущему контракту и не публикует новый `/sync`, но ранее сохранённое объявление может оставаться у брокера.

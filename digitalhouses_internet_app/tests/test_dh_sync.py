@@ -1,4 +1,4 @@
-"""DH Sync v1 announcement and canonical resource regression tests."""
+"""DH Sync 0.6.0 announcement and canonical resource regression tests."""
 from __future__ import annotations
 
 import json
@@ -8,27 +8,29 @@ from pathlib import Path
 
 APP = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(APP / "rootfs" / "app"))
-from sync_discovery import DASHBOARD, SYNC_TOPIC, build_sync_payload
+from sync_discovery import SYNC_TOPIC, build_sync_payload
 
 
 class DhSyncTests(unittest.TestCase):
     def test_canonical_source_payload(self):
         self.assertEqual(SYNC_TOPIC, "DigitalHouses/Global/digitalhouses_internet_app/sync")
-        self.assertEqual(DASHBOARD, "dh-system")
         expected = {
             "schema": 1,
             "product_id": "digitalhouses_internet_app",
             "type": "app",
-            "version": "0.1.25",
+            "version": "0.1.26",
             "repository": "https://github.com/DigitalHouses/home-assistant-apps",
             "product_path": "digitalhouses_internet_app",
-            "dashboard": "dh-system",
         }
-        self.assertEqual(json.loads(build_sync_payload("0.1.25")), expected)
+        self.assertEqual(json.loads(build_sync_payload("0.1.26")), expected)
         updated = json.loads(build_sync_payload("1.2.3"))
         self.assertEqual(updated["version"], "1.2.3")
         self.assertEqual(set(updated), set(expected))
-        for forbidden in ("password", "token", "username", "ip", "hostname", "customer"):
+        for forbidden in (
+            "password", "token", "username", "ip", "hostname", "customer",
+            "dashboard", "panel", "view", "order", "require_admin",
+            "show_in_sidebar",
+        ):
             self.assertNotIn(forbidden, updated)
 
     def test_publish_on_every_successful_mqtt_connection(self):
