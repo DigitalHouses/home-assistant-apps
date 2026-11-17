@@ -66,7 +66,7 @@ def test_payload_is_exact_protocol_v1_without_site_or_plex_data(tmp_path: Path):
 
     assert client.payload() == {
         "schema": 1,
-        "telemetry_policy_version": 1,
+        "telemetry_policy_version": 2,
         "installation_id": client.installation_id,
         "product": "digitalhouses_plex_agent",
         "version": "0.7.0",

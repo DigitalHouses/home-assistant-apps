@@ -282,6 +282,7 @@ def print_status(path: Path, runtime_path: Path = RUNTIME_STATUS) -> None:
     print(f'Service: {active}/{service.get("SubState", "unknown")} | uptime {uptime}')
     print(f'Linux hostname: {identity.get("hostname") or "unknown"} | IPv4: {identity.get("ip") or "unknown"}')
     print(f'Configured MQTT broker: {config.mqtt.host}:{config.mqtt.port}')
+    print(f'Telemetry: {"enabled (policy v2)" if config.telemetry.enabled else "disabled (agent startup blocked)"}')
     print('Runtime status: ' + ('live' if live else 'stale or unavailable (historical snapshot is not current state)'))
     print(f'MQTT: {mqtt.get("state", "UNKNOWN")} | reconnect: 60s delay + up to 5s connect timeout')
     print(f'Last successful connect: {mqtt.get("last_connected") or "unknown"}')

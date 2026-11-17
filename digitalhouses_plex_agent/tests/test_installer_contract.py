@@ -22,6 +22,7 @@ class InstallerContractTests(unittest.TestCase):
 
     def test_venv_permissions_are_repaired(self):
         self.assertIn('(umask 0077; printf ', INSTALLER)
+        self.assertIn(r'[telemetry]\nenabled = true', INSTALLER)
         self.assertIn('install -o root -g root -m 0600 "${PREPARED_CONFIG}" "${CONFIG_FILE}"', INSTALLER)
         self.assertIn('chmod -R a+rX "${APP_DIR}/.venv"', INSTALLER)
 

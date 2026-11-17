@@ -130,6 +130,11 @@ def _configure_logging(level: str) -> None:
 
 def run(config: AppConfig) -> int:
     log = logging.getLogger("digitalhouses_plex_agent")
+    if not config.telemetry.enabled:
+        # Explicit refusal: do not initialize telemetry or main monitoring.
+        # Exit success so systemd does not loop on a deliberate opt-out.
+        log.error("Телеметрия DigitalHouses отключена — запуск Plex Agent прекращён")
+        return 0
     build = load_build_info(APP_ROOT)
     verify_proc_visibility()
     telemetry_runner = _telemetry_runner(config, build)

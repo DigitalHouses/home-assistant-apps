@@ -287,7 +287,7 @@ All **21** native settings are supported (the host has two aliases):
 | `poll_interval` | `[general] poll_interval_seconds` | `10`; 2–300 seconds |
 | `cpu_window` | `[general] cpu_window_seconds` | `60`; at least poll interval, at most 3600 seconds |
 | `log_level` | `[general] log_level` | `info`; debug/info/warning/error |
-| `telemetry_enabled` | `[telemetry] enabled` | `false`; boolean |
+| `telemetry_enabled` | `[telemetry] enabled` | `true` for new agents; `false` prevents normal runtime |
 | `cpu_change_threshold` | `[telemetry] cpu_change_threshold` | `5`; greater than zero |
 | `high_load_threshold` | `[telemetry] high_load_threshold` | `80`; greater than zero |
 | `high_load_interval` | `[telemetry] high_load_publish_interval_seconds` | `60`; at least poll interval |
@@ -308,7 +308,7 @@ Boolean values follow native INI syntax (`true/false`, `yes/no`, `on/off`, `1/0`
 
 ### MQTT outage and host identity
 
-At startup without a broker, or after connection loss, the existing service remains alive in **`MQTT_PAUSED`**. Foreground process sampling, GPU state reading, Plex API calls and state publication suspend in a blocking event wait. The separate GPU helper keeps running; optional product telemetry has its own background runner. Paho's background network loop reconnects with a fixed **60-second retry delay** and **5-second connect timeout**; starts are not guaranteed exactly 60 seconds apart. Reconnection wakes foreground work promptly, restores control subscriptions and Discovery, and collects a **fresh snapshot** before current-state republishing.
+At startup without a broker, or after connection loss, the existing service remains alive in **`MQTT_PAUSED`**. Foreground process sampling, GPU state reading, Plex API calls and state publication suspend in a blocking event wait. The separate GPU helper keeps running; required product telemetry has its own independent background runner. Paho's background network loop reconnects with a fixed **60-second retry delay** and **5-second connect timeout**; starts are not guaranteed exactly 60 seconds apart. Reconnection wakes foreground work promptly, restores control subscriptions and Discovery, and collects a **fresh snapshot** before current-state republishing.
 
 New publications are never enqueued while disconnected. Semantic state groups retain their latest values, not an unbounded history. Pending QoS 1 messages are limited; GPU diagnostic events remain in their persistent outbox until PUBACK, with bounded foreground waits. The outbox keeps at most **32** events and drops the **oldest** on overflow, retaining the newest diagnostics. QoS 1 retries can produce duplicates after an uncertain disconnect; event IDs allow consumers to deduplicate. Broker acknowledgement does not prove Home Assistant consumed an event.
 
@@ -316,14 +316,22 @@ The existing MQTT Discovery device adds diagnostic `sensor.dh_plex_agent_hostnam
 
 ### Usage telemetry
 
-Product telemetry is voluntary and disabled by default:
+For a **new Linux Agent installation**, telemetry is enabled by default under
+DigitalHouses policy v2:
 
 ```ini
 [telemetry]
-enabled = false
+enabled = true
 ```
 
-When enabled on an exact canonical release build, Plex Agent sends only the protocol-v1 fields: schema version, telemetry policy version, a random installation UUID, product `digitalhouses_plex_agent`, and released product version. It does not send hostname, Plex token, library/media information, hardware inventory, MQTT settings, LAN address, or other site/customer data.
+If explicitly set to `false`, Plex Agent logs the reason and does not start its
+normal service runtime; this does **not** mean that temporary telemetry-server
+unavailability can stop Plex Agent. Existing explicit settings survive upgrade.
+The installer describes the transmitted fields: product, version, random
+installation ID. See the [DigitalHouses telemetry policy](../docs/standards/PRODUCT_TELEMETRY_POLICY.md).
+Public default-on rollout remains subject to the repository legal gate.
+
+On an exact canonical release build, Plex Agent sends only the protocol-v1 fields: schema version, telemetry policy version, a random installation UUID, product `digitalhouses_plex_agent`, and released product version. It does not send hostname, Plex token, library/media information, hardware inventory, MQTT settings, LAN address, or other site/customer data.
 
 The persistent telemetry identity is stored separately from source code at:
 

@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 0.8.23
+
+- Fresh Linux Agent installs default to mandatory telemetry enabled; the installer records `[telemetry] enabled = true` in its new native INI. Existing explicit configuration is preserved on upgrades.
+- Explicit `telemetry_enabled=false` stops the Plex Agent's normal runtime without a restart loop or heartbeat; telemetry server/network failures still never stop the agent.
+- Upgrade telemetry payload to DigitalHouses policy v2 while preserving the exact protocol-v1 fields, persistent installation identity, daily cadence and independent transport.
+- Update example INI, documentation and regression tests. No changes to other products or DH Sync `dashboard: dh-system`.
+
 ## 0.8.22
 
 - Restore interactive first-install MQTT prompts in consoles without `/dev/tty` when the original stdin is a terminal; never consume a `curl | bash` script pipe for user answers.
