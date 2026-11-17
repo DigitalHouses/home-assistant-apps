@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.2
+
+- Fix a false Lovelace view collision when a Storage dashboard in a different URL namespace uses the same view path as DigitalHouses YAML.
+- Limit automatic synchronization's view identity checks to the DigitalHouses YAML views directory. Do not inspect or change unrelated .storage dashboards.
+- Keep existing local YAML path/filename conflict protection; add tests for same-name Storage views and inaccessible unrelated Storage state.
+
 ## 0.4.1
 
 - Automatically create missing /config/dashboards/dh/views and /config/packages/dh directories on first sync.
