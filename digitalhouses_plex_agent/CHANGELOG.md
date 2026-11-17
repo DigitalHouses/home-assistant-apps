@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.8.22
+
+- Restore interactive first-install MQTT prompts in consoles without `/dev/tty` when the original stdin is a terminal; never consume a `curl | bash` script pipe for user answers.
+- Document the preferred interactive invocation `bash <(curl -fsSL URL)` to preserve stdin; unattended `--set` installs remain unchanged.
+- Add regression tests for terminal stdin fallback, pipe rejection, and hidden password entry.
+
 ## 0.8.21
 
 - Support both first-install modes without extra switches: no CLI settings opens interactive MQTT setup on the controlling terminal (works even when installer source is piped into bash); any `--set` or `--mqtt-password-stdin` selects unattended provisioning with no prompts.

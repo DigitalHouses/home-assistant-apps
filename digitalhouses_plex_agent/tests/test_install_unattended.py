@@ -121,6 +121,31 @@ class UnattendedInstallTests(unittest.TestCase):
         self.assertTrue(tty.closed)
         self.assertIn("Confirm MQTT settings", "".join(tty.prompts))
 
+    def test_fallback_to_original_terminal_stdin_when_no_dev_tty(self) -> None:
+        import builtins
+        native_open = builtins.open
+        def no_dev_tty(path, *args, **kwargs):
+            if str(path) == "/dev/tty":
+                raise OSError("no controlling tty")
+            return native_open(path, *args, **kwargs)
+        class TerminalInput(StringIO):
+            def isatty(self) -> bool:
+                return True
+        stdin = TerminalInput("broker.example\n\noperator\ny\n")
+        prompt_stream = StringIO()
+        with patch("builtins.open", side_effect=no_dev_tty), \
+             patch("sys.stdin", stdin), \
+             patch("sys.stderr", prompt_stream), \
+             patch("app.install_config.getpass.getpass", return_value="secret-safe") as hidden:
+            prepare(self.conf, [], non_interactive=False)
+        self.assertFalse(stdin.closed)
+        self.assertEqual(load_config(self.conf).mqtt.password, "secret-safe")
+        self.assertEqual(load_config(self.conf).mqtt.host, "broker.example")
+        self.assertIn("MQTT host:", prompt_stream.getvalue())
+        self.assertIn("Confirm MQTT settings", prompt_stream.getvalue())
+        hidden.assert_called_once_with("MQTT password [optional]: ", stream=prompt_stream)
+        self.assertNotIn("secret-safe", prompt_stream.getvalue())
+
     def test_any_cli_setting_never_prompts_even_with_missing_host(self) -> None:
         import builtins
         native_open = builtins.open
@@ -143,8 +168,9 @@ class UnattendedInstallTests(unittest.TestCase):
             if str(path) == "/dev/tty":
                 raise OSError("no controlling terminal")
             return native_open(path, *args, **kwargs)
-        with patch("builtins.open", side_effect=missing_tty):
-            with self.assertRaisesRegex(CliError, "interactive MQTT setup requires a terminal"):
+        with patch("builtins.open", side_effect=missing_tty), \
+             patch("sys.stdin", StringIO("script bytes must never be read")):
+            with self.assertRaisesRegex(CliError, "interactive MQTT setup needs terminal input"):
                 prepare(self.conf, [], non_interactive=False)
 
     def test_invalid_configuration_error_redacts_raw_values(self) -> None:

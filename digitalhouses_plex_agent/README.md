@@ -101,9 +101,11 @@ mounted dataset; no media-group membership or file access is required.
 
 - **Interactive:** run `install-latest.sh` without installer options in a real terminal.
   If there is no saved MQTT configuration, the installer asks for broker host,
-  port, username, password (hidden) and confirmation. The prompts read
-  `/dev/tty`, so they work when the installer script is downloaded through
-  `curl | bash`.
+  port, username, password (hidden) and confirmation. Prompts use `/dev/tty`
+  when available, or the original interactive standard input as a fallback.
+  Prefer `bash <(curl -fsSL URL)` (Bash process substitution), which **preserves
+  terminal stdin**. In consoles without `/dev/tty`, `curl URL | bash` cannot
+  prompt because stdin is the script pipe and must not be read as answers.
 - **Unattended:** passing any `--set key=value` or `--mqtt-password-stdin`
   automatically disables all prompts. Pass `--set mqtt_ip=HOST` for a first
   install; other unspecified keys use defaults or saved native INI settings.
@@ -124,7 +126,7 @@ From a root shell **inside the Linux media server**:
 
 ```bash
 set -o pipefail
-curl -fsSL https://raw.githubusercontent.com/DigitalHouses/home-assistant-apps/main/digitalhouses_plex_agent/install-latest.sh | bash
+bash <(curl -fsSL https://raw.githubusercontent.com/DigitalHouses/home-assistant-apps/main/digitalhouses_plex_agent/install-latest.sh)
 ```
 
 From a sudo-capable shell **inside the Linux media server**:
@@ -144,10 +146,10 @@ The guest must have QEMU Guest Agent, Python 3 and curl for the bootstrap. Unatt
 
 **For deliberate rollback or reproducible installs only**, an administrator can still choose a previously published, exact release tag through the original `install.sh` interface. Normal installs do not require it.
 
-**Unattended first install / Ansible (v0.8.19+, automatic mode in 0.8.21):** The installer accepts the same native CLI setting names as `dh-plex-agent set`. It supports `--non-interactive`, repeated `--set key=value` and `--mqtt-password-stdin`. The MQTT password must be streamed via stdin, **never** supplied as a literal CLI argument. Example invocation after fetching the canonical `0.8.21` release installer on the guest:
+**Unattended first install / Ansible (v0.8.19+, automatic mode in 0.8.21):** The installer accepts the same native CLI setting names as `dh-plex-agent set`. It supports `--non-interactive`, repeated `--set key=value` and `--mqtt-password-stdin`. The MQTT password must be streamed via stdin, **never** supplied as a literal CLI argument. Example invocation after fetching the canonical `0.8.22` release installer on the guest:
 
 ```bash
-DIGITALHOUSES_SOURCE_REF=digitalhouses_plex_agent-v0.8.21 \
+DIGITALHOUSES_SOURCE_REF=digitalhouses_plex_agent-v0.8.22 \
   bash ./install.sh --non-interactive \
   --set mqtt_ip=192.0.2.24 --set mqtt_port=1883 \
   --mqtt-password-stdin < /run/secrets/dh_mqtt_password
