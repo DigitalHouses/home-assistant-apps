@@ -28,6 +28,9 @@ class FakeBackend:
         }
         self.revisions = []
 
+    def invalidate(self):
+        self.invalidate_calls = getattr(self, "invalidate_calls", 0) + 1
+
     def resolve_revision(self, repo):
         self.revisions.append(repo)
         return "a" * 40, "main"
@@ -77,6 +80,21 @@ class AutomaticSyncTests(unittest.TestCase):
         second = self.app.sync(CLAIMS)
         self.assertEqual(second["updated"], 0)
         self.assertEqual(second["unchanged"], 1)
+
+    def test_manual_refresh_runs_same_autosync_and_invalidates_git(self):
+        automatic = self.app.sync(CLAIMS)
+        self.assertEqual(automatic["updated"], 1)
+        self.assertEqual(getattr(self.backend, "invalidate_calls", 0), 0)
+        manual = self.app.sync(CLAIMS, refresh=True)
+        self.assertEqual(manual["updated"], 0)
+        self.assertEqual(manual["unchanged"], 1)
+        self.assertEqual(self.backend.invalidate_calls, 1)
+        self.assertEqual(self.publisher.calls[-1][0][0]["slug"], "dh-system")
+        self.backend.raw["example/packages/common/dh_example_package.yaml"] = PACKAGE_NEW
+        updated = self.app.sync(CLAIMS, refresh=True)
+        self.assertEqual(updated["updated"], 1)
+        self.assertEqual(self.backend.invalidate_calls, 2)
+        self.assertEqual((self.root / "packages/dh/dh_example_package.yaml").read_bytes(), PACKAGE_NEW)
 
     def test_mqtt_dashboard_is_completely_ignored(self):
         claims = {"example/old": {**CLAIMS["example/default"], "dashboard": "dh-legacy"},

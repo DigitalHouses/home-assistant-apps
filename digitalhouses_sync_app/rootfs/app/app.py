@@ -21,7 +21,7 @@ PRODUCT_ID = "digitalhouses_sync_app"
 BASE = "DigitalHouses/Global/" + PRODUCT_ID
 DISCOVERY = "homeassistant/device/" + PRODUCT_ID + "/config"
 STARTED_AT = datetime.now(timezone.utc).isoformat()
-VERSION = os.environ.get("APP_VERSION", "0.5.1-local")
+VERSION = os.environ.get("APP_VERSION", "0.6.1-local")
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 LOG = logging.getLogger("dh_sync")
 
@@ -116,8 +116,10 @@ def main() -> None:
     auto.publisher = DashboardPublisher(auto.root, auto.data)
     auto.reloader = lambda: CoreAPI().reload_configuration()
     wake = threading.Event()
-    ingress = make_server(sources, version=VERSION, port=8099,
-                          auto_status=auto.status)
+    ingress = make_server(
+        sources, version=VERSION, port=8099, auto_status=auto.status,
+        auto_sync=lambda: auto.sync(sources.snapshot(), refresh=True),
+    )
     threading.Thread(target=ingress.serve_forever, daemon=True,
                      name="dh-sync-ingress").start()
     LOG.info("DH Sync v%s automatic Ingress ready on 8099", VERSION)

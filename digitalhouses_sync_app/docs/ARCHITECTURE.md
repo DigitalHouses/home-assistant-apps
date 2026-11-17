@@ -1,4 +1,4 @@
-# DH Sync 0.6.0 — Current architecture
+# DH Sync 0.6.1 — Current architecture
 
 Authoritative standard: [DH Sync Developer Standard](../../docs/standards/DH_SYNC_DEVELOPER_STANDARD.md).
 
@@ -13,3 +13,5 @@ Authoritative standard: [DH Sync Developer Standard](../../docs/standards/DH_SYN
 - No migration, old panel adoption, product-version gates or manual confirmation.
 
 Implementation: `rootfs/app/panel_config.py`, `auto_sync.py`, `dashboard_runtime.py`, `git_source.py`.
+
+- Admin Ingress offers «Проверить и обновить»: a manual, authenticated, fresh-GitHub synchronization using the same automatic apply pipeline.

@@ -90,6 +90,20 @@ class GitTransportTests(unittest.TestCase):
         self.assertEqual(len(self.backend.list_views(
             self.repo, "product_a", after)), 3)
 
+    def test_manual_invalidate_fetches_new_git_commit_without_waiting_ttl(self):
+        before, _ = self.backend.resolve_revision(self.repo)
+        (self.origin / "product_a/dashboards/ru/12_manual.yaml").write_text(
+            "title: manual\npath: manual\n")
+        self._git("add", ".")
+        self._git("commit", "-q", "-m", "new manual resource")
+        self.assertEqual(self.backend.resolve_revision(self.repo)[0], before)
+        self.backend.invalidate()
+        after, _ = self.backend.resolve_revision(self.repo)
+        self.assertNotEqual(after, before)
+        self.assertEqual(self.backend.clone_count, 2)
+        self.assertEqual(self.backend.resolve_revision(self.repo)[0], after)
+        self.assertEqual(self.backend.clone_count, 2)
+
     def test_foreign_owner_rejected_before_transport(self):
         with self.assertRaisesRegex(GitSourceError, "DigitalHouses"):
             self.backend.resolve_revision("https://github.com/NotOurOrg/any-repo")

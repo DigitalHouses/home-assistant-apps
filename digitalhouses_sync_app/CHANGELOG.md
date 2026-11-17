@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.1
+
+- Restore the agreed **«Проверить и обновить»** button in DH Sync admin Ingress.
+- One click forces fresh GitHub revisions (bypassing the 5-minute snapshot cache), runs the existing automated Dashboard and Packages synchronization immediately, and reports the result.
+- No separate preview, Apply confirmation, version gate or change to any other App/Agent. The hourly and MQTT-triggered synchronization continue.
+
+
 ## 0.6.0
 
 - Declarative GitHub panels in `digitalhouses_sync_app/dashboards/*.yaml`, ordered Views and native HA title/icon/sidebar/admin properties.

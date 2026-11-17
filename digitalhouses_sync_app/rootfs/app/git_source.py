@@ -38,6 +38,12 @@ class GitSnapshots:
         self.lock = threading.RLock()
         self.cached: dict[str, dict] = {}
 
+    def invalidate(self) -> None:
+        """Expire cached Git revisions so a manual scan fetches fresh main."""
+        with self.lock:
+            for entry in self.cached.values():
+                entry["at"] = float("-inf")
+
     def _name(self, repository: str) -> str:
         try:
             url = canonical_repository(repository)

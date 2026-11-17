@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import http.client
+import re
+from urllib.parse import urlencode
 import tempfile
 import threading
 import unittest
@@ -68,6 +70,79 @@ class CatalogTests(unittest.TestCase):
                 self.assertNotIn("Online</span>", body)
                 self.assertEqual(fetch(server, "POST")[0], 405)
             finally:
+                server.server_close()
+                thread.join(timeout=4)
+
+    def test_manual_button_runs_sync_without_confirmation(self):
+        with tempfile.TemporaryDirectory() as directory:
+            sources = ProductSources(Path(directory) / "sources.json")
+            calls = []
+
+            def manual_sync():
+                calls.append("fresh")
+                return {"state": "OK", "updated": 2, "unchanged": 5,
+                        "dashboard": {"state": "Updated"}, "issues": []}
+
+            server = make_server(
+                sources, version="0.6.1", port=0,
+                auto_status=lambda: {"state": "OK", "updated": 0,
+                                     "unchanged": 7, "resources": []},
+                auto_sync=manual_sync)
+            thread = threading.Thread(target=server.serve_forever, daemon=True)
+            try:
+                thread.start()
+                code, page = fetch(server)
+                self.assertEqual(code, 200)
+                self.assertIn("Проверить и обновить", page)
+                self.assertNotIn("Обновление без кнопок", page)
+                self.assertNotIn("name='confirm'", page)
+                match = re.search(r"name='token' value='([^']+)'", page)
+                self.assertIsNotNone(match)
+                fields = urlencode({"op": "sync", "token": match.group(1)})
+                conn = http.client.HTTPConnection(
+                    "127.0.0.1", server.server_port, timeout=3)
+                try:
+                    conn.request("POST", "/", body=fields,
+                                 headers={"Content-Type": "application/x-www-form-urlencoded"})
+                    resp = conn.getresponse()
+                    result = resp.read().decode("utf-8")
+                    self.assertEqual(resp.status, 200)
+                    self.assertIn("Проверка GitHub завершена", result)
+                    self.assertIn("Обновлено: 2", result)
+                    self.assertIn("Без изменений: 5", result)
+                    self.assertEqual(calls, ["fresh"])
+                finally:
+                    conn.close()
+            finally:
+                server.shutdown()
+                server.server_close()
+                thread.join(timeout=4)
+
+    def test_manual_sync_rejects_wrong_token_without_running(self):
+        with tempfile.TemporaryDirectory() as directory:
+            calls = []
+            server = make_server(
+                ProductSources(Path(directory) / "sources.json"),
+                version="0.6.1", port=0,
+                auto_status=lambda: {"state": "OK", "resources": []},
+                auto_sync=lambda: calls.append(True))
+            thread = threading.Thread(target=server.serve_forever, daemon=True)
+            try:
+                thread.start()
+                fields = urlencode({"op": "sync", "token": "invalid"})
+                conn = http.client.HTTPConnection(
+                    "127.0.0.1", server.server_port, timeout=3)
+                try:
+                    conn.request("POST", "/", body=fields,
+                                 headers={"Content-Type": "application/x-www-form-urlencoded"})
+                    response = conn.getresponse()
+                    self.assertEqual(response.status, 409)
+                    response.read()
+                    self.assertEqual(calls, [])
+                finally:
+                    conn.close()
+            finally:
+                server.shutdown()
                 server.server_close()
                 thread.join(timeout=4)
 

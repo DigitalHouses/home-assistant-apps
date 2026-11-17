@@ -366,8 +366,12 @@ class AutoSync:
                 LOG.exception("Recovery failed: %s", file.parent.name)
                 raise SyncError("An unfinished YAML transaction needs recovery")
 
-    def sync(self, claims: dict) -> dict:
+    def sync(self, claims: dict, *, refresh: bool = False) -> dict:
         with self.lock:
+            if refresh:
+                invalidate = getattr(self.backend, "invalidate", None)
+                if callable(invalidate):
+                    invalidate()
             report = {
                 "last_run": datetime.now(timezone.utc).isoformat(),
                 "state": "OK", "updated": 0, "unchanged": 0,
