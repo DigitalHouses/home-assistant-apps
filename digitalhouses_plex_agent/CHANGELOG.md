@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.8.20
+
+- Publish `dashboard: dh-system` in retained QoS 1 DH Sync `/sync` metadata, matching PVE Agent and DH Sync 0.5.0 panel routing.
+- Preserve current product and instance topics, discovery/availability, canonical view `12_plex.yaml`, Recorder package and GPU diagnostics.
+- Add connect/reconnect and multi-instance regression checks for the panel declaration.
+
 ## 0.8.19
 
 - Align first-install provisioning of Plex Agent with PVE Agent: `--non-interactive`, repeatable `--set key=value` using the existing native CLI aliases, and `--mqtt-password-stdin` without exposing secrets as process arguments.

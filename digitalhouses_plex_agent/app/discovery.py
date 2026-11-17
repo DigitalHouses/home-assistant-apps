@@ -48,6 +48,7 @@ def build_sync_payload(build: BuildInfo) -> dict[str, object]:
         "version": build.version,
         "repository": SYNC_REPOSITORY,
         "product_path": SYNC_PRODUCT_ID,
+        "dashboard": "dh-system",
     }
 
 

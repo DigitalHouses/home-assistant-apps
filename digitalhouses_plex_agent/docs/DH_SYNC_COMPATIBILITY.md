@@ -1,5 +1,21 @@
 # DH Sync v1 — DigitalHouses Plex Agent canonical YAML contract
 
+## Current contract — DH Sync 0.5.0, Plex Agent 0.8.20
+
+Plex Agent announces seven fields over its retained QoS 1
+`DigitalHouses/Global/digitalhouses_plex_agent[/<instance_id>]/sync`:
+`schema`, `product_id`, `type`, `version`, `repository`,
+`product_path` and `dashboard: dh-system`. The new field matches
+PVE Agent and directs DH Sync to create or use the `/dh-system/` panel.
+Runtime identity, availability, reconnect, Discovery and secret handling
+remain unchanged. The canonical view is `dashboards/ru/12_plex.yaml`,
+the Recorder package is `packages/common/dh_plex_app_package.yaml`.
+Their YAML bodies are unchanged; panel creation is DH Sync's responsibility.
+
+The following sections retain historical 0.8.17–0.8.18 acceptance data.
+The six-field payload and manual-approval assumptions there are not the
+current DH Sync 0.5.0 behavior.
+
 Status: historical source and operator validation for Plex Agent 0.8.17/0.8.18. Current DH Sync source admission uses only GitHub owner `DigitalHouses`; agent versions and compatibility ranges are not approval gates. YAML Apply and rollback remain separate, unimplemented work.
 
 ## Identity and runtime
