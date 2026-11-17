@@ -154,6 +154,8 @@ def countries(
     *,
     product: str | None = None,
 ) -> list[dict[str, object]]:
+    # Group the latest report from each installation by both country and
+    # product, so totals and the per-product breakdown share identical rules.
     result = db.execute(
         text(
             """
@@ -173,6 +175,7 @@ def countries(
             )
             SELECT
                 country,
+                product,
                 count(*) AS observed_installations,
                 count(*) FILTER (
                     WHERE received_at >= now() - interval '7 days'
@@ -181,17 +184,40 @@ def countries(
                     WHERE received_at >= now() - interval '30 days'
                 ) AS active_30d
             FROM latest
-            GROUP BY country
-            ORDER BY observed_installations DESC, country
+            GROUP BY country, product
+            ORDER BY country, observed_installations DESC, product
             """
         ),
         {"product": product},
     )
-    rows = _rows(result)
-    for row in rows:
-        for key in ("observed_installations", "active_7d", "active_30d"):
-            row[key] = int(row[key])
-    return rows
+    by_country: dict[str, dict[str, object]] = {}
+    counters = ("observed_installations", "active_7d", "active_30d")
+    for row in _rows(result):
+        country = str(row["country"])
+        group = by_country.setdefault(
+            country,
+            {
+                "country": country,
+                "observed_installations": 0,
+                "active_7d": 0,
+                "active_30d": 0,
+                "products": [],
+            },
+        )
+        entry: dict[str, object] = {
+            "product": str(row["product"]),
+            "name": product_name(str(row["product"])),
+        }
+        for counter in counters:
+            count = int(row[counter])
+            entry[counter] = count
+            group[counter] += count
+        group["products"].append(entry)
+
+    return sorted(
+        by_country.values(),
+        key=lambda row: (-int(row["observed_installations"]), str(row["country"])),
+    )
 
 
 def history(
