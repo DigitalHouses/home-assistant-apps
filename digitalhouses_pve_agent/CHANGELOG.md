@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.94
+
+- Immediately initiate the existing stable GitHub Release check when automatic updates are switched OFF -> ON via CLI or Home Assistant MQTT switch, instead of waiting up to 24 hours. An already running check is reused; a check temporarily blocked by an active updater is retried when the updater becomes available.
+- Keep the existing one-shot auto-install trigger after a successfully verified new release, UPS safety preflight, transactional updater/rollback, manual controls, and 24-hour normal check cadence. No new services, timers, or unrelated product changes.
+
 ## 0.5.93
 
 - Prevent a forever-running HA Restart card after a service restart when an unrelated initial collector publish is incomplete: finish the retained restart operation when the new agent has initialized and MQTT is connected.

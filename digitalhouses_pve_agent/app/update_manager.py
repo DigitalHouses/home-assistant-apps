@@ -72,6 +72,7 @@ class UpdateManager:
         self.auto_update_preference = AutoUpdatePreference(state_dir)
         self.auto_update = False
         self._auto_install_pending = False
+        self._check_on_enable_pending = False
         self._auto_preference_error: str | None = None
         self._lock = threading.Lock()
         self._last_check = 0.0
@@ -278,6 +279,7 @@ class UpdateManager:
              allow_auto_install: bool = True) -> None:
         # Read the same persisted preference as CLI, even if CLI changed it
         # while the agent was running. Fail closed on invalid state.
+        previously_enabled = self.auto_update
         try:
             self.auto_update = self.auto_update_preference.enabled()
             self._auto_preference_error = None
@@ -287,9 +289,17 @@ class UpdateManager:
             if error != self._auto_preference_error:
                 log.error("Auto-update disabled: %s", error)
             self._auto_preference_error = error
+        # OFF -> ON triggers a fresh verification immediately, rather than
+        # waiting for the next 24-hour check. An in-flight or just-completed
+        # check is already fresh and must not be duplicated.
+        if self.auto_update and not previously_enabled and not (
+            self._checking or self._check_result is not None
+        ):
+            self._check_on_enable_pending = True
         checked_successfully = self._apply_check()
         if not self.auto_update:
             self._auto_install_pending = False
+            self._check_on_enable_pending = False
         elif checked_successfully and self._payload()["available"]:
             self._auto_install_pending = True
         # Consume once after a fresh check; a denied UPS preflight must not
@@ -297,10 +307,11 @@ class UpdateManager:
         if allow_auto_install and self._auto_install_pending:
             self._auto_install_pending = False
             install = True
-        if check or self._last_check == 0 or (
+        if check or self._check_on_enable_pending or self._last_check == 0 or (
             time.monotonic() - self._last_check >= CHECK_INTERVAL
         ):
-            self.start_check()
+            if self.start_check():
+                self._check_on_enable_pending = False
         if install:
             if self._checking or not self.known or not self.tag or not self._payload()["available"]:
                 self._status, self._status_error = "error", "No verified newer release"
