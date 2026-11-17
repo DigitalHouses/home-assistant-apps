@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import html
+import hmac
+import secrets
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlsplit, parse_qs, quote
 
@@ -25,12 +27,18 @@ background:#111619;padding:12px;border:1px solid #343d43;border-radius:6px;
 font:12px ui-monospace,monospace}
 details{margin-top:8px}summary{cursor:pointer;color:#91caed}
 .warn{color:#ffcf86}
+button{border:0;border-radius:7px;background:#2382b7;color:white;
+font:inherit;font-weight:600;padding:9px 15px;cursor:pointer}
+button:hover{background:#2a9acc}
+form.sync-now{margin:14px 0}
 """
 
 def _h(value: object) -> str:
     return html.escape(str(value), quote=True)
 
-def make_server(sources: ProductSources, inventory=None, *, version: str = 'development', port: int = 8099, inspect=None, audit=None, apply_manager=None, auto_status=None):
+def make_server(sources: ProductSources, inventory=None, *, version: str = 'development', port: int = 8099, inspect=None, audit=None, apply_manager=None, auto_status=None, auto_sync=None):
+    sync_token = secrets.token_urlsafe(24) if auto_sync is not None else None
+
     class Handler(BaseHTTPRequestHandler):
         server_version = "DHSync/" + version
 
@@ -57,7 +65,7 @@ def make_server(sources: ProductSources, inventory=None, *, version: str = 'deve
                 "<meta name='viewport' content='width=device-width,initial-scale=1'>"
                 "<title>DH Sync</title><style>" + STYLE + "</style></head><body>"
                 "<main><h1>" + _h(title) + "</h1>" + content +
-                "<p><a href='./?local=1'>Вернуться к сравнению</a></p>"
+                "<p><a href='./'>Вернуться к DH Sync</a></p>"
                 "</main></body></html>"
             ))
 
@@ -179,8 +187,16 @@ def make_server(sources: ProductSources, inventory=None, *, version: str = 'deve
                 summary = (
                     "<section><h2>Автоматическая синхронизация</h2>"
                     "<p>GitHub DigitalHouses → Dashboard и Packages. "
-                    "Обновление без кнопок и подтверждений; резервные копии "
-                    "создаются автоматически. Home Assistant не перезапускается.</p>"
+                    "Обновление автоматическое и по кнопке, без подтверждений. "
+                    "Home Assistant не перезапускается.</p>"
+                    + (
+                        "<form class='sync-now' action='./' method='post'>"
+                        "<input type='hidden' name='op' value='sync'>"
+                        "<input type='hidden' name='token' value='" +
+                        _h(sync_token) + "'>"
+                        "<button type='submit'>Проверить и обновить</button></form>"
+                        if auto_sync is not None else ""
+                    ) +
                     "<p>Состояние: <b>" + _h(status.get("state", "—")) +
                     "</b> · Обновлено: " + str(status.get("updated", 0)) +
                     " · Без изменений: " + str(status.get("unchanged", 0)) +
@@ -404,8 +420,8 @@ def make_server(sources: ProductSources, inventory=None, *, version: str = 'deve
             self._send(200, page)
 
         def do_POST(self) -> None:
-            # Only HA Supervisor ingress can submit a plan in production.
-            if apply_manager is None:
+            # All changes are accessible only through Supervisor admin Ingress.
+            if apply_manager is None and auto_sync is None:
                 self._send(405, "<html><body>Read-only catalog</body></html>")
                 return
             allowed = (self.client_address[0] == "172.30.32.2"
@@ -429,7 +445,29 @@ def make_server(sources: ProductSources, inventory=None, *, version: str = 'deve
                     fields.get("op", [""])[0], fields.get("token", [""])[0],
                     fields.get("confirm", [""])[0],
                 )
-                if len(token) > 80 or op not in ("apply", "rollback"):
+                if len(token) > 80:
+                    raise ValueError("invalid request")
+                if op == "sync" and auto_sync is not None:
+                    if not hmac.compare_digest(token, sync_token):
+                        raise ValueError("invalid request token")
+                    result = auto_sync()
+                    summary = (
+                        "<p>Состояние: <b>" + _h(result.get("state", "—")) +
+                        "</b> · Обновлено: " + str(int(result.get("updated", 0))) +
+                        " · Без изменений: " + str(int(result.get("unchanged", 0))) +
+                        "</p>"
+                    )
+                    panel = result.get("dashboard")
+                    if isinstance(panel, dict):
+                        summary += "<p>Панели: " + _h(panel.get("state", "—")) + "</p>"
+                    issues = result.get("issues") or []
+                    if issues:
+                        summary += ("<p class='warn'>Замечания:</p><ul>" +
+                                    "".join("<li>" + _h(x) + "</li>" for x in issues[:20]) +
+                                    "</ul>")
+                    self._action_shell("Проверка GitHub завершена", summary)
+                    return
+                if apply_manager is None or op not in ("apply", "rollback"):
                     raise ValueError("invalid request")
                 if op == "apply":
                     result = apply_manager.apply(token, confirmed=confirm == "YES")
