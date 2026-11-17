@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import shutil
 import tempfile
 import unittest
 from pathlib import Path
@@ -58,6 +59,36 @@ class AutomaticSyncTests(unittest.TestCase):
         (self.root / ".storage").mkdir()
         self.backend = FakeBackend()
         self.app = AutoSync(self.root, base / "journal", backend=self.backend)
+
+    def test_empty_dashboard_and_packages_trees_are_bootstrapped(self):
+        shutil.rmtree(self.root / "dashboards")
+        self.assertFalse((self.root / "packages").exists())
+        result = self.app.sync(CLAIMS)
+        self.assertEqual(result["state"], "OK", result["issues"])
+        self.assertEqual(result["updated"], 2)
+        self.assertEqual((self.root / "dashboards/dh/ui.yaml").read_text(),
+                         "title: DigitalHouses\nviews: !include_dir_list views/\n")
+        self.assertEqual((self.views / "10_first.yaml").read_bytes(), VIEW)
+        self.assertEqual((self.root / "packages/dh/dh_example_package.yaml").read_bytes(),
+                         PACKAGE)
+        again = self.app.sync(CLAIMS)
+        self.assertEqual(again["state"], "OK", again["issues"])
+        self.assertEqual(again["unchanged"], 2)
+
+    def test_occupied_dashboard_directory_is_not_overwritten(self):
+        shutil.rmtree(self.root / "dashboards")
+        (self.root / "dashboards").write_text("leave untouched")
+        result = self.app.sync(CLAIMS)
+        self.assertEqual(result["state"], "Error")
+        self.assertIn("Cannot create YAML directory", result["issues"][0])
+        self.assertEqual((self.root / "dashboards").read_text(), "leave untouched")
+
+    def test_existing_parent_dashboard_is_preserved(self):
+        ui = self.root / "dashboards/dh/ui.yaml"
+        original = ui.read_bytes()
+        result = self.app.sync(CLAIMS)
+        self.assertEqual(result["state"], "OK", result["issues"])
+        self.assertEqual(ui.read_bytes(), original)
 
     def test_zero_click_install_and_second_pass_no_changes(self):
         first = self.app.sync(CLAIMS)

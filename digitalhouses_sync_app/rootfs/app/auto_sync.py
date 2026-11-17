@@ -104,9 +104,28 @@ class AutoSync:
             raise SyncError("Home Assistant configuration unavailable")
         if os.statvfs(self.root).f_flag & getattr(os, "ST_RDONLY", 1):
             raise SyncError("Home Assistant configuration is read-only")
-        if not (self.root / VIEW_DIR).is_dir():
-            raise SyncError("DigitalHouses dashboard directory unavailable")
-        _safe_path(self.root, self.root / VIEW_DIR)
+        # A newly installed HA instance may have no DH dashboard or package tree.
+        # Bootstrap only missing paths; do not replace existing local resources.
+        for relative in (VIEW_DIR, DEFAULT_PACKAGE_DIR):
+            folder = self.root / relative
+            _safe_path(self.root, folder)
+            if folder.exists() and not folder.is_dir():
+                raise SyncError("YAML directory is occupied: " + relative.as_posix())
+            try:
+                folder.mkdir(mode=0o755, parents=True, exist_ok=True)
+            except OSError as exc:
+                raise SyncError("Cannot create YAML directory: " + relative.as_posix()) from exc
+            _safe_path(self.root, folder)
+
+        ui = self.root / "dashboards/dh/ui.yaml"
+        _safe_path(self.root, ui)
+        if not ui.exists():
+            _atomic_replace(
+                ui, b"title: DigitalHouses\nviews: !include_dir_list views/\n",
+                0o644, os.getuid(), os.getgid(),
+            )
+        elif not ui.is_file():
+            raise SyncError("DigitalHouses ui.yaml is not a file")
 
     def _local_views(self) -> tuple[dict, dict, set]:
         snap = _local_snapshot(self.root)
