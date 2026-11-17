@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.93
+
+- Prevent a forever-running HA Restart card after a service restart when an unrelated initial collector publish is incomplete: finish the retained restart operation when the new agent has initialized and MQTT is connected.
+- Prevent a forever-running HA Updates card after the updater has a terminal but unrelated/stale transaction, or when no worker transaction exists. Report a visible error without claiming a stale installation succeeded. Preserve the existing in-progress updater states and valid matching release completion.
+- Keep the existing retained MQTT Agent Card, native `time_since` formatting, and dashboard layout unchanged. Do not add timers, pollers, services, or change other products.
+
 ## 0.5.92
 
 - Support the Proxmox VE 9.0 RRD key schema (`pve-node-9.0`, `pve-vm-9.0`, `pve-storage-9.0`) alongside PVE 8 keys. PVE 9 appends data columns, so retain the existing parsing positions.

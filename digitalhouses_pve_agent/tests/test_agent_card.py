@@ -303,10 +303,14 @@ def test_install_card_does_not_accept_stale_worker_or_wrong_version(tmp_path):
     updater.version = "0.5.63"
     assert updater.install_card_outcome(card_started_at=ts(0)) == (True, None)
     # A stale transaction must still be rejected even if the version is newer.
-    assert updater.install_card_outcome(card_started_at=ts(13)) is None
+    stale = updater.install_card_outcome(card_started_at=ts(13))
+    assert stale is not None and stale[0] is False
+    assert "No matching installation transaction" in stale[1]
     updater.worker.save({"state": "error", "error": "Old error",
                         "updated_at": ts(0)})
-    assert updater.install_card_outcome(card_started_at=ts(0)) is None
+    stale = updater.install_card_outcome(card_started_at=ts(0))
+    assert stale is not None and stale[0] is False
+    assert "No matching installation transaction" in stale[1]
 
 
 def test_install_card_denied_by_ups_does_not_report_previous_success(tmp_path):
@@ -372,3 +376,36 @@ def test_status_cards_are_reused_in_dashboard_and_controls_preserved():
     assert "content: Версия" in dashboard
     assert "content: Новая версия" in dashboard
     assert "content: Перезапуск" in dashboard
+
+
+def test_finished_or_missing_update_cannot_leave_an_install_timer_running(tmp_path):
+    from app.update_manager import UpdateManager
+    manager = UpdateManager(tmp_path, "0.5.92")
+    # Persisted UI card exists, but a CLI install completed before its start.
+    manager.request.save({"version": "0.5.92", "requested_at": "2026-11-17T01:00:00+00:00"})
+    manager.worker.save({"state": "completed", "updated_at": "2026-11-17T01:00:20+00:00"})
+    outcome = manager.install_card_outcome(card_started_at="2026-11-17T01:01:00+00:00")
+    assert outcome is not None and outcome[0] is False
+    assert "matching installation transaction" in outcome[1]
+    card = AgentCard(tmp_path / "card.json", lambda _: True)
+    assert card.begin("install")
+    assert card.finish("install", error=outcome[1])
+    assert card.state == "error"  # never a fabricated success or running forever
+    manager.worker.save({"state": "idle"})
+    assert manager.install_card_outcome(card_started_at=card.started_at) == (
+        False, "No installation transaction is active"
+    )
+    manager.worker.save({"state": "verifying"})
+    assert manager.install_card_outcome(card_started_at=card.started_at) is None
+
+
+def test_restart_card_finishes_after_mqtt_connection_even_if_startup_partly_failed():
+    from pathlib import Path
+    main = (Path(__file__).parents[1] / "app/main.py").read_text()
+    startup_block = main.split("            if not initialized:", 1)[1].split("            if initialized:", 1)[0]
+    connected_block = main.split("            if initialized:", 1)[1]
+    assert 'card.finish("restart")' not in startup_block
+    assert 'bridge.connected.is_set()' in connected_block
+    assert 'card.finish("restart")' in connected_block
+    # The independent updater must not be confused with a restart completion.
+    assert 'card.operation == "restart"' in connected_block
