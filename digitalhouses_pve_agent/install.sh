@@ -179,7 +179,10 @@ elif [[ -f "${LEGACY_CONFIG_FILE}" ]]; then
         "s|^([[:space:]]*topic_prefix[[:space:]]*=[[:space:]]*)${LEGACY_TOPIC_PREFIX}([[:space:]]*)$|\\1${CANONICAL_TOPIC_PREFIX}\\2|" \
         "${PREPARED_CONFIG}"
 else
-    (umask 0077; printf '[general]\ninstance_id =\nnode_name = PVE\nlog_level = info\n\n[mqtt]\nhost =\n' >"${PREPARED_CONFIG}")
+    echo "DigitalHouses telemetry: enabled by default for new PVE Agent installations."
+    echo "Reports only product, version and random installation ID (policy v2)."
+    echo "Policy: https://github.com/DigitalHouses/home-assistant-apps/blob/main/docs/standards/PRODUCT_TELEMETRY_POLICY.md"
+    (umask 0077; printf '[general]\ninstance_id =\nnode_name = PVE\nlog_level = info\n\n[telemetry]\nenabled = true\n\n[mqtt]\nhost =\n' >"${PREPARED_CONFIG}")
 fi
 PREPARE_FLAGS=()
 [[ "${NON_INTERACTIVE}" -eq 1 ]] && PREPARE_FLAGS+=(--non-interactive)
