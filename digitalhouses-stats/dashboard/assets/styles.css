@@ -59,6 +59,28 @@ th:not(:first-child), td:not(:first-child) { text-align: right; }
 .product { font-weight: 700; }
 .muted { color: #929aa5; }
 
+/* Country drill-down uses the existing Known/7d/30d columns. */
+.country-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 3px 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+.country-toggle::before { content: "▸"; color: #798494; font-size: 13px; }
+.country-toggle[aria-expanded="true"]::before { content: "▾"; }
+.country-toggle:hover { color: #3262a1; background: transparent; }
+.country-toggle:focus-visible { outline: 2px solid #3262a1; outline-offset: 3px; border-radius: 3px; }
+.country-product-row { background: #f7f9fc; }
+.country-product-row[hidden] { display: none; }
+.country-product-row td { padding-top: 8px; padding-bottom: 8px; font-size: 12px; }
+.country-product-name { padding-left: 20px; color: #566477; }
+
 footer { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 17px 3px 0; color: #8c95a0; font-size: 12px; }
 button { border: 1px solid #d9dee5; background: #fff; border-radius: 9px; padding: 8px 13px; cursor: pointer; color: #333b46; font-weight: 700; }
 button:hover { background: #f7f8fa; }

@@ -327,6 +327,30 @@ def test_local_stats_use_latest_installation_state() -> None:
     assert by_country["DE"]["active_7d"] == 1
     assert by_country["US"]["active_7d"] == 0
 
+    assert by_country["KZ"]["products"] == [
+        {
+            "product": "digitalhouses_pve_agent",
+            "name": "PVE Agent",
+            "observed_installations": 1,
+            "active_7d": 1,
+            "active_30d": 1,
+        }
+    ]
+    assert by_country["DE"]["products"][0]["name"] == "Recorder App"
+    assert by_country["US"]["products"][0]["name"] == "Plex Agent"
+    assert by_country["US"]["products"][0]["active_7d"] == 0
+    assert by_country["US"]["products"][0]["active_30d"] == 1
+
+    filtered_countries = dashboard_client.get(
+        "/v1/stats/countries", params={"product": "digitalhouses_pve_agent"}
+    )
+    assert filtered_countries.status_code == 200
+    assert [row["country"] for row in filtered_countries.json()] == ["KZ"]
+    assert filtered_countries.json()[0]["products"] == by_country["KZ"]["products"]
+    assert dashboard_client.get(
+        "/v1/stats/countries", params={"product": "invalid_product"}
+    ).status_code == 400
+
     history = dashboard_client.get("/v1/stats/history", params={"days": 2})
     assert history.status_code == 200
     points = history.json()
@@ -339,6 +363,69 @@ def test_local_stats_use_latest_installation_state() -> None:
         params={"product": "not_a_product"},
     )
     assert invalid.status_code == 400
+
+
+def test_country_product_breakdown_uses_latest_country_per_installation() -> None:
+    reset_database()
+    first_id = str(uuid.uuid4())
+    second_id = str(uuid.uuid4())
+    third_id = str(uuid.uuid4())
+
+    _send_heartbeat(
+        installation_id=first_id,
+        token_hex_pair="11",
+        product="digitalhouses_internet_app",
+        version="0.1.23",
+        country="KZ",
+    )
+    _send_heartbeat(
+        installation_id=first_id,
+        token_hex_pair="11",
+        product="digitalhouses_internet_app",
+        version="0.1.24",
+        country="NL",
+    )
+    _send_heartbeat(
+        installation_id=second_id,
+        token_hex_pair="22",
+        product="digitalhouses_internet_app",
+        version="0.1.24",
+        country="NL",
+    )
+    _send_heartbeat(
+        installation_id=third_id,
+        token_hex_pair="33",
+        product="digitalhouses_zigbee_monitor_app",
+        version="0.1.27",
+        country="NL",
+    )
+
+    result = dashboard_client.get("/v1/stats/countries")
+    assert result.status_code == 200
+    assert len(result.json()) == 1
+    country = result.json()[0]
+    assert country["country"] == "NL"
+    assert country["observed_installations"] == 3
+    assert country["active_7d"] == 3
+    assert country["active_30d"] == 3
+    assert country["products"] == [
+        {
+            "product": "digitalhouses_internet_app",
+            "name": "Internet App",
+            "observed_installations": 2,
+            "active_7d": 2,
+            "active_30d": 2,
+        },
+        {
+            "product": "digitalhouses_zigbee_monitor_app",
+            "name": "Zigbee Monitor App",
+            "observed_installations": 1,
+            "active_7d": 1,
+            "active_30d": 1,
+        },
+    ]
+    for key in ("observed_installations", "active_7d", "active_30d"):
+        assert sum(item[key] for item in country["products"]) == country[key]
 
 
 def test_stats_history_days_validation() -> None:
