@@ -349,6 +349,22 @@ install -o root -g root -m 0644 \
     "${APP_DIR}/systemd/${SERVICE_NAME}" \
     "${UNIT_FILE}"
 
+# Exact K15 model only: load the read-only Linux EC observer after each boot.
+# Never enable write_support, write to EC registers or alter BIOS fan control.
+if [[ -r /sys/class/dmi/id/product_name ]] \
+    && [[ "$(cat /sys/class/dmi/id/product_name)" == "NucBox_K15" ]]; then
+    if command -v modprobe >/dev/null 2>&1 \
+        && modprobe ec_sys \
+        && [[ -r /sys/module/ec_sys/parameters/write_support ]] \
+        && [[ "$(cat /sys/module/ec_sys/parameters/write_support)" == "N" ]]; then
+        install -d -o root -g root -m 0755 /etc/modules-load.d
+        printf 'ec_sys\n' >/etc/modules-load.d/digitalhouses-pve-k15-ec.conf
+        echo 'GMKtec K15: read-only ec_sys enabled and persisted for reboot.'
+    else
+        echo 'Warning: K15 ec_sys read-only interface unavailable; fan RPM will remain unavailable.' >&2
+    fi
+fi
+
 PYTHONPATH="${APP_DIR}" "${APP_DIR}/.venv/bin/python" -c \
     'from app.config import load_config; from app.restart_safety import guard_restart; from app.main import DEFAULT_CONFIG; guard_restart(load_config(DEFAULT_CONFIG), allow_nut_unavailable=True)'
 systemctl daemon-reload

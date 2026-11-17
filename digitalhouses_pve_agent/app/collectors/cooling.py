@@ -113,9 +113,25 @@ def select_fan_sources(
     return hwmon
 
 
+def _with_k15_fallback(
+    hwmon_root: Path, fans: tuple[FanSnapshot, ...]
+) -> tuple[FanSnapshot, ...]:
+    """Use K15 EC only if neither hwmon nor IPMI has a board fan channel."""
+    if hwmon_root != Path("/sys/class/hwmon"):
+        return fans
+    if any(fan.chip not in GPU_HWMON_CHIPS for fan in fans):
+        return fans
+    # Lazy import avoids a circular dependency on FanSnapshot.
+    from ..fan_hardware_gmktec_k15 import collect_k15_ec_fans
+
+    ec_fans = collect_k15_ec_fans()
+    return fans + ec_fans if ec_fans else fans
+
+
 def collect_fans(hwmon_root: Path = Path("/sys/class/hwmon")) -> tuple[FanSnapshot, ...]:
     if not hwmon_root.exists():
-        return collect_ipmi_fans() if hwmon_root == Path("/sys/class/hwmon") else ()
+        baseline = collect_ipmi_fans() if hwmon_root == Path("/sys/class/hwmon") else ()
+        return _with_k15_fallback(hwmon_root, baseline)
     result: list[FanSnapshot] = []
     for hwmon in sorted(hwmon_root.glob("hwmon*")):
         if not hwmon.is_dir():
@@ -179,5 +195,6 @@ def collect_fans(hwmon_root: Path = Path("/sys/class/hwmon")) -> tuple[FanSnapsh
         fan.chip not in GPU_HWMON_CHIPS and (fan.rpm or 0) > 0
         for fan in result
     ):
-        return select_fan_sources(tuple(result), collect_ipmi_fans())
-    return tuple(result)
+        selected = select_fan_sources(tuple(result), collect_ipmi_fans())
+        return _with_k15_fallback(hwmon_root, selected)
+    return _with_k15_fallback(hwmon_root, tuple(result))

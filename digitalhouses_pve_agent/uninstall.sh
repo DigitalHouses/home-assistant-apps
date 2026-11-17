@@ -103,6 +103,12 @@ rm -f -- /etc/systemd/system/digitalhouses_pve_agent-update-recover.service
 rm -f -- /usr/local/libexec/digitalhouses-pve-agent-update-runner
 rm -f -- "${UNIT_FILE}"
 rm -f -- "${ROOT_GUIDE}" /root/dh-pve-agent.txt /usr/local/bin/dh-pve-agent
+# Remove only our module-load entry; never unload ec_sys from a running host.
+K15_EC_MODULE_FILE=/etc/modules-load.d/digitalhouses-pve-k15-ec.conf
+if [[ -f "${K15_EC_MODULE_FILE}" ]] \
+    && [[ "$(cat "${K15_EC_MODULE_FILE}")" == "ec_sys" ]]; then
+    rm -f -- "${K15_EC_MODULE_FILE}"
+fi
 rm -rf -- "${APP_DIR}"
 
 if [[ "${purge}" -eq 1 ]]; then
