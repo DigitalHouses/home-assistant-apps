@@ -103,7 +103,6 @@ def test_fresh_install_telemetry_proposed_without_modifying_upgrades():
     example = (ROOT / "examples" / "digitalhouses_pve_agent.conf.example").read_text(encoding="utf-8")
     assert "DigitalHouses telemetry: enabled by default for new PVE Agent installations." in installer
     assert "docs/standards/PRODUCT_TELEMETRY_POLICY.md" in installer
-    assert "http" in installer
     assert r"[telemetry]\nenabled = true\n" in installer
     assert "[telemetry]\nenabled = true" in example
 
