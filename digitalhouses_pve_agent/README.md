@@ -8,7 +8,7 @@ Native Linux agent for **Proxmox VE 8.x** (previously verified) and **9.x** (req
 
 ## Native CLI and unattended installation (development source)
 
-The source tree implements the [DigitalHouses Linux Agent Management Standard](../docs/standards/DH_LINUX_AGENT_MANAGEMENT_STANDARD.md). Version 0.5.95 publishes the DH Sync Discovery v1 metadata with `dashboard: dh-system` on MQTT connect/reconnect; production installation requires the canonical released tag.
+The source tree implements the [DigitalHouses Linux Agent Management Standard](../docs/standards/DH_LINUX_AGENT_MANAGEMENT_STANDARD.md). Version 0.5.96 publishes the DH Sync Discovery v1 metadata with `dashboard: dh-system` on MQTT connect/reconnect; production installation requires the canonical released tag.
 
 Root/admin commands after installing a release that includes the feature:
 
@@ -49,7 +49,7 @@ The installed `/root/dh-pve-agent.txt` guide is mode `0600`. The existing MQTT D
 
 The canonical product and runtime identity is **DigitalHouses PVE Agent** / `digitalhouses_pve_agent`: systemd service `digitalhouses_pve_agent.service`, filesystem roots under `/opt/digitalhouses/digitalhouses_pve_agent`, `/etc/digitalhouses_pve_agent` and `/var/lib/digitalhouses_pve_agent`, MQTT base `DigitalHouses/Global/digitalhouses_pve_agent/<instance>`, and Home Assistant entity prefix `dh_pve_agent_*`. Version 0.5.30 performs the corrected one-time controlled migration from the former `dh_pve_app` / `dh_app_pve_*` runtime, including deterministic cleanup of retained data owned by the legacy MQTT instance namespace.
 
-Current source version: `VERSION` is `0.5.95`.
+Current source version: `VERSION` is `0.5.96`.
 Proxmox VE 9.0 RRD key prefixes for node/VM/storage are supported alongside the PVE 8 prefixes (see changelog 0.5.94). A physical PVE 9.2 installation still needs live acceptance testing.
 See [GMKtec K15 and PVE 8/9 acceptance checklist](docs/GMKTEC_K15_PVE8_PVE9.md) for exact DMI/EC read-only handling, regression requirements, and the remaining live-host verification.
 DH Sync v1 product source is announced as retained MQTT metadata at the existing instance ID under `/sync`; see [DH Sync Discovery v1](docs/DH_SYNC_DISCOVERY_V1.md). This metadata does not authorize dashboard installation.
@@ -314,18 +314,20 @@ When upgrading from 0.5.16 or earlier, remove the old `dh_pve_agent_notification
 
 ## Product telemetry
 
-DigitalHouses product telemetry is explicit opt-in and defaults to OFF:
+**Telemetry Policy v2 (prepared migration; legal rollout gate remains open):** new Linux Agent installations default to ON. An explicit `false` prevents normal Agent startup; network/DNS/server errors never affect the PVE/UPS runtime. Existing installations with OFF/unspecified telemetry cannot silently migrate: installation is rejected before replacing their existing agent unless the operator explicitly configures `telemetry_enabled=true`.
 
 ```ini
 [telemetry]
-enabled = false
+enabled = true
 ```
+
+Для статистики DigitalHouses отправляются: название приложения/агента, версия и случайный идентификатор установки. Полная политика: [Product Telemetry Policy](../docs/standards/PRODUCT_TELEMETRY_POLICY.md). **Enabled by default is not proof of consent:** public rollout remains blocked until the shared legal gate is resolved. No public mandatory-telemetry release is authorized solely by this source change.
 
 When enabled, only a canonical released build may send protocol-v1 heartbeat data to `telemetry.digitalhouses.vip`. The payload contains exactly: protocol schema version, telemetry policy version, a random per-product installation UUID, canonical product identifier and product version. The per-installation token is sent only as the HTTP Bearer credential. Hostname, machine ID, customer/site identity, IP address as payload data, hardware inventory, Home Assistant UUID, commit SHA, release tag and uptime are not transmitted.
 
 Telemetry identity and scheduling state are persisted in `/var/lib/digitalhouses/digitalhouses_pve_agent/telemetry.json`. Telemetry HTTP runs in an isolated worker so DNS/TLS/server failure cannot block PVE, UPS or MQTT monitoring. Branch, `main` and arbitrary-SHA builds are not allowed to send production telemetry even if the config flag is enabled.
 
-The shared privacy/consent contract is documented in [DigitalHouses Product Telemetry Policy](../docs/standards/PRODUCT_TELEMETRY_POLICY.md). The current installation can request authenticated deletion with:
+Under Policy v2, successful authenticated deletion rotates both local installation UUID and bearer token; deletion is **not** telemetry opt-out and continued enabled use resumes reporting under a fresh identity. The shared privacy/consent contract is documented in [DigitalHouses Product Telemetry Policy](../docs/standards/PRODUCT_TELEMETRY_POLICY.md). The current installation can request authenticated deletion with:
 
 ```bash
 PYTHONPATH=/opt/digitalhouses/digitalhouses_pve_agent \
@@ -468,7 +470,7 @@ Production install/update is release-tag only. Version 0.5.30 is the corrected c
 For the canonical runtime, install/update/reinstall never clears the current canonical MQTT namespace. Canonical retained MQTT cleanup is owned exclusively by the supported uninstaller.
 
 ```bash
-TAG=digitalhouses_pve_agent-v0.5.95
+TAG=digitalhouses_pve_agent-v0.5.96
 DIGITALHOUSES_SOURCE_REF="$TAG" \
   bash <(curl -fsSL "https://raw.githubusercontent.com/DigitalHouses/home-assistant-apps/$TAG/digitalhouses_pve_agent/install.sh")
 ```

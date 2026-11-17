@@ -15,7 +15,7 @@ Installer добавляет выше этой памятки фактическ
 
 Production установка выполняется только из canonical release tag:
 
-  TAG=digitalhouses_pve_agent-v0.5.95
+  TAG=digitalhouses_pve_agent-v0.5.96
   DIGITALHOUSES_SOURCE_REF="$TAG" bash <(curl -fsSL "https://raw.githubusercontent.com/DigitalHouses/home-assistant-apps/$TAG/digitalhouses_pve_agent/install.sh")
 
 При первой установке installer запросит MQTT-параметры.
@@ -53,7 +53,7 @@ Branch/main/arbitrary SHA не являются production-путём. Они д
 Ручное обновление конкретным release tag также поддерживается.
 Существующие config/state сохраняются.
 
-  TAG=digitalhouses_pve_agent-v0.5.95
+  TAG=digitalhouses_pve_agent-v0.5.96
   DIGITALHOUSES_SOURCE_REF="$TAG" bash <(curl -fsSL "https://raw.githubusercontent.com/DigitalHouses/home-assistant-apps/$TAG/digitalhouses_pve_agent/install.sh")
 
 После обновления проверить:
@@ -217,14 +217,25 @@ migration/removal операции.
 Telemetry
 ---------
 
-По умолчанию выключена:
+Новая установка Linux Agent: по умолчанию ВКЛЮЧЕНА (Telemetry Policy v2):
 
   [telemetry]
-  enabled = false
+  enabled = true
 
-При включении canonical release отправляет только protocol-v1 поля:
+Если enabled=false, обычный runtime агента не запускается (причина в журнале).
+Недоступность сети/сервера статистики не блокирует PVE/UPS.
+Обновление существующего агента с отключённой/неуказанной телеметрией
+предварительно отклоняется, чтобы не остановить работающий PVE/UPS.
+Для перехода оператор должен явно установить telemetry_enabled=true.
+
+Для статистики DigitalHouses отправляются: название приложения/агента,
+версия и случайный идентификатор установки.
+Политика: https://github.com/DigitalHouses/home-assistant-apps/blob/main/docs/standards/PRODUCT_TELEMETRY_POLICY.md
+
+canonical release отправляет только protocol-v1 поля с policy_version=2:
 schema, telemetry_policy_version, installation_id, product, version.
 Unreleased main/branch/SHA build telemetry не отправляет.
+Публичное включение новой модели разрешено только после закрытия legal gate.
 
 Удалить сохранённую на telemetry-сервере запись этой установки:
 
@@ -234,8 +245,9 @@ Unreleased main/branch/SHA build telemetry не отправляет.
     --state-dir /var/lib/digitalhouses_pve_agent \
     --telemetry-delete
 
-Локальная identity/token остаются persistent, чтобы переустановка/upgrade не
-создавали новую installation identity.
+При успешном удалении на сервере локальные identity/token обновляются.
+Удаление НЕ отключает телеметрию: при продолжении работы отчёты возобновляются
+под новым случайным идентификатором. При upgrade/restart identity сохраняется.
 
 Основные пути
 -------------

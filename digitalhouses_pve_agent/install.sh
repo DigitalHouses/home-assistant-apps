@@ -179,12 +179,44 @@ elif [[ -f "${LEGACY_CONFIG_FILE}" ]]; then
         "s|^([[:space:]]*topic_prefix[[:space:]]*=[[:space:]]*)${LEGACY_TOPIC_PREFIX}([[:space:]]*)$|\\1${CANONICAL_TOPIC_PREFIX}\\2|" \
         "${PREPARED_CONFIG}"
 else
-    (umask 0077; printf '[general]\ninstance_id =\nnode_name = PVE\nlog_level = info\n\n[mqtt]\nhost =\n' >"${PREPARED_CONFIG}")
+    (umask 0077; printf '[general]\ninstance_id =\nnode_name = PVE\nlog_level = info\n\n[mqtt]\nhost =\n\n[telemetry]\nenabled = true\n' >"${PREPARED_CONFIG}")
 fi
 PREPARE_FLAGS=()
 [[ "${NON_INTERACTIVE}" -eq 1 ]] && PREPARE_FLAGS+=(--non-interactive)
 PYTHONPATH="${SOURCE_APP}" python3 -m app.install_config \
     "${PREPARED_CONFIG}" "${PREPARE_FLAGS[@]}" "${CONFIG_SETTINGS[@]}"
+
+# Disclosure is printed before a new activated build can send telemetry.
+echo "Для статистики DigitalHouses отправляются: название приложения/агента, версия и случайный идентификатор установки."
+echo "Policy: https://github.com/DigitalHouses/home-assistant-apps/blob/main/docs/standards/PRODUCT_TELEMETRY_POLICY.md"
+
+# Mandatory-telemetry migration safety: reject upgrades that would silently
+# turn a legacy OFF / unspecified installation into an inactive PVE/UPS agent
+# or turn telemetry ON without an explicit operator configuration change.
+# This is intentionally before any installed service/config/runtime mutation.
+python3 - "${CONFIG_FILE}" "${LEGACY_CONFIG_FILE}" "${PREPARED_CONFIG}" <<'PYTELEMETRY'
+import configparser
+from pathlib import Path
+import sys
+
+def read(path):
+    parser = configparser.ConfigParser(interpolation=None)
+    if path.exists():
+        parser.read(path, encoding="utf-8")
+    return parser
+
+current = Path(sys.argv[1])
+legacy = Path(sys.argv[2])
+prepared = read(Path(sys.argv[3]))
+previous = current if current.exists() else legacy if legacy.exists() else None
+if not prepared.getboolean("telemetry", "enabled", fallback=False):
+    raise SystemExit("ERROR: PVE Agent v2 requires telemetry.enabled=true for startup; original installation unchanged")
+if previous is not None:
+    old = read(previous)
+    old_enabled = old.getboolean("telemetry", "enabled", fallback=False)
+    if not old_enabled and not prepared.has_option("telemetry", "enabled"):
+        raise SystemExit("ERROR: existing PVE/UPS has legacy telemetry OFF or unspecified; explicit telemetry_enabled=true required before upgrading; existing agent unchanged")
+PYTELEMETRY
 
 # On a locally managed UPS, prefer the loopback NUT server and repair
 # a stale PVE IPv4 netserver listener (only with confirmed utility power).

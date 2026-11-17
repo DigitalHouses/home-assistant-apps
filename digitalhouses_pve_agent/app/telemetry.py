@@ -16,7 +16,7 @@ from .state_store import StateStore
 
 PRODUCT = "digitalhouses_pve_agent"
 SCHEMA_VERSION = 1
-TELEMETRY_POLICY_VERSION = 1
+TELEMETRY_POLICY_VERSION = 2
 BASE_URL = "https://telemetry.digitalhouses.vip"
 DEFAULT_TELEMETRY_STATE_FILE = Path(
     "/var/lib/digitalhouses/digitalhouses_pve_agent/telemetry.json"
@@ -144,7 +144,9 @@ class TelemetryClient:
         self.transport = transport or UrllibTelemetryTransport()
         self.now_epoch = now_epoch
         self.log = logging.getLogger(__name__)
-        self._state = self._load_or_create_state()
+        # Do not create a pseudonymous installation identity when the
+        # mandatory-telemetry product has not been activated.
+        self._state = self._load_or_create_state() if self.enabled else self.state_store.load()
         self.released_build = is_released_build(self.version, self.build_info_path)
 
     def _load_or_create_state(self) -> dict[str, object]:
@@ -267,6 +269,12 @@ class TelemetryClient:
         return True
 
     def delete(self) -> bool:
+        # A deletion request without a pre-existing identity must not mint
+        # new identifiers just to send a deletion request.
+        if not (_valid_uuid4(self._state.get("installation_id")) and
+                _valid_token(self._state.get("installation_token"))):
+            self.log.info("No existing telemetry installation identity to delete")
+            return True
         payload = {
             "schema": SCHEMA_VERSION,
             "installation_id": self.installation_id,
@@ -288,6 +296,12 @@ class TelemetryClient:
             self.log.warning("Telemetry deletion failed with HTTP %s", status)
             return False
 
+        # Policy v2: authenticated server-side deletion erases the old
+        # installation history, then rotates *both* local credentials.
+        # Deletion is not telemetry opt-out: when enabled, normal reporting
+        # resumes later under the new pseudonymous installation identity.
+        self._state["installation_id"] = str(uuid.uuid4())
+        self._state["installation_token"] = secrets.token_hex(32)
         self._state.pop("last_success_epoch", None)
         self._state.pop("last_reported_version", None)
         self._state.pop("last_attempt_epoch", None)

@@ -356,6 +356,9 @@ def _restart_denial_reason(
 
 def run(config: AppConfig, *, state_dir: Path = DEFAULT_STATE_DIR) -> int:
     log = logging.getLogger("digitalhouses_pve_agent")
+    if not config.telemetry.enabled:
+        log.error("Mandatory telemetry disabled; PVE Agent runtime not started (telemetry.enabled=false)")
+        return 0  # Clean stop: systemd Restart=on-failure must not loop.
     shutdown_history_tracker = _shutdown_tracker(state_dir)
     try:
         shutdown_history_tracker.startup()

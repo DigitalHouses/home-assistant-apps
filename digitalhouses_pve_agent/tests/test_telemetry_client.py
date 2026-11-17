@@ -36,55 +36,46 @@ def _released_build(tmp_path: Path, version: str) -> Path:
     return path
 
 
-def test_fresh_install_creates_persistent_uuid_and_256_bit_token(tmp_path: Path):
+def test_fresh_activated_install_creates_persistent_uuid_and_256_bit_token(tmp_path: Path):
     store = StateStore(tmp_path / "telemetry.json")
     first = TelemetryClient(
-        enabled=False,
-        version="0.5.8",
-        state_store=store,
+        enabled=True, version="0.5.8", state_store=store,
         build_info_path=tmp_path / "BUILD_INFO",
     )
     second = TelemetryClient(
-        enabled=False,
-        version="0.5.8",
-        state_store=store,
+        enabled=True, version="0.5.8", state_store=store,
         build_info_path=tmp_path / "BUILD_INFO",
     )
-
     assert first.installation_id == second.installation_id
     assert first.installation_token == second.installation_token
     assert len(bytes.fromhex(first.installation_token)) >= 32
 
 
-def test_payload_is_exact_protocol_v1_without_country_or_host_data(tmp_path: Path):
+def test_payload_is_exact_wire_schema_v1_policy_v2(tmp_path: Path):
     client = TelemetryClient(
-        enabled=False,
-        version="0.5.8",
+        enabled=True, version="0.5.8",
         state_store=StateStore(tmp_path / "telemetry.json"),
         build_info_path=tmp_path / "BUILD_INFO",
     )
-
     assert client.payload() == {
         "schema": 1,
-        "telemetry_policy_version": 1,
+        "telemetry_policy_version": 2,
         "installation_id": client.installation_id,
         "product": "digitalhouses_pve_agent",
         "version": "0.5.8",
     }
 
 
-def test_disabled_telemetry_never_calls_transport(tmp_path: Path):
+def test_disabled_telemetry_neither_creates_identity_nor_sends(tmp_path: Path):
     transport = FakeTransport()
+    store = StateStore(tmp_path / "telemetry.json")
     client = TelemetryClient(
-        enabled=False,
-        version="0.5.8",
-        state_store=StateStore(tmp_path / "telemetry.json"),
+        enabled=False, version="0.5.8", state_store=store,
         build_info_path=_released_build(tmp_path, "0.5.8"),
-        transport=transport,
-        now_epoch=lambda: 1000.0,
+        transport=transport, now_epoch=lambda: 1000.0,
     )
-
     assert client.tick() is False
+    assert not store.path.exists()
     assert transport.calls == []
 
 
@@ -190,26 +181,53 @@ def test_failure_is_isolated_and_backed_off(tmp_path: Path):
     assert len(transport.calls) == 1
 
 
-def test_authenticated_delete_uses_same_installation_identity(tmp_path: Path):
+def test_authenticated_delete_rotates_both_credentials_under_policy_v2(tmp_path: Path):
     transport = FakeTransport()
+    store = StateStore(tmp_path / "telemetry.json")
     client = TelemetryClient(
-        enabled=False,
-        version="0.5.8",
-        state_store=StateStore(tmp_path / "telemetry.json"),
-        build_info_path=tmp_path / "BUILD_INFO",
-        transport=transport,
+        enabled=True, version="0.5.8", state_store=store,
+        build_info_path=tmp_path / "BUILD_INFO", transport=transport,
     )
-
+    previous_id, previous_token = client.installation_id, client.installation_token
     assert client.delete() is True
     call = transport.calls[0]
     assert call["method"] == "DELETE"
     assert call["path"] == "/v1/installation"
     assert call["payload"] == {
         "schema": 1,
-        "installation_id": client.installation_id,
+        "installation_id": previous_id,
         "product": "digitalhouses_pve_agent",
     }
-    assert call["token"] == client.installation_token
+    assert call["token"] == previous_token
+    assert client.installation_id != previous_id
+    assert client.installation_token != previous_token
+    assert "last_success_epoch" not in store.load()
+    again = TelemetryClient(enabled=True, version="0.5.8", state_store=store,
+                            build_info_path=tmp_path / "BUILD_INFO")
+    assert (again.installation_id, again.installation_token) == (
+        client.installation_id, client.installation_token)
+
+
+def test_failed_deletion_preserves_credentials(tmp_path: Path):
+    store = StateStore(tmp_path / "telemetry.json")
+    client = TelemetryClient(
+        enabled=True, version="0.5.8", state_store=store,
+        build_info_path=tmp_path / "BUILD_INFO", transport=FakeTransport(status=500),
+    )
+    previous_id, previous_token = client.installation_id, client.installation_token
+    assert client.delete() is False
+    assert client.installation_id == previous_id
+    assert client.installation_token == previous_token
+
+
+def test_disabled_empty_installation_delete_is_safe_noop(tmp_path: Path):
+    store = StateStore(tmp_path / "telemetry.json")
+    transport = FakeTransport()
+    client = TelemetryClient(enabled=False, version="0.5.8", state_store=store,
+                             build_info_path=tmp_path / "BUILD_INFO", transport=transport)
+    assert client.delete() is True
+    assert not store.path.exists()
+    assert transport.calls == []
 
 
 def test_linux_agent_telemetry_identity_uses_canonical_persistent_path():

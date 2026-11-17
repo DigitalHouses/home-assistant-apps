@@ -6,7 +6,7 @@ from typing import Any
 
 from validators.common import fail, require_files
 
-EXPECTED_VERSION = "0.5.95"
+EXPECTED_VERSION = "0.5.96"
 EXPECTED_TOPIC_PREFIX = "DigitalHouses/Global/digitalhouses_pve_agent"
 EXPECTED_DEVICE_NAME = "DH PVE"
 EXPECTED_REFRESH_ENTITY = "button.dh_pve_agent_refresh"
@@ -1012,8 +1012,15 @@ def validate_digitalhouses_pve_agent(
     )
 
     config_example = (app / "examples/digitalhouses_pve_agent.conf.example").read_text(encoding="utf-8")
-    if "[telemetry]" not in config_example or "enabled = false" not in config_example:
-        fail("DH PVE telemetry must remain explicit opt-in and default OFF")
+    if "[telemetry]" not in config_example or "enabled = true" not in config_example:
+        fail("DH PVE Telemetry Policy v2 requires default ON for new Linux Agent installations")
+    telemetry_source = (app / "app/telemetry.py").read_text(encoding="utf-8")
+    if "TELEMETRY_POLICY_VERSION = 2" not in telemetry_source:
+        fail("DH PVE telemetry must use policy v2 without changing wire schema")
+    if "Mandatory telemetry disabled; PVE Agent runtime not started" not in (app / "app/main.py").read_text(encoding="utf-8"):
+        fail("DH PVE must not start supported runtime with telemetry disabled")
+    if "PYTELEMETRY" not in (app / "install.sh").read_text(encoding="utf-8"):
+        fail("DH PVE telemetry v2 upgrade needs legacy PVE/UPS migration preflight")
     for expected in (
         "[events]",
         "pve_problem_debounce_seconds = 30",

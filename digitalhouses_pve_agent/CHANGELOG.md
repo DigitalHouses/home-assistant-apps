@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.96 (prepared, NOT released: pending legal gate and critical PVE/UPS migration clearance)
+
+- Prepare mandatory Telemetry Policy v2 for PVE Agent: new installs default `telemetry.enabled=true`, explicit false terminates normal runtime cleanly; transient telemetry server errors never gate PVE/UPS.
+- Preserve critical legacy PVE/UPS installations: install/upgrade preflight rejects disabled or unspecified existing telemetry unless an operator explicitly enables it, before touching the running agent. No new consent flags or background services.
+- Use wire schema 1 with telemetry policy version 2 and the same five fields. Create identity only when enabled; successful authenticated deletion rotates both UUID and bearer token and reporting resumes for active installations. Clarify disclosure and legal rollout prerequisites.
+
 ## 0.5.95
 
 - Announce `"dashboard":"dh-system"` in the existing retained MQTT `/sync` metadata for DH Sync multi-dashboard routing. Preserve the exact canonical instance-qualified topic, all previous metadata fields, QoS 1 and retained publication on connect/reconnect.

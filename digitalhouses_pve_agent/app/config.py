@@ -36,7 +36,7 @@ class MqttConfig:
 
 @dataclass(frozen=True)
 class TelemetryConfig:
-    enabled: bool = False
+    enabled: bool = True
 
 
 @dataclass(frozen=True)
@@ -171,7 +171,7 @@ def load_config(path: Path) -> AppConfig:
     if not 10 <= keepalive_seconds <= 3600:
         raise ConfigError("mqtt.keepalive_seconds must be between 10 and 3600")
 
-    telemetry_enabled = _get_bool(parser, "telemetry", "enabled", False)
+    telemetry_enabled = _get_bool(parser, "telemetry", "enabled", True)
 
     pve_problem_debounce_seconds = _get_float(
         parser,

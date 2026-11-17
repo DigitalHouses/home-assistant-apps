@@ -21,7 +21,7 @@ def test_load_config_uses_expected_defaults(tmp_path: Path):
     assert config.mqtt.topic_prefix == "DigitalHouses/Global/digitalhouses_pve_agent"
     assert config.mqtt.discovery_prefix == "homeassistant"
     assert config.mqtt.keepalive_seconds == 60
-    assert config.telemetry.enabled is False
+    assert config.telemetry.enabled is True
 
 
 def test_load_config_requires_mqtt_host(tmp_path: Path):
@@ -97,7 +97,7 @@ policy_apply_enabled = maybe
     assert not hasattr(config.ups, "policy_apply_enabled")
 
 
-def test_telemetry_requires_explicit_true_opt_in(tmp_path: Path):
+def test_telemetry_accepts_explicit_true(tmp_path: Path):
     path = write_config(
         tmp_path,
         """[mqtt]
