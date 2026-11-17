@@ -1,4 +1,4 @@
-"""DH Sync Discovery Contract v1: Plex product source over the existing MQTT."""
+"""DH Sync 0.6.0: Plex product identity/source over the existing MQTT."""
 from __future__ import annotations
 
 import json
@@ -23,7 +23,7 @@ from app.mqtt_bridge import MqttBridge
 
 PRODUCT = Path(__file__).resolve().parents[1]
 REGISTRY = PRODUCT.parent / "digitalhouses-stats/digitalhouses_stats/product_registry.json"
-EXPECTED_KEYS = {"schema", "product_id", "type", "version", "repository", "product_path", "dashboard"}
+EXPECTED_KEYS = {"schema", "product_id", "type", "version", "repository", "product_path"}
 
 
 def _is_exact_organization_repo(url: str) -> bool:
@@ -102,7 +102,7 @@ class DiscoverySourceContractTests(unittest.TestCase):
         self.assertEqual(payload["type"], "agent")
         self.assertEqual(payload["version"], installed.version)
         self.assertEqual(payload["product_path"], SYNC_PRODUCT_ID)
-        self.assertEqual(payload["dashboard"], "dh-system")
+        self.assertTrue(set(payload).isdisjoint({"dashboard", "panel", "view", "order"}))
         self.assertTrue(_is_exact_organization_repo(payload["repository"]))
         self.assertEqual(build_sync_payload(BuildInfo("1.2.3","release","sha"))["version"],"1.2.3")
         self.assertNotIn("commit", payload)
@@ -175,7 +175,7 @@ class SyncPublishTests(unittest.TestCase):
         sync=[c for c in first if c.args and c.args[0]==bridge.topics.sync]
         self.assertEqual(len(sync),1)
         self.assertEqual(json.loads(sync[0].kwargs["payload"]),payload)
-        self.assertEqual(json.loads(sync[0].kwargs["payload"])["dashboard"], "dh-system")
+        self.assertNotIn("dashboard", json.loads(sync[0].kwargs["payload"]))
         self.assertEqual(sync[0].kwargs["qos"],1)
         self.assertIs(sync[0].kwargs["retain"],True)
         client.publish.return_value.wait_for_publish.assert_not_called()
@@ -191,7 +191,7 @@ class SyncPublishTests(unittest.TestCase):
         self.assertEqual(len(sync),2)
         self.assertEqual([c.kwargs["payload"] for c in sync],
                          [sync[0].kwargs["payload"]]*2)
-        self.assertTrue(all(json.loads(c.kwargs["payload"])["dashboard"] == "dh-system"
+        self.assertTrue(all("dashboard" not in json.loads(c.kwargs["payload"])
                             for c in sync))
         self.assertEqual(client.subscribe.call_count,10)
         self.assertEqual(bridge.config.mqtt.keepalive_seconds,60)
@@ -205,7 +205,7 @@ class SyncPublishTests(unittest.TestCase):
         self.assertEqual(bridge.topics.sync,
                          "DigitalHouses/Global/digitalhouses_plex_agent/plex_guest/sync")
         self.assertEqual(json.loads(first[0].kwargs["payload"])["version"],"0.8.17")
-        self.assertEqual(json.loads(first[0].kwargs["payload"])["dashboard"],"dh-system")
+        self.assertNotIn("dashboard", json.loads(first[0].kwargs["payload"]))
         bridge._on_disconnect(client,None,SimpleNamespace(),"lost",None)
         # A normal agent upgrade restarts this process; simulate the resulting
         # next-connect payload without an actual installer or broker.
@@ -215,7 +215,7 @@ class SyncPublishTests(unittest.TestCase):
               if c.args and c.args[0]==bridge.topics.sync]
         self.assertEqual(len(sent),2)
         self.assertEqual(json.loads(sent[1].kwargs["payload"])["version"],"0.8.18")
-        self.assertEqual(json.loads(sent[1].kwargs["payload"])["dashboard"],"dh-system")
+        self.assertNotIn("dashboard", json.loads(sent[1].kwargs["payload"]))
         self.assertEqual(sent[1].kwargs["qos"],1)
         self.assertTrue(sent[1].kwargs["retain"])
 
