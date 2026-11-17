@@ -1,4 +1,4 @@
-"""DH Sync v1 MQTT source metadata; no changes to existing PVE topics."""
+"""DH Sync 0.6.0 MQTT source metadata; no changes to existing PVE topics."""
 import json
 from pathlib import Path
 from types import SimpleNamespace
@@ -118,7 +118,6 @@ def test_payload_schema_identity_from_registry_and_running_version():
         "version": version,
         "repository": "https://github.com/DigitalHouses/home-assistant-apps",
         "product_path": "digitalhouses_pve_agent",
-        "dashboard": "dh-system",
     }
     assert type(payload["schema"]) is int
     assert payload["schema"] == 1
@@ -150,7 +149,7 @@ def test_connect_and_reconnect_publish_one_retained_qos1_sync_message_each():
     assert first[0][2:] == (1, True)
     payload = json.loads(first[0][1])
     assert payload["version"] == "9.8.7"  # not copied from VERSION or example
-    assert payload["dashboard"] == "dh-system"
+    assert "dashboard" not in payload
     assert {key: payload[key] for key in (
         "schema", "product_id", "type", "version", "repository", "product_path"
     )} == {
@@ -163,7 +162,7 @@ def test_connect_and_reconnect_publish_one_retained_qos1_sync_message_each():
     }
     assert payload["product_id"] == topics.sync.split("/")[2]
     assert set(payload) == {
-        "schema", "product_id", "type", "version", "repository", "product_path", "dashboard"
+        "schema", "product_id", "type", "version", "repository", "product_path"
     }
     assert all(secret not in first[0][1] for secret in (
         "test_password", "test_user", "node_a", "localhost", "192.168",

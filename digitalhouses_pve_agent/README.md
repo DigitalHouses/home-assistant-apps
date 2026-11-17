@@ -8,7 +8,7 @@ Native Linux agent for **Proxmox VE 8.x** (previously verified) and **9.x** (req
 
 ## Native CLI and unattended installation (development source)
 
-The source tree implements the [DigitalHouses Linux Agent Management Standard](../docs/standards/DH_LINUX_AGENT_MANAGEMENT_STANDARD.md). Version 0.5.95 publishes the DH Sync Discovery v1 metadata with `dashboard: dh-system` on MQTT connect/reconnect; production installation requires the canonical released tag.
+The source tree implements the [DigitalHouses Linux Agent Management Standard](../docs/standards/DH_LINUX_AGENT_MANAGEMENT_STANDARD.md). The DH Sync 0.6.0 source contract publishes retained QoS 1 product identity without Dashboard placement on every successful MQTT connect/reconnect; installed agents receive code changes only through a subsequent release.
 
 Root/admin commands after installing a release that includes the feature:
 
@@ -49,10 +49,10 @@ The installed `/root/dh-pve-agent.txt` guide is mode `0600`. The existing MQTT D
 
 The canonical product and runtime identity is **DigitalHouses PVE Agent** / `digitalhouses_pve_agent`: systemd service `digitalhouses_pve_agent.service`, filesystem roots under `/opt/digitalhouses/digitalhouses_pve_agent`, `/etc/digitalhouses_pve_agent` and `/var/lib/digitalhouses_pve_agent`, MQTT base `DigitalHouses/Global/digitalhouses_pve_agent/<instance>`, and Home Assistant entity prefix `dh_pve_agent_*`. Version 0.5.30 performs the corrected one-time controlled migration from the former `dh_pve_app` / `dh_app_pve_*` runtime, including deterministic cleanup of retained data owned by the legacy MQTT instance namespace.
 
-Current source version: `VERSION` is `0.5.95`.
+Current source version: `VERSION` is `0.5.96`.
 Proxmox VE 9.0 RRD key prefixes for node/VM/storage are supported alongside the PVE 8 prefixes (see changelog 0.5.94). A physical PVE 9.2 installation still needs live acceptance testing.
 See [GMKtec K15 and PVE 8/9 acceptance checklist](docs/GMKTEC_K15_PVE8_PVE9.md) for exact DMI/EC read-only handling, regression requirements, and the remaining live-host verification.
-DH Sync v1 product source is announced as retained MQTT metadata at the existing instance ID under `/sync`; see [DH Sync Discovery v1](docs/DH_SYNC_DISCOVERY_V1.md). This metadata does not authorize dashboard installation.
+DH Sync 0.6.0 uses the existing instance-qualified retained MQTT `/sync` topic to identify the product and GitHub source only. Dashboard placement, order and access are controlled by DH Sync YAML; see [PVE Agent resources](docs/DH_SYNC_COMPATIBILITY.md) and the [developer standard](../docs/standards/DH_SYNC_DEVELOPER_STANDARD.md).
 Agent CPU self-monitoring (v0.5.88): Home Assistant sensor.dh_pve_agent_process_cpu_usage measures the agent process independently of the existing host CPU usage sensor, where 100% means one entire CPU core. binary_sensor.dh_pve_agent_cpu_overload has device_class: problem and becomes ON after strictly above 80% for 300 seconds, then OFF after strictly below 40% for 120 seconds. The condition is part of the existing PVE Problems aggregate. Measurement is performed every 10 seconds in the existing main loop (including while MQTT is disconnected), without new subprocesses. The local dh-pve-agent status reports the latest usage and overload state. MQTT connectivity remains necessary for Home Assistant to receive fresh readings.
 
 
@@ -295,22 +295,25 @@ machine event
 → direct action
 ```
 
-The PVE HA examples are:
+Canonical DH Sync 0.6.0 resources are:
 
-- `examples/packages/dh_pve_agent_package.yaml` — non-language helpers, Recorder and Logbook;
-- `examples/packages/dh_pve_agent_notification_local_package.yaml` — English local notification example;
-- `examples/packages/locales/ru/dh_pve_agent_notification_local_package.yaml` — portable Russian notification example (`persistent_notification.create`);
-- `examples/packages/locales/ru/dh_pve_agent_notification_write2admins.yaml` — optional DigitalHouses Russian admin-chat variant (`script.write2admins`), based on the deployed site notification contract.
+- `dashboards/ru/10_pve_proxmox.yaml` — Proxmox View, stable path `dh_pve_agent`;
+- `dashboards/ru/11_pve_ups.yaml` — UPS View, stable path `dh_pve_agent_ups`;
+- `packages/common/dh_pve_agent_package.yaml` — shared HA helpers, Recorder and Logbook;
+- `packages/locales/ru/dh_pve_agent_notification_local_package.yaml` — portable Russian notifications via `persistent_notification.create`.
 
-Install the base package and **exactly one** local notification package. The portable examples and the `write2admins` variant share the same package key and automation ID; never install them together. The admin-chat variant requires an existing Home Assistant `script.write2admins` accepting `title` and `message`. The script adds the home identifier itself, so the notification package must not hardcode a site name. The local package gives every user-visible situation its own `event.received` trigger and matching `trigger.id`, routes it through `choose`, and calls the delivery service directly. For example, `line_power_lost` is the exact place to edit the text shown when the UPS switches to battery, `line_power_restored` is the restore event, `boost_started` is the exact place for AVR Boost, and `cpu_throttling_started` or `storage_usage_high` are the exact places for those PVE alerts. The bundled text demonstrates the event-time context fields, such as UPS charge/runtime/load/input voltage or PVE temperature/frequency/threshold/free space.
+DH Sync installs the canonical Packages automatically. Do not manually install a duplicate notification package with the same automation ID. The source YAML and its optional header version are managed through GitHub; panel composition is managed only by DH Sync.
 
-The two portable notification examples use `persistent_notification.create`. The additional Russian admin-chat variant routes PVE/UPS notifications, including NFS failure and restoration, to `script.write2admins` without changing trigger IDs, title/message fields or the PVE Agent. A user may also replace the direct action in a portable example with any local `notify.*`, script or other Home Assistant service.
+Local-only examples remain available:
 
-Event data is read directly from `trigger.to_state.attributes`. The notification automation does not create another Home Assistant notification event and does not repeat the producer's machine-event schema validation.
+- `examples/packages/dh_pve_agent_package.yaml` — legacy manual shared package;
+- `examples/packages/dh_pve_agent_notification_local_package.yaml` — English local notifications;
+- `examples/packages/locales/ru/dh_pve_agent_notification_local_package.yaml` — Russian local notification reference;
+- `examples/packages/locales/ru/dh_pve_agent_notification_write2admins.yaml` — **opt-in site-specific** admin chat delivery requiring `script.write2admins`.
 
-Live events are transient. If Home Assistant is offline when an event occurs, that old event is not replayed as a new notification. Current state remains available through the product sensors and binary sensors.
+The admin-chat variant shares the canonical notification package key and automation ID. Use it only as a site-specific replacement, not alongside the canonical file. DH Sync never publishes files from `examples/`. The agent requires neither delivery variant to operate.
 
-When upgrading from 0.5.16 or earlier, remove the old `dh_pve_agent_notification_package.yaml` and any temporary delivery/adapter package before installing `dh_pve_agent_notification_local_package.yaml`. The standalone `dh_pve_agent_ui_package.yaml` remains obsolete because its helpers are already consolidated into `dh_pve_agent_package.yaml`.
+Event data is read directly from `trigger.to_state.attributes`. Events remain transient; states remain available through MQTT sensors. No legacy YAML migration is required.
 
 ## Product telemetry
 
@@ -468,7 +471,7 @@ Production install/update is release-tag only. Version 0.5.30 is the corrected c
 For the canonical runtime, install/update/reinstall never clears the current canonical MQTT namespace. Canonical retained MQTT cleanup is owned exclusively by the supported uninstaller.
 
 ```bash
-TAG=digitalhouses_pve_agent-v0.5.95
+TAG=digitalhouses_pve_agent-v0.5.96
 DIGITALHOUSES_SOURCE_REF="$TAG" \
   bash <(curl -fsSL "https://raw.githubusercontent.com/DigitalHouses/home-assistant-apps/$TAG/digitalhouses_pve_agent/install.sh")
 ```
