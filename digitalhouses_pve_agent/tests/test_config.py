@@ -109,6 +109,18 @@ enabled = true
     assert load_config(path).telemetry.enabled is True
 
 
+def test_existing_config_can_explicitly_keep_telemetry_disabled(tmp_path: Path):
+    path = write_config(
+        tmp_path,
+        """[mqtt]
+host = broker
+[telemetry]
+enabled = false
+""",
+    )
+    assert load_config(path).telemetry.enabled is False
+
+
 def test_telemetry_rejects_non_boolean_value(tmp_path: Path):
     path = write_config(
         tmp_path,
