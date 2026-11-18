@@ -75,7 +75,8 @@ def discovery(config: Config) -> dict:
         # Each datastore has its own stable metric key, no overwrites.
         arr = f"(value_json.datastores | selectattr('name', 'equalto', '{store}') | list | first | default({{}}))"
         sensor(f"datastore_{suffix}_used_percent", store + " used %", arr + ".used_percent | default('unknown', true)")
-        sensor(f"datastore_{suffix}_available_gib", store + " available GiB", f"(({arr}.available_bytes | float(0)) / 1073741824) | round(2)" if False else f"{arr}.available_bytes | default('unknown', true)")
+        sensor(f"datastore_{suffix}_available_gib", store + " available GiB",
+               f"(({arr}.available_bytes / 1073741824) | round(2)) if {arr}.available_bytes is defined else 'unknown'")
     catalog = {
         "backup": ["backup_failed", "backup_overdue", "backup_recovered", "service_unavailable", "service_recovered"],
         "sync": ["sync_failed", "sync_overdue", "sync_recovered"],
@@ -139,15 +140,21 @@ class Publisher:
             self.connected = False
             return
         self.connected = True
-        self._send(self.base + "/availability", "online", retain=True)
-        self._send(self.synctopic, {
+        # Network callbacks MUST NOT wait for PUBACK on their own I/O thread.
+        # paho queues these QoS1 publications; the client loop sends them.
+        def enqueue(topic: str, payload: dict | str) -> None:
+            if not isinstance(payload, str):
+                payload = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
+            client.publish(topic, payload=payload, qos=1, retain=True)
+        enqueue(self.base + "/availability", "online")
+        enqueue(self.synctopic, {
             "schema": 1, "product_id": PRODUCT_ID, "type": "agent",
             "version": _read_version(), "repository": REPO,
             "product_path": PRODUCT_ID,
-        }, retain=True)
-        self._send(self.discovery_topic, discovery(self.config), retain=True)
+        })
+        enqueue(self.discovery_topic, discovery(self.config))
         if self.last_state is not None:
-            self._send(self.base + "/state", self.last_state, retain=True)
+            enqueue(self.base + "/state", self.last_state)
 
     def _on_disconnect(self, client: Any, userdata: Any, flags: Any, reason_code: Any, properties: Any) -> None:
         self.connected = False
