@@ -168,7 +168,7 @@ def collect(config: Config, pbs: PBSClient | None = None, now: float | None = No
         "observed_at": stamp, "status": "UNAVAILABLE", "pbs_version": None,
         "datastores": [], "backups": [], "backup_sessions": {"active": None, "failed_tasks": [], "last_error": None}, "sync_jobs": [], "verify_jobs": [],
         "prune_jobs": [], "gc": [], "zfs": zfs_pools(),
-        "root_fs": root_filesystem(), "errors": [], "problems": [],
+        "root_fs": root_filesystem(), "filesystems": [], "errors": [], "problems": [],
         "summary": {},
     }
     problems = result["problems"]
@@ -184,6 +184,39 @@ def collect(config: Config, pbs: PBSClient | None = None, now: float | None = No
         return result
 
     statuses: list[str] = []
+    # Filesystem paths are from the official datastore configuration, not
+    # inferred from snapshot names. Deduplicate by filesystem device ID.
+    try:
+        config_rows = pbs.get("config/datastore")
+        if not isinstance(config_rows, list):
+            raise SourceError("PBS datastore config is not a list")
+        paths = {
+            str(row.get("name")): str(row["path"])
+            for row in config_rows
+            if isinstance(row, dict) and row.get("name") and isinstance(row.get("path"), str)
+        }
+        filesystems = {}
+        for path in ("/", *[paths.get(store) for store in config.datastores]):
+            if not path:
+                continue
+            if not Path(path).is_absolute():
+                raise SourceError("PBS datastore path is not absolute")
+            try:
+                device = os.stat(path).st_dev
+                vfs = os.statvfs(path)
+            except OSError as exc:
+                raise SourceError(f"filesystem unavailable at {path}") from exc
+            filesystems.setdefault(str(device), {
+                "mountpoint": path,
+                "total_bytes": int(vfs.f_blocks * vfs.f_frsize),
+                "used_bytes": int((vfs.f_blocks - vfs.f_bfree) * vfs.f_frsize),
+                "available_bytes": int(vfs.f_bavail * vfs.f_frsize),
+            })
+        result["filesystems"] = list(filesystems.values())
+    except SourceError as exc:
+        result["errors"].append(f"datastore filesystems: {exc}")
+        statuses.append("UNAVAILABLE")
+
     for store in config.datastores:
         try:
             info = _store_status(pbs, store, now)
