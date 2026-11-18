@@ -161,9 +161,11 @@ def status() -> int:
     print("DigitalHouses PBS Agent", _read_version())
     print("Hostname:", socket.gethostname())
     print("IP:", ip)
-    print("Systemd:", _service_state())
+    service = _service_state()
+    print("Systemd:", service)
     print("MQTT broker:", mqtt)
-    print("MQTT runtime:", runtime.get("mqtt", "unknown"))
+    print("MQTT runtime:", runtime.get("mqtt", "unknown") if service == "active" and not stale
+          else "UNKNOWN (offline or stale)")
     print("Last MQTT PUBACK:", runtime.get("mqtt_last_ack", "unknown"))
     print("PBS status:", runtime.get("status", "UNKNOWN"))
     print("Last collection:", observed or "unknown", "(STALE)" if stale else "(current)")
