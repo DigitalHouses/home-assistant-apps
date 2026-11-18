@@ -56,6 +56,8 @@ class FakePBS:
             return {"total": 1000, "used": self.used, "avail": 1000 - self.used}
         if path == "admin/datastore/pbs-home/snapshots":
             return self.snapshots
+        if path == "nodes/localhost/tasks":
+            return []
         if path == "admin/sync":
             return [{"id": "push-home", "sync-direction": "push",
                      "last-run-state": self.sync_status,
@@ -176,7 +178,7 @@ class PBSAgentTests(unittest.TestCase):
 
     def test_last_run_unknown_not_ok(self):
         self.assertEqual(last_run({})["status"], "NEVER_RUN")
-        self.assertEqual(last_run({"last-run-state": "garbled"})["status"], "FAILED")
+        self.assertEqual(last_run({"last-run-state": "garbled"})["status"], "UNKNOWN")
         self.assertIsNone(age_hours(self.now, None))
 
 
