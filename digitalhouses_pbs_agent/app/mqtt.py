@@ -55,7 +55,7 @@ def discovery(config: Config) -> dict:
     sensor("ip", "IP", "value_json.ip", icon="mdi:ip-network")
     sensor("version", "Version", "value_json.agent_version", icon="mdi:information-outline")
     sensor("health", "PBS health", "value_json.status", attributes=True)
-    sensor("last_collection", "Last collection", "value_json.observed_at", icon="mdi:clock-check-outline")
+    sensor("last_collection", "Last successful collection", "value_json.last_success_at | default('unknown', true)", icon="mdi:clock-check-outline")
     sensor("backup_last_success", "Last successful backup", "value_json.backup_last_success_at | default('unknown', true)")
     sensor("backup_age_hours", "Backup age", "value_json.backup_age_hours | default('unknown', true)")
     sensor("sync_state", "Push Sync", "value_json.sync_overall", icon="mdi:cloud-upload-outline")
