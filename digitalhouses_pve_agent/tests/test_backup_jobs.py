@@ -34,7 +34,8 @@ def test_guest_log_only_real_success():
 def test_missing_guest_is_not_ok():
     result, members = summarize_task(
         [100, 101], {"status": "stopped", "exitstatus": "OK"},
-        ["INFO: Finished Backup of VM 100 (00:00:02)"],
+        ["INFO: starting new backup job: vzdump 100 101 --mode snapshot",
+         "INFO: Finished Backup of VM 100 (00:00:02)"],
     )
     assert result == "PARTIAL"
     assert [item["status"] for item in members] == ["OK", "MISSING"]
