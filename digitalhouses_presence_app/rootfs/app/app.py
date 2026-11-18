@@ -30,6 +30,7 @@ from dh_presence.phone_removal import EMPTY, PhoneRemovalSelection, phone_remova
 from dh_presence.phone_tree import registered_phones_tree
 from dh_presence.router import poll_router_trackers
 from dh_presence.ui import start_ingress_ui
+from telemetry import TelemetryClient, TelemetryRunner, TelemetryStateError
 
 LOG = logging.getLogger("dh_presence_app")
 OPTIONS = "/data/options.json"
@@ -636,8 +637,20 @@ def run():
     LOG.info("Starting %s version %s mode=%s residents=%d Wi-Fi source=HA router tracker",
              "DigitalHouses Presence App", version, engine.mode.value,
              len(engine.residents))
+    telemetry_runner = None
     if options["telemetry_enabled"]:
-        LOG.warning("Experimental pilot: telemetry_enabled=true, but there is no telemetry sender; no statistics are transmitted.")
+        try:
+            telemetry_runner = TelemetryRunner(
+                TelemetryClient(version=version, enabled=True)
+            )
+            telemetry_runner.start()
+            LOG.info("Opt-in DigitalHouses telemetry enabled (protocol v1, 24h cadence)")
+        except (OSError, TelemetryStateError, ValueError) as exc:
+            # Never block household presence or notification delivery due to statistics.
+            LOG.warning("Telemetry initialization failed; presence continues: %s", type(exc).__name__)
+            telemetry_runner = None
+    else:
+        LOG.info("DigitalHouses telemetry disabled by operator; presence remains active")
     if not engine.residents:
         LOG.info("No residents registered yet; use the DH Presence Ingress UI on a local phone")
     try:
@@ -949,6 +962,8 @@ def run():
                 WAKE.wait(min(options["gps_poll_interval_seconds"],
                               5 if operations.state == "success" else options["gps_poll_interval_seconds"]))
     finally:
+        if telemetry_runner is not None:
+            telemetry_runner.stop()
         mqtt_out.stop()
         ingress.shutdown()
         ingress.server_close()
