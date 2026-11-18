@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.32 (staged; not publicly released)
+
+- Add a network-failure-isolated HTTPS telemetry client (wire schema 1, telemetry policy 2) using the canonical `digitalhouses_network_app` product identifier; never send local device data, IP addresses, network inventory or MQTT credentials.
+- Store a persistent per-installation UUIDv4 and secret token in `/data/telemetry.json` only after affirmative consent; retain identity through restart/update, report at approximately daily intervals with jitter/backoff, and support authenticated deletion plus identity rotation.
+- Add the standard `telemetry_enabled: false` Home Assistant App consent control with localized policy disclosure. Policy-v2 requires stopping the application when consent is absent. **This is a breaking change for existing installs**, so this candidate MUST remain a draft and MUST NOT be rolled out until the project completes its legal/privacy gate and approves a migration procedure that protects existing monitoring.
+- Prepare Network App for the DH Stats allowlist. Enrollment on the live server also requires deployment of the updated registry by the Stats owners.
+- Preserve the existing MQTT DH Sync source, Network UI, discovery and machine-event contract when the application has been activated.
+
 ## 0.1.31
 
 - Announce DigitalHouses Network App to DH Sync 0.6.0 using retained QoS 1 MQTT `DigitalHouses/Global/digitalhouses_network_app/sync` after every successful broker connect/reconnect. The payload carries only canonical product identity, running version and the GitHub resource source; no Dashboard/View placement, credentials, home IPs or availability checks.
