@@ -33,11 +33,14 @@ def last_run(row: dict) -> dict:
     if raw is None:
         status = "UNKNOWN" if row.get("last-run-upid") else "NEVER_RUN"
     elif isinstance(raw, str):
-        status = "OK" if raw.lower() == "ok" else "FAILED"
+        lowered = raw.lower()
+        status = "OK" if lowered == "ok" else (
+            "FAILED" if lowered.startswith(("error", "failed")) else "UNKNOWN"
+        )
     elif isinstance(raw, dict):
         kind = raw.get("status") or raw.get("state")
         status = "OK" if isinstance(kind, str) and kind.lower() == "ok" else (
-            "FAILED" if isinstance(kind, str) and kind.lower() in ("error", "failed") else "UNKNOWN"
+            "FAILED" if isinstance(kind, str) and kind.lower().startswith(("error", "failed")) else "UNKNOWN"
         )
     else:
         status = "UNKNOWN"
@@ -324,6 +327,14 @@ def collect(config: Config, pbs: PBSClient | None = None, now: float | None = No
             result["sync_jobs"].append({"id": rule.job_id, "status": "NOT_CONFIGURED",
                                         "max_age_hours": rule.max_age_hours})
             statuses.append("CRITICAL")
+            problems.append({
+                "key": f"sync_overdue:{rule.job_id}", "type": "sync_overdue",
+                "category": "sync",
+                "facts": {
+                    "job_id": rule.job_id, "age_hours": None,
+                    "threshold_hours": rule.max_age_hours, "reason_code": "not_configured",
+                },
+            })
             continue
         item["max_age_hours"] = rule.max_age_hours
         ts = item.get("last_run_timestamp") if item["status"] == "OK" else None
