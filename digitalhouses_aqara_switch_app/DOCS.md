@@ -58,8 +58,12 @@ Mode Keeper, Maintenance Mode, user-confirmed deletion links, assign-binding
 UI and successful button → virtual-light end-to-end must be implemented later.
 Do not enable a second physical controller until QA and explicit cutover.
 
-Telemetry and immutable GHCR release are still blocked by the product
-privacy/release contracts. No telemetry is transmitted in this pilot.
+Version 0.1.18 adds explicit `telemetry_enabled: false` by default, an opt-in
+minimal HTTPS telemetry heartbeat, persistent installation ID/token and
+an authenticated deletion path. Disabling consent never transmits data and
+preserves existing live light controls during the legal/safety migration.
+The normal product release uses an immutable GHCR image. Public mandatory
+policy-v2 activation remains subject to separate legal clearance.
 
 ## Полевые уроки и аварийное восстановление
 

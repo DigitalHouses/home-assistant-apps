@@ -34,6 +34,7 @@ from .mqtt_ui import (
 )
 from .scan import scan_once
 from .supervisor import SupervisorOptions
+from .telemetry import TelemetryClient, TelemetryRunner
 
 LOG = logging.getLogger(__name__)
 _IEEE = re.compile(r"^0x[0-9a-f]{16}$")
@@ -126,6 +127,13 @@ class Application:
         options_snapshot = self.options.read()
         self.config = parse_configuration(options_snapshot)
         self.globals = global_policy(options_snapshot)
+        # Staged migration: existing lighting controls continue with the new
+        # HAOS telemetry switch unset/false. No identity or network request
+        # is created without explicit opt-in.
+        self.telemetry = (TelemetryClient(enabled=True, version=self.version)
+                          if options_snapshot.get('telemetry_enabled') is True else None)
+        self.telemetry_runner = (TelemetryRunner(self.telemetry)
+                                 if self.telemetry is not None else None)
         self._previous = _load_previous(last_scan_path)
         self._previous_path = last_scan_path
         self._stop = threading.Event()
@@ -301,7 +309,7 @@ class Application:
             self._ha_shadows.clear()
             self._light_observed_at.clear()
             self._light_probe_at.clear()
-        for topic in (*_FILTERS, SCAN_REQUEST, "homeassistant/status"):
+        for topic in (*_FILTERS, SCAN_REQUEST, ROOT + "/command/delete_telemetry", "homeassistant/status"):
             self._subscribe(topic)
         self._publish(AVAILABILITY, "online")
         self._publish(SYNC_TOPIC, sync_payload(self.version))
@@ -323,6 +331,12 @@ class Application:
 
     def _on_message(self, client, userdata, message):
         del client, userdata
+        if message.topic == ROOT + "/command/delete_telemetry":
+            if (self.telemetry is not None and not message.retain
+                    and bytes(message.payload) == b"DELETE"):
+                threading.Thread(target=self._delete_telemetry, daemon=True,
+                                 name="dh-aqara-telemetry-delete").start()
+            return
         if message.topic == SCAN_REQUEST:
             # No startup scan; no retained command replay.
             if not message.retain and bytes(message.payload) == b"SCAN":
@@ -775,6 +789,13 @@ class Application:
             self._publish_card()
             self._scan_lock.release()
 
+    def _delete_telemetry(self) -> None:
+        if self.telemetry is not None:
+            if self.telemetry.delete():
+                LOG.info("Aqara telemetry installation and history deleted; identity rotated")
+            else:
+                LOG.warning("Aqara telemetry deletion failed")
+
     def run(self) -> None:
         host, port = os.environ["MQTT_HOST"], int(os.environ["MQTT_PORT"])
         LOG.info("Starting Aqara MQTT input, Mode Keeper and direct MQTT lights %s", self.version)
@@ -784,5 +805,14 @@ class Application:
                          name="dh-aqara-mode-keeper").start()
         threading.Thread(target=self._run_light_probes, daemon=True,
                          name="dh-aqara-light-state-probes").start()
-        self.client.connect(host, port, keepalive=60)
-        self.client.loop_forever(retry_first_connection=True)
+        if self.telemetry_runner is None:
+            LOG.info('DigitalHouses telemetry disabled (consent not enabled); '
+                     'legacy lighting runtime remains active during migration')
+        else:
+            self.telemetry_runner.start()
+        try:
+            self.client.connect(host, port, keepalive=60)
+            self.client.loop_forever(retry_first_connection=True)
+        finally:
+            if self.telemetry_runner is not None:
+                self.telemetry_runner.stop()
