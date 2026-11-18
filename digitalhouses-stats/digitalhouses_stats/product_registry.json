@@ -150,7 +150,7 @@
       "type": "app",
       "entity_prefix": "dh_network_app",
       "display_name": "Network App",
-      "telemetry_allowed": false,
+      "telemetry_allowed": true,
       "release": null,
       "repository_directory": "digitalhouses_network_app",
       "haos_slug": "digitalhouses_network_app"
