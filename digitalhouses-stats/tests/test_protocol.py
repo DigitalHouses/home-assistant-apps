@@ -104,6 +104,18 @@ def test_product_registry_is_complete_and_drives_allowlist() -> None:
     }
 
 
+def test_heartbeat_payload_accepts_dh_sync_policy_v2() -> None:
+    payload = HeartbeatPayload(
+        schema=1,
+        telemetry_policy_version=2,
+        installation_id=uuid.uuid4(),
+        product="digitalhouses_sync_app",
+        version="0.6.2",
+    )
+    assert payload.product == "digitalhouses_sync_app"
+    assert payload.telemetry_policy_version == 2
+
+
 def test_heartbeat_payload_accepts_backblaze_app() -> None:
     payload = HeartbeatPayload(
         schema=1,
