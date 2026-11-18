@@ -11,7 +11,7 @@ import yaml
 
 from app import Application
 from zigbee_monitor import ActivityStore, ZigbeeMonitor, parse_networks
-from zigbee_monitor.discovery import PRODUCT, SYNC_TOPIC
+from zigbee_monitor.discovery import PRODUCT, ROOT, SYNC_TOPIC
 from zigbee_monitor.service import MonitorService
 
 APP_DIR = Path(__file__).resolve().parents[1]
@@ -45,6 +45,7 @@ class DHSyncContractTests(unittest.TestCase):
                     for topic, payload, retain in publications
                     if topic == SYNC_TOPIC]
             self.assertEqual(SYNC_TOPIC, "DigitalHouses/Global/" + PRODUCT + "/sync")
+            self.assertEqual(ROOT, "DigitalHouses/Global/dh_zigbee_monitor_app")
             self.assertEqual(len(sync), 2)
             expected = {
                 "schema": 1,
