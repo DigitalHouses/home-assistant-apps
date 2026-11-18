@@ -28,6 +28,7 @@ options:
   mdns_interval_seconds: 300
   ssdp_interval_seconds: 300
   wsd_interval_seconds: 300
+  telemetry_enabled: false
 schema:
   poll_interval_seconds: int(15,3600)
   scan_interval_seconds: int(60,3600)
