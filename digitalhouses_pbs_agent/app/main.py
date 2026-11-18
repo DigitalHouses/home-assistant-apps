@@ -87,9 +87,24 @@ def run(config_path: Path = DEFAULT_CONFIG, state_dir: Path = STATE_DIR) -> int:
                 })
             except Exception as exc:
                 LOG.exception("PBS collection failed")
+                observed = datetime.now(timezone.utc).isoformat()
+                # Never leave an old retained green state after a collector
+                # crash: publish explicit unavailability instead.
+                unavailable = {
+                    "observed_at": observed, "status": "UNAVAILABLE",
+                    "hostname": __import__("socket").gethostname(),
+                    "ip": ip or "unknown", "agent_version": _read_version(),
+                    "pbs_version": None, "datastores": [], "backups": [],
+                    "sync_jobs": [], "verify_jobs": [], "prune_jobs": [],
+                    "gc": [], "zfs": {"status": "UNKNOWN", "pools": []},
+                    "summary": {}, "errors": [f"{type(exc).__name__}: {str(exc)[:160]}"],
+                    "backup_last_success_at": None, "backup_age_hours": None,
+                    "sync_overall": "UNKNOWN", "sync_last_success_at": None,
+                }
+                publisher.state(unavailable)
                 current_status.save({
-                    "observed_at": datetime.now(timezone.utc).isoformat(),
-                    "status": "UNAVAILABLE", "mqtt": "CONNECTED" if publisher.connected else "DISCONNECTED",
+                    "observed_at": observed, "status": "UNAVAILABLE",
+                    "mqtt": "CONNECTED" if publisher.connected else "DISCONNECTED",
                     "error": f"{type(exc).__name__}: {str(exc)[:160]}",
                 })
             elapsed = time.monotonic() - started
