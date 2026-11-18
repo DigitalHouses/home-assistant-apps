@@ -38,13 +38,12 @@ class LovelaceCardTests(unittest.TestCase):
     def test_canonical_sync_view_preserves_existing_sections_and_path(self):
         content = CANONICAL_VIEW.read_text(encoding="utf-8")
         self.assertTrue(content.startswith(
-            "# DH-View-Version: 1.0.0\\n# DH-View-Date: 2026-11-18\\n".replace("\\\\n", "\\n")))
-        view = "\\n".join(content.splitlines()[2:]) + "\\n"
+            "# DH-View-Version: 1.0.0\n# DH-View-Date: 2026-11-18\n"))
+        view = "\n".join(content.splitlines()[2:]) + "\n"
         self.assertEqual(view, DASHBOARD.read_text(encoding="utf-8"))
-        self.assertEqual(content.count("\\npath: presence\\n"), 1)
-        self.assertIn("\\ntype: sections\\n", content)
+        self.assertEqual(content.count("\npath: presence\n"), 1)
+        self.assertIn("\ntype: sections\n", content)
         self.assertNotIn("dh_dashboard_admin_only", content.lower())
-
 
     def test_native_supervisor_update_is_reflected_in_primary_status(self):
         """Only Supervisor can authorize installing an App update."""
