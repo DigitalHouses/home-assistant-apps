@@ -154,10 +154,14 @@ def summarize_task(
     unknowns = sum(item["status"] in ("UNKNOWN", "RUNNING") for item in details)
     if failures:
         return ("PARTIAL" if successes else "FAILED"), details
+    # PVE task exit status proves job failure even when its log is missing.
+    # It does NOT prove failure/success for any individual VMID.
+    if isinstance(exitstatus, str) and exitstatus != "OK":
+        return ("PARTIAL" if successes else "FAILED"), details
     if unknowns or not expected or any(item["status"] == "SKIPPED" for item in details):
         return "UNKNOWN", details
     if exitstatus != "OK":
-        return "FAILED", details
+        return "UNKNOWN", details
     return "OK", details
 
 
