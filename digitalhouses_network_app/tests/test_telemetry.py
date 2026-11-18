@@ -172,6 +172,31 @@ class TestTelemetry(unittest.TestCase):
             self.assertFalse(client.tick())
             self.assertEqual(transport.calls, [])
 
+    def test_launcher_guards_core_runtime_before_start(self):
+        launcher = (APP / "rootfs" / "run.sh").read_text(encoding="utf-8")
+        self.assertIn("bashio::config.true 'telemetry_enabled'", launcher)
+        self.assertIn("Statistics collection consent not granted. Stopping application.", launcher)
+        self.assertLess(launcher.index("bashio::config.true 'telemetry_enabled'"),
+                        launcher.index("python3 /app/mqtt_events.py &"))
+        self.assertLess(launcher.index("bashio::config.true 'telemetry_enabled'"),
+                        launcher.index("exec /usr/local/bin/dh-network"))
+        self.assertIn("python3 /app/telemetry.py &", launcher)
+
+    def test_app_consent_and_stats_registry_are_explicit(self):
+        cfg = (APP / "config.yaml").read_text(encoding="utf-8")
+        self.assertIn("telemetry_enabled: false", cfg)
+        self.assertIn("telemetry_enabled: bool", cfg)
+        repo = APP.parent
+        registry = json.loads((repo / "digitalhouses-stats" /
+                               "digitalhouses_stats" / "product_registry.json").read_text(encoding="utf-8"))
+        product = next(x for x in registry["products"]
+                       if x["id"] == "digitalhouses_network_app")
+        self.assertIs(product["telemetry_allowed"], True)
+        for language in ("ru", "en"):
+            loc = (APP / "translations" / f"{language}.yaml").read_text(encoding="utf-8")
+            self.assertIn("PRODUCT_TELEMETRY_POLICY.md", loc)
+            self.assertIn("telemetry_enabled:", loc)
+
 
 if __name__ == "__main__":
     unittest.main()
