@@ -1,5 +1,13 @@
 # Changelog — DigitalHouses Aqara Switch App
 
+## 0.1.18
+
+- Add explicit opt-in DigitalHouses Stats protocol-v1/policy-v2 telemetry: HTTPS heartbeat on initial activation and approximately daily thereafter, persistent pseudonymous installation identity/token in `/data/telemetry.json`, authenticated history deletion with identity rotation, retry backoff and network-error isolation.
+- Send only product ID, running release version and random UUID. Country is derived by the server, not sent by the App. Never transmit Zigbee inventory, MQTT devices, HA identity, switches, actions, customer data or secrets.
+- Add HAOS `telemetry_enabled: false` consent option with English/Russian disclosure and public policy link. During the safety-gated transition, previously installed Aqara lighting control continues working when consent has not been accepted; no installation identity or outbound telemetry is created until consent is enabled.
+- Admit Aqara product to the DigitalHouses Stats allowlist; the Stats host must deploy the updated registry for ingestion. DH Sync discovery and physical switching remain unchanged.
+- Add tests for consent, persistence, single heartbeat per interval, upgrade version, deletion, invalid stored credentials and MQTT command safety.
+
 ## 0.1.17
 
 DH Sync 0.6.0 publication:

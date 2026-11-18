@@ -1,4 +1,7 @@
 configuration:
+  telemetry_enabled:
+    name: Статистика DigitalHouses
+    description: "Согласие на передачу статистики (название приложения, версия, случайный идентификатор установки). https://github.com/DigitalHouses/home-assistant-apps/blob/main/docs/standards/PRODUCT_TELEMETRY_POLICY.md"
   log_level:
     name: Уровень журнала
     description: Подробность журнала приложения.

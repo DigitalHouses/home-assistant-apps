@@ -1,6 +1,6 @@
 # DigitalHouses Aqara Switch App
 
-**v0.1.17 — DH Sync 0.6.0 resource publication; light-control behavior unchanged.**
+**v0.1.18 — DigitalHouses Stats telemetry with explicit consent; light-control behavior unchanged.**
 
 This Home Assistant App supports the commissioning flow for Aqara wired switches,
 battery buttons and key panels. It is not a general automation engine. This MVP scans and adopts Aqara
@@ -458,8 +458,27 @@ The LAB package contains no physical relay control and is independent of this Ap
 
 ## Safety and release
 
-Product telemetry remains unadmitted (`telemetry_allowed=false`). This
-release provides an immutable GHCR image for installation through the
+As of v0.1.18, optional DigitalHouses Stats telemetry is available only when
+`telemetry_enabled: true` is explicitly set in HAOS App Options. The new switch
+defaults to false; upgrading existing lighting deployments does not silently
+stop switch control. No telemetry ID or token is created while disabled. When
+accepted, the App creates a persistent pseudonymous UUID/token in
+`/data/telemetry.json` and sends a minimal HTTPS heartbeat to
+`https://telemetry.digitalhouses.vip` on activation and approximately daily:
+`product`, `version`, `installation_id`, `schema` and
+`telemetry_policy_version`. No Zigbee or HA installation details are sent;
+country is derived by the Stats server. Server network errors do not interrupt
+light control. The token is never part of a payload or log.
+
+[Telemetry/privacy policy](../docs/standards/PRODUCT_TELEMETRY_POLICY.md).
+To delete this installation's telemetry history (and rotate its identity), an
+administrator may send non-retained MQTT payload `DELETE` to
+`DigitalHouses/Global/dh_aqara_switch_app/command/delete_telemetry`.
+The public policy-v2 mandatory-activation gate remains a separately controlled
+legal/safety migration: existing Aqara lighting must not be unexpectedly shut
+down before consent acceptance and rollout clearance.
+
+The release provides an immutable GHCR image for installation through the
 DigitalHouses Home Assistant App Store. Installation/Scan does not imply
 physical actuator acceptance. The live Aqara button and MQTT
 configuration must be inspected during on-site testing.
