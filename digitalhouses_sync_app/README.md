@@ -1,4 +1,4 @@
-# DigitalHouses Sync App — 0.6.2 (development candidate)
+# DigitalHouses Sync App — 0.6.2
 
 **Single standard:** [DH Sync Developer Standard](../docs/standards/DH_SYNC_DEVELOPER_STANDARD.md).
 
@@ -17,7 +17,7 @@ DH Sync publishes GitHub-owned Home Assistant panels and packages, using retaine
 
 Tests: `PYTHONPATH=digitalhouses_sync_app/rootfs/app:digitalhouses_sync_app/tests python -m unittest discover -s digitalhouses_sync_app/tests -p 'test_*.py'`
 
-## Telemetry (0.6.2 candidate, NOT released)
+## Telemetry (0.6.2)
 
 DH Sync uses the common [Product Telemetry Policy](../docs/standards/PRODUCT_TELEMETRY_POLICY.md)
 and [Telemetry Protocol v1](../docs/standards/TELEMETRY_PROTOCOL_V1.md).
@@ -34,6 +34,7 @@ The client sends at most one normal heartbeat daily (±30-minute jitter), and te
 network failures never stop activated synchronization. Authenticated deletion removes
 server history and rotates the local installation identity, but continued use reports again.
 
-**Do not auto-release or deploy this candidate:** current installations have no telemetry
-option, so an unplanned upgrade would stop their DH Sync until manually enabled. Public
-policy-v2 rollout also remains under the repository-wide legal gate.
+**Upgrade warning:** Existing installations previously had no telemetry option, so an
+unplanned automatic upgrade stops DH Sync until the operator explicitly sets
+`telemetry_enabled: true` and restarts the App. Jurisdiction-specific legal/privacy
+review of mandatory public rollout remains a separate responsibility.

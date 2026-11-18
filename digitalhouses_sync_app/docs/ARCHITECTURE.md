@@ -1,4 +1,4 @@
-# DH Sync 0.6.2 (development candidate) — Current architecture
+# DH Sync 0.6.2 — Current architecture
 
 Authoritative standard: [DH Sync Developer Standard](../../docs/standards/DH_SYNC_DEVELOPER_STANDARD.md).
 
