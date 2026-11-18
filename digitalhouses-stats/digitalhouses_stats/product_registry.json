@@ -109,7 +109,11 @@
       "entity_prefix": "dh_presence_app",
       "display_name": "Presence App",
       "telemetry_allowed": false,
-      "release": null,
+      "release": {
+        "title": "DigitalHouses Presence App",
+        "version_source": "haos_config",
+        "policy_baseline": "0.1.38"
+      },
       "repository_directory": "digitalhouses_presence_app",
       "haos_slug": "digitalhouses_presence_app"
     },
