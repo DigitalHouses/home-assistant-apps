@@ -2,12 +2,16 @@
 from __future__ import annotations
 
 import importlib.util
+import json
+import threading
 import sqlite3
 import sys
 import tempfile
 import unittest
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import Mock
 
 ROOT = Path(__file__).resolve().parents[1] / "rootfs/app/mqtt_events.py"
 sys.path.insert(0, str(ROOT.parent))
@@ -17,6 +21,48 @@ events = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(events)
 
 class TestMQTTEventContract(unittest.TestCase):
+    def test_dh_sync_source_payload_uses_runtime_version(self):
+        expected = {
+            "schema": 1,
+            "product_id": "digitalhouses_network_app",
+            "type": "app",
+            "version": "0.1.30",
+            "repository": "https://github.com/DigitalHouses/home-assistant-apps",
+            "product_path": "digitalhouses_network_app",
+        }
+        self.assertEqual(events.SYNC_TOPIC, "DigitalHouses/Global/digitalhouses_network_app/sync")
+        self.assertEqual(json.loads(events.sync_payload("0.1.30")), expected)
+        self.assertEqual(json.loads(events.sync_payload("9.8.7"))["version"], "9.8.7")
+        self.assertEqual(set(json.loads(events.sync_payload("9.8.7"))), set(expected))
+        for forbidden in ("dashboard", "panel", "view", "order", "availability",
+                          "password", "token", "ip", "hostname"):
+            self.assertNotIn(forbidden, json.loads(events.sync_payload("9.8.7")))
+
+    def test_dh_sync_published_on_successful_connect_and_reconnect_only(self):
+        # Bypass the real broker: exercise the actual callback with a fake client.
+        worker = events.MQTTEvents.__new__(events.MQTTEvents)
+        worker.connected = threading.Event()
+        worker.connection_epoch = 0
+        worker.version = "0.1.30"
+        worker.started = "2026-11-18T00:00:00Z"
+        client = Mock()
+        worker.client = client
+
+        worker.on_connect(client, None, None, 0)
+        worker.on_disconnect()
+        worker.on_connect(client, None, None, 0)
+        worker.on_connect(client, None, None, 5)  # rejected connect
+        worker.on_message(client, None, SimpleNamespace(
+            topic="homeassistant/status", payload=b"online"))
+        calls = [item for item in client.publish.call_args_list
+                 if item.args and item.args[0] == events.SYNC_TOPIC]
+        self.assertEqual(len(calls), 2)
+        for item in calls:
+            self.assertEqual(item.kwargs, {"qos": 1, "retain": True})
+            self.assertEqual(json.loads(item.args[1]), json.loads(events.sync_payload(worker.version)))
+        self.assertEqual(worker.connection_epoch, 2)
+        self.assertFalse(worker.connected.is_set())
+
     def test_machine_payload_has_no_localized_presentation(self):
         conn = sqlite3.connect(":memory:")
         conn.row_factory = sqlite3.Row
