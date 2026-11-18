@@ -52,6 +52,8 @@ class FakePBS:
     def get(self, path, **params):
         if path == "version":
             return {"version": "4.2.11"}
+        if path == "config/datastore":
+            return [{"name": "pbs-home", "path": "/"}]
         if path == "admin/datastore/pbs-home/status":
             return {"total": 1000, "used": self.used, "avail": 1000 - self.used}
         if path == "admin/datastore/pbs-home/snapshots":
