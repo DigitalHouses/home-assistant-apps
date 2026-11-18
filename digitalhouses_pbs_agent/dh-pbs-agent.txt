@@ -1,0 +1,12 @@
+DIGITALHOUSES PBS AGENT
+/usr/local/bin/dh-pbs-agent status
+/usr/local/bin/dh-pbs-agent update
+/usr/local/bin/dh-pbs-agent restart
+/usr/local/bin/dh-pbs-agent help
+cat /etc/digitalhouses_pbs_agent/digitalhouses_pbs_agent.conf
+/usr/local/bin/dh-pbs-agent set mqtt_host=127.0.0.1
+/usr/local/bin/dh-pbs-agent set mqtt_port=1883
+/usr/local/bin/dh-pbs-agent set log_level=info
+/usr/local/bin/dh-pbs-agent set mqtt_host=127.0.0.1 mqtt_port=1883
+WARNING: native INI may contain MQTT credentials; keep private.
+Full reference: https://github.com/DigitalHouses/home-assistant-apps/tree/main/digitalhouses_pbs_agent
