@@ -29,11 +29,27 @@ except ImportError:
 ROOT = "DigitalHouses/Global/dh_network_app"
 AVAILABILITY = ROOT + "/availability"
 EVENT_TOPIC = ROOT + "/event"
+# DH Sync source identity is canonical; legacy MQTT Event topics remain stable.
+SYNC_TOPIC = "DigitalHouses/Global/digitalhouses_network_app/sync"
+SYNC_REPOSITORY = "https://github.com/DigitalHouses/home-assistant-apps"
+SYNC_PRODUCT_PATH = "digitalhouses_network_app"
 DISCOVERY = "homeassistant"
 POLL_INTERVAL_SECONDS = 4
 ENRICHMENT_DELAY_SECONDS = 12
 DB = Path(os.environ.get("DH_DB", "/data/network.sqlite3"))
 LOG = logging.getLogger("dh_network_app.mqtt")
+
+def sync_payload(version: str) -> str:
+    """Retained DH Sync 0.6.0 source identity; no panel or HA availability data."""
+    return json.dumps({
+        "schema": 1,
+        "product_id": "digitalhouses_network_app",
+        "type": "app",
+        "version": version,
+        "repository": SYNC_REPOSITORY,
+        "product_path": SYNC_PRODUCT_PATH,
+    }, separators=(",", ":"))
+
 
 def parse_utc(value: str) -> datetime:
     return datetime.fromisoformat(value.replace("Z", "+00:00")).astimezone(timezone.utc)
@@ -178,6 +194,7 @@ class MQTTEvents:
         self.connection_epoch += 1
         self.connected.set()
         client.subscribe("homeassistant/status", qos=1)
+        client.publish(SYNC_TOPIC, sync_payload(self.version), qos=1, retain=True)
         self.publish_discovery()
         LOG.info("MQTT Discovery registered; event transport QoS=1 retain=false")
 
