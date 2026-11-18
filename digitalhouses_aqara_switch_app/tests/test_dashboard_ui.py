@@ -3,10 +3,26 @@ from pathlib import Path
 import unittest
 import yaml
 
-ROOT = Path(__file__).resolve().parents[1] / "examples" / "lovelace"
+APP = Path(__file__).resolve().parents[1]
+ROOT = APP / "examples" / "lovelace"
+CANONICAL_VIEW = APP / "dashboards" / "ru" / "aqara.yaml"
 
 
 class DashboardTests(unittest.TestCase):
+    def test_dh_sync_canonical_view_is_standalone_and_matches_example(self):
+        canonical = yaml.safe_load(CANONICAL_VIEW.read_text(encoding="utf-8"))
+        example = yaml.safe_load(
+            (ROOT / "dh_aqara_switch_app_view_ru.yaml").read_text(encoding="utf-8")
+        )
+        self.assertEqual(canonical, example)
+        self.assertEqual(canonical["title"], "aqara")
+        self.assertEqual(canonical["path"], "aqara")
+        self.assertEqual(canonical["type"], "sections")
+        self.assertIsInstance(canonical["sections"], list)
+        self.assertNotIn("views", canonical)
+        self.assertNotIn("dashboard", canonical)
+        self.assertNotIn("DH-Dashboard", CANONICAL_VIEW.read_text(encoding="utf-8"))
+
     def test_single_view_matches_operator_view_and_pve_layout(self):
         dashboard = yaml.safe_load((ROOT / "dh_aqara_switch_app_dashboard_ru.yaml").read_text())
         standalone = yaml.safe_load((ROOT / "dh_aqara_switch_app_view_ru.yaml").read_text())
