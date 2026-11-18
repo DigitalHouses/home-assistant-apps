@@ -156,6 +156,41 @@ def test_missing_without_execution_manifest_remains_unknown():
     assert members[1]["status"] == "UNKNOWN"
 
 
+def test_job_missed_and_recovered_on_new_completed_execution(tmp_path):
+    fake = FakePve()
+    fake.logs = [
+        "INFO: Finished Backup of VM 100 (00:00:01)",
+        "INFO: Finished Backup of VM 101 (00:00:01)",
+    ]
+    clock = [1711002000.0]
+    due = 1711002100
+    fake.jobs[0]["next-run"] = due
+    monitor_instance = PveBackupMonitor(
+        StateStore(tmp_path / "backup.json"), runner=fake,
+        node="pve", now=lambda: clock[0], grace_seconds=60,
+        excluded_vmids=(2223,), jobstate_dir=tmp_path,
+    )
+    state, events = monitor_instance.scan()
+    assert state["jobs"][0]["status"] == "OK"
+    assert not any(e["event_type"] == "backup_job_missed" for e in events)
+
+    clock[0] = due + 120.0
+    state, events = monitor_instance.scan()
+    assert state["jobs"][0]["status"] == "MISSED"
+    assert [e["event_type"] for e in events] == ["backup_job_missed"]
+    assert monitor_instance.scan()[1] == []
+
+    new_start = int(clock[0] + 10)
+    fake.upid = f"UPID:pve:00000001:00000002:{new_start:08X}:vzdump::root@pam:"
+    fake.jobs[0]["last-run-upid"] = fake.upid
+    fake.jobs[0]["next-run"] = due + 86400
+    clock[0] += 20
+    state, events = monitor_instance.scan()
+    assert state["jobs"][0]["status"] == "OK"
+    assert any(e["event_type"] == "backup_job_recovered" for e in events)
+    assert monitor_instance.scan()[1] == []
+
+
 def test_api_failure_unavailable_not_healthy(tmp_path):
     def failing(_argv):
         raise OSError("API unavailable")
