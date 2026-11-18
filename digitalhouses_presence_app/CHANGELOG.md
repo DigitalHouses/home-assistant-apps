@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.1.39 — DH Sync 0.6.0 publication
+## 0.1.39
 
 - Enable official release delivery through the canonical version-pinned GHCR image, replacing local-only Supervisor builds; retain the experimental stage and existing privileges. No migration of App data or entity identities.
 - The existing Paho MQTT client publishes a retained QoS 1 `DigitalHouses/Global/digitalhouses_presence_app/sync` announcement on each successful connection and reconnection, using the runtime App version and the canonical GitHub product path. This does not change the existing operational `dh_presence_app` MQTT topics or discovery entities.
