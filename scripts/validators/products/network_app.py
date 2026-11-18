@@ -43,6 +43,17 @@ def validate_network(root: Path, app: Path, context: dict) -> None:
         fail("WSD interval must default to 300 seconds")
     if config.get("services") != ["mqtt:want"]:
         fail("Network App MQTT event publisher must remain optional")
+    if config.get("options", {}).get("telemetry_enabled") is not False:
+        fail("Network App telemetry consent must default to false")
+    if config.get("schema", {}).get("telemetry_enabled") != "bool":
+        fail("Network App must expose one boolean telemetry consent option")
+    launcher = (app / "rootfs/run.sh").read_text(encoding="utf-8")
+    consent_marker = "bashio::config.true 'telemetry_enabled'"
+    if consent_marker not in launcher or (
+        launcher.index(consent_marker) >= launcher.index("python3 /app/mqtt_events.py &")
+        or launcher.index(consent_marker) >= launcher.index("exec /usr/local/bin/dh-network")
+    ):
+        fail("Network App must guard normal runtime before starting any workers")
     require_files(root, [
         app / "icon.png", app / "logo.png",
         app / "go.mod",
@@ -84,6 +95,8 @@ def validate_network(root: Path, app: Path, context: dict) -> None:
         app / "cmd/dh-network/ui/index.html",
         app / "tests/ui_sort.test.cjs",
         app / "rootfs/app/mqtt_events.py",
+        app / "rootfs/app/telemetry.py",
+        app / "tests/test_telemetry.py",
         app / "rootfs/app/monitoring.py",
         app / "tests/test_monitoring.py",
         app / "rootfs/app/preflight.py",
