@@ -23,7 +23,7 @@ START_RE = re.compile(r"\bStarting Backup of VM (\d+)\b", re.I)
 EXPECTED_RE = re.compile(r"\bstarting new backup job:\s*vzdump((?:\s+\d+)+)\s*(?:--|$)", re.I)
 FINISH_RE = re.compile(r"\bFinished Backup of VM (\d+)\b", re.I)
 FAIL_RE = re.compile(r"\bBackup of VM (\d+) failed\b(.*)", re.I)
-SKIP_RE = re.compile(r"\b(?:Skip(?:ping|ped)? Backup of VM|Backup of VM) (\d+)\b.*\bskip", re.I)
+SKIP_RE = re.compile(r"\b(?:skip(?:ping|ped)?\s+Backup of VM\s+(?P<early>\d+)|Backup of VM\s+(?P<late>\d+)\b.*\bskip(?:ped|ping)?)", re.I)
 
 
 def _utc(timestamp: float) -> str:
@@ -96,7 +96,7 @@ def parse_guest_log(lines: list[str]) -> dict[int, dict[str, str]]:
             continue
         skipped = SKIP_RE.search(raw)
         if skipped:
-            vmid = int(skipped.group(1))
+            vmid = int(skipped.group("early") or skipped.group("late"))
             if results.get(vmid, {}).get("status") != "FAILED":
                 results[vmid] = {"status": "SKIPPED", "reason": raw[-200:]}
             continue
