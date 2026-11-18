@@ -20,6 +20,7 @@ from .autodiscovery import DISCOVERY_FILTERS, discovery_from_bridge
 from .infrastructure import parse_bridge_infrastructure
 from .discovery import (
     APP_AVAILABILITY, DETAILS, DISCOVERY, EVENT_TOPIC, HA_STATUS, HISTORY, ROOT,
+    PRODUCT, SYNC_TOPIC,
     build_discovery, network_rpm_topic, network_rpm_availability_topic,
     network_offline_topic, network_offline_availability_topic,
     network_rpm_threshold_topic,
@@ -294,6 +295,20 @@ class MonitorService:
             self._bridge_info_seen.clear()
             for detector in self._traffic_detectors.values():
                 detector.reset()
+            # DH Sync registry is independent of Zigbee source availability.
+            # Reassert retained identity on every successful MQTT connection.
+            self._send(
+                SYNC_TOPIC,
+                _json({
+                    "schema": 1,
+                    "product_id": PRODUCT,
+                    "type": "app",
+                    "version": self.version,
+                    "repository": "https://github.com/DigitalHouses/home-assistant-apps",
+                    "product_path": PRODUCT,
+                }),
+                force=True,
+            )
             # Persist unavailability first; stale retained data remains hidden
             # until each source is re-observed after reconnect.
             for key in (*HISTORY, *DETAILS):
