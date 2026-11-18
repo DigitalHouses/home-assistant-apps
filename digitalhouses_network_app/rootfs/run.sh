@@ -35,4 +35,6 @@ bashio::log.info "Starting DigitalHouses Network App ${APP_VERSION} on Ingress p
 # MQTT publisher is a separate optional worker. The Go scanner and Ingress
 # remain usable if the broker is unavailable or the worker exits.
 python3 /app/mqtt_events.py &
+# Separate, network-failure-isolated HTTPS telemetry worker; no MQTT dependency.
+python3 /app/telemetry.py &
 exec /usr/local/bin/dh-network
