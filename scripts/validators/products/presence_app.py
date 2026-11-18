@@ -43,8 +43,8 @@ def validate_presence(root: Path, app: Path, context: dict) -> None:
         fail("Presence App slug must remain canonical")
     if config.get("stage") != "experimental":
         fail("Presence App must remain experimental until acceptance")
-    if config.get("image"):
-        fail("Pilot uses Supervisor local build; no unpublished GHCR image")
+    if config.get("image") != "ghcr.io/digitalhouses/digitalhouses_presence_app":
+        fail("Presence release requires canonical immutable GHCR image repository")
     if config.get("homeassistant_api") is not True:
         fail("Presence App needs HA Core API")
     if "mqtt:need" not in config.get("services", []):
