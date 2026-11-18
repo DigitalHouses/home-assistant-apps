@@ -54,6 +54,19 @@ this View in a panel, send the following to the DH Sync maintainers:
   path: presence
 ```
 
+## Immutable App delivery
+
+Presence App 0.1.39 is the first release-managed build, with the
+product-specific registry baseline at 0.1.38. The canonical production
+image is `ghcr.io/digitalhouses/digitalhouses_presence_app:0.1.39`
+(after the normal merge/release workflow publishes it). The versioned
+release tag is `digitalhouses_presence_app-v0.1.39`.
+
+Existing Ingress registrations, experimental status, Home Assistant
+entities, GPS/Wi-Fi logic, and `host_network + NET_RAW` permissions are
+unchanged. Home Assistant App updates must use the App Store release;
+never manually run a feature-branch or unversioned container image.
+
 ## Verification
 
 - `PYTHONPATH=digitalhouses_presence_app/rootfs/app python -m unittest discover -s digitalhouses_presence_app/tests -v`
