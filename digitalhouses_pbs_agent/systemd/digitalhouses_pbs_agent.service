@@ -1,0 +1,22 @@
+[Unit]
+Description=DigitalHouses PBS Agent — read-only PBS monitoring
+After=network-online.target proxmox-backup-proxy.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+Group=root
+WorkingDirectory=/opt/digitalhouses/digitalhouses_pbs_agent
+ExecStart=/opt/digitalhouses/digitalhouses_pbs_agent/.venv/bin/python -m app.main --config /etc/digitalhouses_pbs_agent/digitalhouses_pbs_agent.conf
+Restart=on-failure
+RestartSec=10
+NoNewPrivileges=true
+ProtectHome=true
+ProtectSystem=full
+PrivateTmp=true
+ReadWritePaths=/var/lib/digitalhouses_pbs_agent
+TimeoutStopSec=25
+
+[Install]
+WantedBy=multi-user.target
