@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.40
+
+- Added **explicit opt-in telemetry** for DigitalHouses Stats using the existing `telemetry_enabled` option. A fresh or upgraded installation remains **disabled by default**; Presence GPS/Wi-Fi, MQTT events, household automations, and notifications continue when telemetry is off. Mandatory policy v2 activation is held pending repository legal review.
+- The independent best-effort background sender reports protocol schema 1 / telemetry policy 1 to `https://telemetry.digitalhouses.vip/v1/heartbeat`. Only product identity, released version and a random installation UUID are sent; names, GPS, MACs, local IPs, trackers, and household data are never transmitted.
+- Credentials remain private in `/data/telemetry.json` (0600), survive restart/upgrade/backup, and use 24h ± 30min cadence, bounded 5s HTTPS request and ≥1h failure retry. An authenticated deletion method rotates the local identity after successful erasure.
+- Admit only `digitalhouses_presence_app` in the Stats product allowlist; keep all other products untouched. Add tests for opt-in, privacy, persistence, network isolation, deletion and unchanged Presence privileges. No runtime or HA-entity migration.
+
 ## 0.1.39
 
 - Enable official release delivery through the canonical version-pinned GHCR image, replacing local-only Supervisor builds; retain the experimental stage and existing privileges. No migration of App data or entity identities.
