@@ -214,6 +214,9 @@ class PveBackupMonitor:
         log = self._api(f"/nodes/{node}/tasks/{upid}/log", limit=5000)
         if not isinstance(log, list) or any(not isinstance(item, dict) for item in log):
             raise ValueError("invalid PVE task log")
+        if len(log) >= 5000:
+            # Truncated log cannot prove that an absent VM was not processed.
+            return status, None
         return status, [str(item.get("t", "")) for item in log]
 
     @staticmethod
@@ -278,6 +281,7 @@ class PveBackupMonitor:
         events: list[dict[str, object]] = []
         jobs: list[dict[str, object]] = []
         unknown_selection = False
+        declared_exclusions = set(self.excluded_vmids)
 
         def emit(kind: str, **fields: object) -> None:
             events.append({"schema_version": 1, "event_type": kind, "observed_at": stamp, **fields})
@@ -305,6 +309,8 @@ class PveBackupMonitor:
             old = previous_jobs.get(job_id, {}) if isinstance(previous_jobs.get(job_id), dict) else {}
             try:
                 members = self._members(source, guests)
+                if enabled:
+                    declared_exclusions.update(_vmids(source.get("exclude")))
                 record["members"] = [
                     {"vmid": vmid, "name": guests[vmid]["name"], "type": guests[vmid]["type"],
                      "status": "UNKNOWN", "reason": ""}
@@ -337,7 +343,19 @@ class PveBackupMonitor:
                          or self._task_started_at(upid) < due - self.grace_seconds)
                     and old.get("schedule") == record["schedule"]
                 )
-                if upid:
+                # A finished UPID is immutable. Avoid re-reading its long log
+                # every five minutes, but retry ambiguous/unfinished results.
+                cached = (
+                    upid and old.get("upid") == upid
+                    and old.get("status") in ("OK", "PARTIAL", "FAILED")
+                    and old.get("member_ids") == members
+                    and isinstance(old.get("member_details"), list)
+                )
+                if cached:
+                    record["members"] = old["member_details"]
+                    record["status"] = old["status"]
+                    record["finished_at"] = old.get("finished_at")
+                elif upid:
                     task, logs = self._task(upid)
                     state, members_state = summarize_task(members, task, logs)
                     for member in members_state:
@@ -348,6 +366,7 @@ class PveBackupMonitor:
                     record["status"] = state
                     if task.get("endtime"):
                         record["finished_at"] = _utc(float(task["endtime"]))
+                missed_at = due if missed else None
                 if missed and record["status"] != "RUNNING":
                     record["status"] = "MISSED"
                 if next_run is not None and (due is None or next_run > due and (missed or self._task_started_at(upid or "") is not None and self._task_started_at(upid or "") >= due - self.grace_seconds)):
@@ -356,6 +375,9 @@ class PveBackupMonitor:
                     "status": record["status"], "upid": upid, "due": due,
                     "schedule": record["schedule"],
                     "member_statuses": {str(x["vmid"]): x["status"] for x in record["members"]},
+                    "member_ids": members,
+                    "member_details": record["members"],
+                    "finished_at": record["finished_at"],
                 }
                 if record["status"] in ("FAILED", "PARTIAL") and (
                     old.get("upid"), old.get("status")
@@ -364,7 +386,7 @@ class PveBackupMonitor:
                          task_id=upid, result=record["status"])
                 elif record["status"] == "MISSED" and old.get("status") != "MISSED":
                     emit("backup_job_missed", job_id=job_id, job_name=record["name"],
-                         expected_at=_utc(due) if due else stamp)
+                         expected_at=_utc(missed_at) if missed_at else stamp)
                 elif record["status"] == "OK" and old.get("status") in ("FAILED", "PARTIAL", "MISSED"):
                     emit("backup_job_recovered", job_id=job_id, job_name=record["name"], task_id=upid)
                 old_members = old.get("member_statuses", {}) if isinstance(old.get("member_statuses"), dict) else {}
@@ -396,7 +418,7 @@ class PveBackupMonitor:
             vmid = int(guest["vmid"])
             if guest["job_ids"]:
                 guest["coverage"] = "COVERED"
-            elif vmid in self.excluded_vmids:
+            elif vmid in declared_exclusions:
                 guest["coverage"] = "EXCLUDED"
             elif unknown_selection:
                 guest["coverage"] = "UNKNOWN"
