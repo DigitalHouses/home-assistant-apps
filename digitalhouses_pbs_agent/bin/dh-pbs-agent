@@ -1,0 +1,6 @@
+#!/bin/sh
+if [ "$(id -u)" -ne 0 ]; then echo "ERROR: run as root" >&2; exit 1; fi
+APP=/opt/digitalhouses/digitalhouses_pbs_agent
+export PYTHONPATH="$APP"
+cd "$APP" || exit 1
+exec "$APP/.venv/bin/python" -m app.cli "$@"
