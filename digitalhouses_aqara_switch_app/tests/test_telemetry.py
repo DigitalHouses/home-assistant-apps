@@ -67,10 +67,9 @@ class TelemetryTests(unittest.TestCase):
     def test_enabled_uses_only_one_telemetry_runner(self):
         options = Mock()
         options.read.return_value = {"switches": "[]", "telemetry_enabled": True}
-        with TemporaryDirectory() as td, (
-            patch("aqara_switch.runtime.TelemetryClient") as telemetry,
-            patch("aqara_switch.runtime.TelemetryRunner") as runner,
-        ):
+        with TemporaryDirectory() as td, \
+                patch("aqara_switch.runtime.TelemetryClient") as telemetry, \
+                patch("aqara_switch.runtime.TelemetryRunner") as runner:
             app = Application(
                 types.SimpleNamespace(Client=FakeMQTT), options=options,
                 registry=Mock(), last_scan_path=Path(td)/"scan.json",
