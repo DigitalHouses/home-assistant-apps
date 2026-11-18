@@ -1276,7 +1276,7 @@ dh_pve_agent_notification_local_package:
                   data:
                     title: "✅ PVE: резервирование гостя восстановлено"
                     message: >-
-                      {{ trigger.to_state.attributes.guest_name }} (VMID {{ trigger.to_state.attributes.vmid }}) — {{ trigger.to_state.attributes.recovery_reason }}.
+                      {% if trigger.to_state.attributes.recovery_reason == "coverage_restored" %}{{ trigger.to_state.attributes.guest_name }} (VMID {{ trigger.to_state.attributes.vmid }}) снова включён в Backup Job; фактическое выполнение проверяется отдельно.{% else %}{{ trigger.to_state.attributes.guest_name }} (VMID {{ trigger.to_state.attributes.vmid }}) — резервная копия успешно создана.{% endif %}
 
     - id: dh_pve_agent_replace_battery_reminder
       alias: DH PVE Agent · Напоминание о замене батареи
