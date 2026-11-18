@@ -121,7 +121,11 @@ def change_config(path: Path, pairs: list[str], *, restart: bool = True) -> str:
                 os.fchmod(target.fileno(), stat.S_IMODE(metadata.st_mode))
                 if os.geteuid() == 0:
                     os.fchown(target.fileno(), metadata.st_uid, metadata.st_gid)
-            old_cfg, new_cfg = load_config(path), load_config(tmp)
+            try:
+                old_cfg = load_config(path)
+            except (ValueError, OSError, configparser.Error):
+                old_cfg = None  # Initial staged installer INI may be incomplete.
+            new_cfg = load_config(tmp)
             if old_cfg == new_cfg:
                 return "UNCHANGED"
             os.replace(tmp, path)
