@@ -1,5 +1,18 @@
 # Changelog — DigitalHouses Aqara Switch App
 
+## 0.1.17
+
+DH Sync 0.6.0 publication:
+
+- Publish product identity on each MQTT connect/reconnect via the existing
+  client at `DigitalHouses/Global/digitalhouses_aqara_switch_app/sync`,
+  QoS 1, retained, with version from running `APP_VERSION`.
+- Publish the existing standalone operator View at
+  `dashboards/ru/aqara.yaml` (`path: aqara`) for DH Sync discovery.
+- Keep dashboard placement under DH Sync ownership and the opt-in LAB package
+  under `examples/`; no automatic LAB device creation or physical relay change.
+- Add regression tests for MQTT reconnect, payload and canonical View equality.
+
 ### PVE-style four-column dashboard layout (no App version change)
 
 - Ship a separate paste-ready `type: sections` Aqara view with four columns,

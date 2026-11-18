@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.28
+
+- Publish retained QoS 1 MQTT `DigitalHouses/Global/digitalhouses_zigbee_monitor_app/sync` on every successful connection and reconnection using the existing MQTT client. The payload contains only DH Sync v0.6.0 product identification and the GitHub source; it is independent of Zigbee2MQTT availability.
+- Publish the existing full Zigbee Monitor Lovelace View as canonical `dashboards/ru/zigbee_monitor.yaml`, preserving stable `path: zigbee-monitor`. Dashboard placement and access remain the responsibility of DH Sync; existing examples remain separate.
+- Add regression tests for MQTT registry identity/reconnect, QoS 1 transport, and standalone canonical View. Zigbee traffic monitoring, FSM, MQTT entity IDs, and Recorder policy remain unchanged.
+
+
 ## 0.1.27
 
 - Replace floor-rounded integer AUTO RPM thresholds with **half the trusted baseline rounded to 0.01 messages/min (half-up)**. Publish the numeric effective threshold with two decimals, including historical HA Recorder measurements. A zero threshold still disables only the RPM alarm. The user-controlled MANUAL threshold remains an integer and is never rewritten.

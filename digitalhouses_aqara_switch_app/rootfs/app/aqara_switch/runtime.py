@@ -29,7 +29,8 @@ from .mode_keeper import (capabilities, global_policy, maintained_switch,
 from .configuration import parse_configuration
 from .ha_registry import HARegistryClient
 from .mqtt_ui import (
-    AVAILABILITY, DISCOVERY_TOPIC, ROOT, SCAN_REQUEST, wire_payload,
+    AVAILABILITY, DISCOVERY_TOPIC, ROOT, SCAN_REQUEST, SYNC_TOPIC,
+    sync_payload, wire_payload,
 )
 from .scan import scan_once
 from .supervisor import SupervisorOptions
@@ -303,6 +304,7 @@ class Application:
         for topic in (*_FILTERS, SCAN_REQUEST, "homeassistant/status"):
             self._subscribe(topic)
         self._publish(AVAILABILITY, "online")
+        self._publish(SYNC_TOPIC, sync_payload(self.version))
         self._publish_all()
 
     def _on_disconnect(self, client, userdata, rc):
