@@ -6,6 +6,7 @@ url: https://github.com/DigitalHouses/home-assistant-apps/tree/main/digitalhouse
 arch:
   - amd64
   - aarch64
+image: ghcr.io/digitalhouses/digitalhouses_presence_app
 startup: application
 boot: auto
 init: false
