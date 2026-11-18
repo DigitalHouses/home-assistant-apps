@@ -163,7 +163,7 @@ def collect(config: Config, pbs: PBSClient | None = None, now: float | None = No
     stamp = utc(now)
     result: dict = {
         "observed_at": stamp, "status": "UNAVAILABLE", "pbs_version": None,
-        "datastores": [], "backups": [], "sync_jobs": [], "verify_jobs": [],
+        "datastores": [], "backups": [], "backup_sessions": {"active": None, "failed_tasks": [], "last_error": None}, "sync_jobs": [], "verify_jobs": [],
         "prune_jobs": [], "gc": [], "zfs": zfs_pools(),
         "root_fs": root_filesystem(), "errors": [], "problems": [],
         "summary": {},
@@ -248,6 +248,46 @@ def collect(config: Config, pbs: PBSClient | None = None, now: float | None = No
                               "reason_code": "no_snapshot" if last is None else "overdue"},
                 })
         result["backups"].append(item)
+
+    # PBS owns backup receive sessions, not the PVE vzdump schedule.
+    # Report an actual failed server-side backup task only with a real UPID.
+    try:
+        task_rows = pbs.get("nodes/localhost/tasks", limit=100, typefilter="backup")
+        if not isinstance(task_rows, list) or any(not isinstance(x, dict) for x in task_rows):
+            raise SourceError("PBS task list is invalid")
+        active = 0
+        failed_tasks = []
+        for task in task_rows:
+            worker_type = str(task.get("worker_type") or task.get("worker-type") or "")
+            if not worker_type.startswith("backup"):
+                continue
+            upid = task.get("upid")
+            if not isinstance(upid, str) or not upid.startswith("UPID:"):
+                continue
+            status_text = task.get("status")
+            if not task.get("endtime"):
+                active += 1
+                continue
+            if isinstance(status_text, str) and status_text.strip() and status_text.upper() != "OK":
+                failed_tasks.append({
+                    "task_id": upid, "worker_type": worker_type, "result": "FAILED",
+                })
+                if len(failed_tasks) <= 15:
+                    problems.append({
+                        "key": f"backup_failed:{upid}", "type": "backup_failed",
+                        "category": "backup",
+                        "facts": {"task_id": upid, "worker_type": worker_type, "result": "FAILED"},
+                    })
+        result["backup_sessions"] = {
+            "active": active, "failed_tasks": failed_tasks[:15],
+            "last_error": failed_tasks[0]["task_id"] if failed_tasks else None,
+        }
+        if failed_tasks:
+            statuses.append("DEGRADED")
+    except SourceError as exc:
+        result["backup_sessions"] = {"active": None, "failed_tasks": [], "last_error": None}
+        result["errors"].append(f"backup tasks: {exc}")
+        statuses.append("UNAVAILABLE")
 
     for kind, endpoint in (("sync_jobs", "admin/sync"), ("verify_jobs", "admin/verify"),
                            ("prune_jobs", "admin/prune")):
