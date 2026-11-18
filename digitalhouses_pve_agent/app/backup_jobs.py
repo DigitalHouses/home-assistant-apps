@@ -22,6 +22,7 @@ UPID_RE = re.compile(r"^UPID:([^:]+):(?:[^:]*:){3}([0-9A-Fa-f]+):vzdump:")
 START_RE = re.compile(r"\bStarting Backup of VM (\d+)\b", re.I)
 EXPECTED_RE = re.compile(r"\bstarting new backup job:\s*vzdump((?:\s+\d+)+)\s*(?:--|$)", re.I)
 FINISH_RE = re.compile(r"\bFinished Backup of VM (\d+)\b", re.I)
+FINISH_DURATION_RE = re.compile(r"\bFinished Backup of VM \d+\s+\((\d+):(\d+):(\d+)\)", re.I)
 FAIL_RE = re.compile(r"\bBackup of VM (\d+) failed\b(.*)", re.I)
 SKIP_RE = re.compile(r"\b(?:skip(?:ping|ped)?\s+Backup of VM\s+(?P<early>\d+)|Backup of VM\s+(?P<late>\d+)\b.*\bskip(?:ped|ping)?)", re.I)
 
@@ -105,6 +106,10 @@ def parse_guest_log(lines: list[str]) -> dict[int, dict[str, str]]:
             vmid = int(finished.group(1))
             if results.get(vmid, {}).get("status") != "FAILED":
                 results[vmid] = {"status": "OK", "reason": ""}
+                duration = FINISH_DURATION_RE.search(raw)
+                if duration:
+                    hh, mm, ss = map(int, duration.groups())
+                    results[vmid]["duration_seconds"] = hh * 3600 + mm * 60 + ss
             continue
         started = START_RE.search(raw)
         if started:
