@@ -10,6 +10,14 @@ export DH_MDNS_INTERVAL="$(bashio::config 'mdns_interval_seconds')"
 export DH_SSDP_INTERVAL="$(bashio::config 'ssdp_interval_seconds')"
 export DH_WSD_INTERVAL="$(bashio::config 'wsd_interval_seconds')"
 
+# Policy v2: no normal runtime or installation identity before explicit consent.
+# This change remains in a draft PR until existing-install migration and legal review.
+if ! bashio::config.true 'telemetry_enabled'; then
+    bashio::log.error "Statistics collection consent not granted. Stopping application."
+    exit 1
+fi
+export DH_TELEMETRY_ENABLED="true"
+
 export DH_STARTED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 export MQTT_HOST=""
 export MQTT_PORT="1883"
