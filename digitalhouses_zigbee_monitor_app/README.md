@@ -1,6 +1,6 @@
 # DigitalHouses Zigbee Monitor App
 
-**Статус:** экспериментальный HAOS App 0.1.6, пилотная установка пользователем подтверждена.
+**Статус:** экспериментальный HAOS App 0.1.28.
 
 ## Идентификаторы
 
@@ -69,17 +69,20 @@ Healer и PoE всегда отключены до отдельной приём
 
 ## Проектные документы
 
-- [UI-first Dashboard (Lovelace YAML)](examples/lovelace/dh_zigbee_monitor_app_dashboard.yaml)
+- [Каноническая View для DH Sync](dashboards/ru/zigbee_monitor.yaml)
+- [Исходный UI-пример](examples/lovelace/dh_zigbee_monitor_app_dashboard.yaml)
 - [Recorder include/exclude (пример HA-пакета)](examples/packages/dh_zigbee_monitor_app_global_package.yaml)
 - [Инструкция и конфигурация](DOCS.md)
 - [Архитектура](docs/ARCHITECTURE.md)
 - [Контракт Dashboard, MQTT и Recorder](docs/UI_DATA_CONTRACT.md)
 - [План реализации и приёмки](docs/IMPLEMENTATION_PLAN.md)
 
-Dashboard и Recorder-пакет — **проектные примеры**. В них нет фиктивных
-цифр: до появления исполняемого App сенсоры отсутствуют, а UI показывает
-нехватку данных. При первом релизе App должен реализовать этот MQTT-контракт,
-а тесты подтвердить Recorder ON/OFF для каждой сущности.
+Каноническая самостоятельная View устанавливается DH Sync по паре
+`digitalhouses_zigbee_monitor_app` + `zigbee-monitor`. Регистрирующий retained MQTT
+`/sync` публикуется существующим клиентом при MQTT connect/reconnect. Панель,
+её порядок и права доступа определяет только DH Sync. Примеры Recorder-политики
+и локальных уведомлений намеренно остаются в `examples/` и автоматически
+не устанавливаются: они требуют выбора администратора дома.
 
 ## Соответствие репозиторию
 
