@@ -1,4 +1,4 @@
-# DH Sync 0.6.1 — Current architecture
+# DH Sync 0.6.2 (development candidate) — Current architecture
 
 Authoritative standard: [DH Sync Developer Standard](../../docs/standards/DH_SYNC_DEVELOPER_STANDARD.md).
 
@@ -15,3 +15,5 @@ Authoritative standard: [DH Sync Developer Standard](../../docs/standards/DH_SYN
 Implementation: `rootfs/app/panel_config.py`, `auto_sync.py`, `dashboard_runtime.py`, `git_source.py`.
 
 - Admin Ingress offers «Проверить и обновить»: a manual, authenticated, fresh-GitHub synchronization using the same automatic apply pipeline.
+
+- Optional compilation of a policy-v2 telemetry client; activation requires explicit `telemetry_enabled: true` before runtime. Public rollout is legally gated.

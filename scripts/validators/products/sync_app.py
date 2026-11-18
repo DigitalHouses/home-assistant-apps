@@ -45,6 +45,7 @@ def validate_sync_app(root: Path, app: Path, context: dict) -> None:
         app / "tests/test_adoption.py",
         app / "rootfs/app/inventory.py",
         app / "rootfs/app/app.py",
+        app / "rootfs/app/telemetry.py",
         app / "tests/test_inventory.py",
         app / "icon.png",
         app / "logo.png",
@@ -55,8 +56,8 @@ def validate_sync_app(root: Path, app: Path, context: dict) -> None:
     registry = json.loads(registry_path.read_text(encoding="utf-8"))
     product = next((entry for entry in registry.get("products", [])
                     if entry.get("id") == "digitalhouses_sync_app"), None)
-    if not product or product.get("telemetry_allowed") is not False:
-        fail("DH Sync: registry identity or privacy-disabled telemetry changed")
+    if not product or product.get("telemetry_allowed") is not True:
+        fail("DH Sync: product must be admitted to telemetry allowlist")
     if product.get("release") != {
         "title": "DigitalHouses Sync App",
         "version_source": "haos_config",
@@ -78,5 +79,9 @@ def validate_sync_app(root: Path, app: Path, context: dict) -> None:
         fail("DH Sync requires admin-only Ingress at port 8099")
     if config.get("panel_admin") is not True:
         fail("DH Sync Ingress must be admin-only")
+    if config.get("options", {}).get("telemetry_enabled") is not False:
+        fail("DH Sync: fresh HAOS App telemetry must default to false")
+    if config.get("schema", {}).get("telemetry_enabled") != "bool":
+        fail("DH Sync: telemetry_enabled boolean option is required")
     if "allow_changes" in config.get("options", {}) or "allow_changes" in config.get("schema", {}):
         fail("DH Sync does not use confirmation or change-permission toggles")

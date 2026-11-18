@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.6.2 (development candidate; release blocked by telemetry privacy/legal rollout gate)
+
+- Implement DH Sync telemetry using shared protocol v1 / policy v2 with explicit HA App consent.
+- Add persistent per-installation UUIDv4 and 256-bit token in `/data`, 24-hour jittered reporting and one-hour failure backoff.
+- Include authenticated installation/history erasure and local credential rotation; isolate telemetry network errors from dashboard synchronization.
+- Register only DH Sync's product identifier in the shared Stats allowlist and update DH Sync validation; no changes to other product runtime.
+- **Rollout warning:** `telemetry_enabled` defaults false and policy v2 blocks App startup until explicitly accepted. Do not merge/release to existing homes without safe activation plan and legal clearance.
+
+
 ## 0.6.1
 
 - Restore the agreed **«Проверить и обновить»** button in DH Sync admin Ingress.

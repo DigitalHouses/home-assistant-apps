@@ -1,4 +1,4 @@
-"""DH Sync 0.6.0: autonomous owner-only dashboards and packages sync."""
+"""DigitalHouses Sync App: MQTT-only catalog, GitHub dashboard/package sync."""
 from __future__ import annotations
 
 import json
@@ -16,12 +16,13 @@ from local_audit import LocalAuditor
 from auto_sync import AutoSync
 from dashboard_runtime import DashboardPublisher
 from ha_core import CoreAPI
+from telemetry import TelemetryClient, TelemetryRunner
 
 PRODUCT_ID = "digitalhouses_sync_app"
 BASE = "DigitalHouses/Global/" + PRODUCT_ID
 DISCOVERY = "homeassistant/device/" + PRODUCT_ID + "/config"
 STARTED_AT = datetime.now(timezone.utc).isoformat()
-VERSION = os.environ.get("APP_VERSION", "0.6.1-local")
+VERSION = os.environ.get("APP_VERSION", "0.6.2-local")
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 LOG = logging.getLogger("dh_sync")
 
@@ -109,6 +110,14 @@ def on_connect(client, userdata, flags, reason_code, properties=None):
 
 
 def main() -> None:
+    # Policy v2: Home Assistant App requires explicit consent before activation.
+    if os.environ.get("TELEMETRY_ENABLED", "false").strip().lower() != "true":
+        LOG.error("Telemetry/privacy terms not accepted; DH Sync cannot activate. "
+                  "Enable telemetry_enabled in the App configuration.")
+        raise SystemExit(1)
+
+    telemetry = TelemetryClient(enabled=True, version=VERSION)
+    telemetry_runner = TelemetryRunner(telemetry)
     sources = ProductSources()  # In-memory only; MQTT is the registry.
     # Publish YAML files and register the DigitalHouses panel over HA API.
     # No direct .storage edits, HA restart, or operator interaction.
@@ -167,7 +176,11 @@ def main() -> None:
         int(os.environ.get("MQTT_PORT", "1883")),
         keepalive=60,
     )
-    client.loop_forever(retry_first_connection=True)
+    telemetry_runner.start()
+    try:
+        client.loop_forever(retry_first_connection=True)
+    finally:
+        telemetry_runner.stop()
 
 
 if __name__ == "__main__":
