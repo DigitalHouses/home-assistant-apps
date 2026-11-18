@@ -150,7 +150,7 @@ def summarize_task(
     if running:
         return "RUNNING", details
     successes = sum(item["status"] == "OK" for item in details)
-    failures = sum(item["status"] in ("FAILED", "MISSING") for item in details)
+    failures = sum(item["status"] in ("FAILED", "MISSING", "SKIPPED") for item in details)
     unknowns = sum(item["status"] in ("UNKNOWN", "RUNNING") for item in details)
     if failures:
         return ("PARTIAL" if successes else "FAILED"), details
@@ -407,7 +407,7 @@ class PveBackupMonitor:
                     status = str(member["status"])
                     vmid = int(member["vmid"])
                     old_status = old_members.get(str(vmid))
-                    if status in ("FAILED", "MISSING") and (
+                    if status in ("FAILED", "MISSING", "SKIPPED") and (
                         old.get("upid") != upid or old_status != status
                     ):
                         emit("backup_guest_failed" if status == "FAILED" else "backup_guest_missing",
@@ -415,7 +415,7 @@ class PveBackupMonitor:
                              vmid=vmid, guest_name=str(member["name"]),
                              guest_type=str(member["type"]), result=status,
                              reason=str(member.get("reason") or ""))
-                    elif status == "OK" and old_status in ("FAILED", "MISSING"):
+                    elif status == "OK" and old_status in ("FAILED", "MISSING", "SKIPPED"):
                         emit("backup_guest_recovered", job_id=job_id, job_name=record["name"],
                              task_id=upid, vmid=vmid, guest_name=str(member["name"]),
                              guest_type=str(member["type"]), recovery_reason="backup_succeeded")
