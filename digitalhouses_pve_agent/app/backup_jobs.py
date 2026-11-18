@@ -224,13 +224,18 @@ class PveBackupMonitor:
             raise ValueError("invalid PVE task status")
         if str(status.get("status", "")).lower() == "running":
             return status, None
-        log = self._api(f"/nodes/{node}/tasks/{upid}/log", limit=5000)
-        if not isinstance(log, list) or any(not isinstance(item, dict) for item in log):
-            raise ValueError("invalid PVE task log")
-        if len(log) >= 5000:
-            # Truncated log cannot prove that an absent VM was not processed.
+        try:
+            log = self._api(f"/nodes/{node}/tasks/{upid}/log", limit=5000)
+            if not isinstance(log, list) or any(not isinstance(item, dict) for item in log):
+                raise ValueError("invalid PVE task log")
+            if len(log) >= 5000:
+                # Truncated log cannot prove that an absent VM was not processed.
+                return status, None
+            return status, [str(item.get("t", "")) for item in log]
+        except (OSError, subprocess.SubprocessError, ValueError):
+            # The task exit status is still authoritative for the JOB.
+            # Per-guest results remain UNKNOWN when the log cannot be read.
             return status, None
-        return status, [str(item.get("t", "")) for item in log]
 
     @staticmethod
     def _task_started_at(upid: str) -> int | None:
@@ -318,6 +323,7 @@ class PveBackupMonitor:
                 "upid": None,
                 "started_at": None,
                 "finished_at": None,
+                "duration_seconds": None,
             }
             old = previous_jobs.get(job_id, {}) if isinstance(previous_jobs.get(job_id), dict) else {}
             try:
@@ -368,6 +374,7 @@ class PveBackupMonitor:
                     record["members"] = old["member_details"]
                     record["status"] = old["status"]
                     record["finished_at"] = old.get("finished_at")
+                    record["duration_seconds"] = old.get("duration_seconds")
                 elif upid:
                     task, logs = self._task(upid)
                     state, members_state = summarize_task(members, task, logs)
@@ -378,7 +385,11 @@ class PveBackupMonitor:
                     record["members"] = members_state
                     record["status"] = state
                     if task.get("endtime"):
-                        record["finished_at"] = _utc(float(task["endtime"]))
+                        endtime = float(task["endtime"])
+                        record["finished_at"] = _utc(endtime)
+                        started = self._task_started_at(upid)
+                        if started is not None and endtime >= started:
+                            record["duration_seconds"] = round(endtime - started)
                 missed_at = due if missed else None
                 if missed and record["status"] != "RUNNING":
                     record["status"] = "MISSED"
@@ -391,6 +402,7 @@ class PveBackupMonitor:
                     "member_ids": members,
                     "member_details": record["members"],
                     "finished_at": record["finished_at"],
+                    "duration_seconds": record["duration_seconds"],
                 }
                 if record["status"] in ("FAILED", "PARTIAL") and (
                     old.get("upid"), old.get("status")
