@@ -25,10 +25,14 @@ while (($#)); do
   esac
 done
 [[ "$(id -u)" -eq 0 ]] || { echo "ERROR: root required" >&2; exit 1; }
-[[ "$TAG" =~ ^digitalhouses_pbs_agent-v([0-9]+)\.([0-9]+)\.([0-9]+)$ ]] || {
-  echo "ERROR: canonical immutable PBS Agent release tag required" >&2; exit 1;
-}
-EXPECTED="${TAG#digitalhouses_pbs_agent-v}"
+if [[ "$TAG" =~ ^digitalhouses_pbs_agent-v([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+  EXPECTED="${TAG#digitalhouses_pbs_agent-v}"
+elif [[ "${DIGITALHOUSES_ALLOW_NON_RELEASE_REF:-0}" == "1" && -n "$TAG" ]]; then
+  echo "WARNING: installing untagged PBS Agent development source for HOME acceptance only."
+  EXPECTED=""
+else
+  echo "ERROR: canonical immutable PBS Agent release tag required" >&2; exit 1
+fi
 for cmd in git python3 systemctl; do
   command -v "$cmd" >/dev/null 2>&1 || { echo "ERROR: missing $cmd" >&2; exit 1; }
 done
@@ -63,7 +67,7 @@ cleanup() {
 trap cleanup EXIT
 git clone --quiet --depth 1 --branch "$TAG" "$REPO" "$TMP/repo"
 ACTUAL="$(cat "$TMP/repo/$PRODUCT/VERSION")"
-[[ "$ACTUAL" == "$EXPECTED" ]] || { echo "ERROR: VERSION does not match release tag" >&2; exit 1; }
+[[ -z "$EXPECTED" || "$ACTUAL" == "$EXPECTED" ]] || { echo "ERROR: VERSION does not match release tag" >&2; exit 1; }
 COMMIT="$(git -C "$TMP/repo" rev-parse HEAD)"
 mkdir -p "$STAGE"
 cp -a "$TMP/repo/$PRODUCT/." "$STAGE/"
