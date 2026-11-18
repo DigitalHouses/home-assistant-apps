@@ -39,6 +39,7 @@ MODE_FILE = "/data/presence_mode.json"
 NOTIFICATIONS_FILE = "/data/presence_notifications.json"
 ZONES_FILE = "/data/presence_zones.json"
 HISTORY_FILE = "/data/presence_event_history.json"
+SYNC_TOPIC = "DigitalHouses/Global/digitalhouses_presence_app/sync"
 OPERATIONS_FILE = "/data/presence_refresh.json"
 REGISTRATIONS_FILE = "/data/presence_registrations.json"
 EVENT_NAMES = {"arrival", "departure", "gps_in", "gps_out", "wifi_in", "wifi_out", "wifi_lost", "zone_enter", "zone_leave"}
@@ -215,14 +216,29 @@ class MqttOutput:
         self.operation_commands = queue.SimpleQueue()
         self.phone_commands = queue.SimpleQueue()
         self.client.will_set(topic("availability"), "offline", retain=True, qos=1)
+        self.version = version
         self.client.connect_async(os.environ["MQTT_HOST"], int(os.environ["MQTT_PORT"]), keepalive=60)
         self.client.loop_start()
-        self.version = version
 
     def _connected(self, client, userdata, flags, reason_code, *args):
         if reason_code == 0:
             self.cache.clear()
             self.connected.set()
+            # Nonblocking: on_connect runs in Paho's loop thread, so waiting
+            # for PUBACK here would block the very thread that processes it.
+            sync_payload = {
+                "schema": 1,
+                "product_id": "digitalhouses_presence_app",
+                "type": "app",
+                "version": self.version,
+                "repository": "https://github.com/DigitalHouses/home-assistant-apps",
+                "product_path": "digitalhouses_presence_app",
+            }
+            sync_result = client.publish(
+                SYNC_TOPIC, json.dumps(sync_payload, sort_keys=True, separators=(",", ":")),
+                qos=1, retain=True)
+            if sync_result.rc != mqtt.MQTT_ERR_SUCCESS:
+                LOG.error("MQTT DH Sync declaration rejected rc=%s", sync_result.rc)
             mode_result = client.subscribe(topic("mode/set"), qos=1)
             birth_result = client.subscribe("homeassistant/status", qos=1)
             command_result = client.subscribe(topic("command"), qos=1)
