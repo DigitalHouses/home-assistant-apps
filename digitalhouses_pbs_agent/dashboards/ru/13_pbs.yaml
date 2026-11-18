@@ -1,0 +1,129 @@
+# DH-View-Version: 0.1.0
+# DH-View-Date: 2026-11-18
+title: PBS
+path: dh_pbs_agent
+icon: mdi:backup-restore
+type: sections
+max_columns: 4
+sections:
+  - type: grid
+    cards:
+      - type: heading
+        heading: Proxmox Backup Server
+        heading_style: title
+        icon: mdi:backup-restore
+      - type: entities
+        title: Состояние PBS
+        entities:
+          - entity: sensor.dh_pbs_agent_health
+            name: Состояние
+          - entity: binary_sensor.dh_pbs_agent_problem
+            name: Есть проблемы
+          - entity: sensor.dh_pbs_agent_last_collection
+            name: Последний сбор
+          - entity: sensor.dh_pbs_agent_zfs_pool_health
+            name: ZFS
+      - type: markdown
+        content: >-
+          {% set a = state_attr('sensor.dh_pbs_agent_health', 'summary') or {} %}
+          **Сводка PBS**
+
+          {% if a %}
+          Datastore: {{ a.datastore_count }}
+
+          Правил резервирования: {{ a.freshness_rules }}
+
+          Push Sync: {{ a.push_jobs }}
+
+          Verify: {{ a.verify_jobs }} · Prune: {{ a.prune_jobs }}
+
+          Активных проблем: {{ a.active_problems }}
+          {% else %}
+          Ожидание достоверных данных.
+          {% endif %}
+  - type: grid
+    cards:
+      - type: heading
+        heading: Datastore и резервные копии
+        heading_style: title
+        icon: mdi:database
+      - type: markdown
+        content: >-
+          {% set entries = state_attr('sensor.dh_pbs_agent_health', 'datastores') or [] %}
+          | Datastore | Заполнено | Свободно |
+          | :--- | ---: | ---: |
+          {% for d in entries %}
+          | {{ d.name }} | {{ d.used_percent if d.used_percent is defined else '—' }}% | {{ (d.available_bytes / 1073741824) | round(1) if d.available_bytes is defined else '—' }} GiB |
+          {% endfor %}
+      - type: markdown
+        content: >-
+          {% set entries = state_attr('sensor.dh_pbs_agent_health', 'backups') or [] %}
+          **Контролируемые группы и свежесть копий**
+
+          {% if entries %}
+          {% for b in entries %}
+          - **{{ b.group }}** ({{ b.datastore }}) — {{ b.status }},
+            {{ b.age_hours if b.age_hours is not none else 'нет копии' }} ч
+          {% endfor %}
+          {% else %}
+          Правила свежести копий не настроены.
+          {% endif %}
+  - type: grid
+    cards:
+      - type: heading
+        heading: Push Sync и обслуживание
+        heading_style: title
+        icon: mdi:cloud-upload-outline
+      - type: markdown
+        content: >-
+          {% set jobs = state_attr('sensor.dh_pbs_agent_health', 'sync_jobs') or [] %}
+          **PBS Push Sync**
+
+          {% if jobs %}
+          {% for j in jobs %}
+          - {{ j.id }} — {{ j.status }}{% if j.last_run_at is defined %}; запуск: {{ j.last_run_at }}{% endif %}
+          {% endfor %}
+          {% else %}
+          Push Sync не обнаружен.
+          {% endif %}
+      - type: markdown
+        content: >-
+          {% set verify = state_attr('sensor.dh_pbs_agent_health', 'verify_jobs') or [] %}
+          {% set prune = state_attr('sensor.dh_pbs_agent_health', 'prune_jobs') or [] %}
+          {% set gc = state_attr('sensor.dh_pbs_agent_health', 'gc') or [] %}
+          **Verify**
+          {% for j in verify %}
+          - {{ j.id }}: {{ j.status }}
+          {% endfor %}
+
+          **Prune**
+          {% for j in prune %}
+          - {{ j.id }}: {{ j.status }}
+          {% endfor %}
+
+          **Garbage Collection**
+          {% for d in gc %}
+          - {{ d.datastore }}: {{ d.status.status if d.status is mapping else d.status }}
+          {% endfor %}
+  - type: grid
+    cards:
+      - type: heading
+        heading: Диагностика
+        heading_style: title
+        icon: mdi:information-outline
+      - type: entities
+        entities:
+          - entity: sensor.dh_pbs_agent_hostname
+          - entity: sensor.dh_pbs_agent_ip
+          - entity: sensor.dh_pbs_agent_version
+      - type: markdown
+        content: >-
+          {% set errors = state_attr('sensor.dh_pbs_agent_health', 'errors') or [] %}
+          **Ошибки сбора**
+          {% if errors %}
+          {% for error in errors %}
+          - {{ error }}
+          {% endfor %}
+          {% else %}
+          Ошибок сбора не зарегистрировано.
+          {% endif %}
