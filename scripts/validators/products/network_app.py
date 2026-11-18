@@ -25,7 +25,7 @@ def validate_network(root: Path, app: Path, context: dict) -> None:
             or config.get("map")
             or config.get("ports") or config.get("ports_description")):
         fail("Foundation preview cannot request host privileges or expose ports")
-    if context["version"] != "0.1.30":
+    if context["version"] != "0.1.31":
         fail("Network App pilot security policy requires review for every new version")
     if config.get("homeassistant_api") is not True:
         fail("Network App requires HA Core API via Supervisor proxy")
