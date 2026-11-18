@@ -58,6 +58,10 @@ def run(config_path: Path = DEFAULT_CONFIG, state_dir: Path = STATE_DIR) -> int:
     publisher = Publisher(config)
     last_problem_state = StateStore(state_dir / "incidents.json")
     current_status = StateStore(state_dir / "runtime.json")
+    try:
+        last_success_at = current_status.load().get("last_success_at")
+    except (ValueError, OSError):
+        last_success_at = None
     stop = threading.Event()
 
     def stopped(_signal, _frame):
@@ -72,7 +76,10 @@ def run(config_path: Path = DEFAULT_CONFIG, state_dir: Path = STATE_DIR) -> int:
             ip = host_ip(config.mqtt_host, config.mqtt_port)
             try:
                 sample = collect(config)
+                if sample["status"] in ("HEALTHY", "DEGRADED", "CRITICAL"):
+                    last_success_at = sample["observed_at"]
                 state = display_state(sample, config, ip)
+                state["last_success_at"] = last_success_at
                 ev = transitions(sample, last_problem_state)
                 success = publisher.state(state)
                 # Events are not replayed after an MQTT disconnection.
@@ -81,6 +88,7 @@ def run(config_path: Path = DEFAULT_CONFIG, state_dir: Path = STATE_DIR) -> int:
                         publisher.event(item["category"], item["payload"])
                 current_status.save({
                     "observed_at": sample["observed_at"],
+                    "last_success_at": last_success_at,
                     "status": sample["status"], "mqtt": "CONNECTED" if publisher.connected else "DISCONNECTED",
                     "mqtt_last_ack": publisher.last_ack_at,
                     "error_count": len(sample["errors"]),
@@ -91,8 +99,8 @@ def run(config_path: Path = DEFAULT_CONFIG, state_dir: Path = STATE_DIR) -> int:
                 # Never leave an old retained green state after a collector
                 # crash: publish explicit unavailability instead.
                 unavailable = {
-                    "observed_at": observed, "status": "UNAVAILABLE",
-                    "hostname": __import__("socket").gethostname(),
+                    "observed_at": observed, "last_success_at": last_success_at,
+                    "status": "UNAVAILABLE", "hostname": __import__("socket").gethostname(),
                     "ip": ip or "unknown", "agent_version": _read_version(),
                     "pbs_version": None, "datastores": [], "backups": [],
                     "sync_jobs": [], "verify_jobs": [], "prune_jobs": [],
@@ -103,7 +111,8 @@ def run(config_path: Path = DEFAULT_CONFIG, state_dir: Path = STATE_DIR) -> int:
                 }
                 publisher.state(unavailable)
                 current_status.save({
-                    "observed_at": observed, "status": "UNAVAILABLE",
+                    "observed_at": observed, "last_success_at": last_success_at,
+                    "status": "UNAVAILABLE",
                     "mqtt": "CONNECTED" if publisher.connected else "DISCONNECTED",
                     "error": f"{type(exc).__name__}: {str(exc)[:160]}",
                 })
