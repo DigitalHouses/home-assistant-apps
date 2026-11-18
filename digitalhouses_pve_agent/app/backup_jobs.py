@@ -20,6 +20,7 @@ POLL_SECONDS = 300
 STATE_SCHEMA = 1
 UPID_RE = re.compile(r"^UPID:([^:]+):(?:[^:]*:){3}([0-9A-Fa-f]+):vzdump:")
 START_RE = re.compile(r"\bStarting Backup of VM (\d+)\b", re.I)
+EXPECTED_RE = re.compile(r"\bstarting new backup job:\s*vzdump((?:\s+\d+)+)\s*(?:--|$)", re.I)
 FINISH_RE = re.compile(r"\bFinished Backup of VM (\d+)\b", re.I)
 FAIL_RE = re.compile(r"\bBackup of VM (\d+) failed\b(.*)", re.I)
 SKIP_RE = re.compile(r"\b(?:Skip(?:ping|ped)? Backup of VM|Backup of VM) (\d+)\b.*\bskip", re.I)
@@ -124,14 +125,22 @@ def summarize_task(
         return "UNKNOWN", [{"vmid": vmid, "status": "UNKNOWN", "reason": ""} for vmid in expected]
     evidence = parse_guest_log(log_lines) if log_lines is not None else {}
     complete = not running
-    # A completed, readable task log containing per-guest markers is evidence
-    # that absent expected participants were not processed. No log => UNKNOWN.
-    has_evidence = bool(evidence)
+    # Only the execution's own vzdump command line proves its intended VMIDs.
+    # Current job membership may have changed since a historic run.
+    expected_at_execution: set[int] = set()
+    for line in log_lines or []:
+        match = EXPECTED_RE.search(line)
+        if match:
+            expected_at_execution = {int(part) for part in match.group(1).split()}
+            break
     details: list[dict[str, object]] = []
     for vmid in expected:
         item = evidence.get(vmid)
         if item is None:
-            result = "MISSING" if complete and has_evidence else ("RUNNING" if running else "UNKNOWN")
+            result = (
+                "MISSING" if complete and vmid in expected_at_execution
+                else ("RUNNING" if running else "UNKNOWN")
+            )
             details.append({"vmid": vmid, "status": result, "reason": ""})
         else:
             result = item["status"]
