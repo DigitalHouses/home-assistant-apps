@@ -35,3 +35,4 @@ schema:
   mdns_interval_seconds: int(120,3600)
   ssdp_interval_seconds: int(120,3600)
   wsd_interval_seconds: int(120,3600)
+  telemetry_enabled: bool
