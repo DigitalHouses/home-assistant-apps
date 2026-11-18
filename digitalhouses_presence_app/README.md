@@ -1,8 +1,10 @@
 # DigitalHouses Presence App
 
-**Status: GPS + HA router device_tracker Wi-Fi pilot, version 0.1.38.** Observe router tracker stability before safety-critical automations.
+**Status: GPS + HA router device_tracker Wi-Fi pilot, version 0.1.39.** Observe router tracker stability before safety-critical automations.
 
 This application belongs to `DigitalHouses/home-assistant-apps/digitalhouses_presence_app` and is installed via **Settings → Apps → App Store**.
+
+**DH Sync 0.6.0:** the App publishes retained MQTT `/sync`; the existing four-column View is available at `dashboards/ru/presence.yaml` (`path: presence`). Local `script.write2log` notification packages remain manual examples, not auto-installed. See [DH Sync compatibility](docs/DH_SYNC_COMPATIBILITY.md).
 
 ## Hybrid: разряженный телефон и авиарежим (0.1.38)
 
