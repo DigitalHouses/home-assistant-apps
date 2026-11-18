@@ -150,7 +150,7 @@ class TelemetryClient:
         return current - last_success >= self._interval()
 
     def tick(self) -> bool:
-        if self.state is None or SEMVER.fullmatch(self.version) is None:
+        if self.state is None or SEMVER.fullmatch(self.version) is None or self.version.endswith("-local"):
             return False
         with self._lock:
             current = float(self.now())
