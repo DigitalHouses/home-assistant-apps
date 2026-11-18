@@ -1,6 +1,8 @@
 # Changelog — DigitalHouses Aqara Switch App
 
-## 0.1.17 — DH Sync 0.6.0
+## 0.1.17
+
+DH Sync 0.6.0 publication:
 
 - Publish product identity on each MQTT connect/reconnect via the existing
   client at `DigitalHouses/Global/digitalhouses_aqara_switch_app/sync`,
