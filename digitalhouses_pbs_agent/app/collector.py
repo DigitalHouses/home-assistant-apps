@@ -301,8 +301,13 @@ def collect(config: Config, pbs: PBSClient | None = None, now: float | None = No
             if not isinstance(upid, str) or not upid.startswith("UPID:"):
                 continue
             status_text = task.get("status")
-            if not task.get("endtime"):
+            endtime = task.get("endtime")
+            if endtime is None:
                 active += 1
+                continue
+            # A 30-day-old failure is historical evidence, not a new outage.
+            # Only recent completed tasks can start a live incident.
+            if not isinstance(endtime, (int, float)) or endtime < now - 86400 or endtime > now + 300:
                 continue
             if isinstance(status_text, str) and status_text.strip() and status_text.upper() != "OK":
                 failed_tasks.append({
