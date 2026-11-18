@@ -108,7 +108,7 @@
       "type": "app",
       "entity_prefix": "dh_presence_app",
       "display_name": "Presence App",
-      "telemetry_allowed": false,
+      "telemetry_allowed": true,
       "release": {
         "title": "DigitalHouses Presence App",
         "version_source": "haos_config",

@@ -208,7 +208,7 @@ class RuntimeSafetyTests(unittest.TestCase):
     def test_sync_declaration_published_on_every_mqtt_connect_and_reconnect(self):
         from app import SYNC_TOPIC
         output = object.__new__(MqttOutput)
-        output.version = "0.1.39"
+        output.version = "0.1.40"
         output.connected = threading.Event()
         output.cache = {}
         client = Mock()
@@ -229,7 +229,7 @@ class RuntimeSafetyTests(unittest.TestCase):
                 "schema": 1,
                 "product_id": "digitalhouses_presence_app",
                 "type": "app",
-                "version": "0.1.39",
+                "version": "0.1.40",
                 "repository": "https://github.com/DigitalHouses/home-assistant-apps",
                 "product_path": "digitalhouses_presence_app",
             })
