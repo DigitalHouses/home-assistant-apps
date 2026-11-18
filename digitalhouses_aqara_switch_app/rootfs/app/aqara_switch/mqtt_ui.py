@@ -10,6 +10,20 @@ ROOT = "DigitalHouses/Global/" + PREFIX
 DISCOVERY_TOPIC = "homeassistant/device/" + PREFIX + "/config"
 AVAILABILITY = ROOT + "/availability"
 SCAN_REQUEST = ROOT + "/command/scan"
+PRODUCT_ID = "digitalhouses_aqara_switch_app"
+SYNC_TOPIC = "DigitalHouses/Global/" + PRODUCT_ID + "/sync"
+
+
+def sync_payload(version: str) -> dict:
+    """DH Sync product identity. Dashboard placement lives in DH Sync YAML."""
+    return {
+        "schema": 1,
+        "product_id": PRODUCT_ID,
+        "type": "app",
+        "version": version,
+        "repository": "https://github.com/DigitalHouses/home-assistant-apps",
+        "product_path": PRODUCT_ID,
+    }
 
 
 def configuration(version: str) -> dict:

@@ -1,12 +1,28 @@
 # DigitalHouses Aqara Switch App
 
-**v0.1.14 — synchronized mixed LAB/Z2M toggles with MQTT-only physical control.**
+**v0.1.17 — DH Sync 0.6.0 resource publication; light-control behavior unchanged.**
 
 This Home Assistant App supports the commissioning flow for Aqara wired switches,
 battery buttons and key panels. It is not a general automation engine. This MVP scans and adopts Aqara
 inputs, preserves saved writable switch configuration, and dispatches an
 explicitly bound Aqara action to one or more Home Assistant light.toggle targets.
 It never switches physical Aqara relay output states itself.
+
+## v0.1.17 — DH Sync 0.6.0
+
+On every successful MQTT connection or reconnection, the existing client publishes
+retained QoS 1 `DigitalHouses/Global/digitalhouses_aqara_switch_app/sync` with
+product identity, the running App version, GitHub repository and product directory.
+Dashboard membership is never declared through MQTT.
+
+The canonical standalone operator View is
+`dashboards/ru/aqara.yaml`, with stable `path: aqara`.
+To include it in a panel, ask the DH Sync owner to reference
+`product: digitalhouses_aqara_switch_app` and `path: aqara`.
+The historical paste-ready UI under `examples/lovelace/` remains an example,
+not a DH Sync resource. The LAB virtual-light package under
+`examples/packages/` remains opt-in for local lab testing; it is **not**
+published as a globally installed package.
 
 ## v0.1.16 — Zigbee2MQTT RGB capability detection
 
