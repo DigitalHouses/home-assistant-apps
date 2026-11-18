@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.39 — DH Sync 0.6.0 publication
+
+- The existing Paho MQTT client publishes a retained QoS 1 `DigitalHouses/Global/digitalhouses_presence_app/sync` announcement on each successful connection and reconnection, using the runtime App version and the canonical GitHub product path. This does not change the existing operational `dh_presence_app` MQTT topics or discovery entities.
+- Publish the approved four-column Presence Lovelace View as `dashboards/ru/presence.yaml`, retaining stable `path: presence`, the established layout, and its documented Mushroom/Button Card/Auto Entities dependencies.
+- Preserve locally configured `script.write2log` notification YAML in `examples/packages/` only: these non-portable opt-in files are not installed by DH Sync. There is no new automation, Recorder migration, UI panel registration, availability gate, or compatibility/version check.
+- Add connect/reconnect declaration tests and canonical View consistency test; all other Presence behavior stays unchanged.
+
+
 ## HA package · удалено третье Wi-Fi уведомление (версия App не меняется)
 
 - Удалён устаревший `wifi_lost` из обоих пакетов автоматизаций: trigger, ветка `script.write2log`, вспомогательная переменная; больше нет уведомления «Wi-Fi не подтверждается».
