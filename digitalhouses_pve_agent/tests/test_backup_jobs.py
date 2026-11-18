@@ -126,6 +126,36 @@ def test_uncovered_new_guest_and_coverage_recovery(tmp_path):
     assert any(e["event_type"] == "backup_guest_recovered" and e["vmid"] == 101 for e in events)
 
 
+def test_failed_job_without_log_proves_job_failure_not_guest_failure():
+    state, members = summarize_task(
+        [100], {"status": "stopped", "exitstatus": "ERROR: storage unavailable"}, None,
+    )
+    assert state == "FAILED"
+    assert members[0]["status"] == "UNKNOWN"
+
+
+def test_skipped_guest_is_incomplete():
+    status, members = summarize_task(
+        [100, 101], {"status": "stopped", "exitstatus": "ERROR"},
+        [
+            "INFO: starting new backup job: vzdump 100 101 --mode snapshot",
+            "INFO: Finished Backup of VM 100 (00:00:01)",
+            "INFO: skipping Backup of VM 101 -- exclude flag",
+        ],
+    )
+    assert status == "PARTIAL"
+    assert members[1]["status"] == "SKIPPED"
+
+
+def test_missing_without_execution_manifest_remains_unknown():
+    state, members = summarize_task(
+        [100, 101], {"status": "stopped", "exitstatus": "OK"},
+        ["INFO: Finished Backup of VM 100 (00:00:02)"],
+    )
+    assert state == "UNKNOWN"
+    assert members[1]["status"] == "UNKNOWN"
+
+
 def test_api_failure_unavailable_not_healthy(tmp_path):
     def failing(_argv):
         raise OSError("API unavailable")
