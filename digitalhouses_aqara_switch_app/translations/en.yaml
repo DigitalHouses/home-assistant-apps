@@ -1,4 +1,7 @@
 configuration:
+  telemetry_enabled:
+    name: DigitalHouses statistics
+    description: "Consent to collect statistics (product name, version, random installation ID). https://github.com/DigitalHouses/home-assistant-apps/blob/main/docs/standards/PRODUCT_TELEMETRY_POLICY.md"
   log_level:
     name: Log level
     description: Application log verbosity.
