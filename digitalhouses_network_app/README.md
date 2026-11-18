@@ -2,6 +2,30 @@
 
 Experimental native **Home Assistant OS App** for a durable LAN device inventory, presence history, and future device events. Internal/entity prefix: `dh_network_app`. Canonical product ID, App Store slug, and repository directory: `digitalhouses_network_app`.
 
+## Staged telemetry policy-v2 implementation (0.1.32 draft)
+
+This is **not yet a published/installed upgrade**. The staged implementation uses
+a dedicated HTTPS worker for `https://telemetry.digitalhouses.vip/v1/heartbeat`,
+independent of MQTT or the network scanner. The only transmitted fields are
+`schema`, `telemetry_policy_version`, `installation_id`, `product` and
+`version`; the per-installation bearer token authenticates each request.
+No devices, IPs, hostnames, local inventory or other LAN measurements are
+included. Country is derived on the server, not transmitted by the App.
+
+The existing HAOS configuration provides one explicit `telemetry_enabled`
+switch (default `false`), with a policy link in the user-facing translation.
+The policy-v2 design stops normal application startup if consent has not been
+given; hence installing it over an existing Network App without advance operator
+migration would interrupt core LAN monitoring. The rollout is blocked until
+the shared privacy/legal gate, consent/rights handling and safe upgrade plan
+are approved. In particular, this experimental source-built App has not yet
+adopted the production immutable-image release provenance requirement.
+
+Telemetry is **not** the retained MQTT `/sync` announcement used by DH Sync.
+The common DH Stats product registry is prepared in this draft for server
+admission, but server deployment and live heartbeat verification are separate
+required release-acceptance steps.
+
 ## DH Sync 0.6.0 discovery (0.1.31)
 
 When the existing optional MQTT worker connects or reconnects, the App publishes
