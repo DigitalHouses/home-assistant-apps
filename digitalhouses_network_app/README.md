@@ -2,6 +2,22 @@
 
 Experimental native **Home Assistant OS App** for a durable LAN device inventory, presence history, and future device events. Internal/entity prefix: `dh_network_app`. Canonical product ID, App Store slug, and repository directory: `digitalhouses_network_app`.
 
+## DH Sync 0.6.0 discovery (0.1.31)
+
+When the existing optional MQTT worker connects or reconnects, the App publishes
+`DigitalHouses/Global/digitalhouses_network_app/sync` with QoS 1 and retain.
+The message identifies the running App and points DH Sync at its canonical
+`digitalhouses_network_app` directory in
+`https://github.com/DigitalHouses/home-assistant-apps`.
+The announcement does not contain Dashboard/View placement, credentials,
+site addresses or network inventory. MQTT Event and Home Assistant Discovery
+topics are unchanged.
+
+The App's full management interface remains in Home Assistant Ingress. No
+canonical Lovelace Views or automatically installed HA Packages are currently
+published for DH Sync. The optional local notification package remains under
+`examples/` and is not part of DH Sync's automatic installation.
+
 ## Current state (0.1.16 NEW badges and machine events)
 
 Available now:
