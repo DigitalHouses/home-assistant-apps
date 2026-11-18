@@ -6,6 +6,8 @@ if [[ -z "${APP_VERSION:-}" ]]; then
   exit 1
 fi
 
+export TELEMETRY_ENABLED="$(bashio::config 'telemetry_enabled')"
+
 export MQTT_HOST="$(bashio::services mqtt host)"
 export MQTT_PORT="$(bashio::services mqtt port)"
 export MQTT_USER="$(bashio::services mqtt username)"
