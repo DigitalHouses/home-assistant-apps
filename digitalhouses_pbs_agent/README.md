@@ -134,9 +134,13 @@ configured, no freshness guarantee is asserted.
 
 CLI/API collection failure is explicit. All PBS reads are executed locally
 under the root-owned systemd service, analogously to PVE Agent's `pvesh get`.
-The agent invokes only `proxmox-backup-debug api get`; never create/set/delete
-operations. `PROXMOX_DEBUG_API_CODE=1` avoids the need for PBS tokens or
-loopback HTTPS. ZFS commands are read-only `zpool list`, no scrub/import/destroy.
+For read-only datastore and job configuration APIs the agent invokes
+`proxmox-backup-debug api get` with `PROXMOX_DEBUG_API_CODE=1`.
+For running/completed task history it uses the supported native
+`proxmox-backup-manager task list --all true` command: the direct debug API
+cannot initialize PBS WorkerTask in a standalone process. Neither interface
+requires a stored PBS token or loopback HTTPS. No create/set/delete operations
+are performed. ZFS commands are read-only `zpool list`, no scrub/import/destroy.
 Snapshots use PBS metadata, not archive contents or chunk scans.
 
 ## Acceptance gate before v0.1.0 release
