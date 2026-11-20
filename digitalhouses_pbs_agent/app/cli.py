@@ -166,8 +166,12 @@ def status() -> int:
     print("MQTT broker:", mqtt)
     print("MQTT runtime:", runtime.get("mqtt", "unknown") if service == "active" and not stale
           else "UNKNOWN (offline or stale)")
-    print("Last MQTT PUBACK:", runtime.get("mqtt_last_ack", "unknown"))
+    print("Last MQTT PUBACK:", runtime.get("mqtt_last_ack") or "unknown")
+    if runtime.get("mqtt_connect_error"):
+        print("MQTT connection reason:", runtime["mqtt_connect_error"])
     print("PBS status:", runtime.get("status", "UNKNOWN"))
+    for error in runtime.get("pbs_errors", [])[:8]:
+        print("PBS source error:", error)
     print("Last collection:", observed or "unknown", "(STALE)" if stale else "(current)")
     print("Build metadata:", (APP / "BUILD_INFO").read_text(encoding="utf-8").strip()
           if (APP / "BUILD_INFO").exists() else "development/unverified")
