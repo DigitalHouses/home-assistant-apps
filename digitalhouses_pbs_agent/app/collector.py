@@ -3,14 +3,11 @@ from __future__ import annotations
 
 import json
 import os
-import ssl
 import subprocess
 import time
 from datetime import datetime, timezone
 from pathlib import Path
-from urllib.error import HTTPError, URLError
-from urllib.parse import quote, urlencode
-from urllib.request import Request, urlopen
+from urllib.parse import quote
 
 from .config import Config
 
@@ -60,37 +57,53 @@ def last_run(row: dict) -> dict:
 
 
 class PBSClient:
-    def __init__(self, config: Config):
+    """Local PBS API reader using the root-owned built-in CLI.
+
+    Analogous to the PVE Agent root subprocess pvesh get. No remote
+    HTTP, stored PBS credentials, or additional service/process.
+    PROXMOX_DEBUG_API_CODE=1 calls the installed PBS API implementation
+    directly, without creating an implicit temporary API token.
+    """
+
+    def __init__(self, config: Config | None = None, runner=None):
         self.config = config
-        self._context = (
-            ssl._create_unverified_context()
-            if config.pbs_insecure_localhost
-            else ssl.create_default_context(cafile=config.pbs_ca_file or None)
-        )
+        self.runner = runner or self._run
+
+    @staticmethod
+    def _run(argv: list[str]) -> str:
+        env = dict(os.environ)
+        env["PROXMOX_DEBUG_API_CODE"] = "1"
+        try:
+            completed = subprocess.run(
+                argv, capture_output=True, text=True, check=True,
+                timeout=20, env=env,
+            )
+        except (OSError, subprocess.SubprocessError) as exc:
+            raise SourceError(f"PBS local CLI failed: {type(exc).__name__}") from exc
+        return completed.stdout
 
     def get(self, path: str, **params: object):
-        if not self.config.pbs_token_id:
-            raise SourceError("pbs.token_id is not configured")
+        """Execute only API GET; never create/update/delete a PBS resource."""
+        if not path or path.startswith("/") or any(x in path for x in ("..", "\n", "\r")):
+            raise SourceError("invalid PBS API GET path")
+        argv = ["proxmox-backup-debug", "api", "get", "/" + path]
+        for key, value in params.items():
+            if value is not None:
+                if not key.replace("-", "").replace("_", "").isalnum():
+                    raise SourceError("invalid PBS API parameter name")
+                argv.extend(["--" + key.replace("_", "-"), str(value)])
+        argv.extend(["--output-format", "json"])
         try:
-            secret = self.config.pbs_token_secret_file.read_text(encoding="utf-8").strip()
-        except OSError as exc:
-            raise SourceError("PBS token secret file cannot be read") from exc
-        if not secret or "\n" in secret or "\r" in secret:
-            raise SourceError("PBS token secret file is empty or invalid")
-        url = f"{self.config.pbs_url}/api2/json/{path.lstrip('/')}"
-        if params:
-            url += "?" + urlencode({k: v for k, v in params.items() if v is not None})
-        req = Request(url, headers={"Authorization": f"PBSAPIToken {self.config.pbs_token_id}:{secret}"})
-        try:
-            with urlopen(req, timeout=12, context=self._context) as resp:
-                body = json.load(resp)
-        except HTTPError as exc:
-            raise SourceError(f"PBS API HTTP {exc.code} on {path}") from exc
-        except (URLError, TimeoutError, ValueError, OSError) as exc:
-            raise SourceError(f"PBS API unavailable on {path}: {type(exc).__name__}") from exc
-        if not isinstance(body, dict) or "data" not in body:
-            raise SourceError(f"invalid PBS API response at {path}")
-        return body["data"]
+            response = json.loads(self.runner(argv))
+        except (TypeError, ValueError) as exc:
+            raise SourceError(f"invalid local PBS JSON at {path}") from exc
+        # Direct CLI ordinarily prints the data (rather than the HTTPS
+        # transport envelope); support the one-key envelope if returned.
+        if isinstance(response, dict) and set(response) == {"data"}:
+            response = response["data"]
+        if response is None:
+            raise SourceError(f"PBS API returned no data at {path}")
+        return response
 
 
 def zfs_pools() -> dict:
