@@ -19,7 +19,7 @@
       "type": "agent",
       "entity_prefix": "dh_pbs_agent",
       "display_name": "PBS Agent",
-      "telemetry_allowed": false,
+      "telemetry_allowed": true,
       "release": {
         "title": "DigitalHouses PBS Agent",
         "version_source": "version_file",
