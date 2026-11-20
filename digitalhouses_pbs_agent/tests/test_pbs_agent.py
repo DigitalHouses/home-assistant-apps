@@ -190,6 +190,29 @@ class PBSAgentTests(unittest.TestCase):
         self.assertIn("backup tasks: PBS native task list failed",
                       " ".join(data["errors"]))
 
+    def test_mqtt_connect_disconnect_updates_status_immediately(self):
+        from app.mqtt import Publisher
+        import types
+        publisher = Publisher(self.config)
+        published = []
+        class FakeTransport:
+            def publish(self, topic, payload, qos, retain):
+                published.append((topic, qos, retain))
+        publisher.client = FakeTransport()
+        changes = []
+        publisher.on_connection_change = lambda state, reason: changes.append((state, reason))
+        accepted = types.SimpleNamespace(is_failure=False)
+        denied = types.SimpleNamespace(is_failure=True)
+        accepted.__str__ = lambda: "Success" if False else "ignored"
+        publisher._on_connect(publisher.client, None, None, accepted, None)
+        self.assertEqual(changes[-1], ("CONNECTED", None))
+        self.assertTrue(any(topic.endswith("/sync") and qos == 1 and retain
+                            for topic, qos, retain in published))
+        publisher._on_disconnect(publisher.client, None, None, "Unspecified error", None)
+        self.assertEqual(changes[-1], ("DISCONNECTED", "Unspecified error"))
+        publisher._on_connect(publisher.client, None, None, denied, None)
+        self.assertEqual(changes[-1][0], "DISCONNECTED")
+
     def test_dh_sync_identity_and_ha_entities(self):
         self.assertEqual(instance_id(self.config), "pbs_home")
         payload = discovery(self.config)
