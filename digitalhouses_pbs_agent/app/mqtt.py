@@ -4,7 +4,7 @@ from __future__ import annotations
 import json
 import socket
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from .config import Config, PRODUCT_ID, REPO
 
@@ -113,6 +113,7 @@ class Publisher:
         self.last_connect_error: str | None = None
         self.last_state: dict | None = None
         self.last_ack_at: str | None = None
+        self.on_connection_change: Callable[[str, str | None], None] | None = None
         self.client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, client_id="dh_pbs_agent_" + self.id)
         self.client.reconnect_delay_set(60, 60)
         if config.mqtt_username:
@@ -140,9 +141,13 @@ class Publisher:
         if getattr(reason_code, "is_failure", False):
             self.connected = False
             self.last_connect_error = str(reason_code)
+            if self.on_connection_change is not None:
+                self.on_connection_change("DISCONNECTED", self.last_connect_error)
             return
         self.connected = True
         self.last_connect_error = None
+        if self.on_connection_change is not None:
+            self.on_connection_change("CONNECTED", None)
         # Network callbacks MUST NOT wait for PUBACK on their own I/O thread.
         # paho queues these QoS1 publications; the client loop sends them.
         def enqueue(topic: str, payload: dict | str) -> None:
@@ -163,6 +168,8 @@ class Publisher:
         self.connected = False
         if str(reason_code) not in ("Normal disconnection", "Success"):
             self.last_connect_error = str(reason_code)
+        if self.on_connection_change is not None:
+            self.on_connection_change("DISCONNECTED", self.last_connect_error)
 
     def start(self) -> None:
         self.client.connect_async(self.config.mqtt_host, self.config.mqtt_port,
