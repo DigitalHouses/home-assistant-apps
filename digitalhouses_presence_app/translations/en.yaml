@@ -25,6 +25,7 @@ configuration:
   exclude_users:
     name: Excluded Home Assistant user IDs (legacy mappings only)
   telemetry_enabled:
-    name: Statistics collection consent (inactive in experimental pilot)
+    name: Share DigitalHouses statistics
+    description: Voluntary. Sends the App name, version and a random installation identifier, never residents, GPS, IP or MAC. Policy — https://github.com/DigitalHouses/home-assistant-apps/blob/main/docs/standards/PRODUCT_TELEMETRY_POLICY.md
   log_level:
     name: Log level
