@@ -15,6 +15,19 @@
       "repository_directory": "digitalhouses_pve_agent"
     },
     {
+      "id": "digitalhouses_pbs_agent",
+      "type": "agent",
+      "entity_prefix": "dh_pbs_agent",
+      "display_name": "PBS Agent",
+      "telemetry_allowed": false,
+      "release": {
+        "title": "DigitalHouses PBS Agent",
+        "version_source": "version_file",
+        "policy_baseline": "0.0.0"
+      },
+      "repository_directory": "digitalhouses_pbs_agent"
+    },
+    {
       "id": "digitalhouses_plex_agent",
       "type": "agent",
       "entity_prefix": "dh_plex_agent",
