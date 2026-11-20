@@ -92,6 +92,8 @@ def run(config_path: Path = DEFAULT_CONFIG, state_dir: Path = STATE_DIR) -> int:
                     "status": sample["status"], "mqtt": "CONNECTED" if publisher.connected else "DISCONNECTED",
                     "mqtt_last_ack": publisher.last_ack_at,
                     "error_count": len(sample["errors"]),
+                    "pbs_errors": sample["errors"][:8],
+                    "mqtt_connect_error": publisher.last_connect_error,
                 })
             except Exception as exc:
                 LOG.exception("PBS collection failed")
@@ -115,6 +117,7 @@ def run(config_path: Path = DEFAULT_CONFIG, state_dir: Path = STATE_DIR) -> int:
                     "status": "UNAVAILABLE",
                     "mqtt": "CONNECTED" if publisher.connected else "DISCONNECTED",
                     "error": f"{type(exc).__name__}: {str(exc)[:160]}",
+                    "mqtt_connect_error": publisher.last_connect_error,
                 })
             elapsed = time.monotonic() - started
             stop.wait(max(1, config.poll_seconds - elapsed))
