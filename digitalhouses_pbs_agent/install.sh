@@ -33,7 +33,7 @@ elif [[ "${DIGITALHOUSES_ALLOW_NON_RELEASE_REF:-0}" == "1" && -n "$TAG" ]]; then
 else
   echo "ERROR: canonical immutable PBS Agent release tag required" >&2; exit 1
 fi
-for cmd in git python3 systemctl; do
+for cmd in git python3 systemctl proxmox-backup-debug; do
   command -v "$cmd" >/dev/null 2>&1 || { echo "ERROR: missing $cmd" >&2; exit 1; }
 done
 mkdir -p /opt/digitalhouses "$(dirname "$CONFIG")" "$STATE"
@@ -87,10 +87,6 @@ port = 1883
 username =
 password =
 [pbs]
-url = https://127.0.0.1:8007
-token_id =
-token_secret_file = /etc/digitalhouses_pbs_agent/pbs.token
-insecure_localhost = true
 datastores =
 [monitor]
 poll_seconds = 300
