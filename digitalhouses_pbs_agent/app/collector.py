@@ -78,6 +78,14 @@ class PBSClient:
                 argv, capture_output=True, text=True, check=True,
                 timeout=20, env=env,
             )
+        except subprocess.CalledProcessError as exc:
+            # Local GETs have no PBS credentials. Show a bounded, printable
+            # diagnostic; never include stdout or the native configuration.
+            detail = " ".join(str(exc.stderr or "").split())[:180]
+            raise SourceError(
+                f"PBS local CLI failed (exit {exc.returncode})"
+                + (f": {detail}" if detail else "")
+            ) from exc
         except (OSError, subprocess.SubprocessError) as exc:
             raise SourceError(f"PBS local CLI failed: {type(exc).__name__}") from exc
         return completed.stdout
