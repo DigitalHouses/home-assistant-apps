@@ -58,6 +58,18 @@ def run(config_path: Path = DEFAULT_CONFIG, state_dir: Path = STATE_DIR) -> int:
     publisher = Publisher(config)
     last_problem_state = StateStore(state_dir / "incidents.json")
     current_status = StateStore(state_dir / "runtime.json")
+    mqtt_status = StateStore(state_dir / "mqtt.json")
+    def on_mqtt_connection(status: str, reason: str | None) -> None:
+        mqtt_status.save({
+            "status": status,
+            "reason": reason,
+            "observed_at": datetime.now(timezone.utc).isoformat(),
+        })
+    mqtt_status.save({
+        "status": "CONNECTING", "reason": None,
+        "observed_at": datetime.now(timezone.utc).isoformat(),
+    })
+    publisher.on_connection_change = on_mqtt_connection
     try:
         last_success_at = current_status.load().get("last_success_at")
     except (ValueError, OSError):
