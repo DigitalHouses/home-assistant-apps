@@ -45,6 +45,9 @@ class FakePBS:
         self.sync_time = now - 3600
         self.used = 500
 
+    def task_list(self, limit=100):
+        return list(getattr(self, "tasks", []))
+
     def get(self, path, **params):
         if path == "version":
             return {"version": "4.2.11"}
@@ -54,8 +57,6 @@ class FakePBS:
             return {"total": 1000, "used": self.used, "avail": 1000 - self.used}
         if path == "admin/datastore/pbs-home/snapshots":
             return self.snapshots
-        if path == "nodes/localhost/tasks":
-            return []
         if path == "admin/sync":
             return [{"id": "push-home", "sync-direction": "push",
                      "last-run-state": self.sync_status,
@@ -150,6 +151,44 @@ class PBSAgentTests(unittest.TestCase):
         self.assertEqual(result["status"], "UNAVAILABLE")
         self.assertIsNone(result["pbs_version"])
         self.assertEqual(result["problems"][0]["type"], "service_unavailable")
+
+    def test_failed_completed_task_produces_factual_problem(self):
+        self.api.tasks = [
+            {"upid": "UPID:pbs:111:222:333:backup:abc:",
+             "worker_type": "backup", "status": "ERROR: client disconnected",
+             "endtime": self.now - 120},
+            {"upid": "UPID:pbs:111:222:333:backup:xyz:",
+             "worker_type": "backup", "status": "OK",
+             "endtime": self.now - 60},
+        ]
+        data = self.sample()
+        self.assertEqual(data["status"], "DEGRADED")
+        self.assertEqual(len(data["backup_sessions"]["failed_tasks"]), 1)
+        self.assertEqual(
+            [x["type"] for x in data["problems"]],
+            ["backup_failed"],
+        )
+
+    def test_running_task_is_not_failure(self):
+        self.api.tasks = [
+            {"upid": "UPID:pbs:111:222:333:backup:abc:",
+             "worker_type": "backup", "status": None}
+        ]
+        data = self.sample()
+        self.assertEqual(data["backup_sessions"]["active"], 1)
+        self.assertNotIn("backup_failed", [p["type"] for p in data["problems"]])
+
+    def test_unavailable_task_cli_keeps_remaining_sources_observable(self):
+        from app.collector import SourceError
+        def unavailable(_limit=100):
+            raise SourceError("PBS native task list failed (exit 255)")
+        self.api.task_list = unavailable
+        data = self.sample()
+        self.assertEqual(data["status"], "UNAVAILABLE")
+        self.assertEqual(data["pbs_version"], "4.2.11")
+        self.assertEqual(data["datastores"][0]["status"], "AVAILABLE")
+        self.assertIn("backup tasks: PBS native task list failed",
+                      " ".join(data["errors"]))
 
     def test_dh_sync_identity_and_ha_entities(self):
         self.assertEqual(instance_id(self.config), "pbs_home")
