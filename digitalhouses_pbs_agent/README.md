@@ -14,9 +14,12 @@ PVE Agent, Cloudflare, Tailscale, Ansible or CORE.
 - Canonical DH Sync 0.6.0 view: dashboards/ru/13_pbs.yaml, path dh_pbs_agent
 - Canonical RU notifications: packages/locales/ru/dh_pbs_agent_notification_local_package.yaml
 
-The agent observes native PBS HTTPS API endpoints for the server version,
-datastore status, snapshots and **push** sync, verify, prune and GC jobs,
-plus local read-only zpool and filesystem status. It does not run or
+Like PVE Agent, the PBS Agent runs locally as root and reads the installed
+PBS API with `proxmox-backup-debug api get` and `PROXMOX_DEBUG_API_CODE=1`.
+No PBS API token, external HTTPS connection, certificate settings, or extra
+monitoring service are needed. It observes PBS server version, datastore
+status, snapshots, **push** sync, verify, prune and GC jobs, plus local
+read-only ZFS and filesystem status. It does not run or
 edit PBS jobs, backup snapshots, PVE jobs, Plex, ZFS or retention.
 A job appearing as OK is **not** proof of restore verification.
 
@@ -25,22 +28,23 @@ A job appearing as OK is **not** proof of restore verification.
 **No production deployment before an immutable public release tag and live
 acceptance on HOME PBS.** After the GitHub Release is published:
 
-```bash
+For a published release, on the local PBS VM as root:
+
+~~~bash
 DIGITALHOUSES_SOURCE_REF=digitalhouses_pbs_agent-v0.1.0 \
   bash install.sh --non-interactive \
   --set mqtt_host=YOUR_MQTT_HOST \
-  --set pbs_token_id='monitor@pbs!read' \
-  --set pbs_datastores=pbs-home \
-  --set pbs_insecure_localhost=true
-```
+  --set pbs_datastores=YOUR_PBS_DATASTORE
+~~~
 
-Create a PBS read-only API token and store its secret securely at
-`/etc/digitalhouses_pbs_agent/pbs.token` as root-readable 0600 **before
-installation**. Provide the real local datastore(s) from PBS. The example
-names above are illustrative; no HOME/CORE addresses, credentials or
-datastore names are hard-coded into the product. Use `pbs_ca_file` to verify
-the PBS TLS certificate; setting `pbs_insecure_localhost=true` is permitted
-**only for a loopback API endpoint**.
+No PBS token is created, requested, or stored. The only optional credential
+is the MQTT password, handled by the existing native CLI/installer stdin
+mechanism. HOME and CORE addresses are not hard-coded into the product.
+
+For a pre-release acceptance run, use the existing development override
+explicitly: `DIGITALHOUSES_SOURCE_REF=feat/pbs-agent-home-v010-20261118
+DIGITALHOUSES_ALLOW_NON_RELEASE_REF=1`. Production always uses an immutable
+release tag.
 
 An existing installation retains its INI. The installer stages a GitHub release
 tag and compares VERSION with the tag. A failed update rolls back the prior
@@ -61,11 +65,6 @@ password =
 keepalive_seconds = 60
 
 [pbs]
-url = https://127.0.0.1:8007
-token_id = monitor@pbs!read
-token_secret_file = /etc/digitalhouses_pbs_agent/pbs.token
-ca_file =
-insecure_localhost = true
 datastores = pbs-home
 
 [monitor]
@@ -133,14 +132,16 @@ degraded ZFS. `UNKNOWN` / `UNAVAILABLE`: required evidence cannot
 be read; never substitute 0 or success. If a backup or sync rule is not
 configured, no freshness guarantee is asserted.
 
-An API failure is explicit; credentials need only PBS API **read permissions**
-appropriate to the inventory endpoints. Never grant a write role to enable
-monitoring. ZFS commands are read-only `zpool list`, no scrub/import/destroy.
+CLI/API collection failure is explicit. All PBS reads are executed locally
+under the root-owned systemd service, analogously to PVE Agent's `pvesh get`.
+The agent invokes only `proxmox-backup-debug api get`; never create/set/delete
+operations. `PROXMOX_DEBUG_API_CODE=1` avoids the need for PBS tokens or
+loopback HTTPS. ZFS commands are read-only `zpool list`, no scrub/import/destroy.
 Snapshots use PBS metadata, not archive contents or chunk scans.
 
 ## Acceptance gate before v0.1.0 release
 
-1. On HOME PBS 4.x verify API token ACL and actual JSON shapes of
+1. On HOME PBS 4.x verify local root CLI and actual JSON shapes of
    `/admin/sync`, `/admin/verify`, `/admin/prune`, `/admin/datastore/<store>/gc`,
    and `/admin/datastore/<store>/snapshots`.
 2. Verify actual Push Job, Verify/Prune/GC status and ZFS datastore metrics.
