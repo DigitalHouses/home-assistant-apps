@@ -90,6 +90,39 @@ class PBSClient:
             raise SourceError(f"PBS local CLI failed: {type(exc).__name__}") from exc
         return completed.stdout
 
+    def task_list(self, limit: int = 100) -> list[dict]:
+        """PBS 4.x supported root CLI, including completed tasks with --all.
+
+        The direct debug API cannot initialize WorkerTask in a standalone
+        process. The normal manager command can list historical tasks.
+        """
+        if not isinstance(limit, int) or not 1 <= limit <= 1000:
+            raise SourceError("invalid PBS task list limit")
+        argv = [
+            "proxmox-backup-manager", "task", "list",
+            "--all", "true", "--limit", str(limit),
+            "--output-format", "json",
+        ]
+        try:
+            finished = subprocess.run(
+                argv, capture_output=True, text=True, check=True, timeout=20,
+            )
+        except subprocess.CalledProcessError as exc:
+            detail = " ".join(str(exc.stderr or "").split())[:180]
+            raise SourceError(
+                f"PBS native task list failed (exit {exc.returncode})"
+                + (f": {detail}" if detail else "")
+            ) from exc
+        except (OSError, subprocess.SubprocessError) as exc:
+            raise SourceError(f"PBS native task list unavailable: {type(exc).__name__}") from exc
+        try:
+            rows = json.loads(finished.stdout)
+        except (ValueError, TypeError) as exc:
+            raise SourceError("PBS native task list is not valid JSON") from exc
+        if not isinstance(rows, list) or any(not isinstance(x, dict) for x in rows):
+            raise SourceError("PBS native task list has invalid structure")
+        return rows
+
     def get(self, path: str, **params: object):
         """Execute only API GET; never create/update/delete a PBS resource."""
         if not path or path.startswith("/") or any(x in path for x in ("..", "\n", "\r")):
@@ -309,7 +342,7 @@ def collect(config: Config, pbs: PBSClient | None = None, now: float | None = No
     # PBS owns backup receive sessions, not the PVE vzdump schedule.
     # Report an actual failed server-side backup task only with a real UPID.
     try:
-        task_rows = pbs.get("nodes/localhost/tasks", limit=100, typefilter="backup")
+        task_rows = pbs.task_list(limit=100)
         if not isinstance(task_rows, list) or any(not isinstance(x, dict) for x in task_rows):
             raise SourceError("PBS task list is invalid")
         active = 0
