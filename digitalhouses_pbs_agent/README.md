@@ -1,4 +1,4 @@
-# DigitalHouses PBS Agent v0.1.0
+# DigitalHouses PBS Agent v0.1.1
 
 Standalone **read-only** Linux/systemd monitoring agent for a local Proxmox Backup
 Server 4.x. HOME pilot: Debian MediaServer/PBS VM; no dependency on Plex Agent,
@@ -28,26 +28,26 @@ A job appearing as OK is **not** proof of restore verification.
 
 ## HOME installation / release
 
-**No production deployment before an immutable public release tag and live
-acceptance on HOME PBS.** After the GitHub Release is published:
+Install only from the published immutable GitHub Release:
 
 For a published release, on the local PBS VM as root:
 
 ~~~bash
-DIGITALHOUSES_SOURCE_REF=digitalhouses_pbs_agent-v0.1.0 \
+DIGITALHOUSES_SOURCE_REF=digitalhouses_pbs_agent-v0.1.1 \
   bash install.sh --non-interactive \
   --set mqtt_host=YOUR_MQTT_HOST \
   --set pbs_datastores=YOUR_PBS_DATASTORE
 ~~~
 
+For existing v0.1.0 installations, add `--set telemetry_enabled=true` to this
+installer command after accepting the telemetry/privacy policy. The installer
+checks this BEFORE stopping the existing service. Without that setting, it
+refuses the upgrade and leaves v0.1.0 running. This prevents a silent telemetry
+opt-in or a monitoring interruption.
+
 No PBS token is created, requested, or stored. The only optional credential
 is the MQTT password, handled by the existing native CLI/installer stdin
 mechanism. HOME and CORE addresses are not hard-coded into the product.
-
-For a pre-release acceptance run, use the existing development override
-explicitly: `DIGITALHOUSES_SOURCE_REF=feat/pbs-agent-home-v010-20261118
-DIGITALHOUSES_ALLOW_NON_RELEASE_REF=1`. Production always uses an immutable
-release tag.
 
 An existing installation retains its INI. The installer stages a GitHub release
 tag and compares VERSION with the tag. A failed update rolls back the prior
@@ -69,6 +69,9 @@ keepalive_seconds = 60
 
 [pbs]
 datastores = pbs-home
+
+[telemetry]
+enabled = true
 
 [monitor]
 poll_seconds = 300
@@ -94,6 +97,7 @@ never success. Freshness SLA is never guessed.
 /usr/local/bin/dh-pbs-agent set monitor_warning_percent=80 monitor_critical_percent=90
 /usr/local/bin/dh-pbs-agent set mqtt_password      # hidden prompt
 printf '%s\n' "$MQTT_PASSWORD" | /usr/local/bin/dh-pbs-agent set mqtt_password=-
+/usr/local/bin/dh-pbs-agent telemetry-delete
 /usr/local/bin/dh-pbs-agent restart
 /usr/local/bin/dh-pbs-agent update
 /usr/local/bin/dh-pbs-agent help
@@ -146,7 +150,7 @@ requires a stored PBS token or loopback HTTPS. No create/set/delete operations
 are performed. ZFS commands are read-only `zpool list`, no scrub/import/destroy.
 Snapshots use PBS metadata, not archive contents or chunk scans.
 
-## Acceptance gate before v0.1.0 release
+## Historical v0.1.0 pilot acceptance checklist
 
 1. On HOME PBS 4.x verify local root CLI and actual JSON shapes of
    `/admin/sync`, `/admin/verify`, `/admin/prune`, `/admin/datastore/<store>/gc`,
@@ -160,3 +164,30 @@ Snapshots use PBS metadata, not archive contents or chunk scans.
    repository validator `python scripts/validate_repository.py`.
 
 Scope remains HOME only for the pilot. Ansible and CORE are managed separately.
+
+## Product telemetry (0.1.1)
+
+The single native INI switch is `[telemetry] enabled = true|false`. Fresh
+installations default to true (Linux Agent policy). The operator must review
+the privacy terms and legal conditions; a default-on value is not itself
+proof of consent. Existing installations retain their INI and **must explicitly
+set true before upgrading**. Disabled telemetry logs its reason and stops
+the agent at startup, as required by current policy v2. An HTTP/network failure
+never stops an activated PBS monitoring loop.
+
+The telemetry service is `https://telemetry.digitalhouses.vip/v1/heartbeat`.
+The JSON contains **only**: schema, telemetry policy version 2, persistent
+random UUIDv4 installation ID, product `digitalhouses_pbs_agent` and released
+agent version. The 256-bit authentication token is sent via Authorization
+header and stored owner-only in `/var/lib/digitalhouses_pbs_agent/telemetry.json`
+outside the repository. Country is derived server-side. No hostname, IP,
+PBS datastore, snapshots, storage health, MQTT details or account data are
+transmitted. Normal cadence is once per 24 hours ±30 minutes with a minimum
+one-hour backoff after failure. The same UUID survives upgrades. Deleting an
+installation and its retained server history is available via
+`dh-pbs-agent telemetry-delete`, which rotates the local identity and
+restarts only the agent so subsequent use reports a new installation.
+
+Privacy terms: [DigitalHouses Product Telemetry Policy](../docs/standards/PRODUCT_TELEMETRY_POLICY.md).
+Legal rollout remains subject to [Privacy / Legal Review](../docs/standards/TELEMETRY_PRIVACY_LEGAL_REVIEW.md);
+public release cannot by itself establish consent or close that review.

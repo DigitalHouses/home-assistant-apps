@@ -10,3 +10,12 @@ cat /etc/digitalhouses_pbs_agent/digitalhouses_pbs_agent.conf
 /usr/local/bin/dh-pbs-agent set mqtt_host=127.0.0.1 mqtt_port=1883
 WARNING: native INI may contain MQTT credentials; keep private.
 Full reference: https://github.com/DigitalHouses/home-assistant-apps/tree/main/digitalhouses_pbs_agent
+
+# Telemetry v0.1.1
+dh-pbs-agent status
+dh-pbs-agent telemetry-delete
+# Existing v0.1.0 upgrade: use the released installer with --set telemetry_enabled=true.
+# After v0.1.1 installation, the single config switch is:
+dh-pbs-agent set telemetry_enabled=true
+# Payload: only product ID, version, random UUID. Never hostname or device metrics.
+# Policy: https://github.com/DigitalHouses/home-assistant-apps/blob/main/docs/standards/PRODUCT_TELEMETRY_POLICY.md

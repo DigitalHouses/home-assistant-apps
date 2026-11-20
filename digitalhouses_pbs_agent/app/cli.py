@@ -18,6 +18,8 @@ from datetime import datetime, timezone
 
 from .config import DEFAULT_CONFIG, KEYS, SECRETS, load_config
 from .mqtt import _read_version, host_ip
+from .state import StateStore
+from .telemetry import TelemetryClient
 
 SERVICE = "digitalhouses_pbs_agent.service"
 STATE_DIR = Path("/var/lib/digitalhouses_pbs_agent")
@@ -144,6 +146,7 @@ def status() -> int:
         mqtt = f"{config.mqtt_host}:{config.mqtt_port}"
         ip = host_ip(config.mqtt_host, config.mqtt_port) or "unknown"
     except Exception:
+        config = None
         mqtt, ip = "unknown", "unknown"
     try:
         runtime = json.loads((STATE_DIR / "runtime.json").read_text(encoding="utf-8"))
@@ -169,6 +172,16 @@ def status() -> int:
     print("IP:", ip)
     service = _service_state()
     print("Systemd:", service)
+    print("Telemetry enabled:", config.telemetry_enabled if config else "unknown")
+    try:
+        record = StateStore(STATE_DIR / "telemetry.json").load()
+        last_epoch = record.get("last_success_epoch")
+        print("Telemetry last success:", (
+            datetime.fromtimestamp(last_epoch, timezone.utc).isoformat()
+            if isinstance(last_epoch, (int, float)) else "never"
+        ))
+    except (ValueError, OSError, OverflowError):
+        print("Telemetry last success: unknown")
     print("MQTT broker:", mqtt)
     mqtt_state = mqtt_runtime.get("status")
     if service != "active":
@@ -188,6 +201,29 @@ def status() -> int:
           if (APP / "BUILD_INFO").exists() else "development/unverified")
     if runtime.get("error"):
         print("Last error:", runtime["error"])
+    return 0
+
+
+def _telemetry_delete() -> int:
+    """Erase server history using the stored secret; restart agent to reload rotated ID."""
+    if not (STATE_DIR / "telemetry.json").exists():
+        raise ValueError("no telemetry installation identity exists")
+    active = _service_state() == "active"
+    if active:
+        subprocess.run(["systemctl", "stop", SERVICE], check=True, timeout=60)
+    try:
+        client = TelemetryClient(
+            enabled=False,
+            version=_read_version(),
+            state_store=StateStore(STATE_DIR / "telemetry.json"),
+            build_info_path=APP / "BUILD_INFO",
+        )
+        if not client.delete():
+            raise RuntimeError("telemetry deletion failed; identity remains unchanged")
+        print("DELETED installation history; local identity rotated")
+    finally:
+        if active:
+            subprocess.run(["systemctl", "start", SERVICE], check=True, timeout=60)
     return 0
 
 
@@ -226,18 +262,22 @@ def main() -> int:
     sub.add_parser("status")
     sub.add_parser("restart")
     sub.add_parser("update")
+    sub.add_parser("telemetry-delete")
     sub.add_parser("help")
     setparser = sub.add_parser("set")
     setparser.add_argument("pairs", nargs="+")
     args = parser.parse_args()
     try:
         if args.command == "help":
-            print("Usage: dh-pbs-agent status | restart | update | set key=value... | help")
+            print("Usage: dh-pbs-agent status | restart | update | telemetry-delete | set key=value... | help")
             print("Native INI:", DEFAULT_CONFIG)
             print("Config keys:", ", ".join(sorted(KEYS)))
             print("Secrets: mqtt_password (hidden prompt or mqtt_password=- from stdin).")
             print("monitor_backup_rules format: datastore|namespace-or--|vm/VMID|hours;...")
             print("monitor_sync_rules format: job-id|hours;...")
+            print("Telemetry: telemetry_enabled=true in [telemetry] enables required Stats heartbeat.")
+            print("Sends product, version and random installation UUID only.")
+            print("Privacy: https://github.com/DigitalHouses/home-assistant-apps/blob/main/docs/standards/PRODUCT_TELEMETRY_POLICY.md")
             print("Reference:", SOURCE)
         elif args.command == "status":
             return status()
@@ -248,6 +288,8 @@ def main() -> int:
             print("RESTARTED")
         elif args.command == "update":
             return _release_update()
+        elif args.command == "telemetry-delete":
+            return _telemetry_delete()
         elif args.command == "set":
             print(change_config(DEFAULT_CONFIG, args.pairs))
         return 0
