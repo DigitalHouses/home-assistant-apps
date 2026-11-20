@@ -2,11 +2,9 @@
 from __future__ import annotations
 
 import configparser
-import ipaddress
 import re
 from dataclasses import dataclass
 from pathlib import Path
-from urllib.parse import urlparse
 
 PRODUCT_ID = "digitalhouses_pbs_agent"
 REPO = "https://github.com/DigitalHouses/home-assistant-apps"
@@ -19,11 +17,6 @@ KEYS = {
     "mqtt_username": ("mqtt", "username"),
     "mqtt_password": ("mqtt", "password"),
     "mqtt_keepalive_seconds": ("mqtt", "keepalive_seconds"),
-    "pbs_url": ("pbs", "url"),
-    "pbs_token_id": ("pbs", "token_id"),
-    "pbs_token_secret_file": ("pbs", "token_secret_file"),
-    "pbs_ca_file": ("pbs", "ca_file"),
-    "pbs_insecure_localhost": ("pbs", "insecure_localhost"),
     "pbs_datastores": ("pbs", "datastores"),
     "monitor_poll_seconds": ("monitor", "poll_seconds"),
     "monitor_backup_rules": ("monitor", "backup_rules"),
@@ -59,11 +52,6 @@ class Config:
     mqtt_username: str
     mqtt_password: str
     mqtt_keepalive_seconds: int
-    pbs_url: str
-    pbs_token_id: str
-    pbs_token_secret_file: Path
-    pbs_ca_file: str
-    pbs_insecure_localhost: bool
     datastores: tuple[str, ...]
     poll_seconds: int
     backup_rules: tuple[BackupRule, ...]
@@ -116,24 +104,6 @@ def load_config(path: Path = DEFAULT_CONFIG) -> Config:
     host = get("mqtt", "host")
     if not host:
         raise ValueError("mqtt.host is required")
-    pbs_url = get("pbs", "url", "https://127.0.0.1:8007").rstrip("/")
-    parsed = urlparse(pbs_url)
-    if parsed.scheme != "https" or not parsed.hostname or parsed.username or parsed.password or parsed.query or parsed.fragment or parsed.path not in ("", "/"):
-        raise ValueError("pbs.url must be an HTTPS origin without credentials")
-    insecure = get("pbs", "insecure_localhost", "false").lower()
-    if insecure not in ("true", "false"):
-        raise ValueError("pbs.insecure_localhost must be true or false")
-    if insecure == "true":
-        if parsed.hostname != "localhost":
-            try:
-                if not ipaddress.ip_address(parsed.hostname).is_loopback:
-                    raise ValueError("insecure TLS is allowed only for loopback PBS")
-            except ValueError as exc:
-                raise ValueError("insecure TLS is allowed only for loopback PBS") from exc
-    token_id = get("pbs", "token_id")
-    token_path = Path(get("pbs", "token_secret_file", "/etc/digitalhouses_pbs_agent/pbs.token"))
-    if not token_path.is_absolute():
-        raise ValueError("pbs.token_secret_file must be absolute")
     stores = _csv(get("pbs", "datastores"))
     if not stores or len(stores) != len(set(stores)) or not all(re.fullmatch(r"[a-zA-Z0-9_-]+", s) for s in stores):
         raise ValueError("pbs.datastores: expected unique datastore names")
@@ -163,8 +133,6 @@ def load_config(path: Path = DEFAULT_CONFIG) -> Config:
         mqtt_host=host, mqtt_port=integer("mqtt", "port", "1883", 1, 65535),
         mqtt_username=get("mqtt", "username"), mqtt_password=get("mqtt", "password"),
         mqtt_keepalive_seconds=integer("mqtt", "keepalive_seconds", "60", 10, 3600),
-        pbs_url=pbs_url, pbs_token_id=token_id, pbs_token_secret_file=token_path,
-        pbs_ca_file=get("pbs", "ca_file"), pbs_insecure_localhost=insecure == "true",
         datastores=stores,
         poll_seconds=integer("monitor", "poll_seconds", "300", 60, 3600),
         backup_rules=backup, sync_rules=sync,
