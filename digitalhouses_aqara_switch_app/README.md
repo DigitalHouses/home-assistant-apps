@@ -1,6 +1,6 @@
 # DigitalHouses Aqara Switch App
 
-**v0.1.18 — DigitalHouses Stats telemetry with explicit consent; light-control behavior unchanged.**
+**v0.1.19 — fault-isolated telemetry persistence; light-control behavior unchanged.**
 
 This Home Assistant App supports the commissioning flow for Aqara wired switches,
 battery buttons and key panels. It is not a general automation engine. This MVP scans and adopts Aqara
@@ -8,6 +8,16 @@ inputs, preserves saved writable switch configuration, and dispatches an
 explicitly bound Aqara action to one or more Home Assistant light.toggle targets.
 It never switches physical Aqara relay output states itself.
 
+## v0.1.19 — Telemetry fault isolation
+
+If a previously saved /data/telemetry.json is corrupt or temporarily unreadable,
+the App logs a telemetry state error but continues switch/light operation.
+It does not overwrite the saved installation ID or token: telemetry remains
+unavailable until the storage error is corrected. The heartbeat scheduler
+survives its own storage faults without affecting MQTT switch control.
+Failed authenticated deletion reports an error rather than escaping its worker.
+The existing telemetry_enabled option remains explicit opt-in; no automatic
+transmission is enabled by this maintenance release.
 ## v0.1.17 — DH Sync 0.6.0
 
 On every successful MQTT connection or reconnection, the existing client publishes
