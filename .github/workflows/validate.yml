@@ -368,6 +368,10 @@ jobs:
         run: python -m unittest discover -s digitalhouses_pbs_agent/tests -v
       - name: Verify release installer shell syntax
         run: bash -n digitalhouses_pbs_agent/install.sh
+      - name: Prepare installed service binary path
+        run: |
+          sudo install -d /opt/digitalhouses/digitalhouses_pbs_agent/.venv/bin
+          sudo ln -sf "$(command -v python)" /opt/digitalhouses/digitalhouses_pbs_agent/.venv/bin/python
       - name: Validate native systemd service
         run: systemd-analyze verify digitalhouses_pbs_agent/systemd/*.service
 
