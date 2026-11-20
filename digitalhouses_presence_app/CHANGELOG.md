@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.41
+
+- Correct misleading Home Assistant settings text in Russian and English. The existing telemetry consent switch is active in the experimental Presence App; its default remains false and disabled statistics never stop presence.
+- Show the explicit HTTP 422 response code and product allowlist diagnostic if DH Stats rejects a heartbeat, rather than logging only a generic `HTTPError`. Verify this response and retry backoff in a regression test.
+- No changes to GPS/Wi-Fi decisions, notifications, MQTT, telemetry payload, consent semantics or the server. The installed DH Stats ingestion service must separately load its updated allowlist.
+
 ## 0.1.40
 
 - Added **explicit opt-in telemetry** for DigitalHouses Stats using the existing `telemetry_enabled` option. A fresh or upgraded installation remains **disabled by default**; Presence GPS/Wi-Fi, MQTT events, household automations, and notifications continue when telemetry is off. Mandatory policy v2 activation is held pending repository legal review.
