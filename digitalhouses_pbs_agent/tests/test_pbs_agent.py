@@ -25,10 +25,6 @@ log_level = info
 host = 192.0.2.1
 port = 1883
 [pbs]
-url = https://127.0.0.1:8007
-token_id = monitor@pbs!read
-token_secret_file = /tmp/token
-insecure_localhost = true
 datastores = pbs-home
 [monitor]
 poll_seconds = 300
@@ -88,14 +84,14 @@ class PBSAgentTests(unittest.TestCase):
         with patch("app.collector.zfs_pools", return_value={"status": "HEALTHY", "pools": [{"pool": "backup", "health": "ONLINE"}]}):
             return collect(self.config, self.api, now=self.now)
 
-    def test_ini_rules_and_local_tls(self):
+    def test_native_ini_has_no_pbs_credentials(self):
         self.assertEqual(self.config.datastores, ("pbs-home",))
         self.assertEqual(self.config.backup_rules[0].group, "vm/2222")
         self.assertEqual(self.config.sync_rules[0].job_id, "push-home")
-        self.assertTrue(self.config.pbs_insecure_localhost)
-        self.ini.write_text(config_text().replace("127.0.0.1", "192.0.2.2"))
-        with self.assertRaises(ValueError):
-            load_config(self.ini)
+        self.assertFalse(any(x.startswith("pbs_token") or x.startswith("pbs_ca")
+                             or x == "pbs_url" for x in self.config.__dataclass_fields__))
+        from app.config import KEYS
+        self.assertEqual([key for key in KEYS if "token" in key], [])
 
     def test_healthy_scan_is_supported_by_sources(self):
         data = self.sample()
@@ -148,7 +144,7 @@ class PBSAgentTests(unittest.TestCase):
         class Down:
             def get(self, path, **params):
                 from app.collector import SourceError
-                raise SourceError("PBS API HTTP 403")
+                raise SourceError("PBS local CLI failed")
         with patch("app.collector.zfs_pools", return_value={"status": "NOT_APPLICABLE", "pools": []}):
             result = collect(self.config, Down(), now=self.now)
         self.assertEqual(result["status"], "UNAVAILABLE")
