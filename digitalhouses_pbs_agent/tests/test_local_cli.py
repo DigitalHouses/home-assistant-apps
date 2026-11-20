@@ -60,6 +60,39 @@ class PBSLocalCliTests(unittest.TestCase):
             ):
                 PBSClient().get("nodes/localhost/tasks", limit=100)
 
+    def test_native_manager_tasks_include_completed(self):
+        class Done:
+            stdout = '[{"upid":"UPID:pbs:1","worker_type":"backup","status":"OK","endtime":123}]'
+        commands = []
+        def execute(argv, **kwargs):
+            commands.append((argv, kwargs))
+            return Done()
+        with patch("app.collector.subprocess.run", side_effect=execute):
+            rows = PBSClient().task_list(limit=100)
+        self.assertEqual(rows[0]["status"], "OK")
+        self.assertEqual(commands[0][0], [
+            "proxmox-backup-manager", "task", "list", "--all", "true",
+            "--limit", "100", "--output-format", "json"
+        ])
+        self.assertEqual(commands[0][1]["timeout"], 20)
+
+    def test_native_manager_task_failure_not_silent(self):
+        error = subprocess.CalledProcessError(
+            255, "proxmox-backup-manager", stderr="temporary task list unavailable"
+        )
+        with patch("app.collector.subprocess.run", side_effect=error):
+            with self.assertRaisesRegex(
+                SourceError, "PBS native task list failed \\(exit 255\\)"
+            ):
+                PBSClient().task_list()
+    
+    def test_native_manager_rejects_invalid_json(self):
+        class Done:
+            stdout = '{}'
+        with patch("app.collector.subprocess.run", return_value=Done()):
+            with self.assertRaisesRegex(SourceError, "invalid structure"):
+                PBSClient().task_list()
+    
     def test_rejects_invalid_api_path_or_missing_json(self):
         pbs = PBSClient(runner=lambda argv: "")
         for path in ("../delete", "/admin/sync", "", "admin/\nprune"):
