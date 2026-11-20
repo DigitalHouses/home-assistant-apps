@@ -25,6 +25,7 @@ configuration:
   exclude_users:
     name: Исключённые HA User ID (только legacy)
   telemetry_enabled:
-    name: Согласие на статистику (неактивно в экспериментальной версии)
+    name: Отправлять статистику DigitalHouses
+    description: Добровольно. Передаются название приложения, версия и случайный идентификатор установки. Имена жильцов, GPS, IP и MAC не передаются. Политика — https://github.com/DigitalHouses/home-assistant-apps/blob/main/docs/standards/PRODUCT_TELEMETRY_POLICY.md
   log_level:
     name: Журналирование
