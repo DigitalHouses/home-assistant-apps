@@ -20,6 +20,7 @@ from validators.products.internet_app import validate_internet
 from validators.products.network_app import validate_network
 from validators.products.presence_app import validate_presence
 from validators.products.plex_agent import validate_plex_agent
+from validators.products.pbs_agent import validate_pbs_agent
 from validators.products.pve_agent import validate_digitalhouses_pve_agent
 from validators.products.recorder_app import validate_db_monitoring
 from validators.products.speedtest_app import validate_speedtest
@@ -47,6 +48,7 @@ PRODUCT_VALIDATORS = {
     "digitalhouses_network_app": validate_network,
     "digitalhouses_presence_app": validate_presence,
     "digitalhouses_plex_agent": validate_plex_agent,
+    "digitalhouses_pbs_agent": validate_pbs_agent,
     "digitalhouses_pve_agent": validate_digitalhouses_pve_agent,
     "digitalhouses_recorder_app": validate_db_monitoring,
     "digitalhouses_speedtest_app": validate_speedtest,
