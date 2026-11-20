@@ -82,6 +82,19 @@ def test_heartbeat_payload_accepts_climate_app() -> None:
     assert payload.product == "digitalhouses_climate_app"
 
 
+def test_heartbeat_payload_accepts_pbs_agent() -> None:
+    payload = HeartbeatPayload(
+        schema=1,
+        telemetry_policy_version=2,
+        installation_id=uuid.uuid4(),
+        product="digitalhouses_pbs_agent",
+        version="0.1.0",
+    )
+    assert payload.product == "digitalhouses_pbs_agent"
+    assert payload.telemetry_policy_version == 2
+    assert "digitalhouses_pbs_agent" in ALLOWED_PRODUCTS
+
+
 def test_product_registry_is_complete_and_drives_allowlist() -> None:
     assert [product.identifier for product in PRODUCTS] == [
         "digitalhouses_pve_agent",
