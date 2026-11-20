@@ -15,7 +15,9 @@ NoNewPrivileges=true
 ProtectHome=true
 ProtectSystem=full
 PrivateTmp=true
-ReadWritePaths=/var/lib/digitalhouses_pbs_agent
+# PBS's built-in read-only API methods take a lock in this directory.
+# The lock must be writable even for GET operations; do not make all /etc writable.
+ReadWritePaths=/var/lib/digitalhouses_pbs_agent /etc/proxmox-backup
 TimeoutStopSec=25
 
 [Install]
