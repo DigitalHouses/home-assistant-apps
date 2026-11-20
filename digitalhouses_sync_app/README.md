@@ -1,4 +1,4 @@
-# DigitalHouses Sync App — 0.6.0
+# DigitalHouses Sync App — 0.6.2
 
 **Single standard:** [DH Sync Developer Standard](../docs/standards/DH_SYNC_DEVELOPER_STANDARD.md).
 
@@ -16,3 +16,25 @@ DH Sync publishes GitHub-owned Home Assistant panels and packages, using retaine
 **Clean start:** v0.6.0 does not migrate old dashboards, former View folders, or MQTT routing. Existing dashboard URLs present in the new YAML are updated; unrelated or legacy panels are not deleted automatically.
 
 Tests: `PYTHONPATH=digitalhouses_sync_app/rootfs/app:digitalhouses_sync_app/tests python -m unittest discover -s digitalhouses_sync_app/tests -p 'test_*.py'`
+
+## Telemetry (0.6.2)
+
+DH Sync uses the common [Product Telemetry Policy](../docs/standards/PRODUCT_TELEMETRY_POLICY.md)
+and [Telemetry Protocol v1](../docs/standards/TELEMETRY_PROTOCOL_V1.md).
+
+For statistics DigitalHouses receives the product name/identifier, released version and a
+random persistent installation identifier. The server determines country from network
+metadata. No home address, username, MQTT settings, hardware inventory, monitored data,
+credentials, or IP address is included in the heartbeat payload.
+
+**Explicit acceptance is required:** Home Assistant App option `telemetry_enabled: false`
+remains false for fresh installations. Setting it true confirms the current telemetry/privacy
+terms and permits normal runtime. When false, supported policy-v2 operation does not activate.
+The client sends at most one normal heartbeat daily (±30-minute jitter), and telemetry
+network failures never stop activated synchronization. Authenticated deletion removes
+server history and rotates the local installation identity, but continued use reports again.
+
+**Upgrade warning:** Existing installations previously had no telemetry option, so an
+unplanned automatic upgrade stops DH Sync until the operator explicitly sets
+`telemetry_enabled: true` and restarts the App. Jurisdiction-specific legal/privacy
+review of mandatory public rollout remains a separate responsibility.

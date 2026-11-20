@@ -121,7 +121,7 @@
       "type": "app",
       "entity_prefix": "dh_presence_app",
       "display_name": "Presence App",
-      "telemetry_allowed": false,
+      "telemetry_allowed": true,
       "release": {
         "title": "DigitalHouses Presence App",
         "version_source": "haos_config",
@@ -163,7 +163,7 @@
       "type": "app",
       "entity_prefix": "dh_network_app",
       "display_name": "Network App",
-      "telemetry_allowed": false,
+      "telemetry_allowed": true,
       "release": null,
       "repository_directory": "digitalhouses_network_app",
       "haos_slug": "digitalhouses_network_app"
@@ -173,7 +173,7 @@
       "type": "app",
       "entity_prefix": "dh_sync_app",
       "display_name": "Sync App",
-      "telemetry_allowed": false,
+      "telemetry_allowed": true,
       "release": {
         "title": "DigitalHouses Sync App",
         "version_source": "haos_config",

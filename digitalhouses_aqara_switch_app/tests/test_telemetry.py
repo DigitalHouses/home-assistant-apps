@@ -11,7 +11,7 @@ from unittest.mock import Mock, patch
 import yaml
 
 from aqara_switch.runtime import Application
-from aqara_switch.telemetry import ContractDataError, TelemetryClient
+from aqara_switch.telemetry import ContractDataError, TelemetryClient, TelemetryRunner
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -46,7 +46,7 @@ class TelemetryTests(unittest.TestCase):
         self.assertFalse(config["options"]["telemetry_enabled"])
         self.assertEqual(config["schema"]["telemetry_enabled"], "bool")
         self.assertEqual(config["boot"], "manual")
-        self.assertEqual(config["version"], "0.1.18")
+        self.assertEqual(config["version"], "0.1.19")
 
     def test_disabled_legacy_lighting_creates_no_telemetry_identity(self):
         for value in (False, None):
@@ -152,6 +152,88 @@ class TelemetryTests(unittest.TestCase):
             }))
             with self.assertRaises(ContractDataError):
                 TelemetryClient(enabled=True, version="0.1.18", state_file=path)
+
+
+    def test_corrupt_identity_is_preserved_and_switches_still_connect(self):
+        with TemporaryDirectory() as td:
+            state = Path(td) / "telemetry.json"
+            broken = '{"installation_id":'
+            state.write_text(broken, encoding="utf-8")
+            options = Mock()
+            options.read.return_value = {"switches": "[]", "telemetry_enabled": True}
+            real_client = TelemetryClient
+
+            def load_client(**kwargs):
+                return real_client(state_file=state, **kwargs)
+
+            with patch("aqara_switch.runtime.TelemetryClient", side_effect=load_client):
+                with self.assertLogs("aqara_switch.runtime", level="ERROR") as logs:
+                    app = Application(
+                        types.SimpleNamespace(Client=FakeMQTT), options=options,
+                        registry=Mock(), last_scan_path=Path(td) / "scan.json",
+                        version="0.1.19",
+                    )
+            self.assertIsNone(app.telemetry)
+            self.assertIsNone(app.telemetry_runner)
+            self.assertEqual(state.read_text(encoding="utf-8"), broken)
+            self.assertTrue(any("identity preserved" in line for line in logs.output))
+            app._on_connect(None, None, None, 0)
+            self.assertTrue(any(
+                args[0].endswith("/availability") and args[1] == "online"
+                for args, _kwargs in app.client.published
+            ))
+            options.write.assert_not_called()
+
+    def test_telemetry_permission_failure_is_isolated(self):
+        options = Mock()
+        options.read.return_value = {"switches": "[]", "telemetry_enabled": True}
+        with TemporaryDirectory() as td:
+            with patch("aqara_switch.runtime.TelemetryClient",
+                       side_effect=OSError("read-only filesystem")):
+                with self.assertLogs("aqara_switch.runtime", level="ERROR"):
+                    app = Application(
+                        types.SimpleNamespace(Client=FakeMQTT), options=options,
+                        registry=Mock(), last_scan_path=Path(td) / "scan.json",
+                        version="0.1.19",
+                    )
+        self.assertIsNone(app.telemetry_runner)
+
+    def test_worker_retries_after_telemetry_only_exception(self):
+        class FailingOnce:
+            def __init__(self):
+                import logging
+                self.log = logging.getLogger("aqara-telemetry-test")
+                self.count = 0
+
+            def tick(self):
+                self.count += 1
+                if self.count == 1:
+                    raise OSError("disk busy")
+                runner._stop.set()
+
+        client = FailingOnce()
+        runner = TelemetryRunner(client, check_seconds=0)
+        with self.assertLogs("aqara-telemetry-test", level="ERROR"):
+            runner._run()
+        self.assertEqual(client.count, 2)
+
+    def test_delete_storage_exception_is_logged(self):
+        options = Mock()
+        options.read.return_value = {"switches": "[]", "telemetry_enabled": True}
+        with TemporaryDirectory() as td:
+            with patch("aqara_switch.runtime.TelemetryClient") as telemetry:
+                with patch("aqara_switch.runtime.TelemetryRunner"):
+                    telemetry.return_value.delete.side_effect = OSError("disk full")
+                    app = Application(
+                        types.SimpleNamespace(Client=FakeMQTT), options=options,
+                        registry=Mock(), last_scan_path=Path(td) / "scan.json",
+                        version="0.1.19",
+                    )
+                    with self.assertLogs("aqara_switch.runtime", level="ERROR") as logs:
+                        app._delete_telemetry()
+                    self.assertTrue(any(
+                        "deletion state error" in line for line in logs.output
+                    ))
 
     def test_local_version_does_not_report(self):
         with TemporaryDirectory() as td:
