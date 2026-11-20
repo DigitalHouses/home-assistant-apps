@@ -44,7 +44,9 @@ class CLIManagementTests(unittest.TestCase):
             self.assertEqual(changed, "CHANGED")
             self.assertEqual(load_config(self.path).mqtt_port, 1884)
             self.assertEqual(load_config(self.path).poll_seconds, 180)
-            restart.assert_not_called()
+            self.assertEqual(restart.call_args_list[0].args[0],
+                             ["systemctl", "is-active", "digitalhouses_pbs_agent.service"])
+            self.assertEqual(len(restart.call_args_list), 1)
         self.assertIn("# Admin-owned native config", self.path.read_text("utf-8"))
 
     def test_idempotent_set_never_restarts(self):
