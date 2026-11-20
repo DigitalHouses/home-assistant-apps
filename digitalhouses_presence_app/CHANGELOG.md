@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.42
+
+- Identify the HTTPS telemetry client to Cloudflare using `User-Agent: DigitalHouses-Telemetry/1`, matching the existing Internet App. The default Python urllib User-Agent was rejected by Cloudflare with 403 / error 1010, preventing Presence heartbeat delivery.
+- Add a transport regression test to verify the canonical User-Agent, HTTP method, HTTPS endpoint, and timeout. No change to opt-in behavior, payload, installation identity, GPS/Wi-Fi processing or notifications.
+- The separate DH Stats server route and product allowlist must also accept `digitalhouses_presence_app`; an accepted heartbeat is confirmed only by HTTP 204.
+
 ## 0.1.41
 
 - Correct misleading Home Assistant settings text in Russian and English. The existing telemetry consent switch is active in the experimental Presence App; its default remains false and disabled statistics never stop presence.
