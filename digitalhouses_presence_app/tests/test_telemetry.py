@@ -49,6 +49,24 @@ class TelemetryTests(unittest.TestCase):
         self.assertFalse(client.delete())
         self.assertEqual(transport.calls, [])
 
+    def test_cloudflare_transport_sets_canonical_user_agent(self):
+        from unittest.mock import patch
+        from telemetry import HTTPS
+        with patch("telemetry.urllib.request.urlopen") as opener:
+            opener.return_value.__enter__.return_value.status = 204
+            status = HTTPS().request(
+                method="POST", path="/v1/heartbeat",
+                payload={"schema": 1, "product": PRODUCT},
+                token="0" * 64, timeout_seconds=5,
+            )
+        self.assertEqual(status, 204)
+        request = opener.call_args.args[0]
+        self.assertEqual(request.get_header("User-agent"), "DigitalHouses-Telemetry/1")
+        self.assertEqual(request.get_header("Content-type"), "application/json")
+        self.assertEqual(request.get_method(), "POST")
+        self.assertEqual(request.full_url, "https://telemetry.digitalhouses.vip/v1/heartbeat")
+        self.assertEqual(opener.call_args.kwargs["timeout"], 5)
+
     def test_first_opt_in_sends_only_exact_private_fields_with_bearer(self):
         transport = FakeTransport(204)
         client = self.make(transport=transport)
