@@ -236,6 +236,17 @@ class PBSAgentTests(unittest.TestCase):
         self.assertNotIn("tojson", notifications)
         self.assertNotIn("192.168.", notifications)
 
+    def test_systemd_pbs_lock_exception_is_scoped(self):
+        unit = (ROOT / "systemd/digitalhouses_pbs_agent.service").read_text("utf-8")
+        self.assertIn("User=root", unit)
+        self.assertIn("ProtectSystem=full", unit)
+        self.assertIn(
+            "ReadWritePaths=/var/lib/digitalhouses_pbs_agent /etc/proxmox-backup",
+            unit,
+        )
+        self.assertNotIn("ReadWritePaths=/etc\n", unit)
+        self.assertNotIn("ProtectSystem=false", unit)
+
     def test_last_run_unknown_not_ok(self):
         self.assertEqual(last_run({})["status"], "NEVER_RUN")
         self.assertEqual(last_run({"last-run-state": "garbled"})["status"], "UNKNOWN")
