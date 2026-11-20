@@ -110,6 +110,7 @@ class Publisher:
         self.discovery_topic = f"homeassistant/device/dh_pbs_agent_{self.id}/config"
         self.synctopic = self.base + "/sync"
         self.connected = False
+        self.last_connect_error: str | None = None
         self.last_state: dict | None = None
         self.last_ack_at: str | None = None
         self.client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, client_id="dh_pbs_agent_" + self.id)
@@ -138,8 +139,10 @@ class Publisher:
     def _on_connect(self, client: Any, userdata: Any, flags: Any, reason_code: Any, properties: Any) -> None:
         if getattr(reason_code, "is_failure", False):
             self.connected = False
+            self.last_connect_error = str(reason_code)
             return
         self.connected = True
+        self.last_connect_error = None
         # Network callbacks MUST NOT wait for PUBACK on their own I/O thread.
         # paho queues these QoS1 publications; the client loop sends them.
         def enqueue(topic: str, payload: dict | str) -> None:
@@ -158,6 +161,8 @@ class Publisher:
 
     def _on_disconnect(self, client: Any, userdata: Any, flags: Any, reason_code: Any, properties: Any) -> None:
         self.connected = False
+        if str(reason_code) not in ("Normal disconnection", "Success"):
+            self.last_connect_error = str(reason_code)
 
     def start(self) -> None:
         self.client.connect_async(self.config.mqtt_host, self.config.mqtt_port,
