@@ -15,12 +15,7 @@ def main() -> int:
     args = parser.parse_args()
     if args.changes:
         print(change_config(args.config, args.changes, restart=False))
-    config = load_config(args.config)
-    if not config.pbs_token_id:
-        raise ValueError("pbs_token_id is required")
-    # Validate that a configured token secret exists without reading it into logs.
-    if not config.pbs_token_secret_file.is_file():
-        raise ValueError("pbs_token_secret_file does not exist")
+    load_config(args.config)
     return 0
 
 
