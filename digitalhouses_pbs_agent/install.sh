@@ -33,9 +33,20 @@ elif [[ "${DIGITALHOUSES_ALLOW_NON_RELEASE_REF:-0}" == "1" && -n "$TAG" ]]; then
 else
   echo "ERROR: canonical immutable PBS Agent release tag required" >&2; exit 1
 fi
-for cmd in git python3 systemctl proxmox-backup-debug; do
+for cmd in systemctl proxmox-backup-debug; do
   command -v "$cmd" >/dev/null 2>&1 || { echo "ERROR: missing $cmd" >&2; exit 1; }
 done
+need_packages=()
+command -v git >/dev/null 2>&1 || need_packages+=(git)
+command -v python3 >/dev/null 2>&1 || need_packages+=(python3 python3-venv)
+if command -v python3 >/dev/null 2>&1 && ! python3 -c 'import ensurepip' >/dev/null 2>&1; then
+  need_packages+=(python3-venv)
+fi
+if (( ${#need_packages[@]} > 0 )); then
+  command -v apt-get >/dev/null 2>&1 || { echo "ERROR: apt-get unavailable" >&2; exit 1; }
+  apt-get update
+  DEBIAN_FRONTEND=noninteractive apt-get install -y "${need_packages[@]}"
+fi
 mkdir -p /opt/digitalhouses "$(dirname "$CONFIG")" "$STATE"
 chmod 700 "$(dirname "$CONFIG")" "$STATE"
 TMP="$(mktemp -d /opt/digitalhouses/.pbs-agent-install.XXXXXXXX)"
