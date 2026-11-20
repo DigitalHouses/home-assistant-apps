@@ -50,6 +50,16 @@ class PBSLocalCliTests(unittest.TestCase):
             with self.assertRaisesRegex(SourceError, "PBS local CLI failed"):
                 PBSClient().get("version")
 
+    def test_cli_error_includes_bounded_stderr_for_diagnostics(self):
+        error = subprocess.CalledProcessError(
+            2, "proxmox-backup-debug", stderr="task API error: unsupported option"
+        )
+        with patch("app.collector.subprocess.run", side_effect=error):
+            with self.assertRaisesRegex(
+                SourceError, r"exit 2.*task API error: unsupported option"
+            ):
+                PBSClient().get("nodes/localhost/tasks", limit=100)
+
     def test_rejects_invalid_api_path_or_missing_json(self):
         pbs = PBSClient(runner=lambda argv: "")
         for path in ("../delete", "/admin/sync", "", "admin/\nprune"):
