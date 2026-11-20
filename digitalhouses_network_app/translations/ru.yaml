@@ -1,4 +1,7 @@
 configuration:
+  telemetry_enabled:
+    name: Согласие на сбор статистики
+    description: "Необязательная статистика: при включении передаются название приложения, версия и случайный идентификатор установки. Отключение статистики не останавливает мониторинг. Политика: https://github.com/DigitalHouses/home-assistant-apps/blob/main/docs/standards/PRODUCT_TELEMETRY_POLICY.md"
   poll_interval_seconds:
     name: Интервал опроса роутеров (секунды)
     description: Периодически читать device_tracker интеграций роутеров из Home Assistant.

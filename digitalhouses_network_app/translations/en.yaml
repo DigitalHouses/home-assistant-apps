@@ -1,4 +1,7 @@
 configuration:
+  telemetry_enabled:
+    name: Statistics collection consent
+    description: "Optional statistics: when enabled, send the App name, version and a random installation identifier. Disabling statistics does not stop network monitoring. Policy: https://github.com/DigitalHouses/home-assistant-apps/blob/main/docs/standards/PRODUCT_TELEMETRY_POLICY.md"
   poll_interval_seconds:
     name: Router tracker poll interval (seconds)
     description: Read existing Home Assistant router device_trackers periodically.
