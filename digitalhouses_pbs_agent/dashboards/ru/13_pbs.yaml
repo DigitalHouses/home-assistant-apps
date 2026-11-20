@@ -1,5 +1,5 @@
-# DH-View-Version: 0.1.0
-# DH-View-Date: 2026-11-18
+# DH-View-Version: 0.1.1
+# DH-View-Date: 2026-11-21
 title: PBS
 path: dh_pbs_agent
 icon: mdi:backup-restore
@@ -24,7 +24,7 @@ sections:
           - entity: sensor.dh_pbs_agent_zfs_pool_health
             name: ZFS
       - type: markdown
-        content: >-
+        content: |
           {% set a = state_attr('sensor.dh_pbs_agent_health', 'summary') or {} %}
           **Сводка PBS**
 
@@ -48,15 +48,15 @@ sections:
         heading_style: title
         icon: mdi:database
       - type: markdown
-        content: >-
+        content: |
           {% set entries = state_attr('sensor.dh_pbs_agent_health', 'datastores') or [] %}
           | Datastore | Заполнено | Свободно |
           | :--- | ---: | ---: |
-          {% for d in entries %}
+          {% for d in entries -%}
           | {{ d.name }} | {{ d.used_percent if d.used_percent is defined else '—' }}% | {{ (d.available_bytes / 1073741824) | round(1) if d.available_bytes is defined else '—' }} GiB |
           {% endfor %}
       - type: markdown
-        content: >-
+        content: |
           {% set entries = state_attr('sensor.dh_pbs_agent_health', 'backups') or [] %}
           **Контролируемые группы и свежесть копий**
 
@@ -75,7 +75,7 @@ sections:
         heading_style: title
         icon: mdi:cloud-upload-outline
       - type: markdown
-        content: >-
+        content: |
           {% set jobs = state_attr('sensor.dh_pbs_agent_health', 'sync_jobs') or [] %}
           **PBS Push Sync**
 
@@ -87,7 +87,7 @@ sections:
           Push Sync не обнаружен.
           {% endif %}
       - type: markdown
-        content: >-
+        content: |
           {% set verify = state_attr('sensor.dh_pbs_agent_health', 'verify_jobs') or [] %}
           {% set prune = state_attr('sensor.dh_pbs_agent_health', 'prune_jobs') or [] %}
           {% set gc = state_attr('sensor.dh_pbs_agent_health', 'gc') or [] %}
@@ -117,7 +117,7 @@ sections:
           - entity: sensor.dh_pbs_agent_ip
           - entity: sensor.dh_pbs_agent_version
       - type: markdown
-        content: >-
+        content: |
           {% set errors = state_attr('sensor.dh_pbs_agent_health', 'errors') or [] %}
           **Ошибки сбора**
           {% if errors %}

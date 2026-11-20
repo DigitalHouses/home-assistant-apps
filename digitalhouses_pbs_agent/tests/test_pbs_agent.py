@@ -236,6 +236,19 @@ class PBSAgentTests(unittest.TestCase):
         self.assertNotIn("tojson", notifications)
         self.assertNotIn("192.168.", notifications)
 
+    def test_lovelace_markdown_table_keeps_real_line_breaks(self):
+        view = (ROOT / "dashboards/ru/13_pbs.yaml").read_text(encoding="utf-8")
+        # Folded YAML scalar (>- ) turns the Markdown table into one line.
+        self.assertEqual(view.count("content: |"), 6)
+        self.assertNotIn("content: >-", view)
+        self.assertIn(
+            "| Datastore | Заполнено | Свободно |\n"
+            "          | :--- | ---: | ---: |\n"
+            "          {% for d in entries -%}\n"
+            "          | {{ d.name }}",
+            view,
+        )
+
     def test_systemd_pbs_lock_exception_is_scoped(self):
         unit = (ROOT / "systemd/digitalhouses_pbs_agent.service").read_text("utf-8")
         self.assertIn("User=root", unit)
