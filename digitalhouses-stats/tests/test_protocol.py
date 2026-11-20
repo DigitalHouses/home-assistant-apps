@@ -85,6 +85,7 @@ def test_heartbeat_payload_accepts_climate_app() -> None:
 def test_product_registry_is_complete_and_drives_allowlist() -> None:
     assert [product.identifier for product in PRODUCTS] == [
         "digitalhouses_pve_agent",
+        "digitalhouses_pbs_agent",
         "digitalhouses_plex_agent",
         "digitalhouses_recorder_app",
         "digitalhouses_speedtest_app",
