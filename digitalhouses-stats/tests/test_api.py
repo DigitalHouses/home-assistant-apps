@@ -50,6 +50,7 @@ def test_empty_dashboard_products_lists_full_catalog() -> None:
     rows = response.json()
     assert [row["product"] for row in rows] == [
         "digitalhouses_pve_agent",
+        "digitalhouses_pbs_agent",
         "digitalhouses_plex_agent",
         "digitalhouses_recorder_app",
         "digitalhouses_speedtest_app",
