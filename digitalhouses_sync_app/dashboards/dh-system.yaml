@@ -15,6 +15,12 @@ views:
     icon: mdi:power-plug-battery
     show_icon_and_title: false
 
+  - product: digitalhouses_pbs_agent
+    path: dh_pbs_agent
+    title: PBS
+    icon: mdi:backup-restore
+    show_icon_and_title: true
+
   - product: digitalhouses_plex_agent
     path: dh-plex-agent
     title: Plex
