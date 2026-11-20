@@ -149,6 +149,12 @@ def status() -> int:
         runtime = json.loads((STATE_DIR / "runtime.json").read_text(encoding="utf-8"))
     except (OSError, ValueError):
         runtime = {}
+    try:
+        mqtt_runtime = json.loads((STATE_DIR / "mqtt.json").read_text(encoding="utf-8"))
+        if not isinstance(mqtt_runtime, dict):
+            mqtt_runtime = {}
+    except (OSError, ValueError):
+        mqtt_runtime = {}
     observed = runtime.get("observed_at")
     stale = True
     if observed:
@@ -164,11 +170,16 @@ def status() -> int:
     service = _service_state()
     print("Systemd:", service)
     print("MQTT broker:", mqtt)
-    print("MQTT runtime:", runtime.get("mqtt", "unknown") if service == "active" and not stale
-          else "UNKNOWN (offline or stale)")
+    mqtt_state = mqtt_runtime.get("status")
+    if service != "active":
+        mqtt_state = "UNKNOWN (agent inactive)"
+    elif mqtt_state is None:
+        mqtt_state = runtime.get("mqtt", "UNKNOWN (no connection event yet)")
+    print("MQTT runtime:", mqtt_state)
     print("Last MQTT PUBACK:", runtime.get("mqtt_last_ack") or "unknown")
-    if runtime.get("mqtt_connect_error"):
-        print("MQTT connection reason:", runtime["mqtt_connect_error"])
+    mqtt_reason = mqtt_runtime.get("reason") or runtime.get("mqtt_connect_error")
+    if mqtt_state != "CONNECTED" and mqtt_reason:
+        print("MQTT connection reason:", mqtt_reason)
     print("PBS status:", runtime.get("status", "UNKNOWN"))
     for error in runtime.get("pbs_errors", [])[:8]:
         print("PBS source error:", error)
