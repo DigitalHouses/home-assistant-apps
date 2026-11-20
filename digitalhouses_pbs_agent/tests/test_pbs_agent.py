@@ -180,7 +180,7 @@ class PBSAgentTests(unittest.TestCase):
 
     def test_unavailable_task_cli_keeps_remaining_sources_observable(self):
         from app.collector import SourceError
-        def unavailable(_limit=100):
+        def unavailable(limit=100):
             raise SourceError("PBS native task list failed (exit 255)")
         self.api.task_list = unavailable
         data = self.sample()
