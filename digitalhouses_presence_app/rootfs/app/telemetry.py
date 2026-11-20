@@ -177,6 +177,9 @@ class TelemetryClient:
                 if not 200 <= int(status) < 300:
                     LOG.warning("Telemetry heartbeat HTTP %s; retry after backoff", status)
                     return False
+            except urllib.error.HTTPError as exc:
+                LOG.warning("Telemetry heartbeat HTTP %s; check Stats server product allowlist and request schema; retry after backoff", exc.code)
+                return False
             except Exception as exc:
                 LOG.warning("Telemetry heartbeat delivery failed; retry after backoff: %s", type(exc).__name__)
                 return False

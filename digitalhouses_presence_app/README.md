@@ -1,12 +1,12 @@
 # DigitalHouses Presence App
 
-**Status: GPS + HA router device_tracker Wi-Fi pilot, version 0.1.40.** Observe router tracker stability before safety-critical automations.
+**Status: GPS + HA router device_tracker Wi-Fi pilot, version 0.1.41.** Observe router tracker stability before safety-critical automations.
 
 This application belongs to `DigitalHouses/home-assistant-apps/digitalhouses_presence_app` and is installed via **Settings → Apps → App Store**.
 
 **DH Sync 0.6.0:** the App publishes retained MQTT `/sync`; the existing four-column View is available at `dashboards/ru/presence.yaml` (`path: presence`). Local `script.write2log` notification packages remain manual examples, not auto-installed. See [DH Sync compatibility](docs/DH_SYNC_COMPATIBILITY.md).
 
-## DigitalHouses Stats: добровольная телеметрия (0.1.40)
+## DigitalHouses Stats: добровольная телеметрия (0.1.40–0.1.41)
 
 **Включение:** `Settings → Apps → DigitalHouses Presence App → Configuration → telemetry_enabled: true`, сохранить и перезапустить App. При `false` никакая статистика не отправляется, случайный идентификатор не создаётся при новой установке, а GPS/Wi-Fi присутствие и уведомления продолжают работать. Существующий параметр конфигурации при обновлении **не меняется автоматически**.
 
@@ -15,6 +15,8 @@ This application belongs to `DigitalHouses/home-assistant-apps/digitalhouses_pre
 Используется совместимый с сервером протокол v1 и добровольная модель согласия (policy v1). Обязательная модель policy v2 пока заблокирована юридическим review, поэтому **отказ от телеметрии никогда не останавливает Presence App**. Доставка не связана с MQTT/DH Sync: отправляется HTTPS heartbeat на `https://telemetry.digitalhouses.vip/v1/heartbeat` сразу после первой активации, далее примерно раз в сутки (±30 минут), с попытками не чаще одного раза в час при ошибке. Ошибки статистики не блокируют контроль присутствия.
 
 Локальные случайные UUID и секретный токен сохраняются в `/data/telemetry.json` с правами 0600, переживают обновления и восстановление резервной копии. Для **удаления** статистики сначала выключите `telemetry_enabled` и перезапустите App, затем выполните операторскую команду `python3 /app/telemetry.py --delete` в контейнере App; она вызывает защищённое удаление на сервере. Не включайте опцию снова, если хотите оставить телеметрию отключённой.
+
+**Диагностика с 0.1.41:** если сервер отклоняет heartbeat, журнал показывает HTTP-код, например `Telemetry heartbeat HTTP 422`. Проверьте обновление серверного списка разрешённых продуктов. Только успешный ответ сервера приводит к появлению статистики.
 
 **Важное условие для отображения на портале:** после релиза сервер DH Stats должен получить обновлённый реестр продуктов с `telemetry_allowed: true` для Presence App. Без обновления сервера он ответит 422 даже на корректный heartbeat.
 

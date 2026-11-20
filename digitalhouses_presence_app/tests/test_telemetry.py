@@ -113,6 +113,20 @@ class TelemetryTests(unittest.TestCase):
         self.assertTrue(client.tick())
         self.assertEqual(len(transport.calls), 2)
 
+    def test_http_422_diagnostic_and_retry_backoff(self):
+        err = HTTPError("https://telemetry.digitalhouses.vip/v1/heartbeat",
+                        422, "unsupported product", {}, None)
+        transport = FakeTransport(err)
+        client = self.make(transport=transport)
+        with self.assertLogs("dh_presence_app.telemetry", level="WARNING") as logs:
+            self.assertFalse(client.tick())
+        output = "\n".join(logs.output)
+        self.assertIn("HTTP 422", output)
+        self.assertIn("product allowlist", output)
+        self.assertNotIn("last_success_epoch", client.state)
+        self.assertFalse(client.tick())
+        self.assertEqual(len(transport.calls), 1)
+
     def test_http_failure_is_not_counted_as_success(self):
         transport = FakeTransport(422, 204)
         client = self.make(transport=transport)
