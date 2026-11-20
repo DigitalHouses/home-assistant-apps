@@ -17,7 +17,10 @@ PVE Agent, Cloudflare, Tailscale, Ansible or CORE.
 Like PVE Agent, the PBS Agent runs locally as root and reads the installed
 PBS API with `proxmox-backup-debug api get` and `PROXMOX_DEBUG_API_CODE=1`.
 No PBS API token, external HTTPS connection, certificate settings, or extra
-monitoring service are needed. It observes PBS server version, datastore
+monitoring service are needed. The systemd service retains `ProtectSystem=full`,
+with a narrow writable exception for `/etc/proxmox-backup` because PBS itself
+opens `.datastore.lck` even for read-only datastore status and GC queries.
+It observes PBS server version, datastore
 status, snapshots, **push** sync, verify, prune and GC jobs, plus local
 read-only ZFS and filesystem status. It does not run or
 edit PBS jobs, backup snapshots, PVE jobs, Plex, ZFS or retention.
