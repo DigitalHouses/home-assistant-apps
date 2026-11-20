@@ -13,6 +13,10 @@ usage() {
   cat <<'EOF'
 Usage: DIGITALHOUSES_SOURCE_REF=digitalhouses_pbs_agent-vX.Y.Z bash install.sh [--non-interactive] [--set key=value] [--mqtt-password-stdin]
 Native INI settings are identical to dh-pbs-agent set. MQTT password only by stdin.
+TELEMETRY: [telemetry] enabled=true sends product, version and random installation ID.
+Privacy: https://github.com/DigitalHouses/home-assistant-apps/blob/main/docs/standards/PRODUCT_TELEMETRY_POLICY.md
+For an existing 0.1.0 installation, use --set telemetry_enabled=true explicitly.
+
 EOF
 }
 while (($#)); do
@@ -99,6 +103,8 @@ username =
 password =
 [pbs]
 datastores =
+[telemetry]
+enabled = true
 [monitor]
 poll_seconds = 300
 backup_rules =
@@ -113,6 +119,7 @@ chmod 600 "$CANDIDATE"
   export PYTHONPATH="$STAGE"
   "$STAGE/.venv/bin/python" -m app.installer "$CANDIDATE" "${CHANGES[@]}"
   "$STAGE/.venv/bin/python" -m app.main --config "$CANDIDATE" --check-config
+  "$STAGE/.venv/bin/python" -c 'import sys; from pathlib import Path; from app.config import load_config; cfg=load_config(Path(sys.argv[1])); sys.exit(0 if cfg.telemetry_enabled else "ERROR: telemetry not accepted; run installer again with --set telemetry_enabled=true after reviewing the privacy policy (existing installation untouched)")' "$CANDIDATE"
 )
 if systemctl is-active --quiet "$SERVICE"; then ACTIVE_BEFORE=1; fi
 if ((ACTIVE_BEFORE == 1)); then systemctl stop "$SERVICE"; fi

@@ -12,6 +12,7 @@ DEFAULT_CONFIG = Path("/etc/digitalhouses_pbs_agent/digitalhouses_pbs_agent.conf
 KEYS = {
     "instance_id": ("general", "instance_id"),
     "log_level": ("general", "log_level"),
+    "telemetry_enabled": ("telemetry", "enabled"),
     "mqtt_host": ("mqtt", "host"),
     "mqtt_port": ("mqtt", "port"),
     "mqtt_username": ("mqtt", "username"),
@@ -58,6 +59,7 @@ class Config:
     sync_rules: tuple[SyncRule, ...]
     warning_percent: float
     critical_percent: float
+    telemetry_enabled: bool
 
 
 def _csv(s: str) -> tuple[str, ...]:
@@ -128,6 +130,10 @@ def load_config(path: Path = DEFAULT_CONFIG) -> Config:
     critical = percentage("critical_percent", "90")
     if warning >= critical:
         raise ValueError("warning_percent must be less than critical_percent")
+    value = get("telemetry", "enabled", "false").lower()
+    if value not in {"true", "false"}:
+        raise ValueError("telemetry.enabled: expected true or false")
+    telemetry_enabled = value == "true"
     return Config(
         instance_id=instance, log_level=level,
         mqtt_host=host, mqtt_port=integer("mqtt", "port", "1883", 1, 65535),
@@ -137,4 +143,5 @@ def load_config(path: Path = DEFAULT_CONFIG) -> Config:
         poll_seconds=integer("monitor", "poll_seconds", "300", 60, 3600),
         backup_rules=backup, sync_rules=sync,
         warning_percent=warning, critical_percent=critical,
+        telemetry_enabled=telemetry_enabled,
     )

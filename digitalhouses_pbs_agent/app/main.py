@@ -15,6 +15,7 @@ from .config import DEFAULT_CONFIG, load_config
 from .events import transitions
 from .mqtt import Publisher, _read_version, host_ip
 from .state import StateStore
+from .telemetry import TelemetryClient, TelemetryRunner
 
 STATE_DIR = Path("/var/lib/digitalhouses_pbs_agent")
 LOG = logging.getLogger("digitalhouses_pbs_agent")
@@ -54,7 +55,18 @@ def run(config_path: Path = DEFAULT_CONFIG, state_dir: Path = STATE_DIR) -> int:
         level=getattr(logging, config.log_level.upper()),
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
     )
+    if not config.telemetry_enabled:
+        LOG.error("Telemetry/privacy terms not accepted: PBS Agent does not activate. "
+                  "Set telemetry_enabled=true in native INI after reviewing the policy.")
+        return 0
     state_dir.mkdir(parents=True, exist_ok=True)
+    telemetry = TelemetryClient(
+        enabled=True,
+        version=_read_version(),
+        state_store=StateStore(state_dir / "telemetry.json"),
+        build_info_path=Path(__file__).resolve().parents[1] / "BUILD_INFO",
+    )
+    telemetry_runner = TelemetryRunner(telemetry)
     publisher = Publisher(config)
     last_problem_state = StateStore(state_dir / "incidents.json")
     current_status = StateStore(state_dir / "runtime.json")
@@ -81,8 +93,9 @@ def run(config_path: Path = DEFAULT_CONFIG, state_dir: Path = STATE_DIR) -> int:
 
     signal.signal(signal.SIGINT, stopped)
     signal.signal(signal.SIGTERM, stopped)
-    publisher.start()
+    telemetry_runner.start()
     try:
+        publisher.start()
         while not stop.is_set():
             started = time.monotonic()
             ip = host_ip(config.mqtt_host, config.mqtt_port)
@@ -135,6 +148,7 @@ def run(config_path: Path = DEFAULT_CONFIG, state_dir: Path = STATE_DIR) -> int:
             stop.wait(max(1, config.poll_seconds - elapsed))
     finally:
         publisher.stop()
+        telemetry_runner.stop()
     return 0
 
 
