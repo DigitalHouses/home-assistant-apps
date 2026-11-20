@@ -357,7 +357,14 @@ class TelemetryRunner:
 
     def _run(self) -> None:
         while not self._stop.is_set():
-            self.client.tick()
+            try:
+                self.client.tick()
+            except Exception:
+                # A telemetry-only fault must not terminate the scheduler.
+                # The ordinary cadence is used for future attempts.
+                self.client.log.exception(
+                    "Aqara telemetry worker failed; retry remains scheduled"
+                )
             self._stop.wait(self.check_seconds)
 
     def stop(self) -> None:

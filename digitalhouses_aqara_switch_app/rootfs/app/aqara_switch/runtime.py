@@ -34,7 +34,7 @@ from .mqtt_ui import (
 )
 from .scan import scan_once
 from .supervisor import SupervisorOptions
-from .telemetry import TelemetryClient, TelemetryRunner
+from .telemetry import ContractDataError, TelemetryClient, TelemetryRunner
 
 LOG = logging.getLogger(__name__)
 _IEEE = re.compile(r"^0x[0-9a-f]{16}$")
@@ -130,10 +130,21 @@ class Application:
         # Staged migration: existing lighting controls continue with the new
         # HAOS telemetry switch unset/false. No identity or network request
         # is created without explicit opt-in.
-        self.telemetry = (TelemetryClient(enabled=True, version=self.version)
-                          if options_snapshot.get('telemetry_enabled') is True else None)
-        self.telemetry_runner = (TelemetryRunner(self.telemetry)
-                                 if self.telemetry is not None else None)
+        self.telemetry = None
+        self.telemetry_runner = None
+        if options_snapshot.get("telemetry_enabled") is True:
+            try:
+                self.telemetry = TelemetryClient(enabled=True, version=self.version)
+                self.telemetry_runner = TelemetryRunner(self.telemetry)
+            except (ContractDataError, OSError, ValueError) as exc:
+                # A failed telemetry identity must never interrupt light
+                # control or be silently replaced with a fresh identifier.
+                LOG.error(
+                    "Aqara telemetry unavailable (persistent state error): %s; "
+                    "lighting remains operational; saved identity preserved", exc
+                )
+                self.telemetry = None
+                self.telemetry_runner = None
         self._previous = _load_previous(last_scan_path)
         self._previous_path = last_scan_path
         self._stop = threading.Event()
@@ -790,11 +801,17 @@ class Application:
             self._scan_lock.release()
 
     def _delete_telemetry(self) -> None:
-        if self.telemetry is not None:
-            if self.telemetry.delete():
-                LOG.info("Aqara telemetry installation and history deleted; identity rotated")
-            else:
-                LOG.warning("Aqara telemetry deletion failed")
+        if self.telemetry is None:
+            return
+        try:
+            deleted = self.telemetry.delete()
+        except (ContractDataError, OSError, ValueError) as exc:
+            LOG.error("Aqara telemetry deletion state error: %s", exc)
+            return
+        if deleted:
+            LOG.info("Aqara telemetry installation and history deleted; identity rotated")
+        else:
+            LOG.warning("Aqara telemetry deletion failed")
 
     def run(self) -> None:
         host, port = os.environ["MQTT_HOST"], int(os.environ["MQTT_PORT"])

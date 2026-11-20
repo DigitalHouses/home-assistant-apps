@@ -1,5 +1,12 @@
 # Changelog — DigitalHouses Aqara Switch App
 
+## 0.1.19
+
+- Keep Zigbee/MQTT switch control running if an opted-in telemetry state file is malformed or unreadable. Log the error and preserve the original installation credentials instead of silently regenerating identity.
+- Keep the telemetry worker alive on heartbeat state/persistence errors, retaining its existing retry cadence.
+- Handle telemetry deletion persistence failures in its worker without unhandled exceptions.
+- Extend regression tests for telemetry fault isolation while leaving physical relays, DH Sync, consent and server protocol unchanged.
+
 ## 0.1.18
 
 - Add explicit opt-in DigitalHouses Stats protocol-v1/policy-v2 telemetry: HTTPS heartbeat on initial activation and approximately daily thereafter, persistent pseudonymous installation identity/token in `/data/telemetry.json`, authenticated history deletion with identity rotation, retry backoff and network-error isolation.
