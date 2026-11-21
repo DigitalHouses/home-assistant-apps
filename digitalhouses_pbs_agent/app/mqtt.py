@@ -177,8 +177,9 @@ def discovery(config: Config, sample: dict | None = None) -> dict:
     sensor("upload_stats", "Размеры новых данных",
            "(value_json.upload_summary.available | string) ~ '/' ~ (value_json.upload_summary.total | string) if value_json.upload_summary is defined else 'unknown'",
            icon="mdi:database-arrow-up",
-           extra_attributes=("'reasons': value_json.upload_summary.reasons | default({})"
-                             " if value_json.upload_summary is defined else {}"))
+           extra_attributes=("'reasons': value_json.upload_summary.reasons | default({}), "
+                             "'sample_error': value_json.upload_summary.sample_error | default(none)"
+                             " if value_json.upload_summary is defined else none"))
     sensor("last_collection", "Последний успешный опрос", "value_json.last_success_at | default('unknown', true)", icon="mdi:clock-check-outline")
     sensor("backup_last_success", "Последняя успешная резервная копия", "value_json.backup_last_success_at | default('unknown', true)")
     sensor("backup_age_hours", "Возраст резервной копии", "value_json.backup_age_hours | default('unknown', true)")

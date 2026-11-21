@@ -1,4 +1,4 @@
-# DigitalHouses PBS Agent v0.1.15
+# DigitalHouses PBS Agent v0.1.16
 
 Standalone **read-only** Linux/systemd monitoring agent for a local Proxmox Backup
 Server 4.x. HOME pilot: Debian MediaServer/PBS VM; no dependency on Plex Agent,
@@ -25,6 +25,24 @@ status, snapshots, **push** sync, verify, prune and GC jobs, plus local
 read-only ZFS and filesystem status. It does not run or
 edit PBS jobs, backup snapshots, PVE jobs, Plex, ZFS or retention.
 A job appearing as OK is **not** proof of restore verification.
+
+## Correct incremental size collection (v0.1.16)
+
+PBS stores its actual per-run new compressed chunk upload in each immutable
+snapshot manifest: index.json.blob / unprotected.chunk_upload_stats.compressed_size.
+The Agent resolves the official datastore path, guest, namespace and timestamp
+and reads this number with PBS's built-in read-only proxmox-backup-debug inspect
+file --decode - command. It parses only the first JSON object (inspect also
+prints a size/encryption footer). PBS API snapshot-information remains a fallback
+when no local manifest is available. The value is not a full backup size nor
+a precise post-deduplication increase in disk allocation.
+
+This addresses HOME's 0/32 uploaded-size situation: nine surviving snapshots
+failed the API request while 23 older tasks had no snapshot after manual
+deletion. The latter remain NO_MATCH rather than 0 bytes. Diagnostic
+sensor.dh_pbs_agent_upload_stats exposes available/total, reasons and a
+sample_error attribute if a real surviving snapshot cannot be read.
+No PBS or PVE backup schedules, files or snapshots are changed.
 
 ## Agent-rendered trees, auto freshness and HA timezone (v0.1.15)
 

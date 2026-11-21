@@ -91,6 +91,65 @@ class PBSClient:
             raise SourceError(f"PBS local CLI failed: {type(exc).__name__}") from exc
         return completed.stdout
 
+    @staticmethod
+    def snapshot_upload_bytes(
+        store_path: str, ns: str, typ: str, ident: str, when: int,
+    ) -> int:
+        """Read the native immutable PBS snapshot manifest; no HTTP or credentials.
+
+        PBS stores the actual new compressed chunk upload in
+        index.json.blob -> unprotected.chunk_upload_stats.compressed_size.
+        The built-in inspect command decodes the manifest safely and read-only.
+        """
+        if not isinstance(store_path, str) or not Path(store_path).is_absolute():
+            raise SourceError("PBS manifest: invalid datastore path")
+        if typ not in ("vm", "ct") or not re.fullmatch(r"[0-9]+", ident):
+            raise SourceError("PBS manifest: invalid backup identity")
+        if type(when) is not int or when <= 0:
+            raise SourceError("PBS manifest: invalid backup time")
+        root = Path(store_path).resolve()
+        folder = root
+        if ns:
+            for segment in ns.split("/"):
+                if not segment or segment in (".", ".."):
+                    raise SourceError("PBS manifest: invalid namespace")
+                folder = folder / "ns" / segment
+        stamp = datetime.fromtimestamp(when, timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        manifest_path = folder / typ / ident / stamp / "index.json.blob"
+        path = manifest_path.resolve()
+        if root not in path.parents:
+            raise SourceError("PBS manifest: path outside datastore")
+        if not path.is_file():
+            raise SourceError("PBS manifest: snapshot manifest not present locally")
+        cmd = ["proxmox-backup-debug", "inspect", "file", "--decode", "-", str(path)]
+        try:
+            process = subprocess.run(
+                cmd, capture_output=True, text=True, check=True, timeout=15,
+            )
+        except subprocess.CalledProcessError as exc:
+            detail = " ".join(str(exc.stderr or "").split())[:120]
+            raise SourceError("PBS manifest inspect failed"
+                              + (": " + detail if detail else "")) from exc
+        except (OSError, subprocess.SubprocessError) as exc:
+            raise SourceError(f"PBS manifest inspect unavailable: {type(exc).__name__}") from exc
+        try:
+            # Inspect prints decoded JSON followed by size/encryption notes.
+            manifest, _ = json.JSONDecoder().raw_decode(process.stdout.lstrip())
+        except (ValueError, TypeError) as exc:
+            raise SourceError("PBS manifest inspect returned invalid JSON") from exc
+        if (not isinstance(manifest, dict)
+                or manifest.get("backup-type") != typ
+                or str(manifest.get("backup-id")) != ident
+                or manifest.get("backup-time") != when):
+            raise SourceError("PBS manifest identity/time mismatch")
+        unprotected = manifest.get("unprotected")
+        chunk_stats = (unprotected.get("chunk_upload_stats")
+                       if isinstance(unprotected, dict) else None)
+        size = chunk_stats.get("compressed_size") if isinstance(chunk_stats, dict) else None
+        if type(size) is not int or size < 0:
+            raise SourceError("PBS manifest missing chunk_upload_stats.compressed_size")
+        return size
+
     def task_list(self, limit: int = 100) -> list[dict]:
         """PBS 4.x supported root CLI, including completed tasks with --all.
 
@@ -295,6 +354,7 @@ def _backup_upload_stats(
     history: list[dict],
     groups: list[dict],
     cache: dict | None = None,
+    datastore_paths: dict[str, str] | None = None,
 ) -> None:
     """Optional compressed chunk-upload bytes for exactly matched snapshots.
 
@@ -361,20 +421,33 @@ def _backup_upload_stats(
         if cache is not None and identity in cache:
             size = cache[identity]
         else:
-            try:
-                info = pbs.get(
-                    f"admin/datastore/{quote(store, safe='')}/snapshot-information",
-                    **{"backup-type": typ, "backup-id": ident,
-                       "backup-time": when, "ns": ns or None},
-                )
-            except SourceError:
-                task["upload_status"] = "API_ERROR"
-                continue
-            stats = info.get("upload-statistics") if isinstance(info, dict) else None
-            size = stats.get("compressed-size") if isinstance(stats, dict) else None
-            if type(size) is not int or size < 0:
-                task["upload_status"] = "NO_STATISTICS"
-                continue
+            size = None
+            manifest_error = None
+            store_path = (datastore_paths or {}).get(store)
+            # Native on-disk manifest is authoritative and avoids the
+            # snapshot-information API errors observed on PBS 4.2.10.
+            if store_path and hasattr(pbs, "snapshot_upload_bytes"):
+                try:
+                    size = pbs.snapshot_upload_bytes(store_path, ns, typ, ident, when)
+                except SourceError as exc:
+                    manifest_error = str(exc)
+            if size is None:
+                try:
+                    info = pbs.get(
+                        f"admin/datastore/{quote(store, safe='')}/snapshot-information",
+                        **{"backup-type": typ, "backup-id": ident,
+                           "backup-time": when, "ns": ns or None},
+                    )
+                except SourceError as exc:
+                    task["upload_status"] = "API_ERROR"
+                    task["upload_error"] = (manifest_error + "; " if manifest_error else "") + str(exc)[:140]
+                    continue
+                stats = info.get("upload-statistics") if isinstance(info, dict) else None
+                size = stats.get("compressed-size") if isinstance(stats, dict) else None
+                if type(size) is not int or size < 0:
+                    task["upload_status"] = "NO_STATISTICS"
+                    task["upload_error"] = manifest_error or "PBS snapshot upload statistics absent"
+                    continue
             if cache is not None:
                 if len(cache) >= 256:
                     cache.clear()
@@ -789,12 +862,18 @@ def collect(config: Config, pbs: PBSClient | None = None, now: float | None = No
         "unknown": sum(g["status"] == "UNKNOWN" for g in inventory),
         "auto_hours": AUTO_FRESHNESS_HOURS,
     }
-    _backup_upload_stats(pbs, result["task_history"], inventory, upload_cache)
+    _backup_upload_stats(
+        pbs, result["task_history"], inventory, upload_cache,
+        {store: row["path"] for store, row in datastore_config.items()
+         if isinstance(row.get("path"), str)},
+    )
     sizes = [t for t in result["task_history"]
              if t.get("type") == "Backup" and t.get("status") == "OK"]
     result["upload_summary"] = {
         "total": len(sizes),
         "available": sum(t.get("upload_status") == "OK" for t in sizes),
+        "sample_error": next((t["upload_error"][:220] for t in sizes
+                              if t.get("upload_error")), None),
         "reasons": {reason: sum(t.get("upload_status") == reason for t in sizes)
                     for reason in ("API_ERROR", "NO_STATISTICS", "NO_MATCH",
                                    "AMBIGUOUS", "UNAVAILABLE")},
