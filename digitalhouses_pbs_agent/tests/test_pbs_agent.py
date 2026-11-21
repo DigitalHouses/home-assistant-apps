@@ -372,15 +372,47 @@ class PBSAgentTests(unittest.TestCase):
         self.assertIn(job_component_key("Verify", "different-home"), current["components"])
         self.assertEqual(pub.job_registry.load()["jobs"], [["Verify", "different-home"]])
 
+    def test_pve_style_dynamic_progress_metadata_and_s3_fallback(self):
+        from app.mqtt import discovery
+        from app.config import load_config
+        path = self.folder / "many-stores.conf"
+        path.write_text("[mqtt]\nhost=broker\n[pbs]\ndatastores=lab-archive,pbs-media\n",
+                        encoding="utf-8")
+        sensors = discovery(load_config(path))["components"]
+        for store in ("lab-archive", "pbs-media"):
+            key = "datastore_" + store.replace("-", "_") + "_used_percent"
+            entry = sensors[key]
+            self.assertEqual(entry["platform"], "sensor")
+            self.assertIn("pbs_metric", entry["json_attributes_template"])
+            self.assertIn("'total_gib':", entry["json_attributes_template"])
+            self.assertIn("'used_gib':", entry["json_attributes_template"])
+            self.assertIn("'pbs_health':", entry["json_attributes_template"])
+            self.assertIn("'pbs_backend':", entry["json_attributes_template"])
+            self.assertIn(store, entry["name"])
+            self.assertEqual(entry["default_entity_id"], "sensor.dh_pbs_agent_" + key)
+        view = (ROOT / "dashboards/ru/13_pbs.yaml").read_text(encoding="utf-8")
+        self.assertIn("if backend == 'S3'", view)
+        self.assertIn("S3 · объём не определён", view)
+        self.assertIn("if health == 'CRITICAL'", view)
+        self.assertIn("elif health == 'DEGRADED'", view)
+        self.assertIn("elif health == 'HEALTHY'", view)
+        self.assertIn("'bar_size': 'medium'", view)
+        self.assertIn("'tap_action': {'action': 'more-info'}", view)
+
     def test_ui_is_standalone_with_dynamic_store_and_job_names(self):
         view = (ROOT / "dashboards/ru/13_pbs.yaml").read_text(encoding="utf-8")
-        self.assertNotIn("type: custom:auto-entities", view)
-        self.assertNotIn("states.sensor", view)
+        self.assertIn("type: custom:auto-entities", view)
+        self.assertIn("type': 'custom:entity-progress-card-template'", view)
+        self.assertIn("states.sensor", view)
+        self.assertIn("pbs_section') == 'datastore'", view)
+        self.assertIn("pbs_metric') == 'used_percent'", view)
         self.assertIn("state_attr('sensor.dh_pbs_agent_health',", view)
-        self.assertIn("~ d.name]", view)
+        self.assertNotIn("~ d.name]", view)
+        self.assertNotIn("Datastore (' ~ (ds | count)", view)
         self.assertIn("~ j.id ~", view)
         self.assertIn("store_prefix = (g.datastore ~ '/') if (ds | count) > 1 else ''", view)
-        self.assertIn("detail_prefix = '│  │  ' if not loop.last else '│     '", view)
+        self.assertIn("heading: Хранилища PBS", view)
+        self.assertIn("heading: Резервные копии", view)
         for hardcoded in ("pbs-serzhan", "dh-weekly-serzhan", "pbs-core"):
             self.assertNotIn(hardcoded, view)
         self.assertIn("number.dh_pbs_agent_backup_groups_limit", view)
@@ -401,7 +433,9 @@ class PBSAgentTests(unittest.TestCase):
     def test_dashboard_uses_compact_pve_style_tree_not_wide_tables(self):
         view = (ROOT / "dashboards/ru/13_pbs.yaml").read_text(encoding="utf-8")
         self.assertEqual(view.count("<pre style="), 3)
-        self.assertIn("├─ Datastore", view)
+        self.assertNotIn("├─ Datastore", view)
+        self.assertIn("heading: Хранилища PBS", view)
+        self.assertIn("custom:entity-progress-card-template", view)
         self.assertIn("Группы резервных копий", view)
         self.assertIn("Контроль свежести", view)
         self.assertIn("Последние выполнения", view)
@@ -491,10 +525,13 @@ class PBSAgentTests(unittest.TestCase):
 
     def test_dashboard_uses_correct_percentage_and_independent_limits(self):
         view = (ROOT / "dashboards/ru/13_pbs.yaml").read_text(encoding="utf-8")
-        self.assertIn("d.used_bytes / d.total_bytes", view)
-        self.assertIn("used ~ '/' ~ total ~ ' GiB ('", view)
+        self.assertIn("state_attr(storage.entity_id, 'used_gib')", view)
+        self.assertIn("state_attr(storage.entity_id, 'total_gib')", view)
+        self.assertIn("~ ' / ' ~ ('%.2f' | format(total | float))", view)
+        self.assertIn("name ~ ' · занято '", view)
+        self.assertIn("percent = '%.2f' | format(used_percent)", view)
         self.assertNotIn("d.available_bytes / d.total_bytes", view)
-        self.assertIn("detail_prefix ~ '└─ '", view)
+        self.assertNotIn("detail_prefix ~ '└─ '", view)
         self.assertIn("groups[:group_limit]", view)
         self.assertIn("events[:event_limit]", view)
         self.assertIn("limits.backup_groups | default(10)", view)

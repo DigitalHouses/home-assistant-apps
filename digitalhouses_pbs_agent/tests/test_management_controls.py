@@ -100,7 +100,7 @@ class ControlTests(unittest.TestCase):
         def fake_release():
             release_started.set()
             release_done.wait(2)
-            return "digitalhouses_pbs_agent-v0.1.11", "0.1.11"
+            return "digitalhouses_pbs_agent-v99.0.0", "99.0.0"
         with patch("app.control.latest_release", side_effect=fake_release):
             self.assertTrue(self.control.start_check(manual=False))
             self.assertTrue(release_started.wait(2))
@@ -224,7 +224,18 @@ class ControlTests(unittest.TestCase):
         self.assertIn("button.dh_pbs_agent_restart_agent", view)
         self.assertIn("text: Установить новый релиз PBS Agent?", view)
         self.assertIn("text: Перезапустить только PBS Agent?", view)
-        self.assertNotIn("type: custom:auto-entities", view)
+        self.assertIn("type: custom:auto-entities", view)
+        self.assertIn("custom:entity-progress-card-template", view)
+
+    def test_diagnostics_has_actual_mqtt_auto_update_switch(self):
+        view = (ROOT / "dashboards/ru/13_pbs.yaml").read_text(encoding="utf-8")
+        heading = view.index("heading: Диагностика")
+        diag = view[heading:]
+        agent = diag.index("title: PBS Agent")
+        display = diag.index("title: Настройки отображения")
+        self.assertEqual(diag[agent:display].count(
+            "entity: switch.dh_pbs_agent_auto_update"), 1)
+        self.assertIn("name: Автообновление", diag[agent:display])
 
     def test_installer_one_command_and_silent_git(self):
         script = (ROOT / "install.sh").read_text()
