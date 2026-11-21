@@ -67,7 +67,11 @@ def run(config_path: Path = DEFAULT_CONFIG, state_dir: Path = STATE_DIR) -> int:
         build_info_path=Path(__file__).resolve().parents[1] / "BUILD_INFO",
     )
     telemetry_runner = TelemetryRunner(telemetry)
-    publisher = Publisher(config, view_limits=ViewLimits(StateStore(state_dir / "view_limits.json")))
+    publisher = Publisher(
+        config,
+        view_limits=ViewLimits(StateStore(state_dir / "view_limits.json")),
+        job_registry=StateStore(state_dir / "discovery_jobs.json"),
+    )
     last_problem_state = StateStore(state_dir / "incidents.json")
     current_status = StateStore(state_dir / "runtime.json")
     mqtt_status = StateStore(state_dir / "mqtt.json")

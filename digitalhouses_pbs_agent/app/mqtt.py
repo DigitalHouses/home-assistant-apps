@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import json
+import hashlib
+import re
 import math
 import threading
 import socket
@@ -9,7 +11,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from .config import Config, PRODUCT_ID, REPO
-from .state import ViewLimits, VIEW_LIMIT_RANGES
+from .state import StateStore, ViewLimits, VIEW_LIMIT_RANGES
 
 
 def _read_version() -> str:
@@ -33,13 +35,73 @@ def host_ip(host: str, port: int) -> str | None:
         return None
 
 
-def discovery(config: Config) -> dict:
+def job_component_key(kind: str, name: str) -> str:
+    """Stable, collision-resistant discovery key from actual PBS job identity."""
+    readable = re.sub(r"[^a-z0-9]+", "_", (kind + "_" + name).lower()).strip("_")[:45]
+    digest = hashlib.sha256(json.dumps([kind, name]).encode("utf-8")).hexdigest()[:10]
+    return f"job_{readable}_{digest}_status"
+
+
+def job_identity(sample: dict | None) -> tuple[tuple[str, str], ...]:
+    rows = (sample or {}).get("maintenance_jobs", [])
+    return tuple(sorted({
+        (str(item["type"]), str(item["id"]))
+        for item in rows if isinstance(item, dict) and item.get("type") and item.get("id")
+    }))
+
+
+def job_components(config: Config, sample: dict | None) -> dict:
+    """Discover only actual PBS jobs; names are never installation constants."""
+    ident = instance_id(config)
+    base = f"DigitalHouses/Global/{PRODUCT_ID}/{ident}"
+    device_id = f"dh_pbs_agent_{ident}"
+    availability = [{"topic": base + "/availability",
+                     "payload_available": "online", "payload_not_available": "offline"}]
+    rows: dict = {}
+    for kind, name in job_identity(sample):
+        qkind, qname = json.dumps(kind, ensure_ascii=False), json.dumps(name, ensure_ascii=False)
+        arr = f"(value_json.maintenance_jobs | selectattr('type', 'equalto', {qkind}) | selectattr('id', 'equalto', {qname}) | list | first | default({{}}))"
+        key = job_component_key(kind, name)
+        metadata = {
+            "pbs_product": PRODUCT_ID,
+            "pbs_section": "job",
+            "pbs_metric": "status",
+            "pbs_job_type": kind,
+            "pbs_job_id": name,
+            "pbs_display_name": name,
+            "pbs_instance": ident,
+        }
+        # Object-literal metadata prevents job names from becoming identity rules in UI.
+        props = ", ".join(f"{json.dumps(k)}: {json.dumps(v, ensure_ascii=False)}" for k, v in metadata.items())
+        rows[key] = {
+            "platform": "sensor",
+            "name": f"{kind} · {name}",
+            "unique_id": f"{device_id}_{key}",
+            "default_entity_id": f"sensor.dh_pbs_agent_{ident}_{key}",
+            "state_topic": base + "/state",
+            "value_template": "{{ " + arr + ".status | default('UNKNOWN', true) }}",
+            "json_attributes_topic": base + "/state",
+            "json_attributes_template": (
+                "{{ {" + props + ", 'schedule': " + arr +
+                ".schedule | default(none), 'last_run_at': " + arr +
+                ".last_run_at | default(none)} | tojson }}"
+            ),
+            "availability": availability,
+            "entity_category": "diagnostic",
+            "icon": "mdi:calendar-check-outline",
+        }
+    return rows
+
+
+def discovery(config: Config, sample: dict | None = None) -> dict:
     ident = instance_id(config)
     base = f"DigitalHouses/Global/{PRODUCT_ID}/{ident}"
     availability = [{"topic": base + "/availability", "payload_available": "online", "payload_not_available": "offline"}]
     components: dict[str, dict] = {}
     device_id = f"dh_pbs_agent_{ident}"
-    def sensor(key: str, name: str, expression: str, *, attributes: bool = False, icon: str = "mdi:backup-restore"):
+    def sensor(key: str, name: str, expression: str, *, attributes: bool = False,
+               icon: str = "mdi:backup-restore", section: str = "system",
+               display_name: str | None = None, metric: str | None = None):
         item = {
             "platform": "sensor", "name": name,
             "unique_id": f"{device_id}_{key}",
@@ -52,12 +114,25 @@ def discovery(config: Config) -> dict:
         if attributes:
             item["json_attributes_topic"] = base + "/state"
             item["json_attributes_template"] = "{{ {'summary': value_json.summary, 'datastores': value_json.datastores, 'backups': value_json.backups, 'sync_jobs': value_json.sync_jobs, 'verify_jobs': value_json.verify_jobs, 'prune_jobs': value_json.prune_jobs, 'gc': value_json.gc, 'maintenance_jobs': value_json.maintenance_jobs, 'task_history': value_json.task_history, 'task_history_status': value_json.task_history_status, 'backup_groups': value_json.backup_groups, 'backup_groups_status': value_json.backup_groups_status, 'view_limits': value_json.view_limits, 'zfs': value_json.zfs, 'errors': value_json.errors, 'observed_at': value_json.observed_at} | tojson }}"
+        marker = {"pbs_product": PRODUCT_ID, "pbs_section": section,
+                  "pbs_metric": metric or key, "pbs_display_name": display_name or name,
+                  "pbs_instance": ident}
+        fields = ", ".join(f"{json.dumps(k)}: {json.dumps(v, ensure_ascii=False)}"
+                           for k, v in marker.items())
+        item["json_attributes_topic"] = base + "/state"
+        if attributes:
+            item["json_attributes_template"] = item["json_attributes_template"].replace(
+                "'observed_at': value_json.observed_at}",
+                "'observed_at': value_json.observed_at, " + fields + "}",
+            )
+        else:
+            item["json_attributes_template"] = "{{ {" + fields + "} | tojson }}"
         components[key] = item
 
     sensor("hostname", "Hostname", "value_json.hostname", icon="mdi:server")
     sensor("ip", "IP", "value_json.ip", icon="mdi:ip-network")
     sensor("version", "Version", "value_json.agent_version", icon="mdi:information-outline")
-    sensor("health", "PBS health", "value_json.status", attributes=True)
+    sensor("health", "PBS health", "value_json.status", attributes=True, section="health")
     sensor("last_collection", "Last successful collection", "value_json.last_success_at | default('unknown', true)", icon="mdi:clock-check-outline")
     sensor("backup_last_success", "Last successful backup", "value_json.backup_last_success_at | default('unknown', true)")
     sensor("backup_age_hours", "Backup age", "value_json.backup_age_hours | default('unknown', true)")
@@ -89,14 +164,18 @@ def discovery(config: Config) -> dict:
         "value_template": "{{ 'ON' if value_json.status in ['CRITICAL', 'DEGRADED', 'UNAVAILABLE', 'UNKNOWN'] else 'OFF' }}",
         "payload_on": "ON", "payload_off": "OFF", "availability": availability,
         "entity_category": "diagnostic",
+        "json_attributes_topic": base + "/state",
+        "json_attributes_template": "{{ {'pbs_product': 'digitalhouses_pbs_agent', 'pbs_section': 'system', 'pbs_metric': 'problem', 'pbs_instance': " + json.dumps(ident) + "} | tojson }}",
     }
     for store in config.datastores:
         suffix = store.lower().replace("-", "_")
         # Each datastore has its own stable metric key, no overwrites.
         arr = f"(value_json.datastores | selectattr('name', 'equalto', '{store}') | list | first | default({{}}))"
-        sensor(f"datastore_{suffix}_used_percent", store + " used %", arr + ".used_percent | default('unknown', true)")
+        sensor(f"datastore_{suffix}_used_percent", store + " used %", arr + ".used_percent | default('unknown', true)",
+               section="datastore", display_name=store, metric="used_percent")
         sensor(f"datastore_{suffix}_available_gib", store + " available GiB",
-               f"(({arr}.available_bytes / 1073741824) | round(2)) if {arr}.available_bytes is defined else 'unknown'")
+               f"(({arr}.available_bytes / 1073741824) | round(2)) if {arr}.available_bytes is defined else 'unknown'",
+               section="datastore", display_name=store, metric="available_gib")
     catalog = {
         "backup": ["backup_failed", "backup_overdue", "backup_recovered", "service_unavailable", "service_recovered"],
         "sync": ["sync_failed", "sync_overdue", "sync_recovered"],
@@ -112,6 +191,7 @@ def discovery(config: Config) -> dict:
             "event_types": event_types, "qos": 1, "availability": availability,
             "entity_category": "diagnostic",
         }
+    components.update(job_components(config, sample))
     return {
         "device": {"identifiers": [device_id], "name": "DigitalHouses PBS Agent " + ident,
                    "manufacturer": "DigitalHouses", "model": "PBS Agent",
@@ -122,11 +202,19 @@ def discovery(config: Config) -> dict:
 
 
 class Publisher:
-    def __init__(self, config: Config, *, view_limits: ViewLimits | None = None):
+    def __init__(self, config: Config, *, view_limits: ViewLimits | None = None,
+                 job_registry: StateStore | None = None):
         import paho.mqtt.client as mqtt
         self.config = config
         self.view_limits = view_limits if view_limits is not None else ViewLimits()
         self._state_lock = threading.Lock()
+        self.job_registry = job_registry
+        saved_jobs = job_registry.load().get("jobs", []) if job_registry else []
+        self._known_jobs = {
+            (str(row[0]), str(row[1])) for row in saved_jobs
+            if isinstance(row, list) and len(row) == 2
+        }
+        self._discovery_primed = False
         self.id = instance_id(config)
         self.base = f"DigitalHouses/Global/{PRODUCT_ID}/{self.id}"
         self.discovery_topic = f"homeassistant/device/dh_pbs_agent_{self.id}/config"
@@ -183,11 +271,16 @@ class Publisher:
             "version": _read_version(), "repository": REPO,
             "product_path": PRODUCT_ID,
         })
-        enqueue(self.discovery_topic, discovery(self.config))
-        client.subscribe(self.base + "/set/view/+", qos=1)
         with self._state_lock:
-            if self.last_state is not None:
-                enqueue(self.base + "/state", self.last_state)
+            current = self.last_state
+            if current is None:
+                enqueue(self.discovery_topic, discovery(self.config))
+                self._discovery_primed = False
+            else:
+                self._announce_jobs(client, current)
+            client.subscribe(self.base + "/set/view/+", qos=1)
+            if current is not None:
+                enqueue(self.base + "/state", current)
 
     def _on_message(self, client: Any, userdata: Any, message: Any) -> None:
         # Do not replay stale retained commands when the broker reconnects.
@@ -228,6 +321,23 @@ class Publisher:
                                   keepalive=self.config.mqtt_keepalive_seconds)
         self.client.loop_start()
 
+    def _announce_jobs(self, client: Any, sample: dict | None) -> None:
+        """Publish device discovery only on change; remove obsolete job entities."""
+        current = set(job_identity(sample)) if sample is not None else set(self._known_jobs)
+        removed = self._known_jobs - current
+        discovered = discovery(self.config, sample)
+        if removed:
+            deleting = discovery(self.config, sample)
+            for kind, name in removed:
+                deleting["components"][job_component_key(kind, name)] = {"platform": "sensor"}
+            client.publish(self.discovery_topic, json.dumps(deleting, ensure_ascii=False), qos=1, retain=True)
+        client.publish(self.discovery_topic, json.dumps(discovered, ensure_ascii=False), qos=1, retain=True)
+        if sample is not None and self._known_jobs != current:
+            if self.job_registry:
+                self.job_registry.save({"jobs": [list(pair) for pair in sorted(current)]})
+            self._known_jobs = current
+        self._discovery_primed = True
+
     def state(self, payload: dict) -> bool:
         # Queue while locked so an incoming Number command cannot be overwritten
         # by a concurrent polling publish with older view settings.
@@ -237,6 +347,11 @@ class Publisher:
             if not self.connected:
                 return False
             data = json.dumps(updated, ensure_ascii=False, separators=(",", ":"))
+            current_jobs = set(job_identity(updated))
+            if updated.get("status") != "UNAVAILABLE" and (
+                not self._discovery_primed or current_jobs != self._known_jobs
+            ):
+                self._announce_jobs(self.client, updated)
             info = self.client.publish(self.base + "/state", data, qos=1, retain=True)
         if info.rc != 0:
             return False
