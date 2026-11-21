@@ -1,4 +1,4 @@
-# DigitalHouses PBS Agent v0.1.1
+# DigitalHouses PBS Agent v0.1.2
 
 Standalone **read-only** Linux/systemd monitoring agent for a local Proxmox Backup
 Server 4.x. HOME pilot: Debian MediaServer/PBS VM; no dependency on Plex Agent,
@@ -26,6 +26,22 @@ read-only ZFS and filesystem status. It does not run or
 edit PBS jobs, backup snapshots, PVE jobs, Plex, ZFS or retention.
 A job appearing as OK is **not** proof of restore verification.
 
+## PBS dashboard data in v0.1.2
+
+The existing `dh_pbs_agent` View now renders four factual tables: datastore
+usage, backup groups (`admin/datastore/{store}/groups` with discovered
+namespaces), Sync/Verify/Prune/GC jobs (schedule, last run and result), and
+recent tasks (up to 12) from the same existing native
+`proxmox-backup-manager task list --all true` call. No external APIs, no
+new service and no PVE changes. Backup groups with no configured freshness
+rule are displayed **without a monitored OK status**. Empty/partial task or
+group data are visibly labeled rather than silently shown as healthy.
+
+For large datastores the displayed group inventory is capped at the 80 most
+recent groups; when truncated, the View displays a partial-coverage warning.
+New MQTT attributes require the v0.1.2 agent to be installed; the YAML View
+itself is fetched from GitHub `main` by DH Sync on refresh.
+
 ## HOME installation / release
 
 Install only from the published immutable GitHub Release:
@@ -33,7 +49,7 @@ Install only from the published immutable GitHub Release:
 For a published release, on the local PBS VM as root:
 
 ~~~bash
-DIGITALHOUSES_SOURCE_REF=digitalhouses_pbs_agent-v0.1.1 \
+DIGITALHOUSES_SOURCE_REF=digitalhouses_pbs_agent-v0.1.2 \
   bash install.sh --non-interactive \
   --set mqtt_host=YOUR_MQTT_HOST \
   --set pbs_datastores=YOUR_PBS_DATASTORE

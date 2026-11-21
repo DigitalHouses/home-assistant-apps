@@ -1,5 +1,19 @@
 # DigitalHouses PBS Agent
 
+## 0.1.2
+
+- Extend the existing DH System PBS View with actual scheduled Sync/Verify/Prune/GC
+  job rows, last-run statuses, recent native PBS task results, and visible
+  VM/CT/Host backup groups across namespaces.
+- Keep the existing PBS status, datastore capacity, freshness-rule and
+  diagnostics cards; distinguish unmonitored backups from verified healthy
+  backups instead of displaying a fabricated OK.
+- Use only local read-only PBS API GET and the existing manager task list;
+  namespace/group inventory is optional and reports partial availability
+  without interrupting the existing PBS monitoring.
+- Present human-readable Markdown tables without external frontend cards;
+  preserve the same MQTT Discovery entities and DH Sync view path.
+
 ## 0.1.1
 
 - Add official DigitalHouses Stats HTTPS telemetry (protocol v1 / policy v2).
