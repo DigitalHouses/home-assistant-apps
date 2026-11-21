@@ -654,6 +654,32 @@ class PBSAgentTests(unittest.TestCase):
         self.assertEqual(second[0]["uploaded_compressed_bytes"], 118111600)
         self.assertEqual(self.api.snapshot_upload_bytes.call_count, 1)
 
+    def test_manifest_and_api_errors_are_diagnostic_not_fake_sizes(self):
+        from app.collector import _backup_upload_stats, _task_history, SourceError
+        from unittest.mock import Mock
+        started = self.now - 60
+        history = _task_history([{
+            "worker_type": "backup", "worker_id": "pbs-home:ct/1221",
+            "starttime": started, "endtime": started + 11, "status": "OK",
+        }])
+        rows = [{"datastore": "pbs-home", "namespace": "", "group": "ct/1221"}]
+        original = self.api.get
+        def getter(path, **params):
+            if path.endswith("/snapshots"):
+                return [{"backup-type": "ct", "backup-id": "1221",
+                         "backup-time": started}]
+            if path.endswith("/snapshot-information"):
+                raise SourceError("PBS API status 500")
+            return original(path, **params)
+        self.api.get = getter
+        self.api.snapshot_upload_bytes = Mock(side_effect=SourceError("local manifest absent"))
+        _backup_upload_stats(self.api, history, rows, {}, {"pbs-home": "/mnt/pbs-home"})
+        self.assertEqual(history[0]["upload_status"], "API_ERROR")
+        self.assertIn("local manifest absent", history[0]["upload_error"])
+        self.assertIn("PBS API status 500", history[0]["upload_error"])
+        self.assertNotIn("uploaded_compressed_bytes", history[0])
+        self.assertNotIn("last_uploaded_compressed_bytes", rows[0])
+
     def test_native_manifest_error_falls_back_to_existing_pbs_api(self):
         from app.collector import _backup_upload_stats, _task_history, SourceError
         from unittest.mock import Mock
