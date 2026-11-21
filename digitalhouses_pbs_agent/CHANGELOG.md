@@ -1,5 +1,22 @@
 # DigitalHouses PBS Agent
 
+## 0.1.10
+
+- Use one release-aware installer command to resolve the newest *published stable*
+  PBS Agent tag, while continuing to support explicitly pinned immutable tags
+  and existing unattended --set / safe-secret options.
+- Suppress Git detached-HEAD advice for expected tag checkouts.
+- Add PVE-style MQTT Refresh, Check Updates, Install Update and Restart Agent
+  buttons, plus opt-in auto-update switch and authoritative state sensors.
+- Add unified status/control header and preserve native PBS health/dynamic
+  datastore/job trees. Installed HA entity identities remain stable.
+- Run self-update/restart through a separate systemd oneshot worker with
+  durable operation outcomes; no PBS service restart, job changes or new
+  management daemon.
+- Retain native CLI config/set/status/restart/update and add check-update and
+  auto-update on/off/status commands. Maintain /root/dh-pbs-agent.txt.
+
+
 ## 0.1.9
 
 - Display local datastore USED / TOTAL GiB and percent USED in the compact

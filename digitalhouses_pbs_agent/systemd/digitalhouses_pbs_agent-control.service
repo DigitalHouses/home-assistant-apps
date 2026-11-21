@@ -1,0 +1,14 @@
+[Unit]
+Description=DigitalHouses PBS Agent independent control worker
+After=network-online.target
+Wants=network-online.target
+ConditionPathExists=/etc/digitalhouses_pbs_agent/digitalhouses_pbs_agent.conf
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+ExecStart=/usr/bin/python3 /usr/local/libexec/digitalhouses-pbs-agent-control-runner
+TimeoutStartSec=1000
+PrivateTmp=true
+NoNewPrivileges=true
