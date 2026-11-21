@@ -569,6 +569,139 @@ class PBSAgentTests(unittest.TestCase):
                          ["VM1234", None, None])
         self.assertEqual(history[0]["duration_seconds"], 30)
 
+    def test_native_pbs_snapshot_manifest_supplies_real_increment(self):
+        from app.collector import PBSClient
+        from datetime import datetime, timezone
+        from unittest.mock import Mock
+        start = 1795309200
+        timestamp = datetime.fromtimestamp(start, timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        manifest_dir = self.folder / "datastore" / "vm" / "2222" / timestamp
+        manifest_dir.mkdir(parents=True)
+        blob = manifest_dir / "index.json.blob"
+        blob.write_bytes(b"PBS_NATIVE_BLOB_NOT_JSON")
+        decoded = {
+            "backup-type": "vm", "backup-id": "2222", "backup-time": start,
+            "unprotected": {"chunk_upload_stats": {
+                "compressed_size": 118111600, "size": 107374182400,
+                "count": 123, "duplicates": 122,
+            }},
+        }
+        output = json.dumps(decoded) + "size: 1542\nencryption: none\n"
+        with patch("app.collector.subprocess.run",
+                   return_value=Mock(stdout=output, returncode=0)) as run:
+            result = PBSClient.snapshot_upload_bytes(
+                str(self.folder / "datastore"), "", "vm", "2222", start)
+        self.assertEqual(result, 118111600)
+        argv = run.call_args.args[0]
+        self.assertEqual(argv[:6], ["proxmox-backup-debug", "inspect",
+                                    "file", "--decode", "-", str(blob)])
+        self.assertTrue(run.call_args.kwargs["check"])
+        self.assertEqual(run.call_args.kwargs["timeout"], 15)
+
+    def test_native_pbs_manifest_nested_namespace_identity_safety(self):
+        from app.collector import PBSClient, SourceError
+        from datetime import datetime, timezone
+        from unittest.mock import Mock
+        start = 1795309200
+        timestamp = datetime.fromtimestamp(start, timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        folder = (self.folder / "datastore" / "ns" / "prod"
+                  / "ns" / "home" / "ct" / "1221" / timestamp)
+        folder.mkdir(parents=True)
+        (folder / "index.json.blob").write_bytes(b"PBS")
+        decoded = {"backup-type": "ct", "backup-id": "1221",
+                   "backup-time": start, "unprotected": {"chunk_upload_stats": {"compressed_size": 0}}}
+        with patch("app.collector.subprocess.run",
+                   return_value=Mock(stdout=json.dumps(decoded) + "size: 1")):
+            self.assertEqual(PBSClient.snapshot_upload_bytes(
+                str(self.folder / "datastore"), "prod/home", "ct", "1221", start), 0)
+        with self.assertRaises(SourceError):
+            PBSClient.snapshot_upload_bytes(str(self.folder), "../outside", "ct", "1221", start)
+        with self.assertRaises(SourceError):
+            PBSClient.snapshot_upload_bytes(str(self.folder), "", "ct", "../../etc", start)
+        with patch("app.collector.subprocess.run",
+                   return_value=Mock(stdout=json.dumps({**decoded, "backup-id": "other"}))):
+            with self.assertRaisesRegex(SourceError, "identity/time mismatch"):
+                PBSClient.snapshot_upload_bytes(
+                    str(self.folder / "datastore"), "prod/home", "ct", "1221", start)
+
+    def test_actual_manifest_beats_broken_snapshot_api(self):
+        from app.collector import _backup_upload_stats, _task_history
+        from unittest.mock import Mock
+        start = self.now - 60
+        task_rows = [{"worker_type": "backup", "worker_id": "pbs-home:vm/2222",
+                      "starttime": start, "endtime": start + 32, "status": "OK"}]
+        history = _task_history(task_rows)
+        groups = [{"datastore": "pbs-home", "namespace": "", "group": "vm/2222",
+                   "last_backup_at": history[0]["started_at"]}]
+        old = self.api.get
+        def getter(path, **params):
+            if path.endswith("/snapshots"):
+                return [{"backup-type": "vm", "backup-id": "2222", "backup-time": start}]
+            if path.endswith("/snapshot-information"):
+                raise AssertionError("API endpoint must not be called when native manifest succeeds")
+            return old(path, **params)
+        self.api.get = getter
+        self.api.snapshot_upload_bytes = Mock(return_value=118111600)
+        cache = {}
+        _backup_upload_stats(self.api, history, groups, cache, {"pbs-home": "/mnt/datastore/pbs-home"})
+        self.assertEqual(history[0]["upload_status"], "OK")
+        self.assertEqual(history[0]["uploaded_compressed_bytes"], 118111600)
+        self.assertEqual(groups[0]["last_uploaded_compressed_bytes"], 118111600)
+        self.api.snapshot_upload_bytes.assert_called_once_with(
+            "/mnt/datastore/pbs-home", "", "vm", "2222", start)
+        second = _task_history(task_rows)
+        _backup_upload_stats(self.api, second, groups, cache, {"pbs-home": "/mnt/datastore/pbs-home"})
+        self.assertEqual(second[0]["uploaded_compressed_bytes"], 118111600)
+        self.assertEqual(self.api.snapshot_upload_bytes.call_count, 1)
+
+    def test_manifest_and_api_errors_are_diagnostic_not_fake_sizes(self):
+        from app.collector import _backup_upload_stats, _task_history, SourceError
+        from unittest.mock import Mock
+        started = self.now - 60
+        history = _task_history([{
+            "worker_type": "backup", "worker_id": "pbs-home:ct/1221",
+            "starttime": started, "endtime": started + 11, "status": "OK",
+        }])
+        rows = [{"datastore": "pbs-home", "namespace": "", "group": "ct/1221"}]
+        original = self.api.get
+        def getter(path, **params):
+            if path.endswith("/snapshots"):
+                return [{"backup-type": "ct", "backup-id": "1221",
+                         "backup-time": started}]
+            if path.endswith("/snapshot-information"):
+                raise SourceError("PBS API status 500")
+            return original(path, **params)
+        self.api.get = getter
+        self.api.snapshot_upload_bytes = Mock(side_effect=SourceError("local manifest absent"))
+        _backup_upload_stats(self.api, history, rows, {}, {"pbs-home": "/mnt/pbs-home"})
+        self.assertEqual(history[0]["upload_status"], "API_ERROR")
+        self.assertIn("local manifest absent", history[0]["upload_error"])
+        self.assertIn("PBS API status 500", history[0]["upload_error"])
+        self.assertNotIn("uploaded_compressed_bytes", history[0])
+        self.assertNotIn("last_uploaded_compressed_bytes", rows[0])
+
+    def test_native_manifest_error_falls_back_to_existing_pbs_api(self):
+        from app.collector import _backup_upload_stats, _task_history, SourceError
+        from unittest.mock import Mock
+        start = self.now - 60
+        history = _task_history([{
+            "worker_type": "backup", "worker_id": "pbs-home:vm/2222",
+            "starttime": start, "endtime": start + 32, "status": "OK",
+        }])
+        groups = [{"datastore": "pbs-home", "namespace": "", "group": "vm/2222"}]
+        old = self.api.get
+        def getter(path, **params):
+            if path.endswith("/snapshots"):
+                return [{"backup-type": "vm", "backup-id": "2222", "backup-time": start}]
+            if path.endswith("/snapshot-information"):
+                return {"upload-statistics": {"compressed-size": 90000000}}
+            return old(path, **params)
+        self.api.get = getter
+        self.api.snapshot_upload_bytes = Mock(side_effect=SourceError("manifest unavailable"))
+        _backup_upload_stats(self.api, history, groups, {}, {"pbs-home": "/mnt/datastore/pbs-home"})
+        self.assertEqual(history[0]["uploaded_compressed_bytes"], 90000000)
+        self.assertEqual(history[0]["upload_status"], "OK")
+
     def test_compressed_upload_increment_uses_exact_snapshot_statistics(self):
         from app.collector import _backup_upload_stats, _task_history
         start = self.now - 40

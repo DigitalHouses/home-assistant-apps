@@ -1,5 +1,23 @@
 # DigitalHouses PBS Agent
 
+## 0.1.16
+
+- Fix observed HOME PBS 4.2.10 incremental-size diagnostics:
+  0/32 with nine API errors and 23 deleted-history snapshots.
+- Read the exact new compressed chunk bytes from the immutable PBS snapshot
+  manifest (index.json.blob, unprotected.chunk_upload_stats.compressed_size),
+  decoded read-only with native proxmox-backup-debug inspect file.
+- Use the datastore path supplied by the PBS configuration; verify the
+  namespace, guest identity and snapshot timestamp before attributing a size.
+  Preserve the existing snapshot-information API as a fallback for backends
+  without a local manifest, including S3.
+- Do not use full logical backup sizes or assign a fabricated value to old
+  tasks whose snapshots were deleted. Keep previous compact trees.
+- Expose the first bounded PBS size-source error as diagnostic sensor
+  attribute sample_error, alongside existing reason counters. No credentials,
+  HA UI computation, new daemon or PBS scheduler changes.
+
+
 ## 0.1.15
 
 - **Agent owns all tree calculations**: four ready-to-display retained MQTT
