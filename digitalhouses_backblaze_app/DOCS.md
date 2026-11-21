@@ -84,3 +84,17 @@ The Home Assistant `Delete telemetry data` button sends the authenticated protoc
 The Backblaze secret is read from Home Assistant App options and is never published through MQTT, telemetry, or logs.
 
 Use a dedicated read-only application key rather than the master key.
+
+## DH Sync resources
+
+The App publishes the retained MQTT product source at
+`DigitalHouses/Global/digitalhouses_backblaze_app/sync` (QoS 1) on every
+successful connect and reconnect, using its existing MQTT connection.
+The payload declares only the running version and canonical GitHub product source.
+
+DH Sync reads `dashboards/ru/backblaze.yaml` and
+`packages/common/dh_app_backblaze_package.yaml` from the repository's main
+branch. The View path remains `backblaze`, and the Recorder package retains
+its established top-level key and exactly two account sensors.
+Dashboard/panel placement is defined only in the DH Sync repository panel YAML.
+No legacy Backblaze MQTT topics or Home Assistant entity IDs are changed.
