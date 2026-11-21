@@ -104,61 +104,59 @@ function renderChart(points) {
   const chart = $("chart");
   chart.innerHTML = "";
 
-  const totalHeartbeats = points.reduce((sum, point) => sum + point.heartbeats, 0);
-  const activeDays = points.filter((point) => point.active_installations > 0).length;
-  const peakActive = Math.max(0, ...points.map((point) => point.active_installations));
-  const maxValue = Math.max(
-    1,
-    ...points.map((point) => Math.max(point.active_installations, point.heartbeats))
-  );
-  const labelEvery = Math.max(1, Math.ceil(points.length / 8));
+  if (!points.length) {
+    chart.textContent = "No data";
+    return;
+  }
 
-  $("period-heartbeats").textContent = totalHeartbeats;
-  $("period-active-days").textContent = activeDays;
-  $("period-peak").textContent = peakActive;
-
-  points.forEach((point, index) => {
-    const activePercent = (point.active_installations / maxValue) * 100;
-    const heartbeatPercent = (point.heartbeats / maxValue) * 100;
+  const maxTotal = Math.max(1, ...points.map((p) => p.total_installations));
+  for (const point of points) {
+    const total = Number(point.total_installations);
+    const active = Math.min(total, Number(point.active_installations));
+    const inactive = Math.max(0, total - active);
 
     const day = document.createElement("div");
     day.className = "day-wrap";
-    day.title =
-      point.day +
-      " · " +
-      point.active_installations +
-      " reporting installations · " +
-      point.heartbeats +
-      " heartbeat messages";
+    day.title = point.day + " · Total: " + total + " · Active: " + active +
+      " · Inactive: " + inactive;
+    day.setAttribute("aria-label", day.title);
+    day.setAttribute("tabindex", "0");
 
     const bars = document.createElement("div");
-    bars.className = "bars";
+    bars.className = "bars stacked-bars";
 
-    const active = document.createElement("div");
-    active.className = "bar active-bar";
-    active.style.height = Math.max(point.active_installations ? 3 : 1, activePercent) + "%";
+    const column = document.createElement("div");
+    column.className = "bar-column";
+    column.style.height = (total / maxTotal * 100) + "%";
 
-    const heartbeats = document.createElement("div");
-    heartbeats.className = "bar heartbeat-bar";
-    heartbeats.style.height = Math.max(point.heartbeats ? 3 : 1, heartbeatPercent) + "%";
+    const stack = document.createElement("div");
+    stack.className = "bar-stack";
 
-    bars.appendChild(active);
-    bars.appendChild(heartbeats);
+    const value = document.createElement("span");
+    value.className = "bar-total";
+    value.textContent = String(total);
+
+    const inactivePart = document.createElement("div");
+    inactivePart.className = "bar-part inactive-part";
+    inactivePart.style.height = (total ? (inactive / total * 100) : 0) + "%";
+
+    const activePart = document.createElement("div");
+    activePart.className = "bar-part active-part";
+    activePart.style.height = (total ? (active / total * 100) : 0) + "%";
+
+    stack.appendChild(inactivePart);
+    stack.appendChild(activePart);
+    column.appendChild(value);
+    column.appendChild(stack);
+    bars.appendChild(column);
     day.appendChild(bars);
 
     const label = document.createElement("span");
     label.className = "day-label";
-    if (
-      index === 0 ||
-      index === points.length - 1 ||
-      index % labelEvery === 0
-    ) {
-      label.textContent = dayLabel(point.day);
-    }
+    label.textContent = dayLabel(point.day);
     day.appendChild(label);
-
     chart.appendChild(day);
-  });
+  }
 }
 
 async function load() {
@@ -171,7 +169,7 @@ async function load() {
       getJson("/api/summary"),
       getJson("/api/versions"),
       getJson("/api/countries"),
-      getJson("/api/history?days=" + days)
+      getJson("/api/installation-history?days=7")
     ]);
 
     $("known").textContent = summary.observed_installations;

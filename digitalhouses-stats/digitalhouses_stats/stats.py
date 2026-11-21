@@ -269,3 +269,58 @@ def history(
         row["active_installations"] = int(row["active_installations"])
         row["heartbeats"] = int(row["heartbeats"])
     return rows
+
+
+def installation_history(db: Session, *, days: int = 7) -> list[dict[str, object]]:
+    """Total registered vs. active in the preceding 7 days, as of each UTC day.
+
+    A row represents the end of a UTC day. Today ends at the current instant,
+    not an assumed future midnight. Only currently retained registrations can
+    be reconstructed: explicitly deleted installations have been removed.
+    """
+    result = db.execute(
+        text(
+            """
+            WITH days AS (
+                SELECT generate_series(
+                    (now() AT TIME ZONE 'UTC')::date - (:days - 1),
+                    (now() AT TIME ZONE 'UTC')::date,
+                    interval '1 day'
+                )::date AS day
+            ),
+            cutoffs AS (
+                SELECT
+                    day,
+                    least(
+                        (day + interval '1 day') AT TIME ZONE 'UTC',
+                        now()
+                    ) AS cutoff
+                FROM days
+            )
+            SELECT
+                c.day,
+                (
+                    SELECT count(*)
+                    FROM installations i
+                    WHERE i.created_at < c.cutoff
+                ) AS total_installations,
+                (
+                    SELECT count(DISTINCT (h.product, h.installation_id))
+                    FROM heartbeats h
+                    WHERE h.received_at >= c.cutoff - interval '7 days'
+                      AND h.received_at < c.cutoff
+                ) AS active_installations
+            FROM cutoffs c
+            ORDER BY c.day
+            """
+        ),
+        {"days": days},
+    )
+    return [
+        {
+            "day": row["day"].isoformat(),
+            "total_installations": int(row["total_installations"]),
+            "active_installations": int(row["active_installations"]),
+        }
+        for row in _rows(result)
+    ]
