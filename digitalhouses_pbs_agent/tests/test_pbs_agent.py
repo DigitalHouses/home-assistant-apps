@@ -244,6 +244,107 @@ class PBSAgentTests(unittest.TestCase):
         self.assertEqual(components["backup_event"]["platform"], "event")
         self.assertEqual(len(payload["device"]["identifiers"]), 1)
 
+    def test_dynamic_identity_other_home_and_auto_entity_markers(self):
+        from app.mqtt import discovery, job_component_key
+        from app.config import load_config
+        house = self.folder / "other-home.conf"
+        house.write_text("[general]\ninstance_id=mountain_home\n[mqtt]\nhost=broker\n"
+                         "[pbs]\ndatastores=vault-archive,vault-media\n", encoding="utf-8")
+        cfg = load_config(house)
+        sample = {"maintenance_jobs": [
+            {"type": "Verify", "id": "weekly-remote", "status": "OK", "schedule": "sun 07:00"},
+            {"type": "Prune", "id": "cleanup-custom", "status": "FAILED", "schedule": "04:00"},
+        ]}
+        home = discovery(self.config, sample)
+        remote = discovery(cfg, sample)
+        self.assertEqual(home["components"]["health"]["default_entity_id"],
+                         "sensor.dh_pbs_agent_health")
+        self.assertEqual(home["components"]["health"]["unique_id"],
+                         "dh_pbs_agent_pbs_home_health")
+        self.assertEqual(remote["components"]["health"]["unique_id"],
+                         "dh_pbs_agent_mountain_home_health")
+        self.assertIn('"pbs_product": "digitalhouses_pbs_agent"',
+                      remote["components"]["health"]["json_attributes_template"])
+        self.assertIn('"pbs_section": "health"',
+                      remote["components"]["health"]["json_attributes_template"])
+        stores = [item for item in remote["components"].values()
+                  if item.get("name", "").startswith("vault-")]
+        self.assertEqual(len(stores), 4)
+        for item in stores:
+            self.assertIn('"pbs_section": "datastore"', item["json_attributes_template"])
+        jobs = {key: value for key, value in remote["components"].items()
+                if key.startswith("job_")}
+        self.assertEqual(len(jobs), 2)
+        verify = jobs[job_component_key("Verify", "weekly-remote")]
+        self.assertEqual(verify["name"], "Verify · weekly-remote")
+        self.assertEqual(verify["platform"], "sensor")
+        self.assertIn('"pbs_section": "job"', verify["json_attributes_template"])
+        self.assertIn("value_json.maintenance_jobs", verify["value_template"])
+        self.assertIn("mountain_home", verify["unique_id"])
+        self.assertEqual(len(remote["device"]["identifiers"]), 1)
+        self.assertNotEqual(remote["device"]["identifiers"], home["device"]["identifiers"])
+        self.assertNotEqual(job_component_key("Verify", "x-y"),
+                            job_component_key("Verify", "x_y"))
+
+    def test_dynamic_job_discovery_and_expired_job_cleanup(self):
+        import threading
+        from unittest.mock import Mock
+        from app.mqtt import Publisher, job_component_key
+        from app.state import StateStore, ViewLimits
+        pub = Publisher.__new__(Publisher)
+        pub.config = self.config
+        pub.base = "DigitalHouses/Global/digitalhouses_pbs_agent/pbs_home"
+        pub.discovery_topic = "homeassistant/device/dh_pbs_agent_pbs_home/config"
+        pub.view_limits = ViewLimits()
+        pub._state_lock = threading.Lock()
+        pub._known_jobs = set()
+        pub._discovery_primed = False
+        pub.job_registry = StateStore(self.folder / "discovery_jobs.json")
+        pub.last_state = None
+        pub.last_ack_at = None
+        pub.connected = True
+        pub.client = Mock()
+        pub.client.publish.return_value.rc = 0
+        pub.client.publish.return_value.is_published.return_value = True
+        basic = {"status": "HEALTHY", "maintenance_jobs": [
+            {"type": "Verify", "id": "site-verify", "status": "OK", "schedule": "daily"}
+        ]}
+        self.assertTrue(pub.state(basic))
+        published = pub.client.publish.call_args_list
+        self.assertEqual(len(published), 2)
+        config = json.loads(published[0].args[1])
+        self.assertIn(job_component_key("Verify", "site-verify"), config["components"])
+        self.assertEqual(pub.job_registry.load()["jobs"], [["Verify", "site-verify"]])
+        pub.client.reset_mock()
+        self.assertTrue(pub.state(basic))
+        self.assertEqual(pub.client.publish.call_count, 1)
+        replacement = {"status": "HEALTHY", "maintenance_jobs": [
+            {"type": "Verify", "id": "different-home", "status": "OK"}
+        ]}
+        pub.client.reset_mock()
+        self.assertTrue(pub.state(replacement))
+        sent = pub.client.publish.call_args_list
+        self.assertEqual(len(sent), 3)
+        removal = json.loads(sent[0].args[1])
+        self.assertEqual(removal["components"][job_component_key("Verify", "site-verify")],
+                         {"platform": "sensor"})
+        current = json.loads(sent[1].args[1])
+        self.assertNotIn(job_component_key("Verify", "site-verify"), current["components"])
+        self.assertIn(job_component_key("Verify", "different-home"), current["components"])
+        self.assertEqual(pub.job_registry.load()["jobs"], [["Verify", "different-home"]])
+
+    def test_ui_does_not_depend_on_installed_names(self):
+        view = (ROOT / "dashboards/ru/13_pbs.yaml").read_text(encoding="utf-8")
+        self.assertIn("pbs_metric: health", view)
+        self.assertIn("pbs_metric: hostname", view)
+        self.assertIn("type: custom:auto-entities", view)
+        self.assertIn("states.sensor", view)
+        self.assertIn("state_attr(health_entity,", view)
+        self.assertNotIn("state_attr('sensor.dh_pbs_agent_health',", view)
+        for hardcoded in ("pbs-serzhan", "dh-weekly-serzhan", "pbs-core"):
+            self.assertNotIn(hardcoded, view)
+        self.assertIn("number.dh_pbs_agent_*_limit", view)
+
     def test_packages_are_portable_and_view_standalone(self):
         view = (ROOT / "dashboards/ru/13_pbs.yaml").read_text("utf-8")
         notifications = (ROOT / "packages/locales/ru/dh_pbs_agent_notification_local_package.yaml").read_text("utf-8")

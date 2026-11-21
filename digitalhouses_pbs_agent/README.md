@@ -1,4 +1,4 @@
-# DigitalHouses PBS Agent v0.1.6
+# DigitalHouses PBS Agent v0.1.7
 
 Standalone **read-only** Linux/systemd monitoring agent for a local Proxmox Backup
 Server 4.x. HOME pilot: Debian MediaServer/PBS VM; no dependency on Plex Agent,
@@ -25,6 +25,48 @@ status, snapshots, **push** sync, verify, prune and GC jobs, plus local
 read-only ZFS and filesystem status. It does not run or
 edit PBS jobs, backup snapshots, PVE jobs, Plex, ZFS or retention.
 A job appearing as OK is **not** proof of restore verification.
+
+## Portable MQTT Discovery and dynamic Views (v0.1.7)
+
+All datastore, backup-group, and scheduled-job names are taken from local PBS
+rather than from a HOME-specific list. The existing per-datastore MQTT sensors
+are labelled with portable entity attributes:
+- pbs_product = digitalhouses_pbs_agent
+- pbs_section = datastore
+- pbs_metric = used_percent or available_gib
+- pbs_display_name = the actual datastore name
+- pbs_instance = instance_id
+
+Actual PBS maintenance jobs are now individual MQTT diagnostic sensors in
+the same device, with pbs_section=job, pbs_metric=status, pbs_job_type,
+pbs_job_id, pbs_display_name, schedule, and last_run_at. Their entity
+identities are stable for unchanged PBS type and ID; renamed or removed jobs
+are removed from MQTT Discovery. Discovery inventory is retained locally in
+the existing state directory, without extra services.
+
+Existing core and datastore unique_id values are retained; new installs with
+different names do not need site-specific changes to the View. Its data-source
+sensor is found from pbs_product/pbs_section metadata (with a legacy fallback).
+The status/diagnostic cards and MQTT Number limits use custom:auto-entities,
+as in PVE Agent. Install the Auto Entities frontend card via HACS where needed.
+
+Example portable datastore filter, for an optional future card:
+
+~~~yaml
+type: custom:auto-entities
+card:
+  type: entities
+  title: Datastores
+filter:
+  include:
+    - attributes:
+        pbs_product: digitalhouses_pbs_agent
+        pbs_section: datastore
+        pbs_metric: used_percent
+~~~
+
+For an optional job list, change pbs_section to job and pbs_metric to status.
+There are no hardcoded PBS datastore names or job IDs in the View.
 
 ## Maintenance schedule tree (v0.1.6)
 
@@ -94,7 +136,7 @@ Install only from the published immutable GitHub Release:
 For a published release, on the local PBS VM as root:
 
 ~~~bash
-DIGITALHOUSES_SOURCE_REF=digitalhouses_pbs_agent-v0.1.6 \
+DIGITALHOUSES_SOURCE_REF=digitalhouses_pbs_agent-v0.1.7 \
   bash install.sh --non-interactive \
   --set mqtt_host=YOUR_MQTT_HOST \
   --set pbs_datastores=YOUR_PBS_DATASTORE

@@ -1,5 +1,18 @@
 # DigitalHouses PBS Agent
 
+## 0.1.7
+
+- Tag MQTT sensors with stable pbs_product, pbs_section, pbs_metric,
+  pbs_display_name and pbs_instance attributes for portable Auto Entities.
+- Discover per-job diagnostic sensors using the actual PBS task type/ID and
+  remove obsolete job components when the PBS inventory changes.
+- Resolve the View's health source by product/section metadata instead of a
+  fixed installed entity ID. Render status, diagnostics, and Number controls
+  via Auto Entities filters.
+- Preserve current MQTT unique IDs and monitoring/alert semantics. No site
+  name or datastore/job ID is hardcoded in the View.
+
+
 ## 0.1.6
 
 - Show each PBS maintenance job schedule on its own nested clock line,
