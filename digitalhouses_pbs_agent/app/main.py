@@ -133,7 +133,7 @@ def run(config_path: Path = DEFAULT_CONFIG, state_dir: Path = STATE_DIR) -> int:
                     "sync_jobs": [], "verify_jobs": [], "prune_jobs": [],
                     "gc": [], "maintenance_jobs": [], "task_history": [],
                     "task_history_status": "UNAVAILABLE", "backup_groups": [],
-                    "backup_groups_status": "UNAVAILABLE", "zfs": {"status": "UNKNOWN", "pools": []},
+                    "backup_groups_status": "UNAVAILABLE", "pull_sync_jobs": [], "zfs": {"status": "UNKNOWN", "pools": []},
                     "summary": {}, "errors": [f"{type(exc).__name__}: {str(exc)[:160]}"],
                     "backup_last_success_at": None, "backup_age_hours": None,
                     "sync_overall": "UNKNOWN", "sync_last_success_at": None,

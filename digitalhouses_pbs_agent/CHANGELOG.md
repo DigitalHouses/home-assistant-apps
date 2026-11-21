@@ -1,5 +1,19 @@
 # DigitalHouses PBS Agent
 
+## 0.1.3
+
+- Replace the three wide Markdown PBS tables with compact status trees,
+  following the existing PVE Agent monospaced `├─` / `└─` style.
+  Group datastore usage, backup inventory, freshness checks, maintenance
+  jobs and latest task history without losing diagnostic information.
+- Identify native PBS S3-backed datastores from the existing datastore
+  configuration. Show their status as S3 without treating the local S3 cache
+  percentage as the Backblaze bucket's remote capacity.
+- Include native PBS Pull Sync jobs in the maintenance tree, including S3
+  target jobs and their actual last-run result. Preserve the existing Push
+  Sync sensor and alerts. No external rclone/Backblaze App job monitoring.
+- Keep the same View path and MQTT entity IDs; no PVE/DH Sync/CORE changes.
+
 ## 0.1.2
 
 - Extend the existing DH System PBS View with actual scheduled Sync/Verify/Prune/GC

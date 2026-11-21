@@ -44,6 +44,8 @@ class FakePBS:
         self.sync_status = "OK"
         self.sync_time = now - 3600
         self.used = 500
+        self.backend = None
+        self.pull_status = None
 
     def task_list(self, limit=100):
         return list(getattr(self, "tasks", []))
@@ -52,7 +54,8 @@ class FakePBS:
         if path == "version":
             return {"version": "4.2.11"}
         if path == "config/datastore":
-            return [{"name": "pbs-home", "path": "/", "gc-schedule": "sun 04:00"}]
+            return [{"name": "pbs-home", "path": "/", "gc-schedule": "sun 04:00",
+                     "backend": self.backend}]
         if path == "admin/datastore/pbs-home/namespace":
             return [{"ns": "archive"}]
         if path == "admin/datastore/pbs-home/groups":
@@ -66,9 +69,16 @@ class FakePBS:
         if path == "admin/datastore/pbs-home/snapshots":
             return self.snapshots
         if path == "admin/sync":
-            return [{"id": "push-home", "sync-direction": "push",
-                     "last-run-state": self.sync_status,
-                     "last-run-upid": "UPID:pve:test", "last-run-endtime": self.sync_time}]
+            records = [{"id": "push-home", "sync-direction": "push",
+                        "last-run-state": self.sync_status,
+                        "last-run-upid": "UPID:pve:test", "last-run-endtime": self.sync_time}]
+            if self.pull_status is not None:
+                records.append({"id": "b2-copy", "sync-direction": "pull",
+                                "store": "pbs-home", "schedule": "daily",
+                                "last-run-state": self.pull_status,
+                                "last-run-upid": "UPID:pbs:syncjob:b2-copy",
+                                "last-run-endtime": self.now - 3600})
+            return records
         if path == "admin/verify":
             return [{"id": "verify-home", "last-run-state": "OK"}]
         if path == "admin/prune":
@@ -244,18 +254,43 @@ class PBSAgentTests(unittest.TestCase):
         self.assertNotIn("tojson", notifications)
         self.assertNotIn("192.168.", notifications)
 
-    def test_lovelace_markdown_table_keeps_real_line_breaks(self):
+    def test_dashboard_uses_compact_pve_style_tree_not_wide_tables(self):
         view = (ROOT / "dashboards/ru/13_pbs.yaml").read_text(encoding="utf-8")
-        # Folded YAML scalar (>- ) turns the Markdown table into one line.
-        self.assertEqual(view.count("content: |"), 7)
+        self.assertEqual(view.count("<pre style="), 3)
+        self.assertIn("├─ Datastore", view)
+        self.assertIn("Группы резервных копий", view)
+        self.assertIn("Контроль свежести", view)
+        self.assertIn("Последние выполнения", view)
+        self.assertIn("S3 Sync", view)
+        self.assertIn("ns.lines | join('\\n')", view)
+        self.assertNotIn("| Datastore | Заполнено", view)
         self.assertNotIn("content: >-", view)
-        self.assertIn(
-            "| Datastore | Заполнено | Свободно |\n"
-            "          | :--- | ---: | ---: |\n"
-            "          {% for d in entries -%}\n"
-            "          | {{ d.name }}",
-            view,
+
+    def test_native_s3_and_pull_job_visible_with_real_result(self):
+        self.api.backend = "bucket=pbs-b2,client=backblaze,type=s3"
+        self.api.pull_status = "OK"
+        data = self.sample()
+        self.assertEqual(data["datastores"][0]["backend"], "S3")
+        self.assertEqual(data["sync_jobs"][0]["id"], "push-home")
+        self.assertEqual(data["pull_sync_jobs"][0]["id"], "b2-copy")
+        records = {(j["type"], j["id"]): j for j in data["maintenance_jobs"]}
+        self.assertEqual(records[("S3 Sync", "b2-copy")]["status"], "OK")
+        self.assertEqual(records[("S3 Sync", "b2-copy")]["schedule"], "daily")
+        self.assertEqual(data["status"], "HEALTHY")
+        self.api.pull_status = "ERROR"
+        degraded = self.sample()
+        self.assertEqual(degraded["status"], "DEGRADED")
+        self.assertEqual(
+            next(j["status"] for j in degraded["maintenance_jobs"] if j["type"] == "S3 Sync"),
+            "FAILED",
         )
+
+    def test_non_s3_local_pull_not_labeled_cloud(self):
+        self.api.pull_status = "OK"
+        data = self.sample()
+        self.assertEqual(data["datastores"][0]["backend"], "LOCAL")
+        self.assertTrue(any(j["type"] == "Pull Sync" for j in data["maintenance_jobs"]))
+        self.assertFalse(any(j["type"] == "S3 Sync" for j in data["maintenance_jobs"]))
 
     def test_dashboard_inventory_includes_namespaces_and_monitored_status(self):
         sample = self.sample()
@@ -319,14 +354,14 @@ class PBSAgentTests(unittest.TestCase):
         self.assertEqual(state["backup_groups"], [])
         self.assertTrue(any("groups pbs-home" in err for err in state["errors"]))
 
-    def test_dashboard_contains_real_tables_not_fabricated_example_rows(self):
+    def test_dashboard_contains_real_sources_not_fabricated_example_rows(self):
         from app.mqtt import discovery
         view = (ROOT / "dashboards/ru/13_pbs.yaml").read_text("utf-8")
         for attribute in ("maintenance_jobs", "task_history", "backup_groups"):
             self.assertIn("'" + attribute + "'", discovery(self.config)["components"]["health"]["json_attributes_template"])
             self.assertIn("'" + attribute + "'", view)
         self.assertIn("Последние выполнения PBS", view)
-        self.assertIn("Группы резервных копий PBS", view)
+        self.assertIn("Группы резервных копий (", view)
         self.assertNotIn("21.11 02:00", view)
 
     def test_systemd_pbs_lock_exception_is_scoped(self):

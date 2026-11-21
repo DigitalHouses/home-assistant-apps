@@ -1,4 +1,4 @@
-# DigitalHouses PBS Agent v0.1.2
+# DigitalHouses PBS Agent v0.1.3
 
 Standalone **read-only** Linux/systemd monitoring agent for a local Proxmox Backup
 Server 4.x. HOME pilot: Debian MediaServer/PBS VM; no dependency on Plex Agent,
@@ -26,6 +26,23 @@ read-only ZFS and filesystem status. It does not run or
 edit PBS jobs, backup snapshots, PVE jobs, Plex, ZFS or retention.
 A job appearing as OK is **not** proof of restore verification.
 
+## Compact PBS dashboard and native S3 monitoring (v0.1.3)
+
+The canonical PBS View now uses the same compact text tree convention as
+PVE Agent, with `├─`/`└─` branches and state icons. Datastores, backup
+snapshot groups, freshness rules, Sync/Verify/Prune/GC jobs and up to six
+recent tasks are shown without wide tables. The View uses existing HA
+entities; DH Sync will fetch it from the main branch.
+
+PBS 4.2 native S3-backed datastores can be distinguished via their `backend`
+configuration, but must be included in the native `pbs_datastores` list.
+Local-target Pull Sync jobs are now included in the maintenance tree; when
+the destination datastore uses the PBS S3 backend the job is marked `S3 Sync`
+with its actual last-run state. These results come from PBS, not directly
+from the S3 provider. S3 datastore capacity may reflect the local cache,
+so the tree intentionally does not report it as cloud bucket free space.
+**External rclone/restic/Backblaze App jobs are not monitored by PBS Agent.**
+
 ## PBS dashboard data in v0.1.2
 
 The existing `dh_pbs_agent` View now renders four factual tables: datastore
@@ -49,7 +66,7 @@ Install only from the published immutable GitHub Release:
 For a published release, on the local PBS VM as root:
 
 ~~~bash
-DIGITALHOUSES_SOURCE_REF=digitalhouses_pbs_agent-v0.1.2 \
+DIGITALHOUSES_SOURCE_REF=digitalhouses_pbs_agent-v0.1.3 \
   bash install.sh --non-interactive \
   --set mqtt_host=YOUR_MQTT_HOST \
   --set pbs_datastores=YOUR_PBS_DATASTORE
