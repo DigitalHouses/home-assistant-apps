@@ -294,4 +294,33 @@ def build_shutdown_aware_ups_discovery_payload(
             "'history_available': value_json.shutdown_readiness.history_available | default(false)} | tojson }}"
         ),
     }
+    # One retained summary with bounded structured details; no entity per VMID.
+    components["backup_monitor"] = {
+        "platform": "sensor",
+        "name": "Backup monitoring",
+        "unique_id": f"{topics.device_id}_backup_monitor",
+        "default_entity_id": "sensor.dh_pve_agent_backup_monitor",
+        "state_topic": f"{topics.base}/backup/state",
+        "value_template": "{{ value_json.status }}",
+        "json_attributes_topic": f"{topics.base}/backup/state",
+        "availability": [{"topic": topics.availability, "payload_available": "online", "payload_not_available": "offline"}],
+        "entity_category": "diagnostic",
+        "icon": "mdi:backup-restore",
+    }
+    components["backup_event"] = {
+        "platform": "event",
+        "name": "Backup event",
+        "unique_id": f"{topics.device_id}_backup_event",
+        "default_entity_id": "event.dh_pve_agent_backup",
+        "state_topic": f"{topics.base}/backup/event",
+        "event_types": [
+            "backup_job_failed", "backup_job_missed", "backup_job_recovered",
+            "backup_guest_failed", "backup_guest_missing",
+            "backup_guest_uncovered", "backup_guest_recovered",
+        ],
+        "qos": 1,
+        "availability": [{"topic": topics.availability, "payload_available": "online", "payload_not_available": "offline"}],
+        "entity_category": "diagnostic",
+        "icon": "mdi:backup-restore",
+    }
     return route_ups_discovery_groups(payload, topics)

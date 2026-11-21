@@ -12,6 +12,7 @@ from dataclasses import replace
 from datetime import datetime, timezone
 from pathlib import Path
 
+from .backup_jobs import PveBackupMonitor, POLL_SECONDS as BACKUP_POLL_SECONDS
 from .collectors.cooling import collect_fans
 from .config import AppConfig, UpsConfig, load_config
 from .fan_calibration import FanCalibrationManager, FanCalibrationRegistry
@@ -405,6 +406,15 @@ def run(config: AppConfig, *, state_dir: Path = DEFAULT_STATE_DIR) -> int:
     memory_worker = ThreadPoolExecutor(max_workers=1, thread_name_prefix="dh-pve-memory")
     memory_pending = None
     memory_force_due = False
+    backup_monitor = PveBackupMonitor(
+        StateStore(state_dir / "backup_jobs.json"),
+        excluded_vmids=config.backup.excluded_vmids,
+        grace_seconds=config.backup.missed_grace_seconds,
+    )
+    backup_worker = ThreadPoolExecutor(max_workers=1, thread_name_prefix="dh-pve-backup")
+    backup_pending = None
+    backup_last_check: float | None = None
+    backup_snapshot: dict[str, object] | None = None
     try:
         nfs_monitor = NfsFailureMonitor(
             StateStore(state_dir / "nfs_incidents.json"),
@@ -743,6 +753,28 @@ def run(config: AppConfig, *, state_dir: Path = DEFAULT_STATE_DIR) -> int:
                 nfs_last_check = nfs_now
                 nfs_pending = nfs_worker.submit(nfs_monitor.scan)
 
+            # Read-only PVE backup scan. Work happens off the main UPS safety loop.
+            if backup_pending is not None and backup_pending.done():
+                try:
+                    backup_snapshot, backup_events = backup_pending.result()
+                    if bridge.publish_backup_state(backup_snapshot):
+                        for item in backup_events:
+                            bridge.publish_backup_event(item)
+                    # Transient events are not queued for a disconnected broker.
+                except Exception:
+                    log.exception("Не удалось проверить Backup Jobs PVE")
+                finally:
+                    backup_pending = None
+            backup_now = time.monotonic()
+            if backup_pending is None and (
+                backup_last_check is None
+                or backup_now - backup_last_check >= BACKUP_POLL_SECONDS
+            ):
+                backup_last_check = backup_now
+                backup_pending = backup_worker.submit(backup_monitor.scan)
+            elif debug_reconnected and backup_snapshot is not None:
+                bridge.publish_backup_state(backup_snapshot)
+
             identity_reconnect = debug_reconnected and bridge.connected.is_set()
             if host_identity.refresh(now=time.monotonic(), force=identity_reconnect) or identity_reconnect:
                 bridge.publish_host_identity(host_identity.value)
@@ -753,6 +785,7 @@ def run(config: AppConfig, *, state_dir: Path = DEFAULT_STATE_DIR) -> int:
             bridge.wake_requested.wait(1.0)
             bridge.wake_requested.clear()
     finally:
+        backup_worker.shutdown(wait=False, cancel_futures=True)
         memory_worker.shutdown(wait=False, cancel_futures=True)
         nfs_worker.shutdown(wait=False, cancel_futures=True)
         telemetry_runner.stop()

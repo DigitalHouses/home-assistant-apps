@@ -11,8 +11,8 @@ DASHBOARDS = PRODUCT / "dashboards" / "ru"
 HEADERS = {
     "10_pve_proxmox.yaml": (
         "# DH-View: dh_pve_agent\n"
-        "# DH-View-Version: 1.0.1\n"
-        "# DH-View-Date: 2026-11-17\n"
+        "# DH-View-Version: 1.1.0\n"
+        "# DH-View-Date: 2026-11-18\n"
         "\n"
     ),
     "11_pve_ups.yaml": (
@@ -62,6 +62,19 @@ class DhSyncCanonicalPveResourcesTests(unittest.TestCase):
                 self.assertTrue(resource.startswith(header))
                 body = resource[len(header):]
                 if filename == "10_pve_proxmox.yaml":
+                    # Keep the original CORE v3 view body immutable, while
+                    # allowing this product-owned additive Backup Jobs section.
+                    backup_marker = (
+                        "  - type: grid\n"
+                        "    cards:\n"
+                        "      - type: heading\n"
+                        "        heading: Резервное копирование PVE\n"
+                    )
+                    self.assertEqual(body.count(backup_marker), 1)
+                    original, extension = body.split(backup_marker, 1)
+                    self.assertIn("sensor.dh_pve_agent_backup_monitor", extension)
+                    self.assertTrue(extension.endswith("cards: []\nbadges: []\n"))
+                    body = original + "cards: []\nbadges: []\n"
                     # Preserve the exact v3 CORE baseline except for the
                     # intentional, narrowly scoped Diagnostics UI update.
                     self.assertEqual(body.count("        heading: Диагностика\n"), 1)

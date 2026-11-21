@@ -533,6 +533,22 @@ class MqttBridge(MqttEvents):
             retain=True,
         )
 
+    def publish_backup_state(self, payload: dict[str, object]) -> bool:
+        """Current backup inventory, job outcomes and guest coverage (retained)."""
+        return self._publish(
+            f"{self.topics.base}/backup/state",
+            json.dumps(payload, ensure_ascii=False, separators=(",", ":")),
+            retain=True,
+        )
+
+    def publish_backup_event(self, payload: dict[str, object]) -> bool:
+        """Transient factual backup incident, never a retained notification."""
+        return self._publish(
+            f"{self.topics.base}/backup/event",
+            json.dumps(payload, ensure_ascii=False, separators=(",", ":")),
+            retain=False,
+        )
+
     def publish_nfs_diagnostics(self, payload: dict[str, object]) -> bool:
         """Retained NFS incident status; no guest or NFS mount operations."""
         return self._publish(

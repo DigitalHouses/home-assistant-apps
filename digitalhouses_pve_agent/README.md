@@ -6,6 +6,67 @@
 
 Native Linux agent for **Proxmox VE 8.x** (previously verified) and **9.x** (requires live acceptance) that publishes host, CPU, memory, storage, disk/SMART, GPU, fan, VM/LXC and optional NUT/UPS observability to Home Assistant through MQTT Discovery.
 
+## HOME PVE Backup Jobs observability (development branch)
+
+The existing PVE Agent now contains a **read-only backup monitoring module**.
+The module runs on PVE itself: no PVE API token, SSH, PBS API, sidecar or
+additional service is needed. It reads official PVE data with `pvesh get`,
+the local scheduler jobstate and the task UPID/log, without changing jobs.
+
+* Discovers local VM/CT inventory and enabled/disabled backup jobs.
+* Resolves job selection (`all`, explicit `vmid`, resource pool, `exclude`).
+* Shows each guest as `COVERED`, `UNCOVERED`, `EXCLUDED` or `UNKNOWN`.
+* Provides per-job outcomes, UPID, timestamps, and participant outcomes.
+  `UNKNOWN` means a backup could not be confirmed; a successful task
+  is never taken as proof of success for an individual guest.
+* Detects missed schedules when reliable PVE `next-run` information and an
+  earlier monitoring baseline exist. Never invents missed runs at first start.
+* Publishes a retained MQTT state plus seven non-retained QoS1 machine events,
+  rendered in Russian by the *existing* Notification Package.
+* Reuses the existing canonical Proxmox View with an added backup section.
+
+MQTT state and event topics for each PVE instance:
+
+```text
+DigitalHouses/Global/digitalhouses_pve_agent/<instance>/backup/state
+DigitalHouses/Global/digitalhouses_pve_agent/<instance>/backup/event
+```
+
+Single HA sensor: `sensor.dh_pve_agent_backup_monitor`.
+Single HA event: `event.dh_pve_agent_backup`. No entity per VM/CT.
+
+### Exclusions and missing-run policy
+
+PVE job `exclude` entries are automatically recognized as deliberate
+exclusions. To explicitly omit additional guests which do not belong to
+any job (for example, a MediaServer/PBS VM), set their VMIDs in the
+agent's existing native INI using the existing safe CLI:
+
+```bash
+dh-pve-agent set backup_excluded_vmids=2223
+dh-pve-agent set backup_missed_grace_seconds=900
+```
+
+The VMID above is only an **example** for the serzhan HOME pilot; it is
+not a product default. With an empty exclusion list, every guest
+outside an enabled job is reported uncovered. The two keys map to
+`[backup] excluded_vmids` and `[backup] missed_grace_seconds`.
+
+If a task log does not prove an individual participant's result, the
+participant is reported `UNKNOWN`, not `OK` or `MISSING`.
+Task failure can still be reported from the official task exit status.
+All scans are asynchronous to the existing UPS safety loop, with a
+5-minute scan interval and no polling loop or new process.
+
+**DH Sync 0.6.0:** the existing retained `/sync` declaration is already
+compliant: the declaration identifies the product and GitHub source
+only. This feature does not modify any DH Sync panels or other products.
+Its canonical view keeps stable `path: dh_pve_agent`.
+
+**Acceptance gate:** before production release, validate the actual
+PVE scheduler state, UPID and task-log formats, as well as local HA
+events, on HOME PVE. Until then this module is development-only.
+
 ## Native CLI and unattended installation (development source)
 
 The source tree implements the [DigitalHouses Linux Agent Management Standard](../docs/standards/DH_LINUX_AGENT_MANAGEMENT_STANDARD.md). The DH Sync 0.6.0 source contract publishes retained QoS 1 product identity without Dashboard placement on every successful MQTT connect/reconnect; installed agents receive code changes only through a subsequent release.

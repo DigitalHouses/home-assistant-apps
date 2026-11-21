@@ -1,6 +1,6 @@
 # DH-View: dh_pve_agent
-# DH-View-Version: 1.0.1
-# DH-View-Date: 2026-11-17
+# DH-View-Version: 1.1.0
+# DH-View-Date: 2026-11-18
 
 title: Proxmox
 path: dh_pve_agent
@@ -2382,5 +2382,74 @@ sections:
             {% endif %}
         grid_options:
           columns: 12
+  - type: grid
+    cards:
+      - type: heading
+        heading: Резервное копирование PVE
+        heading_style: title
+        icon: mdi:backup-restore
+      - type: markdown
+        content: >-
+          {% set a = state_attr('sensor.dh_pve_agent_backup_monitor', 'summary') or {} %}
+          {% set status = states('sensor.dh_pve_agent_backup_monitor') %}
+          **Мониторинг:** {{ status }}
+
+          {% if a %}
+          **Гостей:** {{ a.total_guests }} · **Защищено:** {{ a.covered }} ·
+          **Исключено:** {{ a.excluded }} · **Без заданий:** {{ a.uncovered }} ·
+          **Неизвестно:** {{ a.unknown }}
+
+          **Заданий:** {{ a.total_jobs }}
+          {% else %}
+          Нет достоверной инвентаризации Backup Jobs.
+          {% endif %}
+      - type: markdown
+        content: >-
+          {% set jobs = state_attr('sensor.dh_pve_agent_backup_monitor', 'jobs') or [] %}
+          **Backup Jobs**
+
+          {% if jobs %}
+          | Задание | Статус | Участники |
+          | :--- | :--- | ---: |
+          {% for j in jobs %}
+          | {{ j.name }} ({{ j.job_id }}) | {{ j.status }} | {{ j.members | count }} |
+          {% endfor %}
+          {% else %}
+          Нет данных о заданиях.
+          {% endif %}
+      - type: markdown
+        content: >-
+          {% set guests = state_attr('sensor.dh_pve_agent_backup_monitor', 'guests') or [] %}
+          **Гости без резервного копирования**
+
+          {% set ns = namespace(missing=[]) %}
+          {% for g in guests if g.coverage == 'UNCOVERED' %}
+            {% set ns.missing = ns.missing + [g] %}
+          {% endfor %}
+          {% if ns.missing %}
+          {% for g in ns.missing %}
+          - {{ g.vmid }} · {{ g.name }} ({{ g.type }})
+          {% endfor %}
+          {% else %}
+          Нет гостей с подтверждённым отсутствием Backup Job.
+          {% endif %}
+      - type: markdown
+        content: >-
+          {% set jobs = state_attr('sensor.dh_pve_agent_backup_monitor', 'jobs') or [] %}
+          **Ошибки участников**
+
+          {% set ns = namespace(failed=[]) %}
+          {% for j in jobs %}
+            {% for m in j.members if m.status in ['FAILED', 'MISSING', 'UNKNOWN'] %}
+              {% set ns.failed = ns.failed + [(j.job_id, m)] %}
+            {% endfor %}
+          {% endfor %}
+          {% if ns.failed %}
+          {% for item in ns.failed %}
+          - **{{ item[0] }}** · {{ item[1].vmid }} {{ item[1].name }} — {{ item[1].status }} {{ item[1].reason }}
+          {% endfor %}
+          {% else %}
+          Нет зарегистрированных ошибок участников.
+          {% endif %}
 cards: []
 badges: []
