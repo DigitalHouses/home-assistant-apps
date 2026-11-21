@@ -1,4 +1,4 @@
-# DH-View-Version: 0.1.12
+# DH-View-Version: 0.1.13
 # DH-View-Date: 2026-11-22
 title: PBS
 path: dh_pbs_agent
@@ -367,7 +367,10 @@ sections:
           {%- set event_limit = limits.task_events | default(10) | int -%}
           {%- set coverage = state_attr('sensor.dh_pbs_agent_health', 'task_history_status') or 'UNAVAILABLE' -%}
           {# Keep the collector's newest-first order; group by HA-local day. #}
-          {%- set ns = namespace(lines=['Последние выполнения PBS'], dates=[], entries=[]) -%}
+          {%- set ns = namespace(lines=['Последние выполнения PBS'], dates=[], entries=[], all_days=[]) -%}
+          {%- for e in events -%}
+            {%- set ns.all_days = ns.all_days + [as_local(as_datetime(e.started_at)).strftime('%d.%m.%Y')] -%}
+          {%- endfor -%}
           {%- for e in events[:event_limit] -%}
             {%- set local_start = as_local(as_datetime(e.started_at)) -%}
             {%- set day = local_start.strftime('%d.%m.%Y') -%}
@@ -377,7 +380,7 @@ sections:
             {%- set ns.entries = ns.entries + [{
                 'day': day,
                 'time': local_start.strftime('%H:%M'),
-                'type': e.type,
+                'type': e.type ~ (' ' ~ e.guest if e.guest | default(none) else ''),
                 'duration': (e.duration_seconds ~ ' с') if e.duration_seconds is not none else '—',
                 'status': e.status
               }] -%}
@@ -387,7 +390,8 @@ sections:
             {%- set last_day = loop.last and (events | count) <= event_limit -%}
             {%- set branch = '└─' if last_day else '├─' -%}
             {%- set indent = '   ' if last_day else '│  ' -%}
-            {%- set ns.lines = ns.lines + [branch ~ ' 📅 ' ~ day] -%}
+            {%- set day_total = ns.all_days | select('equalto', day) | list | count -%}
+            {%- set ns.lines = ns.lines + [branch ~ ' 📅 ' ~ day ~ ' (' ~ day_total ~ ')'] -%}
             {%- for e in day_events -%}
               {%- set icon = '🟢' if e.status == 'OK'
                   else '🔴' if e.status == 'FAILED'

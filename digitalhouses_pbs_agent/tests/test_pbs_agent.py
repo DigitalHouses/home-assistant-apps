@@ -523,6 +523,41 @@ class PBSAgentTests(unittest.TestCase):
         self.assertIn("j.schedule or 'без расписания'", view)
         self.assertIn("as_local(as_datetime(j.last_run_at))", view)
 
+    def test_backup_guest_identity_from_actual_pbs_worker_only(self):
+        from app.collector import _backup_guest, _task_history
+        examples = [
+            ({"worker_id": "pbs-serzhan:vm-1234"}, "VM1234"),
+            ({"worker-id": "archive:ct-1221"}, "CT1221"),
+            ({"upid": r"UPID:pbs:00011F53:011064D4:00000336:667B4F54:backup:pbs\x2dbackup\x3avm-168:pve-user@pbs:"}, "VM168"),
+            ({"upid": r"UPID:pbs:00011F53:011064D4:00000336:667B4F54:backup:store\x3act-4321:user@pbs:"}, "CT4321"),
+            ({"upid": "UPID:pbs:1:2:3:backup:z"}, None),
+            ({"worker_id": "store:vm-ABC"}, None),
+            ({"worker_id": "store:vm-1234-extra"}, None),
+            ({"worker_id": "vm-1234"}, None),
+            ({"worker_id": "store:host-archiver"}, None),
+            ({"upid": r"UPID:pbs:1:2:3:4:verify:store\x3avm-1234:root@pam:"}, None),
+            ({"upid": r"UPID:pbs:1:2:3:4:backup:some-store\x3ajob-1234:root@pam:"}, None),
+        ]
+        for row, expected in examples:
+            with self.subTest(row=row):
+                self.assertEqual(_backup_guest(row), expected)
+        now = self.now
+        rows = [
+            {"worker_type": "backup", "worker_id": "any-datastore:vm-1234",
+             "upid": "UPID:pbs:unimportant", "starttime": now - 60,
+             "endtime": now - 30, "status": "OK"},
+            {"worker_type": "backup", "upid": "UPID:pbs:1:2:3:backup:z",
+             "starttime": now - 90, "endtime": now - 80, "status": "OK"},
+            {"worker_type": "verify", "worker_id": "any-datastore:vm-1234",
+             "starttime": now - 120, "endtime": now - 100, "status": "OK"},
+        ]
+        history = _task_history(rows)
+        self.assertEqual([row["type"] for row in history],
+                         ["Backup", "Backup", "Verify"])
+        self.assertEqual([row["guest"] for row in history],
+                         ["VM1234", None, None])
+        self.assertEqual(history[0]["duration_seconds"], 30)
+
     def test_task_history_groups_by_home_assistant_local_day(self):
         view = (ROOT / "dashboards/ru/13_pbs.yaml").read_text(encoding="utf-8")
         self.assertIn("local_start = as_local(as_datetime(e.started_at))", view)
@@ -536,6 +571,15 @@ class PBSAgentTests(unittest.TestCase):
         self.assertIn("events | count > event_limit", view)
         self.assertIn("История недоступна", view)
         self.assertNotIn("as_local(as_datetime(e.started_at)).strftime('%d.%m %H:%M')", view)
+
+    def test_task_history_labels_local_day_counts_and_guests(self):
+        view = (ROOT / "dashboards/ru/13_pbs.yaml").read_text(encoding="utf-8")
+        self.assertIn("for e in events -%}", view)
+        self.assertIn("ns.all_days = ns.all_days + [as_local(as_datetime(e.started_at))", view)
+        self.assertIn("day_total = ns.all_days | select('equalto', day) | list | count", view)
+        self.assertIn("branch ~ ' 📅 ' ~ day ~ ' (' ~ day_total ~ ')'", view)
+        self.assertIn("'type': e.type ~ (' ' ~ e.guest if e.guest | default(none) else '')", view)
+        self.assertIn("for e in events[:event_limit] -%}", view)
 
     def test_dashboard_uses_correct_percentage_and_independent_limits(self):
         view = (ROOT / "dashboards/ru/13_pbs.yaml").read_text(encoding="utf-8")
