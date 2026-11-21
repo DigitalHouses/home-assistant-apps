@@ -1,5 +1,15 @@
 # DigitalHouses PBS Agent
 
+## 0.1.12
+
+- Group the **Последние выполнения PBS** tree by actual run date, with a
+  calendar icon per day and indented time/status/duration rows.
+- Format both dates and times in the configured Home Assistant timezone
+  using `as_local(as_datetime(...))`, including midnight crossings.
+- Preserve newest-first event order, native PBS status, independent event
+  limit, overflow notice and empty-history state. View-only change.
+
+
 ## 0.1.11
 
 - Show the existing MQTT `switch.dh_pbs_agent_auto_update` as **Автообновление**

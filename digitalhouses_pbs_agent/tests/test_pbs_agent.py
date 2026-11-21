@@ -523,6 +523,20 @@ class PBSAgentTests(unittest.TestCase):
         self.assertIn("j.schedule or 'без расписания'", view)
         self.assertIn("as_local(as_datetime(j.last_run_at))", view)
 
+    def test_task_history_groups_by_home_assistant_local_day(self):
+        view = (ROOT / "dashboards/ru/13_pbs.yaml").read_text(encoding="utf-8")
+        self.assertIn("local_start = as_local(as_datetime(e.started_at))", view)
+        self.assertIn("local_start.strftime('%d.%m.%Y')", view)
+        self.assertIn("local_start.strftime('%H:%M')", view)
+        self.assertIn("branch ~ ' 📅 ' ~ day", view)
+        self.assertIn("ns.entries | selectattr('day', 'equalto', day) | list", view)
+        self.assertIn("child = '└─' if loop.last else '├─'", view)
+        self.assertIn("indent ~ child ~ ' ' ~ icon ~ ' ' ~ e.time", view)
+        self.assertIn("events[:event_limit]", view)
+        self.assertIn("events | count > event_limit", view)
+        self.assertIn("История недоступна", view)
+        self.assertNotIn("as_local(as_datetime(e.started_at)).strftime('%d.%m %H:%M')", view)
+
     def test_dashboard_uses_correct_percentage_and_independent_limits(self):
         view = (ROOT / "dashboards/ru/13_pbs.yaml").read_text(encoding="utf-8")
         self.assertIn("state_attr(storage.entity_id, 'used_gib')", view)
