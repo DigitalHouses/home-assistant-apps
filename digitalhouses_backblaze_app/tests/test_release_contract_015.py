@@ -12,14 +12,16 @@ DOCKERFILE = ROOT / "Dockerfile"
 
 class ReleaseContract015Tests(unittest.TestCase):
     def test_release_version_is_consistent(self):
-        self.assertIn("version: 0.1.15", CONFIG.read_text(encoding="utf-8"))
+        config = CONFIG.read_text(encoding="utf-8")
+        version = next(line.split(": ", 1)[1] for line in config.splitlines()
+                       if line.startswith("version: "))
         self.assertIn(
-            'ARG BUILD_VERSION="0.1.15"',
+            f'ARG BUILD_VERSION="{version}"',
             DOCKERFILE.read_text(encoding="utf-8"),
         )
         self.assertIn("## 0.1.15", CHANGELOG.read_text(encoding="utf-8"))
         self.assertIn(
-            "Version 0.1.15 is the current stable production release.",
+            f"Version {version} is the current stable production release.",
             README.read_text(encoding="utf-8"),
         )
 
