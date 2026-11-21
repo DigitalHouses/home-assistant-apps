@@ -1,0 +1,78 @@
+#!/usr/bin/python3
+"""Independent PBS Agent maintenance worker. No MQTT privileges or HA hooks."""
+from __future__ import annotations
+
+import fcntl
+import json
+import os
+from pathlib import Path
+import subprocess
+import tempfile
+import time
+from datetime import datetime, timezone
+
+ROOT = Path("/var/lib/digitalhouses_pbs_agent")
+SERVICE = "digitalhouses_pbs_agent.service"
+
+
+def now() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+def read(name: str) -> dict:
+    try:
+        return json.loads((ROOT / name).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+
+
+def save(name: str, record: dict) -> None:
+    fd, target = tempfile.mkstemp(prefix=".pbs-worker-", dir=ROOT)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as output:
+            os.fchmod(output.fileno(), 0o600)
+            json.dump(record, output, ensure_ascii=False)
+            output.flush()
+            os.fsync(output.fileno())
+        os.replace(target, ROOT / name)
+    finally:
+        if os.path.exists(target):
+            os.unlink(target)
+
+
+def main() -> int:
+    ROOT.mkdir(parents=True, exist_ok=True)
+    with (ROOT / "control.lock").open("a+") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        request = read("control_request.json")
+        current = read("control_worker.json")
+        action = request.get("action")
+        transaction = request.get("request_id")
+        if (action not in ("install", "restart") or
+                not isinstance(transaction, str) or
+                current.get("request_id") != transaction or
+                current.get("state") != "queued"):
+            return 0
+        started = time.monotonic()
+        save("control_worker.json", {"request_id": transaction,
+                                    "state": "running", "started_at": now()})
+        cmd = (["/usr/local/bin/dh-pbs-agent", "update"] if action == "install"
+               else ["systemctl", "restart", SERVICE])
+        error = None
+        try:
+            result = subprocess.run(cmd, capture_output=True, timeout=950, check=False)
+            if result.returncode:
+                error = ("Установка не завершена" if action == "install"
+                         else "Служба PBS Agent не перезапущена")
+        except (OSError, subprocess.SubprocessError):
+            error = "Системная операция прервана или завершилась по таймауту"
+        save("control_worker.json", {
+            "request_id": transaction, "state": "error" if error else "completed",
+            "finished_at": now(), "duration_seconds": round(time.monotonic()-started, 2),
+            "error": error,
+        })
+        return 1 if error else 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

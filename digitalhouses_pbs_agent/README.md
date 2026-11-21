@@ -1,4 +1,4 @@
-# DigitalHouses PBS Agent v0.1.9
+# DigitalHouses PBS Agent v0.1.10
 
 Standalone **read-only** Linux/systemd monitoring agent for a local Proxmox Backup
 Server 4.x. HOME pilot: Debian MediaServer/PBS VM; no dependency on Plex Agent,
@@ -25,6 +25,72 @@ status, snapshots, **push** sync, verify, prune and GC jobs, plus local
 read-only ZFS and filesystem status. It does not run or
 edit PBS jobs, backup snapshots, PVE jobs, Plex, ZFS or retention.
 A job appearing as OK is **not** proof of restore verification.
+
+## One-command installation and PVE-style management (v0.1.10)
+
+Run on the PBS Linux VM as root; this fetches the installer from the
+DigitalHouses repository and **pins its actual install to the latest published
+stable immutable PBS Agent release** (never a branch head):
+
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/DigitalHouses/home-assistant-apps/main/digitalhouses_pbs_agent/install.sh)
+```
+
+On an existing host the native INI is preserved, so no options or extra
+configuration are needed. For a fresh, fully unattended installation supply
+the real MQTT broker and the local PBS datastore names (change for the site):
+
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/DigitalHouses/home-assistant-apps/main/digitalhouses_pbs_agent/install.sh) --non-interactive --set mqtt_host=192.168.11.222 --set pbs_datastores=pbs-serzhan
+```
+
+To pin a known release, set `DIGITALHOUSES_SOURCE_REF=digitalhouses_pbs_agent-vX.Y.Z`.
+Passwords are passed only with `--mqtt-password-stdin` or hidden
+`dh-pbs-agent set mqtt_password`, never with literal command arguments.
+The installer validates the version, performs rollback on installation
+failure and suppresses Git's harmless detached-HEAD advice.
+
+Daily management (absolute paths in `/root/dh-pbs-agent.txt`):
+
+```bash
+dh-pbs-agent status
+dh-pbs-agent restart
+dh-pbs-agent check-update
+dh-pbs-agent update
+dh-pbs-agent auto-update on
+dh-pbs-agent auto-update off
+dh-pbs-agent auto-update status
+dh-pbs-agent set mqtt_host=192.168.11.222 mqtt_port=1883
+dh-pbs-agent help
+```
+
+The CLI works without MQTT; `set` retains native INI semantics and existing
+credentials. The MQTT device contains native buttons
+`button.dh_pbs_agent_refresh`,
+`button.dh_pbs_agent_check_updates`,
+`button.dh_pbs_agent_update` and
+`button.dh_pbs_agent_restart_agent`, plus the persistent
+`switch.dh_pbs_agent_auto_update` (OFF by default).
+The status card uses `sensor.dh_pbs_agent_card` and exact user-operation
+states; update-check and manual refresh have their own diagnostic sensors.
+The independent `digitalhouses_pbs_agent-control.service` oneshot worker
+handles install/restart so that the monitoring agent does not replace itself
+inside its own MQTT callback. Its state is retained in the existing state
+directory and checked after an agent restart. Manual Refresh is real,
+on-demand PBS collection, not a service restart or republish of cached data.
+The source of update availability is a verified **published stable GitHub
+Release**. Repeated presses do not queue duplicate work.
+
+The canonical View header follows PVE Agent's
+`custom:button-card` + `custom:mushroom-chips-card` layout.
+Those two frontend resources must be installed for the unified header;
+PBS data trees and main native entities cards do not require Auto Entities.
+The UI asks for confirmation before installation and restart.
+
+The shared reference requirements are:
+- [Linux Agent Management Standard](../docs/standards/DH_LINUX_AGENT_MANAGEMENT_STANDARD.md)
+- [Unified Product Status Card Standard](../docs/standards/UNIFIED_PRODUCT_STATUS_CARD_STANDARD.md)
+- [Manual Refresh Standard](../docs/standards/MANUAL_REFRESH_STANDARD.md)
 
 ## Used capacity and Russian entity names (v0.1.9)
 
