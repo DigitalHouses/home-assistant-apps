@@ -1,0 +1,18 @@
+# DH Sync common package: Home Assistant is the source of its own timezone.
+# One retained MQTT setting, received automatically by PBS Agent.
+dh_pbs_agent_timezone_package:
+  automation:
+    - id: dh_pbs_agent_publish_ha_timezone
+      alias: DH PBS Agent · Home Assistant timezone
+      triggers:
+        - trigger: homeassistant
+          event: start
+        - trigger: time_pattern
+          minutes: "/15"
+      actions:
+        - action: mqtt.publish
+          data:
+            topic: DigitalHouses/Global/digitalhouses_pbs_agent/ha_timezone
+            payload: "{{ now().tzinfo.key }}"
+            qos: 1
+            retain: true

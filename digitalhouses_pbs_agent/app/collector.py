@@ -306,6 +306,8 @@ def _backup_upload_stats(
              and task.get("status") == "OK" and task.get("guest")
              and task.get("backup_datastore")
              and task.get("started_at") and task.get("ended_at")]
+    for task in tasks:
+        task["upload_status"] = "UNAVAILABLE"
     if not tasks or not groups:
         return
 
@@ -343,6 +345,8 @@ def _backup_upload_stats(
                       and start - 120 <= c[4] <= end + 120]
         if len(candidates) == 1:
             assignments.append((task, candidates[0]))
+        else:
+            task["upload_status"] = "NO_MATCH" if not candidates else "AMBIGUOUS"
 
     # A snapshot must match exactly one task, even if two same-guest tasks
     # overlap its timestamp tolerance window. Never duplicate a run's bytes.
@@ -351,6 +355,7 @@ def _backup_upload_stats(
         used[candidate] = used.get(candidate, 0) + 1
     for task, identity in assignments:
         if used[identity] != 1:
+            task["upload_status"] = "AMBIGUOUS"
             continue
         store, ns, typ, ident, when = identity
         if cache is not None and identity in cache:
@@ -363,16 +368,46 @@ def _backup_upload_stats(
                        "backup-time": when, "ns": ns or None},
                 )
             except SourceError:
+                task["upload_status"] = "API_ERROR"
                 continue
             stats = info.get("upload-statistics") if isinstance(info, dict) else None
             size = stats.get("compressed-size") if isinstance(stats, dict) else None
             if type(size) is not int or size < 0:
+                task["upload_status"] = "NO_STATISTICS"
                 continue
             if cache is not None:
                 if len(cache) >= 256:
                     cache.clear()
                 cache[identity] = size
         task["uploaded_compressed_bytes"] = size
+        task["backup_namespace"] = ns
+        task["backup_snapshot_time"] = when
+        task["upload_status"] = "OK"
+
+    # The group tree shows the uploaded increment of the last snapshot, not
+    # a logical/full size. Only attach a value with an exact snapshot identity.
+    by_snapshot = {}
+    for task in tasks:
+        if task.get("upload_status") != "OK":
+            continue
+        key = (task["backup_datastore"], task["backup_namespace"],
+               "vm/" + task["guest"][2:] if task["guest"].startswith("VM")
+               else "ct/" + task["guest"][2:], task["backup_snapshot_time"])
+        by_snapshot.setdefault(key, []).append(task["uploaded_compressed_bytes"])
+    for group in groups:
+        last = group.get("last_backup_at")
+        if not last:
+            continue
+        stamp = int(datetime.fromisoformat(last).timestamp())
+        key = (group["datastore"], group["namespace"], group["group"], stamp)
+        values = by_snapshot.get(key, [])
+        if len(values) == 1:
+            group["last_uploaded_compressed_bytes"] = values[0]
+
+
+# Daily PVE backups are normally expected at least once every 36 hours.
+# Explicit per-group backup_rules override this default.
+AUTO_FRESHNESS_HOURS = 36.0
 
 
 def _backup_inventory(config: Config, pbs: PBSClient, now: float) -> tuple[list[dict], str, list[str]]:
@@ -408,15 +443,17 @@ def _backup_inventory(config: Config, pbs: PBSClient, now: float) -> tuple[list[
                 timestamp = stamp if isinstance(stamp, (int, float)) and 0 < stamp <= now + 300 else None
                 age = age_hours(now, timestamp)
                 threshold = rules.get((store, ns, group))
-                status = ("NOT_MONITORED" if threshold is None else
-                          "UNKNOWN" if age is None else
-                          "OK" if age <= threshold else "OVERDUE")
+                source = "configured" if threshold is not None else "automatic"
+                limit = threshold if threshold is not None else AUTO_FRESHNESS_HOURS
+                status = ("UNKNOWN" if age is None else
+                          "OK" if age <= limit else "OVERDUE")
                 count = row.get("backup-count")
                 groups.append({
                     "datastore": store, "namespace": ns, "group": group,
                     "snapshot_count": count if isinstance(count, int) and count >= 0 else None,
                     "last_backup_at": utc(timestamp) if timestamp is not None else None,
                     "age_hours": age, "status": status,
+                    "freshness_hours": limit, "freshness_source": source,
                 })
     groups.sort(key=lambda row: row["last_backup_at"] or "", reverse=True)
     if len(groups) > 80:
@@ -726,7 +763,42 @@ def collect(config: Config, pbs: PBSClient | None = None, now: float | None = No
     result["backup_groups"] = inventory
     result["backup_groups_status"] = coverage
     result["errors"].extend(inventory_errors)
+    monitored = {(r.datastore, r.namespace, r.group) for r in config.backup_rules}
+    for group in inventory:
+        if group["status"] != "OVERDUE":
+            continue
+        # The explicit per-group rule already contributes the same incident.
+        if (group["datastore"], group["namespace"], group["group"]) in monitored:
+            continue
+        statuses.append("CRITICAL")
+        problems.append({
+            "key": f"backup:{group['datastore']}:{group['namespace']}:{group['group']}",
+            "type": "backup_overdue", "category": "backup",
+            "facts": {
+                "datastore": group["datastore"], "namespace": group["namespace"],
+                "backup_group": group["group"],
+                "age_hours": group["age_hours"],
+                "threshold_hours": group["freshness_hours"],
+                "reason_code": "overdue",
+            },
+        })
+    result["freshness_summary"] = {
+        "checked": len(inventory),
+        "ok": sum(g["status"] == "OK" for g in inventory),
+        "overdue": sum(g["status"] == "OVERDUE" for g in inventory),
+        "unknown": sum(g["status"] == "UNKNOWN" for g in inventory),
+        "auto_hours": AUTO_FRESHNESS_HOURS,
+    }
     _backup_upload_stats(pbs, result["task_history"], inventory, upload_cache)
+    sizes = [t for t in result["task_history"]
+             if t.get("type") == "Backup" and t.get("status") == "OK"]
+    result["upload_summary"] = {
+        "total": len(sizes),
+        "available": sum(t.get("upload_status") == "OK" for t in sizes),
+        "reasons": {reason: sum(t.get("upload_status") == reason for t in sizes)
+                    for reason in ("API_ERROR", "NO_STATISTICS", "NO_MATCH",
+                                   "AMBIGUOUS", "UNAVAILABLE")},
+    }
 
     if result["zfs"]["status"] == "DEGRADED":
         statuses.append("CRITICAL")

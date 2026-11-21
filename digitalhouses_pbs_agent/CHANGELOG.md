@@ -1,5 +1,30 @@
 # DigitalHouses PBS Agent
 
+## 0.1.15
+
+- **Agent owns all tree calculations**: four ready-to-display retained MQTT
+  texts (backup groups, maintenance jobs, task history, summary). Lovelace
+  only displays their content. Datastore card names, capacity text, percentages,
+  icons and colours are also prepared by the Agent, not HA templates.
+- **Automatic freshness**: every discovered PBS group is monitored against a
+  default 36-hour threshold; optional existing per-group backup_rules override
+  it. Green means a recent snapshot; red means it is stale. Existing event
+  state/recovery is preserved and extended to the auto-monitored groups.
+- **Home Assistant timezone as source**: one canonical DH Sync common package
+  publishes HA's IANA timezone to retained MQTT. The Agent caches and applies
+  that timezone to all tree dates and times, including midnight crossings.
+  If it has not arrived, the tree explicitly warns that UTC is temporary.
+- Group inventory additionally shows the compressed increment of the last
+  snapshot only when it matches a completed task exactly; never substitute
+  logical size for missing stats.
+- **Diagnose missing uploaded-size values**: report counts of missing snapshot,
+  ambiguous match, PBS API failure and absent upload statistics through a
+  diagnostic sensor, without faking a full snapshot size or 0 bytes. The
+  incremental metric remains the PBS compressed chunk upload size.
+- Preserve existing MQTT IDs, native PBS read-only monitoring, dynamic
+  datastore/job discovery, Number limits and no PBS scheduler changes.
+
+
 ## 0.1.14
 
 - Show the real compressed upload of a completed PBS Backup as

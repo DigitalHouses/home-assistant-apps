@@ -1,4 +1,4 @@
-# DH-View-Version: 0.1.14
+# DH-View-Version: 0.1.15
 # DH-View-Date: 2026-11-22
 title: PBS
 path: dh_pbs_agent
@@ -164,22 +164,7 @@ sections:
             name: ZFS
       - type: markdown
         content: |
-          {% set a = state_attr('sensor.dh_pbs_agent_health', 'summary') or {} %}
-          **Сводка PBS**
-
-          {% if a %}
-          Datastore: {{ a.datastore_count }}
-
-          Правил резервирования: {{ a.freshness_rules }}
-
-          Push Sync: {{ a.push_jobs }}
-
-          Verify: {{ a.verify_jobs }} · Prune: {{ a.prune_jobs }}
-
-          Активных проблем: {{ a.active_problems }}
-          {% else %}
-          Ожидание достоверных данных.
-          {% endif %}
+          <pre style="margin:0; padding:0; line-height:1.2; white-space:pre-wrap;">{{ state_attr('sensor.dh_pbs_agent_summary_tree', 'text') or 'Ожидание данных PBS Agent…' }}</pre>
   - type: grid
     cards:
       - type: heading
@@ -201,60 +186,15 @@ sections:
               {% if state_attr(storage.entity_id, 'pbs_product') == 'digitalhouses_pbs_agent'
                   and state_attr(storage.entity_id, 'pbs_section') == 'datastore'
                   and state_attr(storage.entity_id, 'pbs_metric') == 'used_percent' %}
-                {% set name = state_attr(storage.entity_id, 'pbs_display_name') or storage.name %}
-                {% set backend = state_attr(storage.entity_id, 'pbs_backend') or 'LOCAL' %}
-                {% set health = state_attr(storage.entity_id, 'pbs_health') or 'UNKNOWN' %}
-                {% set total = state_attr(storage.entity_id, 'total_gib') %}
-                {% set used = state_attr(storage.entity_id, 'used_gib') %}
-
-                {% if backend == 'S3' %}
-                  {% set card_name = name %}
-                  {% set secondary = 'S3 · объём не определён' %}
-                  {% set percent = '0' %}
-                  {% set color = 'grey' %}
-                  {% set icon = 'mdi:cloud-outline' %}
-                {% elif storage.state | is_number %}
-                  {% set used_percent = storage.state | float %}
-                  {% if total is number and used is number %}
-                    {% set secondary =
-                      'Занято ' ~ ('%.2f' | format(used | float))
-                      ~ ' / ' ~ ('%.2f' | format(total | float)) ~ ' GiB'
-                    %}
-                  {% else %}
-                    {% set secondary = 'Занято ' ~ ('%.1f' | format(used_percent)) ~ '%' %}
-                  {% endif %}
-                  {% set card_name =
-                    name ~ ' · занято ' ~ ('%.1f' | format(used_percent)) ~ '%'
-                  %}
-                  {% set percent = '%.2f' | format(used_percent) %}
-                  {% if health == 'CRITICAL' %}
-                    {% set color = 'red' %}
-                    {% set icon = 'mdi:database-alert' %}
-                  {% elif health == 'DEGRADED' %}
-                    {% set color = 'orange' %}
-                    {% set icon = 'mdi:database-alert' %}
-                  {% elif health == 'HEALTHY' %}
-                    {% set color = 'green' %}
-                    {% set icon = 'mdi:database-check' %}
-                  {% else %}
-                    {% set color = 'grey' %}
-                    {% set icon = 'mdi:database' %}
-                  {% endif %}
-                {% else %}
-                  {% set card_name = name %}
-                  {% set secondary = 'Данные недоступны' %}
-                  {% set percent = '0' %}
-                  {% set color = 'grey' %}
-                  {% set icon = 'mdi:database' %}
-                {% endif %}
-
+                {% set entity = storage.entity_id %}
+                {% set color = state_attr(entity, 'card_color') or 'grey' %}
                 {% set ns.items = ns.items + [{
                   'type': 'custom:entity-progress-card-template',
-                  'entity': storage.entity_id,
-                  'name': card_name,
-                  'secondary': secondary,
-                  'percent': percent,
-                  'icon': icon,
+                  'entity': entity,
+                  'name': state_attr(entity, 'card_name') or storage.name,
+                  'secondary': state_attr(entity, 'card_secondary') or '',
+                  'percent': state_attr(entity, 'card_percent') or 0,
+                  'icon': state_attr(entity, 'card_icon') or 'mdi:database',
                   'color': color,
                   'bar_color': color,
                   'bar_size': 'medium',
@@ -273,47 +213,7 @@ sections:
         icon: mdi:backup-restore
       - type: markdown
         content: |
-          {%- set ds = state_attr('sensor.dh_pbs_agent_health', 'datastores') or [] -%}
-          {%- set groups = state_attr('sensor.dh_pbs_agent_health', 'backup_groups') or [] -%}
-          {%- set rules = state_attr('sensor.dh_pbs_agent_health', 'backups') or [] -%}
-          {%- set coverage = state_attr('sensor.dh_pbs_agent_health', 'backup_groups_status') or 'UNAVAILABLE' -%}
-          {%- set limits = state_attr('sensor.dh_pbs_agent_health', 'view_limits') or {} -%}
-          {%- set group_limit = limits.backup_groups | default(10) | int -%}
-          {%- set ns = namespace(lines=['PBS']) -%}
-          {%- set ns.lines = ns.lines + ['├─ Группы резервных копий (' ~ (groups | count) ~ ')'] -%}
-          {%- for g in groups[:group_limit] -%}
-            {%- set icon = '🟢' if g.status == 'OK'
-                else '🔴' if g.status in ['OVERDUE','NO_SNAPSHOT','UNAVAILABLE']
-                else '⚪' -%}
-            {%- set when = as_local(as_datetime(g.last_backup_at)).strftime('%d.%m %H:%M') if g.last_backup_at else '—' -%}
-            {%- set status = '' if g.status == 'NOT_MONITORED' else ' · ' ~ g.status -%}
-            {%- set count = (g.snapshot_count | string) if g.snapshot_count is not none else '?' -%}
-            {%- set store_prefix = (g.datastore ~ '/') if (ds | count) > 1 else '' -%}
-            {%- set name = store_prefix ~ (g.namespace ~ '/' if g.namespace else '') ~ g.group -%}
-            {%- set branch = '└─' if loop.last and groups | count <= group_limit else '├─' -%}
-            {%- set ns.lines = ns.lines + ['│  ' ~ branch ~ ' ' ~ icon ~ ' ' ~ name ~ ' · ' ~ count ~ ' коп. · ' ~ when ~ status] -%}
-          {%- endfor -%}
-          {%- if not groups -%}
-            {%- set ns.lines = ns.lines + ['│  └─ ' ~ ('Нет копий' if coverage == 'COMPLETE' else '⚪ Нет достоверного списка')] -%}
-          {%- elif groups | count > group_limit -%}
-            {%- set ns.lines = ns.lines + ['│  └─ Ещё ' ~ ((groups | count) - group_limit) ~ ' групп'] -%}
-          {%- endif -%}
-          {%- if coverage != 'COMPLETE' -%}
-            {%- set ns.lines = ns.lines + ['│  ⚠ Инвентаризация ' ~ coverage] -%}
-          {%- endif -%}
-          {%- set ns.lines = ns.lines + ['└─ Контроль свежести (' ~ (rules | count) ~ ')'] -%}
-          {%- for b in rules[:8] -%}
-            {%- set icon = '🟢' if b.status == 'OK' else '🔴' if b.status in ['OVERDUE','NO_SNAPSHOT'] else '⚪' -%}
-            {%- set branch = '└─' if loop.last and (rules | count) <= 8 else '├─' -%}
-            {%- set age = (b.age_hours ~ ' ч') if b.age_hours is not none else 'нет копии' -%}
-            {%- set ns.lines = ns.lines + ['   ' ~ branch ~ ' ' ~ icon ~ ' ' ~ b.group ~ ' · ' ~ age ~ ' / ' ~ b.max_age_hours ~ ' ч · ' ~ b.status] -%}
-          {%- endfor -%}
-          {%- if not rules -%}
-            {%- set ns.lines = ns.lines + ['   └─ Не настроен'] -%}
-          {%- elif rules | count > 8 -%}
-            {%- set ns.lines = ns.lines + ['   └─ Ещё ' ~ ((rules | count) - 8) ~ ' правил'] -%}
-          {%- endif -%}
-          <pre style="margin:0; padding:0; line-height:1.2; font-family:'Courier New',monospace; white-space:pre; overflow-x:auto;">{{ ns.lines | join('\n') }}</pre>
+          <pre style="margin:0; padding:0; line-height:1.2; font-family:'Courier New',monospace; white-space:pre; overflow-x:auto;">{{ state_attr('sensor.dh_pbs_agent_backup_tree', 'text') or 'Ожидание данных PBS Agent…' }}</pre>
         grid_options:
           columns: 12
   - type: grid
@@ -324,104 +224,12 @@ sections:
         icon: mdi:calendar-check
       - type: markdown
         content: |
-          {%- set jobs = state_attr('sensor.dh_pbs_agent_health', 'maintenance_jobs') or [] -%}
-          {%- set kinds = ['Push Sync','S3 Sync','Pull Sync','Verify','Prune','GC'] -%}
-          {%- set shown_kinds = namespace(items=[]) -%}
-          {%- for kind in kinds -%}
-            {%- if jobs | selectattr('type', 'equalto', kind) | list | count > 0 -%}
-              {%- set shown_kinds.items = shown_kinds.items + [kind] -%}
-            {%- endif -%}
-          {%- endfor -%}
-          {%- set ns = namespace(lines=['Задания PBS (' ~ (jobs | count) ~ ')']) -%}
-          {%- for kind in shown_kinds.items -%}
-            {%- set found = jobs | selectattr('type', 'equalto', kind) | list -%}
-            {%- set kind_last = loop.last -%}
-            {%- set type_branch = '└─' if kind_last else '├─' -%}
-            {%- set type_indent = '   ' if kind_last else '│  ' -%}
-            {%- set ns.lines = ns.lines + [type_branch ~ ' ' ~ kind ~ ' (' ~ (found | count) ~ ')'] -%}
-            {%- for j in found -%}
-              {%- set icon = '🟢' if j.status == 'OK'
-                  else '🔴' if j.status in ['FAILED','UNAVAILABLE']
-                  else '🟠' if j.status == 'NOT_CONFIGURED'
-                  else '⚪' -%}
-              {%- set when = as_local(as_datetime(j.last_run_at)).strftime('%d.%m %H:%M') if j.last_run_at else '—' -%}
-              {%- set schedule = j.schedule or 'без расписания' -%}
-              {%- set branch = '└─' if loop.last else '├─' -%}
-              {%- set child_indent = '   ' if loop.last else '│  ' -%}
-              {%- set ns.lines = ns.lines + [
-                  type_indent ~ branch ~ ' 🕒 ' ~ schedule,
-                  type_indent ~ child_indent ~ '└─ ' ~ icon ~ ' ' ~ j.id ~ ' · ' ~ j.status ~ ' · ' ~ when
-                ] -%}
-            {%- endfor -%}
-          {%- endfor -%}
-          {%- if not jobs -%}
-            {%- set ns.lines = ns.lines + ['└─ ⚪ Заданий нет или данные недоступны'] -%}
-          {%- endif -%}
-          <pre style="margin:0; padding:0; line-height:1.2; font-family:'Courier New',monospace; white-space:pre; overflow-x:auto;">{{ ns.lines | join('\n') }}</pre>
+          <pre style="margin:0; padding:0; line-height:1.2; font-family:'Courier New',monospace; white-space:pre; overflow-x:auto;">{{ state_attr('sensor.dh_pbs_agent_jobs_tree', 'text') or 'Ожидание данных PBS Agent…' }}</pre>
         grid_options:
           columns: 12
       - type: markdown
         content: |
-          {%- set events = state_attr('sensor.dh_pbs_agent_health', 'task_history') or [] -%}
-          {%- set limits = state_attr('sensor.dh_pbs_agent_health', 'view_limits') or {} -%}
-          {%- set event_limit = limits.task_events | default(10) | int -%}
-          {%- set coverage = state_attr('sensor.dh_pbs_agent_health', 'task_history_status') or 'UNAVAILABLE' -%}
-          {# Keep the collector's newest-first order; group by HA-local day. #}
-          {%- set ns = namespace(lines=['Последние выполнения PBS'], dates=[], entries=[], all_days=[]) -%}
-          {%- for e in events -%}
-            {%- set ns.all_days = ns.all_days + [as_local(as_datetime(e.started_at)).strftime('%d.%m.%Y')] -%}
-          {%- endfor -%}
-          {%- for e in events[:event_limit] -%}
-            {%- set local_start = as_local(as_datetime(e.started_at)) -%}
-            {%- set day = local_start.strftime('%d.%m.%Y') -%}
-            {%- if day not in ns.dates -%}
-              {%- set ns.dates = ns.dates + [day] -%}
-            {%- endif -%}
-            {%- set bytes = e.uploaded_compressed_bytes | default(none) -%}
-            {%- set transfer = '' -%}
-            {%- if bytes is number and bytes >= 0 -%}
-              {%- if bytes >= 10737418 -%}
-                {%- set transfer = ' · +' ~ ('%.2f' | format(bytes / 1073741824)) ~ ' GiB' -%}
-              {%- elif bytes >= 1024 -%}
-                {%- set transfer = ' · +' ~ ('%.1f' | format(bytes / 1048576)) ~ ' MiB' -%}
-              {%- else -%}
-                {%- set transfer = ' · +' ~ bytes ~ ' B' -%}
-              {%- endif -%}
-            {%- endif -%}
-            {%- set ns.entries = ns.entries + [{
-                'day': day,
-                'time': local_start.strftime('%H:%M'),
-                'type': e.type ~ (' ' ~ e.guest if e.guest | default(none) else ''),
-                'transfer': transfer,
-                'duration': (e.duration_seconds ~ ' с') if e.duration_seconds is not none else '—',
-                'status': e.status
-              }] -%}
-          {%- endfor -%}
-          {%- for day in ns.dates -%}
-            {%- set day_events = ns.entries | selectattr('day', 'equalto', day) | list -%}
-            {%- set last_day = loop.last and (events | count) <= event_limit -%}
-            {%- set branch = '└─' if last_day else '├─' -%}
-            {%- set indent = '   ' if last_day else '│  ' -%}
-            {%- set day_total = ns.all_days | select('equalto', day) | list | count -%}
-            {%- set ns.lines = ns.lines + [branch ~ ' 📅 ' ~ day ~ ' (' ~ day_total ~ ')'] -%}
-            {%- for e in day_events -%}
-              {%- set icon = '🟢' if e.status == 'OK'
-                  else '🔴' if e.status == 'FAILED'
-                  else '🟡' if e.status == 'RUNNING'
-                  else '⚪' -%}
-              {%- set child = '└─' if loop.last else '├─' -%}
-              {%- set ns.lines = ns.lines + [
-                  indent ~ child ~ ' ' ~ icon ~ ' ' ~ e.time ~ ' · ' ~
-                  e.type ~ e.transfer ~ ' · ' ~ e.duration ~ ' · ' ~ e.status
-                ] -%}
-            {%- endfor -%}
-          {%- endfor -%}
-          {%- if not events -%}
-            {%- set ns.lines = ns.lines + ['└─ ⚪ ' ~ ('Нет подходящих задач' if coverage == 'AVAILABLE' else 'История недоступна')] -%}
-          {%- elif events | count > event_limit -%}
-            {%- set ns.lines = ns.lines + ['└─ Ещё ' ~ ((events | count) - event_limit) ~ ' событий'] -%}
-          {%- endif -%}
-          <pre style="margin:0; padding:0; line-height:1.2; font-family:'Courier New',monospace; white-space:pre; overflow-x:auto;">{{ ns.lines | join('\n') }}</pre>
+          <pre style="margin:0; padding:0; line-height:1.2; font-family:'Courier New',monospace; white-space:pre; overflow-x:auto;">{{ state_attr('sensor.dh_pbs_agent_history_tree', 'text') or 'Ожидание данных PBS Agent…' }}</pre>
         grid_options:
           columns: 12
   - type: grid
@@ -436,6 +244,10 @@ sections:
           - entity: sensor.dh_pbs_agent_hostname
           - entity: sensor.dh_pbs_agent_ip
           - entity: sensor.dh_pbs_agent_version
+          - entity: sensor.dh_pbs_agent_ha_timezone
+            name: Часовой пояс Home Assistant
+          - entity: sensor.dh_pbs_agent_upload_stats
+            name: Передано за задания (доступна статистика)
           - entity: switch.dh_pbs_agent_auto_update
             name: Автообновление
       - type: entities
