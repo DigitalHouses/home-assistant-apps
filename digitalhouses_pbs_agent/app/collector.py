@@ -225,34 +225,37 @@ def _snapshots(pbs: PBSClient, store: str, ns: str) -> list[dict]:
     return result
 
 
-def _backup_guest(task: dict) -> str | None:
-    r"""VM/CT identity from the native PBS backup worker ID, never guessed.
+def _backup_worker_identity(task: dict) -> tuple[str, str] | None:
+    r"""Decode PBS backup source identity, not a PVE guest-name guess.
 
-    PBS backup workers use <datastore>:vm-1234 or <datastore>:ct-1221.
-    The task list can include worker_id directly; its UPID encodes special
-    worker-id characters as literal \xHH sequences, e.g. \x3a for ':'.
+    PBS task_list worker_id uses 'datastore:vm/1234', while UPIDs may
+    encode this as 'datastore\x3avm-1234'. Both are authoritative.
     """
+    candidates = []
     worker = task.get("worker_id") or task.get("worker-id")
-    if not isinstance(worker, str) or not worker:
-        upid = task.get("upid")
-        if not isinstance(upid, str):
-            return None
+    if isinstance(worker, str) and worker:
+        candidates.append(worker)
+    upid = task.get("upid")
+    if isinstance(upid, str):
         fields = upid.split(":")
-        if len(fields) < 9 or fields[0] != "UPID" or fields[6] != "backup":
-            return None
-        worker = fields[7]
-    # Decode PBS UPID worker-id escaping for ':' and '-' without interpreting
-    # arbitrary escapes or relying on site-specific datastore names.
-    worker = re.sub(
-        r"\\x([0-9a-fA-F]{2})",
-        lambda match: chr(int(match.group(1), 16)),
-        worker,
-    )
-    match = re.fullmatch(r".+:(vm|ct)-(\d+)", worker, re.IGNORECASE)
-    if not match:
-        return None
-    kind, vmid = match.groups()
-    return kind.upper() + vmid
+        if len(fields) >= 9 and fields[0] == "UPID" and fields[6] == "backup":
+            candidates.append(fields[7])
+    for value in candidates:
+        value = re.sub(
+            r"\\x([0-9a-fA-F]{2})",
+            lambda match: chr(int(match.group(1), 16)),
+            value,
+        )
+        match = re.fullmatch(r"(.+):(vm|ct)[/-](\d+)", value, re.IGNORECASE)
+        if match:
+            datastore, kind, vmid = match.groups()
+            return datastore, kind.upper() + vmid
+    return None
+
+
+def _backup_guest(task: dict) -> str | None:
+    identity = _backup_worker_identity(task)
+    return identity[1] if identity else None
 
 
 def _task_history(tasks: list[dict]) -> list[dict]:
@@ -274,15 +277,102 @@ def _task_history(tasks: list[dict]) -> list[dict]:
         state = str(task.get("status") or "").strip()
         result = ("RUNNING" if end is None else "OK" if state.upper() == "OK"
                   else "FAILED" if state else "UNKNOWN")
+        identity = _backup_worker_identity(task) if kind == "Backup" else None
         history.append({
             "type": kind, "task_id": str(task.get("upid") or ""),
-            "guest": _backup_guest(task) if kind == "Backup" else None,
+            "guest": identity[1] if identity else None,
+            "backup_datastore": identity[0] if identity else None,
             "started_at": utc(start),
             "ended_at": utc(end) if isinstance(end, (int, float)) and end > 0 else None,
             "duration_seconds": round(max(0, end - start)) if isinstance(end, (int, float)) and end >= start else None,
             "status": result,
         })
     return sorted(history, key=lambda row: row["started_at"], reverse=True)[:50]
+
+
+def _backup_upload_stats(
+    pbs: PBSClient,
+    history: list[dict],
+    groups: list[dict],
+    cache: dict | None = None,
+) -> None:
+    """Optional compressed chunk-upload bytes for exactly matched snapshots.
+
+    PBS snapshot-information contains upload-statistics.compressed-size.
+    That is transferred compressed chunk payload, NOT a snapshot's logical
+    size or an estimate of physically allocated datastore space.
+    """
+    tasks = [task for task in history if task.get("type") == "Backup"
+             and task.get("status") == "OK" and task.get("guest")
+             and task.get("backup_datastore")
+             and task.get("started_at") and task.get("ended_at")]
+    if not tasks or not groups:
+        return
+
+    # The group inventory gives the valid datastore/namespace pairs.
+    pairs = {(g["datastore"], g["namespace"]) for g in groups}
+    matches: dict[tuple[str, str], list[tuple[str, str, str, str, int]]] = {}
+    for store, ns in sorted(pairs):
+        try:
+            rows = _snapshots(pbs, store, ns)
+        except SourceError:
+            # Size is auxiliary; never downgrade a healthy backup status.
+            continue
+        for row in rows:
+            typ, ident, when = (row.get("backup-type"), row.get("backup-id"),
+                                row.get("backup-time"))
+            if (typ not in ("vm", "ct") or ident is None
+                    or type(when) is not int or when <= 0):
+                continue
+            key = typ, str(ident)
+            matches.setdefault(key, []).append((store, ns, typ, str(ident), when))
+
+    assignments = []
+    for task in tasks:
+        guest = task["guest"]
+        key = ("vm", guest[2:]) if guest.startswith("VM") else (
+              ("ct", guest[2:]) if guest.startswith("CT") else None)
+        if key is None:
+            continue
+        start = datetime.fromisoformat(task["started_at"]).timestamp()
+        end = datetime.fromisoformat(task["ended_at"]).timestamp()
+        # A PBS writer starts near the snapshot timestamp and completes
+        # after it. Do not assign bytes from a different run/guest.
+        candidates = [c for c in matches.get(key, [])
+                      if c[0] == task["backup_datastore"]
+                      and start - 120 <= c[4] <= end + 120]
+        if len(candidates) == 1:
+            assignments.append((task, candidates[0]))
+
+    # A snapshot must match exactly one task, even if two same-guest tasks
+    # overlap its timestamp tolerance window. Never duplicate a run's bytes.
+    used: dict[tuple, int] = {}
+    for _task, candidate in assignments:
+        used[candidate] = used.get(candidate, 0) + 1
+    for task, identity in assignments:
+        if used[identity] != 1:
+            continue
+        store, ns, typ, ident, when = identity
+        if cache is not None and identity in cache:
+            size = cache[identity]
+        else:
+            try:
+                info = pbs.get(
+                    f"admin/datastore/{quote(store, safe='')}/snapshot-information",
+                    **{"backup-type": typ, "backup-id": ident,
+                       "backup-time": when, "ns": ns or None},
+                )
+            except SourceError:
+                continue
+            stats = info.get("upload-statistics") if isinstance(info, dict) else None
+            size = stats.get("compressed-size") if isinstance(stats, dict) else None
+            if type(size) is not int or size < 0:
+                continue
+            if cache is not None:
+                if len(cache) >= 256:
+                    cache.clear()
+                cache[identity] = size
+        task["uploaded_compressed_bytes"] = size
 
 
 def _backup_inventory(config: Config, pbs: PBSClient, now: float) -> tuple[list[dict], str, list[str]]:
@@ -334,7 +424,8 @@ def _backup_inventory(config: Config, pbs: PBSClient, now: float) -> tuple[list[
     return groups[:80], "PARTIAL" if errors else "COMPLETE", errors
 
 
-def collect(config: Config, pbs: PBSClient | None = None, now: float | None = None) -> dict:
+def collect(config: Config, pbs: PBSClient | None = None, now: float | None = None,
+            upload_cache: dict | None = None) -> dict:
     """Each missing source yields UNKNOWN/UNAVAILABLE, never healthy zeroes."""
     pbs = pbs or PBSClient(config)
     now = time.time() if now is None else now
@@ -635,6 +726,7 @@ def collect(config: Config, pbs: PBSClient | None = None, now: float | None = No
     result["backup_groups"] = inventory
     result["backup_groups_status"] = coverage
     result["errors"].extend(inventory_errors)
+    _backup_upload_stats(pbs, result["task_history"], inventory, upload_cache)
 
     if result["zfs"]["status"] == "DEGRADED":
         statuses.append("CRITICAL")
