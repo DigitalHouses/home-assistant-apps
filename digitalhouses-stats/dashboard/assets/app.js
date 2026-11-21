@@ -1,7 +1,8 @@
 const $ = (id) => document.getElementById(id);
 
-// Keep country details expanded when the dashboard refreshes.
-const expandedCountries = new Set();
+// Browser-provided ISO 3166 region names, always in English.
+const countryNames = typeof Intl.DisplayNames === "function"
+  ? new Intl.DisplayNames(["en"], { type: "region" }) : null;
 
 function escapeHtml(value) {
   return String(value).replace(/[&<>"']/g, (char) => ({
@@ -30,33 +31,40 @@ function tableRows(target, rows, render, colspan) {
   for (const row of rows) body.insertAdjacentHTML("beforeend", render(row));
 }
 
+function countryName(code) {
+  if (!code || ["XX", "ZZ"].includes(String(code).toUpperCase())) return "Unknown";
+  try {
+    return countryNames?.of(String(code).toUpperCase()) || String(code);
+  } catch {
+    return String(code);
+  }
+}
+
 function renderCountries(rows) {
   const body = $("countries");
   body.innerHTML = "";
+  let total = 0;
+
   if (!rows.length) {
-    body.innerHTML = '<tr><td class="empty" colspan="4">No data</td></tr>';
-    return;
+    body.innerHTML = '<tr><td class="empty" colspan="2">No data</td></tr>';
   }
 
   for (const country of rows) {
-    const code = escapeHtml(country.country);
-    const expanded = expandedCountries.has(country.country);
+    const count = Number(country.observed_installations) || 0;
+    total += count;
     body.insertAdjacentHTML("beforeend",
-      '<tr class="country-summary-row"><td class="product">' +
-      '<button type="button" class="country-toggle" aria-label="Toggle apps and agents for ' + code +
-      '" aria-expanded="' + expanded + '">' + code + '</button></td><td>' +
-      Number(country.observed_installations) + '</td><td>' + Number(country.active_7d) +
-      '</td><td>' + Number(country.active_30d) + '</td></tr>');
+      '<tr class="country-summary-row"><td class="country-name">' +
+      escapeHtml(countryName(country.country)) + '</td><td>' + count + '</td></tr>');
 
     for (const product of country.products || []) {
       body.insertAdjacentHTML("beforeend",
-        '<tr class="country-product-row"' + (expanded ? '' : ' hidden') +
-        '><td class="country-product-name">' + escapeHtml(product.name || product.product) +
-        '</td><td>' + Number(product.observed_installations) + '</td><td>' +
-        Number(product.active_7d) + '</td><td>' + Number(product.active_30d) +
-        '</td></tr>');
+        '<tr class="country-product-row"><td class="country-product-name">' +
+        escapeHtml(product.name || product.product) + '</td><td>' +
+        (Number(product.observed_installations) || 0) + '</td></tr>');
     }
   }
+
+  $("country-total").textContent = total;
 }
 
 function formatLastHeartbeat(value) {
@@ -119,9 +127,9 @@ function renderChart(points) {
       point.day +
       " · " +
       point.active_installations +
-      " active · " +
+      " reporting installations · " +
       point.heartbeats +
-      " heartbeats";
+      " heartbeat messages";
 
     const bars = document.createElement("div");
     bars.className = "bars";
@@ -159,9 +167,8 @@ async function load() {
 
   try {
     const days = Number($("history-days").value);
-    const [summary, products, versions, countries, history] = await Promise.all([
+    const [summary, versions, countries, history] = await Promise.all([
       getJson("/api/summary"),
-      getJson("/api/products"),
       getJson("/api/versions"),
       getJson("/api/countries"),
       getJson("/api/history?days=" + days)
@@ -176,10 +183,6 @@ async function load() {
     const lastHeartbeat = formatLastHeartbeat(summary.last_heartbeat);
     $("last-heartbeat").textContent = lastHeartbeat.relative;
     $("last-heartbeat-exact").textContent = lastHeartbeat.exact;
-
-    tableRows("products", products, (r) =>
-      '<tr><td class="product">' + (r.name || r.product) + '</td><td>' + r.observed_installations +
-      '</td><td>' + r.active_24h + '</td><td>' + r.active_7d + '</td><td>' + r.active_30d + '</td></tr>', 5);
 
     tableRows("versions", versions, (r) =>
       '<tr><td class="product">' + (r.name || r.product) + '</td><td>' + r.version +
@@ -198,23 +201,6 @@ async function load() {
     $("refresh").disabled = false;
   }
 }
-
-$("countries").addEventListener("click", (event) => {
-  const toggle = event.target.closest(".country-toggle");
-  if (!toggle) return;
-
-  const country = toggle.textContent;
-  const expanded = toggle.getAttribute("aria-expanded") !== "true";
-  toggle.setAttribute("aria-expanded", String(expanded));
-  if (expanded) expandedCountries.add(country);
-  else expandedCountries.delete(country);
-
-  let row = toggle.closest("tr").nextElementSibling;
-  while (row && row.classList.contains("country-product-row")) {
-    row.hidden = !expanded;
-    row = row.nextElementSibling;
-  }
-});
 
 $("refresh").addEventListener("click", load);
 $("history-days").addEventListener("change", load);

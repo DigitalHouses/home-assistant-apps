@@ -53,4 +53,4 @@ uvicorn digitalhouses_stats.main:app --host 127.0.0.1 --port 8080
 
 See `docs/DEPLOYMENT_LXC.md` for the Debian 12 LXC deployment and `docs/LOCAL_DASHBOARD.md` for the LAN-only dashboard.
 
-The LAN dashboard Country rows expand to show known and active installations per agent/app. The breakdown uses only aggregated, latest-country counts and is not exposed by the public telemetry API.
+The LAN dashboard combines country and product counts in one table: full English country names, App/Agent counts below each country, and a grand total. The breakdown uses only aggregated, latest-country counts and is not exposed by the public telemetry API.
