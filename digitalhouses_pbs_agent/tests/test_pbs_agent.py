@@ -52,7 +52,7 @@ class FakePBS:
         if path == "version":
             return {"version": "4.2.11"}
         if path == "config/datastore":
-            return [{"name": "pbs-home", "path": "/"}]
+            return [{"name": "pbs-home", "path": "/", "gc-schedule": "sun 04:00"}]
         if path == "admin/datastore/pbs-home/namespace":
             return [{"ns": "archive"}]
         if path == "admin/datastore/pbs-home/groups":
@@ -270,6 +270,7 @@ class PBSAgentTests(unittest.TestCase):
         self.assertEqual(jobs[("Verify", "verify-home")]["status"], "OK")
         self.assertEqual(jobs[("Prune", "prune-home")]["status"], "OK")
         self.assertEqual(jobs[("GC", "pbs-home")]["status"], "OK")
+        self.assertEqual(jobs[("GC", "pbs-home")]["schedule"], "sun 04:00")
 
     def test_history_is_actual_tasks_not_fabricated_job_success(self):
         self.api.tasks = [
@@ -303,6 +304,20 @@ class PBSAgentTests(unittest.TestCase):
         self.assertEqual(sample["backup_groups_status"], "PARTIAL")
         self.assertIn("namespaces pbs-home: not supported", sample["errors"])
         self.assertEqual(sample["backup_groups"][0]["group"], "vm/2222")
+
+    def test_group_list_failure_is_partial_and_not_fabricated(self):
+        from app.collector import SourceError
+        original = self.api.get
+        def broken_groups(path, **params):
+            if path.endswith("/groups"):
+                raise SourceError("permission or missing directory")
+            return original(path, **params)
+        self.api.get = broken_groups
+        state = self.sample()
+        self.assertEqual(state["status"], "HEALTHY")
+        self.assertEqual(state["backup_groups_status"], "PARTIAL")
+        self.assertEqual(state["backup_groups"], [])
+        self.assertTrue(any("groups pbs-home" in err for err in state["errors"]))
 
     def test_dashboard_contains_real_tables_not_fabricated_example_rows(self):
         from app.mqtt import discovery
