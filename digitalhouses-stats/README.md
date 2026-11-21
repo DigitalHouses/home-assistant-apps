@@ -71,8 +71,10 @@ timer every minute, independently of ingestion.
   observed countries. Existing countries do not produce notifications.
 - Published countries are saved after broker PUBACK. Failed sends retry at
   the next run. A country change via VPN can count as a new country.
-- No Telegram bot is required on Stats. The receiving HA automation may call
-  an existing `script.write2admin` (or `script.write2admins`) if that script is configured in HA.
+- No Telegram bot is required on Stats. CORE HA (`192.168.11.242`) subscribes
+  to the MQTT event and sends directly to the configured group with
+  `notify.send_message`, `entity_id: notify.dh_core_group`. The legacy global
+  Telegram dispatcher and `write2admins` are not needed for Stats events.
 
 See `deploy/digitalhouses-stats-country-notifier.service`,
 `deploy/digitalhouses-stats-country-notifier.timer`, and
