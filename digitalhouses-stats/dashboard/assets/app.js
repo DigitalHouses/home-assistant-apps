@@ -109,46 +109,33 @@ function renderChart(points) {
     return;
   }
 
-  const maxTotal = Math.max(1, ...points.map((p) => p.total_installations));
+  const maxTotal = Math.max(1, ...points.map((p) => Number(p.total_installations) || 0));
   for (const point of points) {
-    const total = Number(point.total_installations);
-    const active = Math.min(total, Number(point.active_installations));
+    const total = Number(point.total_installations) || 0;
+    const active = Math.min(total, Number(point.active_installations) || 0);
     const inactive = Math.max(0, total - active);
 
     const day = document.createElement("div");
     day.className = "day-wrap";
-    day.title = point.day + " · Total: " + total + " · Active: " + active +
-      " · Inactive: " + inactive;
+    day.title = point.day + " · Total: " + total + " · Inactive: " + inactive;
     day.setAttribute("aria-label", day.title);
     day.setAttribute("tabindex", "0");
 
     const bars = document.createElement("div");
-    bars.className = "bars stacked-bars";
+    bars.className = "bars comparison-bars";
 
-    const column = document.createElement("div");
-    column.className = "bar-column";
-    column.style.height = (total / maxTotal * 100) + "%";
+    for (const [kind, count] of [["total", total], ["inactive", inactive]]) {
+      const column = document.createElement("div");
+      column.className = "comparison-column " + kind + "-column";
+      column.style.height = (count / maxTotal * 100) + "%";
 
-    const stack = document.createElement("div");
-    stack.className = "bar-stack";
+      const value = document.createElement("span");
+      value.className = "bar-value";
+      value.textContent = String(count);
+      column.appendChild(value);
+      bars.appendChild(column);
+    }
 
-    const value = document.createElement("span");
-    value.className = "bar-total";
-    value.textContent = String(total);
-
-    const inactivePart = document.createElement("div");
-    inactivePart.className = "bar-part inactive-part";
-    inactivePart.style.height = (total ? (inactive / total * 100) : 0) + "%";
-
-    const activePart = document.createElement("div");
-    activePart.className = "bar-part active-part";
-    activePart.style.height = (total ? (active / total * 100) : 0) + "%";
-
-    stack.appendChild(inactivePart);
-    stack.appendChild(activePart);
-    column.appendChild(value);
-    column.appendChild(stack);
-    bars.appendChild(column);
     day.appendChild(bars);
 
     const label = document.createElement("span");
@@ -164,7 +151,6 @@ async function load() {
   $("refresh").disabled = true;
 
   try {
-    const days = Number($("history-days").value);
     const [summary, versions, countries, history] = await Promise.all([
       getJson("/api/summary"),
       getJson("/api/versions"),
@@ -201,5 +187,4 @@ async function load() {
 }
 
 $("refresh").addEventListener("click", load);
-$("history-days").addEventListener("change", load);
 load();

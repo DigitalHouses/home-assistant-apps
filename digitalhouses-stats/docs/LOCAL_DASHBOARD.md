@@ -78,12 +78,13 @@ The dashboard summary shows:
 - total accepted heartbeat count;
 - the latest heartbeat time, rendered locally in the browser.
 
-The seven-day installation chart renders one vertical stacked column per UTC
-day, oldest to newest. The full bar is the number of registered installations
-at the end of that day (today is measured at current time). The darker part
-shows the unique (product, installation_id) pairs that reported a heartbeat
-within the preceding rolling seven days. The lighter part is the remainder;
-no separate heartbeat-volume series is drawn. The current day's chart uses
-the same seven-day activity window as the summary's Active 7d metric.
-Registration history is based on the current installations table and cannot
-reconstruct explicitly deleted registrations.
+The seven-day installation chart renders two vertical columns for each UTC
+date, oldest to newest. **Total** is the number of currently retained
+registrations created before that day's cutoff. **Inactive** is the subset with
+no heartbeat during the preceding rolling seven days (Total minus Active).
+The chart visibly displays zero values for inactive installations.
+
+**Inactive does not mean uninstalled**: a device can simply be offline.
+Explicitly deleted registrations are removed from the registry, and the
+current data model does not retain an audit record of deletions. Historical
+totals therefore cannot reconstruct deleted registrations.

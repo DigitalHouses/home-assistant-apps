@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>DigitalHouses Stats</title>
-  <link rel="stylesheet" href="/assets/styles.css?v=seven-day-installations-20261121">
+  <link rel="stylesheet" href="/assets/styles.css?v=total-inactive-20261121-v2">
 </head>
 <body>
   <main class="page">
@@ -57,15 +57,15 @@
       <div class="panel-head">
         <div>
           <h2>Installations history</h2>
-          <p>Last 7 days · UTC · Active = heartbeat received within the preceding 7 days</p>
+          <p>Last 7 days · UTC · Inactive = no heartbeat in the preceding 7 days</p>
         </div>
       </div>
       <div class="chart-legend" aria-label="Chart legend">
-        <span><i class="legend-active"></i>Active</span>
+        <span><i class="legend-total"></i>Total</span>
         <span><i class="legend-inactive"></i>Inactive</span>
-        <span class="chart-hint">Full bar = total installations</span>
+        <span class="chart-hint">Two bars per day · registered vs. not reporting</span>
       </div>
-      <div id="chart" class="chart chart-stacked" aria-label="Seven-day history of total and active registered installations"></div>
+      <div id="chart" class="chart chart-stacked" aria-label="Seven-day history of total and inactive registered installations"></div>
     </section>
 
     <section class="grid">
@@ -106,6 +106,6 @@
       <button id="refresh" type="button">Refresh</button>
     </footer>
   </main>
-  <script src="/assets/app.js?v=seven-day-installations-20261121"></script>
+  <script src="/assets/app.js?v=total-inactive-20261121-v2"></script>
 </body>
 </html>
