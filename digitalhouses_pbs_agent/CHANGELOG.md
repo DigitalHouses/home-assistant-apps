@@ -1,5 +1,14 @@
 # DigitalHouses PBS Agent
 
+## 0.1.6
+
+- Show each PBS maintenance job schedule on its own nested clock line,
+  then its status, name, and last execution beneath it.
+- Preserve actual PBS schedule strings and local display of last-run times.
+- Render consistent tree branches for multiple job types and multiple jobs;
+  no changes to PBS collection, MQTT entities, alerts, DH Sync or CORE.
+
+
 ## 0.1.5
 
 - Replace both INI dashboard display limits with two native Home Assistant MQTT

@@ -338,6 +338,15 @@ class PBSAgentTests(unittest.TestCase):
         send("task_events", "15")
         self.assertEqual(pub.view_limits.snapshot()["task_events"], 15)
 
+    def test_maintenance_tree_has_schedule_above_last_run(self):
+        view = (ROOT / "dashboards/ru/13_pbs.yaml").read_text(encoding="utf-8")
+        self.assertIn("type_indent ~ branch ~ ' 🕒 ' ~ schedule", view)
+        self.assertIn("type_indent ~ child_indent ~ '└─ ' ~ icon ~ ' ' ~ j.id", view)
+        self.assertNotIn("when ~ ' · ' ~ schedule", view)
+        self.assertIn("shown_kinds.items", view)
+        self.assertIn("j.schedule or 'без расписания'", view)
+        self.assertIn("as_local(as_datetime(j.last_run_at))", view)
+
     def test_dashboard_uses_correct_percentage_and_independent_limits(self):
         view = (ROOT / "dashboards/ru/13_pbs.yaml").read_text(encoding="utf-8")
         self.assertIn("d.available_bytes / d.total_bytes", view)

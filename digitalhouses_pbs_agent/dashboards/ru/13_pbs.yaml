@@ -1,5 +1,5 @@
 # DH-View-Version: 0.1.4
-# DH-View-Date: 2026-11-21
+# DH-View-Date: 2026-11-22
 title: PBS
 path: dh_pbs_agent
 icon: mdi:backup-restore
@@ -122,22 +122,34 @@ sections:
       - type: markdown
         content: |
           {%- set jobs = state_attr('sensor.dh_pbs_agent_health', 'maintenance_jobs') or [] -%}
-          {%- set ns = namespace(lines=['Задания PBS (' ~ (jobs | count) ~ ')']) -%}
-          {%- for kind in ['Push Sync','S3 Sync','Pull Sync','Verify','Prune','GC'] -%}
-            {%- set found = jobs | selectattr('type', 'equalto', kind) | list -%}
-            {%- if found -%}
-              {%- set ns.lines = ns.lines + ['├─ ' ~ kind ~ ' (' ~ (found | count) ~ ')'] -%}
-              {%- for j in found -%}
-                {%- set icon = '🟢' if j.status == 'OK'
-                    else '🔴' if j.status in ['FAILED','UNAVAILABLE']
-                    else '🟠' if j.status == 'NOT_CONFIGURED'
-                    else '⚪' -%}
-                {%- set when = as_local(as_datetime(j.last_run_at)).strftime('%d.%m %H:%M') if j.last_run_at else '—' -%}
-                {%- set schedule = j.schedule or 'без расписания' -%}
-                {%- set branch = '└─' if loop.last else '├─' -%}
-                {%- set ns.lines = ns.lines + ['│  ' ~ branch ~ ' ' ~ icon ~ ' ' ~ j.id ~ ' · ' ~ j.status ~ ' · ' ~ when ~ ' · ' ~ schedule] -%}
-              {%- endfor -%}
+          {%- set kinds = ['Push Sync','S3 Sync','Pull Sync','Verify','Prune','GC'] -%}
+          {%- set shown_kinds = namespace(items=[]) -%}
+          {%- for kind in kinds -%}
+            {%- if jobs | selectattr('type', 'equalto', kind) | list | count > 0 -%}
+              {%- set shown_kinds.items = shown_kinds.items + [kind] -%}
             {%- endif -%}
+          {%- endfor -%}
+          {%- set ns = namespace(lines=['Задания PBS (' ~ (jobs | count) ~ ')']) -%}
+          {%- for kind in shown_kinds.items -%}
+            {%- set found = jobs | selectattr('type', 'equalto', kind) | list -%}
+            {%- set kind_last = loop.last -%}
+            {%- set type_branch = '└─' if kind_last else '├─' -%}
+            {%- set type_indent = '   ' if kind_last else '│  ' -%}
+            {%- set ns.lines = ns.lines + [type_branch ~ ' ' ~ kind ~ ' (' ~ (found | count) ~ ')'] -%}
+            {%- for j in found -%}
+              {%- set icon = '🟢' if j.status == 'OK'
+                  else '🔴' if j.status in ['FAILED','UNAVAILABLE']
+                  else '🟠' if j.status == 'NOT_CONFIGURED'
+                  else '⚪' -%}
+              {%- set when = as_local(as_datetime(j.last_run_at)).strftime('%d.%m %H:%M') if j.last_run_at else '—' -%}
+              {%- set schedule = j.schedule or 'без расписания' -%}
+              {%- set branch = '└─' if loop.last else '├─' -%}
+              {%- set child_indent = '   ' if loop.last else '│  ' -%}
+              {%- set ns.lines = ns.lines + [
+                  type_indent ~ branch ~ ' 🕒 ' ~ schedule,
+                  type_indent ~ child_indent ~ '└─ ' ~ icon ~ ' ' ~ j.id ~ ' · ' ~ j.status ~ ' · ' ~ when
+                ] -%}
+            {%- endfor -%}
           {%- endfor -%}
           {%- if not jobs -%}
             {%- set ns.lines = ns.lines + ['└─ ⚪ Заданий нет или данные недоступны'] -%}
