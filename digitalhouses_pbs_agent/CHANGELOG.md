@@ -4,8 +4,17 @@
 
 - Show the existing MQTT `switch.dh_pbs_agent_auto_update` as **Автообновление**
   in the **Диагностика → PBS Agent** entities card.
-- Preserve the OFF-by-default behavior and all MQTT topics, identifiers,
-  control implementation, scheduled jobs, and monitoring logic.
+- Reuse PVE Agent's native `custom:auto-entities` +
+  `custom:entity-progress-card-template` storage cards for each actual PBS
+  datastore (used/total GiB, used percent, health colour, more-info).
+- Remove duplicated datastore usage from the backup tree; retain group inventory
+  and backup freshness there. Identify datastore sensors by portable MQTT role
+  attributes, not by site-specific names.
+- Add per-datastore capacity and health metadata to existing MQTT usage sensors,
+  retaining their unique IDs, topics and display names. For S3 / unavailable
+  capacity, show an explicit unknown state, not fabricated space.
+- Preserve OFF-by-default auto-update, all existing MQTT topic/ID contracts,
+  operational logic, scheduled jobs, and monitoring semantics.
 
 
 ## 0.1.10

@@ -26,6 +26,29 @@ read-only ZFS and filesystem status. It does not run or
 edit PBS jobs, backup snapshots, PVE jobs, Plex, ZFS or retention.
 A job appearing as OK is **not** proof of restore verification.
 
+## Dynamic PBS storage progress cards (v0.1.11)
+
+The **Хранилища PBS** section now matches PVE Agent's storage UI: one
+`custom:entity-progress-card-template` per datastore, generated using
+`custom:auto-entities`. Each local datastore displays its real name, used
+percentage, used/total GiB, health-based colour and a more-info action.
+MQTT Discovery exposes `total_gib`, `used_gib`, `pbs_health` and
+`pbs_backend` on the existing `used_percent` sensor. No datastore
+name or entity ID is hardcoded in the View.
+
+An S3 backend or missing capacity displays an explicit unavailable-capacity
+message instead of inventing remote usage. The former datastore branch has
+been removed from the backup inventory tree to avoid duplicate information;
+the tree still shows backup groups and freshness checks.
+
+This section uses the **same installed frontend components as PVE Agent**:
+`custom:auto-entities` and `custom:entity-progress-card-template`.
+The rest of the PBS View continues to use native HA cards and the already
+adopted PVE Agent status header.
+
+The existing MQTT auto-update switch is shown in
+**Диагностика → PBS Agent**.
+
 ## One-command installation and PVE-style management (v0.1.10)
 
 Run on the PBS Linux VM as root; this fetches the installer from the
@@ -84,7 +107,8 @@ Release**. Repeated presses do not queue duplicate work.
 The canonical View header follows PVE Agent's
 `custom:button-card` + `custom:mushroom-chips-card` layout.
 Those two frontend resources must be installed for the unified header;
-PBS data trees and main native entities cards do not require Auto Entities.
+PBS backup/job trees and main native entities cards do not require Auto Entities;
+the storage progress section does, just as the PVE storage section does.
 The UI asks for confirmation before installation and restart.
 
 The shared reference requirements are:

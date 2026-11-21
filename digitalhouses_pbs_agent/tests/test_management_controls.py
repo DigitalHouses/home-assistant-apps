@@ -224,7 +224,8 @@ class ControlTests(unittest.TestCase):
         self.assertIn("button.dh_pbs_agent_restart_agent", view)
         self.assertIn("text: Установить новый релиз PBS Agent?", view)
         self.assertIn("text: Перезапустить только PBS Agent?", view)
-        self.assertNotIn("type: custom:auto-entities", view)
+        self.assertIn("type: custom:auto-entities", view)
+        self.assertIn("custom:entity-progress-card-template", view)
 
     def test_diagnostics_has_actual_mqtt_auto_update_switch(self):
         view = (ROOT / "dashboards/ru/13_pbs.yaml").read_text(encoding="utf-8")

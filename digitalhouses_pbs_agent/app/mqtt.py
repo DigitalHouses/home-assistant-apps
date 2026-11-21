@@ -113,7 +113,8 @@ def discovery(config: Config, sample: dict | None = None) -> dict:
     device_id = f"dh_pbs_agent_{ident}"
     def sensor(key: str, name: str, expression: str, *, attributes: bool = False,
                icon: str = "mdi:backup-restore", section: str = "system",
-               display_name: str | None = None, metric: str | None = None):
+               display_name: str | None = None, metric: str | None = None,
+               extra_attributes: str | None = None):
         item = {
             "platform": "sensor", "name": name,
             "unique_id": f"{device_id}_{key}",
@@ -138,6 +139,8 @@ def discovery(config: Config, sample: dict | None = None) -> dict:
                 "'observed_at': value_json.observed_at, " + fields + "}",
             )
         else:
+            if extra_attributes:
+                fields += ", " + extra_attributes
             item["json_attributes_template"] = "{{ {" + fields + "} | tojson }}"
         components[key] = item
 
@@ -182,9 +185,20 @@ def discovery(config: Config, sample: dict | None = None) -> dict:
     for store in config.datastores:
         suffix = store.lower().replace("-", "_")
         # Each datastore has its own stable metric key, no overwrites.
-        arr = f"(value_json.datastores | selectattr('name', 'equalto', '{store}') | list | first | default({{}}))"
+        # Jinja literal is JSON-quoted so names containing quotes remain portable.
+        store_literal = json.dumps(store, ensure_ascii=False)
+        arr = f"(value_json.datastores | selectattr('name', 'equalto', {store_literal}) | list | first | default({{}}))"
+        details = (
+            "'total_gib': ((" + arr + ".total_bytes / 1073741824) | round(2)) "
+            "if " + arr + ".total_bytes is defined else none, "
+            "'used_gib': ((" + arr + ".used_bytes / 1073741824) | round(2)) "
+            "if " + arr + ".used_bytes is defined else none, "
+            "'pbs_health': " + arr + ".health | default('UNKNOWN', true), "
+            "'pbs_backend': " + arr + ".backend | default('LOCAL', true)"
+        )
         sensor(f"datastore_{suffix}_used_percent", store + " · занято, %", arr + ".used_percent | default('unknown', true)",
-               section="datastore", display_name=store, metric="used_percent")
+               section="datastore", display_name=store, metric="used_percent",
+               extra_attributes=details)
         sensor(f"datastore_{suffix}_available_gib", store + " · свободно, ГиБ",
                f"(({arr}.available_bytes / 1073741824) | round(2)) if {arr}.available_bytes is defined else 'unknown'",
                section="datastore", display_name=store, metric="available_gib")
