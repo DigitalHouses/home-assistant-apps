@@ -187,6 +187,17 @@ def _job_id(row: dict) -> str:
     return str(row.get("id") or row.get("job-id") or "")
 
 
+def _datastore_backend(row: dict) -> str:
+    """PBS datastore config marks native S3 (not an external rclone job)."""
+    backend = row.get("backend")
+    if isinstance(backend, dict):
+        return "S3" if backend.get("type") == "s3" else "LOCAL"
+    if isinstance(backend, str):
+        fields = [part.strip() for part in backend.split(",")]
+        return "S3" if "type=s3" in fields else "LOCAL"
+    return "LOCAL"
+
+
 def _store_status(pbs: PBSClient, store: str, now: float) -> dict:
     encoded = quote(store, safe="")
     status = pbs.get(f"admin/datastore/{encoded}/status")
@@ -301,7 +312,7 @@ def collect(config: Config, pbs: PBSClient | None = None, now: float | None = No
         "datastores": [], "backups": [], "backup_sessions": {"active": None, "failed_tasks": [], "last_error": None}, "sync_jobs": [], "verify_jobs": [],
         "prune_jobs": [], "gc": [], "maintenance_jobs": [], "task_history": [],
         "task_history_status": "UNAVAILABLE", "backup_groups": [],
-        "backup_groups_status": "UNAVAILABLE", "zfs": zfs_pools(),
+        "backup_groups_status": "UNAVAILABLE", "pull_sync_jobs": [], "zfs": zfs_pools(),
         "root_fs": root_filesystem(), "filesystems": [], "errors": [], "problems": [],
         "summary": {},
     }
@@ -357,6 +368,7 @@ def collect(config: Config, pbs: PBSClient | None = None, now: float | None = No
     for store in config.datastores:
         try:
             info = _store_status(pbs, store, now)
+            info["backend"] = _datastore_backend(datastore_config.get(store, {}))
             pct = info["used_percent"]
             severity = "CRITICAL" if pct >= config.critical_percent else (
                 "DEGRADED" if pct >= config.warning_percent else "HEALTHY"
@@ -376,7 +388,8 @@ def collect(config: Config, pbs: PBSClient | None = None, now: float | None = No
                     },
                 })
         except SourceError as exc:
-            info = {"name": store, "status": "UNAVAILABLE", "health": "UNAVAILABLE"}
+            info = {"name": store, "status": "UNAVAILABLE", "health": "UNAVAILABLE",
+                    "backend": _datastore_backend(datastore_config.get(store, {}))}
             statuses.append("UNAVAILABLE")
             result["errors"].append(f"{store}: {exc}")
         result["datastores"].append(info)
@@ -476,6 +489,19 @@ def collect(config: Config, pbs: PBSClient | None = None, now: float | None = No
             if not isinstance(rows, list) or any(not isinstance(row, dict) for row in rows):
                 raise SourceError(f"PBS {kind} response is invalid")
             if kind == "sync_jobs":
+                # Keep the existing Push Sync sensor and alert scope unchanged,
+                # but list native pull jobs too (e.g. local → S3 datastore).
+                for source in rows:
+                    direction = str(source.get("sync-direction") or source.get("direction") or "pull")
+                    if direction != "pull":
+                        continue
+                    run = last_run(source)
+                    record = {"id": _job_id(source), "store": source.get("store"), **run}
+                    result["pull_sync_jobs"].append(record)
+                    if run["status"] == "FAILED":
+                        statuses.append("DEGRADED")
+                    elif run["status"] in ("UNKNOWN", "NEVER_RUN"):
+                        statuses.append("UNKNOWN")
                 rows = [row for row in rows if str(row.get("sync-direction") or row.get("direction") or "pull") == "push"]
             for source in rows:
                 run = last_run(source)
@@ -551,6 +577,18 @@ def collect(config: Config, pbs: PBSClient | None = None, now: float | None = No
                     and job["next_run_timestamp"] > 0 else None,
                 "status": job.get("status", "UNKNOWN"),
             })
+    for job in result["pull_sync_jobs"]:
+        destination = job.get("store")
+        backend = _datastore_backend(datastore_config.get(destination, {}))
+        result["maintenance_jobs"].append({
+            "type": "S3 Sync" if backend == "S3" else "Pull Sync",
+            "id": job["id"], "schedule": job.get("schedule"),
+            "last_run_at": job.get("last_run_at"),
+            "next_run_at": utc(job["next_run_timestamp"])
+                if isinstance(job.get("next_run_timestamp"), (int, float))
+                and job["next_run_timestamp"] > 0 else None,
+            "status": job.get("status", "UNKNOWN"),
+        })
     for gc in result["gc"]:
         run = gc["status"] if isinstance(gc["status"], dict) else {}
         result["maintenance_jobs"].append({
