@@ -41,10 +41,11 @@ nginx maps the following browser paths to the loopback-only statistics API:
 The underlying API process uses `/v1/stats/*` on `127.0.0.1:8081`.
 
 Version and country distributions count each installation only in the value
-from its latest heartbeat. Countries are expandable: select a country to see
-each agent/app and its Known, active 7d and active 30d counters. The country
-totals equal the sum of the product rows, and the `/api/countries` response
-includes additive `products` breakdown entries (no installation IDs or tokens).
+from its latest heartbeat. The dashboard combines product and country views into one table, with full
+English country names and all App/Agent counts shown under each country. Its
+bottom Total sums known installations across countries. The `/api/countries`
+response already includes `products` breakdown entries (no installation IDs
+or tokens), so the API remains unchanged.
 History is grouped by UTC calendar day.
 
 ## Installation
