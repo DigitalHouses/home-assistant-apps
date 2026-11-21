@@ -1,5 +1,16 @@
 # DigitalHouses PBS Agent
 
+## 0.1.8
+
+- Restore a fully standalone PBS View using native Home Assistant entities
+  and Markdown cards. Remove the mandatory custom:auto-entities dependency
+  added in 0.1.7 that can leave a HOME dashboard blank.
+- Keep dynamically named datastore and job entries using the PBS state
+  arrays, and show both MQTT Number settings in a native entities card.
+- Preserve 0.1.7 MQTT per-store/per-job Discovery metadata for optional
+  Auto Entities cards elsewhere. No changes to MQTT IDs, PBS jobs or alerts.
+
+
 ## 0.1.7
 
 - Tag MQTT sensors with stable pbs_product, pbs_section, pbs_metric,

@@ -333,17 +333,19 @@ class PBSAgentTests(unittest.TestCase):
         self.assertIn(job_component_key("Verify", "different-home"), current["components"])
         self.assertEqual(pub.job_registry.load()["jobs"], [["Verify", "different-home"]])
 
-    def test_ui_does_not_depend_on_installed_names(self):
+    def test_ui_is_standalone_with_dynamic_store_and_job_names(self):
         view = (ROOT / "dashboards/ru/13_pbs.yaml").read_text(encoding="utf-8")
-        self.assertIn("pbs_metric: health", view)
-        self.assertIn("pbs_metric: hostname", view)
-        self.assertIn("type: custom:auto-entities", view)
-        self.assertIn("states.sensor", view)
-        self.assertIn("state_attr(health_entity,", view)
-        self.assertNotIn("state_attr('sensor.dh_pbs_agent_health',", view)
+        self.assertNotIn("type: custom:auto-entities", view)
+        self.assertNotIn("states.sensor", view)
+        self.assertIn("state_attr('sensor.dh_pbs_agent_health',", view)
+        self.assertIn("~ d.name]", view)
+        self.assertIn("~ j.id ~", view)
+        self.assertIn("store_prefix = (g.datastore ~ '/') if (ds | count) > 1 else ''", view)
+        self.assertIn("detail_prefix = '│  │  ' if not loop.last else '│     '", view)
         for hardcoded in ("pbs-serzhan", "dh-weekly-serzhan", "pbs-core"):
             self.assertNotIn(hardcoded, view)
-        self.assertIn("number.dh_pbs_agent_*_limit", view)
+        self.assertIn("number.dh_pbs_agent_backup_groups_limit", view)
+        self.assertIn("number.dh_pbs_agent_task_events_limit", view)
 
     def test_packages_are_portable_and_view_standalone(self):
         view = (ROOT / "dashboards/ru/13_pbs.yaml").read_text("utf-8")
@@ -452,7 +454,7 @@ class PBSAgentTests(unittest.TestCase):
         view = (ROOT / "dashboards/ru/13_pbs.yaml").read_text(encoding="utf-8")
         self.assertIn("d.available_bytes / d.total_bytes", view)
         self.assertIn("free ~ '/' ~ total ~ ' GiB ('", view)
-        self.assertIn("│       └─", view)
+        self.assertIn("detail_prefix ~ '└─ '", view)
         self.assertIn("groups[:group_limit]", view)
         self.assertIn("events[:event_limit]", view)
         self.assertIn("limits.backup_groups | default(10)", view)

@@ -1,4 +1,4 @@
-# DigitalHouses PBS Agent v0.1.7
+# DigitalHouses PBS Agent v0.1.8
 
 Standalone **read-only** Linux/systemd monitoring agent for a local Proxmox Backup
 Server 4.x. HOME pilot: Debian MediaServer/PBS VM; no dependency on Plex Agent,
@@ -26,6 +26,22 @@ read-only ZFS and filesystem status. It does not run or
 edit PBS jobs, backup snapshots, PVE jobs, Plex, ZFS or retention.
 A job appearing as OK is **not** proof of restore verification.
 
+## Standalone Home Assistant View (v0.1.8)
+
+The canonical Dashboard now requires only native Home Assistant cards.
+The mandatory Auto Entities cards introduced by v0.1.7 were removed because
+they can leave the View unavailable if that frontend component is missing.
+The main health and diagnostic entity IDs are intentionally stable across
+separate HA installations and do not contain any installed datastore or job
+names. The datastore and job trees continue to render those names dynamically
+from PBS telemetry.
+
+Two existing MQTT Number controls are shown in a standard entities card:
+number.dh_pbs_agent_backup_groups_limit and
+number.dh_pbs_agent_task_events_limit. The portable MQTT role metadata
+introduced in v0.1.7 remains available to use with Auto Entities in optional
+cards later; it is not mandatory for displaying PBS status.
+
 ## Portable MQTT Discovery and dynamic Views (v0.1.7)
 
 All datastore, backup-group, and scheduled-job names are taken from local PBS
@@ -44,11 +60,12 @@ identities are stable for unchanged PBS type and ID; renamed or removed jobs
 are removed from MQTT Discovery. Discovery inventory is retained locally in
 the existing state directory, without extra services.
 
-Existing core and datastore unique_id values are retained; new installs with
-different names do not need site-specific changes to the View. Its data-source
-sensor is found from pbs_product/pbs_section metadata (with a legacy fallback).
-The status/diagnostic cards and MQTT Number limits use custom:auto-entities,
-as in PVE Agent. Install the Auto Entities frontend card via HACS where needed.
+Existing core and datastore unique_id values are retained; new installations
+in separate Home Assistant instances use the same stable base entity IDs.
+The canonical View reads that stable health sensor, while all displayed PBS
+store and job names come from the native state data.
+Optional custom:auto-entities cards can use these metadata filters when
+the frontend resource is installed; the canonical PBS View does not require it.
 
 Example portable datastore filter, for an optional future card:
 
@@ -136,7 +153,7 @@ Install only from the published immutable GitHub Release:
 For a published release, on the local PBS VM as root:
 
 ~~~bash
-DIGITALHOUSES_SOURCE_REF=digitalhouses_pbs_agent-v0.1.7 \
+DIGITALHOUSES_SOURCE_REF=digitalhouses_pbs_agent-v0.1.8 \
   bash install.sh --non-interactive \
   --set mqtt_host=YOUR_MQTT_HOST \
   --set pbs_datastores=YOUR_PBS_DATASTORE
