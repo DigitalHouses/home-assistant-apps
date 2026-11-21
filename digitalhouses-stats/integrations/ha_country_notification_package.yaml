@@ -1,0 +1,43 @@
+# Home Assistant package for the existing CORE MQTT broker.
+# Prefer script.write2admin (or legacy script.write2admins) when available;
+# otherwise keep the event as a persistent HA notification.
+dh_stats_country_notification_package:
+  automation:
+    - id: dh_stats_new_country_notification
+      alias: "DigitalHouses Stats · New country"
+      mode: queued
+      triggers:
+        - trigger: mqtt
+          topic: DigitalHouses/Global/digitalhouses_stats/event/new_country
+          value_template: "{{ value_json.event_type }}"
+          payload: new_country
+      actions:
+        - variables:
+            title: "🌍 DigitalHouses — новая страна"
+            message: |-
+              {{ trigger.payload_json.country_name }} ({{ trigger.payload_json.country }})
+              Стран в статистике: {{ trigger.payload_json.country_count }}
+              Первое появление: {{ as_timestamp(trigger.payload_json.first_seen) | timestamp_custom('%d.%m.%Y %H:%M', true) }}
+        - choose:
+            - conditions:
+                - condition: template
+                  value_template: "{{ states('script.write2admin') not in ['unknown', 'unavailable'] }}"
+              sequence:
+                - action: script.write2admin
+                  data:
+                    title: "{{ title }}"
+                    message: "{{ message }}"
+            - conditions:
+                - condition: template
+                  value_template: "{{ states('script.write2admins') not in ['unknown', 'unavailable'] }}"
+              sequence:
+                - action: script.write2admins
+                  data:
+                    title: "{{ title }}"
+                    message: "{{ message }}"
+          default:
+            - action: persistent_notification.create
+              data:
+                title: "{{ title }}"
+                message: "{{ message }}
+Telegram script.write2admin(s) is not configured on CORE."

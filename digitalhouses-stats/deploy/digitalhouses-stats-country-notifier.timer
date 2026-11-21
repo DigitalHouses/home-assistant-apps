@@ -1,0 +1,12 @@
+[Unit]
+Description=Check DigitalHouses Stats for newly observed countries
+
+[Timer]
+OnBootSec=1min
+OnUnitInactiveSec=1min
+AccuracySec=10s
+Persistent=true
+Unit=digitalhouses-stats-country-notifier.service
+
+[Install]
+WantedBy=timers.target
