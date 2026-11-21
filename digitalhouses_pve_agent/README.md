@@ -317,18 +317,44 @@ Event data is read directly from `trigger.to_state.attributes`. Events remain tr
 
 ## Product telemetry
 
-DigitalHouses product telemetry is explicit opt-in and defaults to OFF:
+**Planned policy-v2 implementation (pending shared legal review):** For a fresh
+PVE Agent installation, the installer proposes `[telemetry] enabled = true`
+and displays the telemetry disclosure and policy link. Existing installations
+retain their original native configuration unchanged, including an absent
+`[telemetry]` section or explicit `enabled = false`. The runtime fallback for
+legacy configurations remains OFF, so upgrades never silently enable reporting.
 
 ```ini
 [telemetry]
-enabled = false
+enabled = true
 ```
 
-When enabled, only a canonical released build may send protocol-v1 heartbeat data to `telemetry.digitalhouses.vip`. The payload contains exactly: protocol schema version, telemetry policy version, a random per-product installation UUID, canonical product identifier and product version. The per-installation token is sent only as the HTTP Bearer credential. Hostname, machine ID, customer/site identity, IP address as payload data, hardware inventory, Home Assistant UUID, commit SHA, release tag and uptime are not transmitted.
+For an existing PVE installation whose operator has accepted reporting, use
+`dh-pve-agent set telemetry_enabled=true`. This native CLI operation updates
+the saved configuration and performs the existing protected service restart.
+No separate telemetry service, MQTT client or recurring check is introduced.
 
-Telemetry identity and scheduling state are persisted in `/var/lib/digitalhouses/digitalhouses_pve_agent/telemetry.json`. Telemetry HTTP runs in an isolated worker so DNS/TLS/server failure cannot block PVE, UPS or MQTT monitoring. Branch, `main` and arbitrary-SHA builds are not allowed to send production telemetry even if the config flag is enabled.
+On an official tagged build, enabled telemetry posts protocol-v1 heartbeats
+with telemetry **policy version 2** to `https://telemetry.digitalhouses.vip`.
+Fields are limited to: schema, policy version, random persistent installation
+UUID, canonical product ID, and released version. A secret token is used only
+for HTTP Bearer authentication; the server derives country from the network
+path. No hostname, site, LAN address, UPS state, hardware or monitoring data
+are included.
 
-The shared privacy/consent contract is documented in [DigitalHouses Product Telemetry Policy](../docs/standards/PRODUCT_TELEMETRY_POLICY.md). The current installation can request authenticated deletion with:
+Telemetry identity and scheduling state remain under
+`/var/lib/digitalhouses/digitalhouses_pve_agent/telemetry.json`. Reporting
+runs in an isolated worker with a roughly daily cadence and retry backoff.
+Network failure never affects PVE or NUT monitoring. Development branches and
+non-release builds cannot send production telemetry.
+
+**Rollout safety:** The [shared Product Telemetry Policy](../docs/standards/PRODUCT_TELEMETRY_POLICY.md)
+still gates public policy-v2 rollout on legal/privacy clearance.
+This preparatory source change must not be released as a new default-on public
+build until that gate is closed. Already deployed critical PVE/UPS monitoring
+must not be stopped solely because a legacy config has telemetry disabled.
+
+Authenticated deletion of this installation's server-side telemetry record:
 
 ```bash
 PYTHONPATH=/opt/digitalhouses/digitalhouses_pve_agent \

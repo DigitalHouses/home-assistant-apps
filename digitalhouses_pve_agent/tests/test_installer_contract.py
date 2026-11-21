@@ -96,3 +96,20 @@ def test_installer_deploys_root_quick_reference_with_build_metadata():
     assert "version = %s" in installer_text
     assert "source = %s" in installer_text
     assert "commit = %s" in installer_text
+
+
+def test_fresh_install_telemetry_proposed_without_modifying_upgrades():
+    installer = (ROOT / "install.sh").read_text(encoding="utf-8")
+    example = (ROOT / "examples" / "digitalhouses_pve_agent.conf.example").read_text(encoding="utf-8")
+    assert "DigitalHouses telemetry: enabled by default for new PVE Agent installations." in installer
+    assert "docs/standards/PRODUCT_TELEMETRY_POLICY.md" in installer
+    assert r"[telemetry]\nenabled = true\n" in installer
+    assert "[telemetry]" in example
+    assert "enabled = true" in example
+
+    # Existing settings, including an explicit OFF, always take precedence.
+    existing = installer.index('if [[ -f "${CONFIG_FILE}" ]]; then', installer.index('PREPARED_CONFIG='))
+    legacy = installer.index('elif [[ -f "${LEGACY_CONFIG_FILE}" ]]; then', existing)
+    new = installer.index('else\n    echo "DigitalHouses telemetry:', legacy)
+    assert existing < legacy < new
+    assert 'cp -p "${CONFIG_FILE}" "${PREPARED_CONFIG}"' in installer[existing:new]

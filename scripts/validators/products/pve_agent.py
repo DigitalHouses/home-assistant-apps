@@ -1012,8 +1012,8 @@ def validate_digitalhouses_pve_agent(
     )
 
     config_example = (app / "examples/digitalhouses_pve_agent.conf.example").read_text(encoding="utf-8")
-    if "[telemetry]" not in config_example or "enabled = false" not in config_example:
-        fail("DH PVE telemetry must remain explicit opt-in and default OFF")
+    if "[telemetry]" not in config_example or "enabled = true" not in config_example:
+        fail("DH PVE fresh-install telemetry example must enable policy-v2 reporting")
     for expected in (
         "[events]",
         "pve_problem_debounce_seconds = 30",

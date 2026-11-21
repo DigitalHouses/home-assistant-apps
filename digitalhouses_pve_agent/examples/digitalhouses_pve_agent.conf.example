@@ -44,8 +44,9 @@ fan_delta_rpm = 100
 pve_problem_debounce_seconds = 30
 
 [telemetry]
-# Voluntary product telemetry. Default is OFF.
-# When enabled, a canonical released build sends only:
+# For new installations, telemetry is enabled by default.
+# Existing installations retain their saved setting.
+# Official builds send only:
 # schema, telemetry_policy_version, installation_id, product, version.
 # Policy: docs/standards/PRODUCT_TELEMETRY_POLICY.md
-enabled = false
+enabled = true
