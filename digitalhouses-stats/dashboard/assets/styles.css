@@ -31,29 +31,27 @@ h1 { margin: 6px 0 3px; font-size: clamp(28px, 4vw, 44px); letter-spacing: -.04e
 .panel-head h2 { margin: 0 0 3px; font-size: 17px; }
 select { border: 1px solid #dce1e7; background: #fff; padding: 8px 10px; border-radius: 9px; color: #334; }
 
-/* One stacked vertical bar per UTC date: active + inactive = total. */
+/* Two separate bars per UTC date: total registered and inactive. */
 .chart-legend { display: flex; align-items: center; gap: 18px; margin: -2px 0 12px; color: #707987; font-size: 12px; flex-wrap: wrap; }
 .chart-legend span { display: inline-flex; align-items: center; gap: 6px; }
 .chart-legend i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
-.legend-active { background: #3262a1; }
-.legend-inactive { background: #ccd5e0; }
+.legend-total { background: #3262a1; }
+.legend-inactive { background: #cb873d; }
 .chart-hint { margin-left: auto; color: #8995a4; }
 
 .chart { height: 265px; display: flex; align-items: stretch; gap: 12px; border-bottom: 1px solid #e9ecf0; padding-top: 22px; }
 .day-wrap { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; position: relative; outline-offset: 2px; }
 .bars { flex: 1; min-height: 0; display: flex; align-items: flex-end; justify-content: center; }
-.bar-column { width: min(65%, 72px); position: relative; }
-.bar-stack {
-  width: 100%; height: 100%; min-height: 0;
-  display: flex; flex-direction: column; justify-content: flex-end;
-  overflow: hidden; border-radius: 5px 5px 0 0;
+.comparison-bars { gap: min(8px, 5%); }
+.comparison-column {
+  position: relative; width: min(38%, 65px);
+  min-height: 0; border-radius: 5px 5px 0 0;
   transition: opacity .15s ease;
 }
-.bar-part { width: 100%; flex-shrink: 0; }
-.active-part { background: #3262a1; }
-.inactive-part { background: #ccd5e0; }
-.day-wrap:hover .bar-stack, .day-wrap:focus-visible .bar-stack { opacity: .78; }
-.bar-total {
+.total-column { background: #3262a1; }
+.inactive-column { background: #cb873d; }
+.day-wrap:hover .comparison-column, .day-wrap:focus-visible .comparison-column { opacity: .75; }
+.bar-value {
   position: absolute; bottom: calc(100% + 3px); left: 50%;
   transform: translateX(-50%); font-weight: 700; font-size: 11px; color: #334155;
 }
