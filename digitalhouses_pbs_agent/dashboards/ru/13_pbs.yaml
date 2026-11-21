@@ -1,4 +1,4 @@
-# DH-View-Version: 0.1.3
+# DH-View-Version: 0.1.4
 # DH-View-Date: 2026-11-21
 title: PBS
 path: dh_pbs_agent
@@ -53,42 +53,47 @@ sections:
           {%- set groups = state_attr('sensor.dh_pbs_agent_health', 'backup_groups') or [] -%}
           {%- set rules = state_attr('sensor.dh_pbs_agent_health', 'backups') or [] -%}
           {%- set coverage = state_attr('sensor.dh_pbs_agent_health', 'backup_groups_status') or 'UNAVAILABLE' -%}
+          {%- set limits = state_attr('sensor.dh_pbs_agent_health', 'dashboard_limits') or {} -%}
+          {%- set group_limit = limits.backup_groups | default(10) | int -%}
           {%- set ns = namespace(lines=['PBS', '├─ Datastore (' ~ (ds | count) ~ ')']) -%}
           {%- for d in ds -%}
             {%- set icon = '🟢' if d.health == 'HEALTHY'
                 else '🟠' if d.health == 'DEGRADED'
                 else '🔴' if d.health in ['CRITICAL', 'UNAVAILABLE']
                 else '⚪' -%}
-            {%- if d.backend | default('LOCAL') == 'S3' -%}
-              {%- set label = '☁ S3 · ' ~ (d.status | default('UNKNOWN')) -%}
-            {%- elif d.used_percent is defined and d.available_bytes is defined -%}
-              {%- set label = (d.used_percent | round(1) | string) ~ '% · '
-                  ~ ((d.available_bytes / 1073741824) | round(1) | string) ~ ' GiB свободно' -%}
-            {%- else -%}
-              {%- set label = (d.status | default('UNKNOWN')) -%}
-            {%- endif -%}
             {%- set branch = '└─' if loop.last else '├─' -%}
-            {%- set ns.lines = ns.lines + ['│  ' ~ branch ~ ' ' ~ icon ~ ' ' ~ d.name ~ ' · ' ~ label] -%}
+            {%- set ns.lines = ns.lines + ['│  ' ~ branch ~ ' ' ~ icon ~ ' ' ~ d.name] -%}
+            {%- if d.backend | default('LOCAL') == 'S3' -%}
+              {%- set detail = '☁ S3 · ' ~ (d.status | default('UNKNOWN')) -%}
+            {%- elif d.total_bytes is defined and d.available_bytes is defined and d.total_bytes > 0 -%}
+              {%- set free = (d.available_bytes / 1073741824) | round(1) | string -%}
+              {%- set total = (d.total_bytes / 1073741824) | round(1) | string -%}
+              {%- set pct = (100 * d.available_bytes / d.total_bytes) | round(1) | string -%}
+              {%- set detail = free ~ '/' ~ total ~ ' GiB (' ~ pct ~ '%)' -%}
+            {%- else -%}
+              {%- set detail = d.status | default('UNKNOWN') -%}
+            {%- endif -%}
+            {%- set ns.lines = ns.lines + ['│       └─ ' ~ icon ~ ' ' ~ detail] -%}
           {%- endfor -%}
           {%- if not ds -%}
             {%- set ns.lines = ns.lines + ['│  └─ ⚪ Нет данных'] -%}
           {%- endif -%}
           {%- set ns.lines = ns.lines + ['├─ Группы резервных копий (' ~ (groups | count) ~ ')'] -%}
-          {%- for g in groups[:12] -%}
+          {%- for g in groups[:group_limit] -%}
             {%- set icon = '🟢' if g.status == 'OK'
                 else '🔴' if g.status in ['OVERDUE','NO_SNAPSHOT','UNAVAILABLE']
                 else '⚪' -%}
             {%- set when = as_local(as_datetime(g.last_backup_at)).strftime('%d.%m %H:%M') if g.last_backup_at else '—' -%}
-            {%- set status = 'без правила' if g.status == 'NOT_MONITORED' else g.status -%}
+            {%- set status = '' if g.status == 'NOT_MONITORED' else ' · ' ~ g.status -%}
             {%- set count = (g.snapshot_count | string) if g.snapshot_count is not none else '?' -%}
             {%- set name = (g.namespace ~ '/' if g.namespace else '') ~ g.group -%}
-            {%- set branch = '└─' if loop.last and groups | count <= 12 else '├─' -%}
-            {%- set ns.lines = ns.lines + ['│  ' ~ branch ~ ' ' ~ icon ~ ' ' ~ name ~ ' · ' ~ count ~ ' коп. · ' ~ when ~ ' · ' ~ status] -%}
+            {%- set branch = '└─' if loop.last and groups | count <= group_limit else '├─' -%}
+            {%- set ns.lines = ns.lines + ['│  ' ~ branch ~ ' ' ~ icon ~ ' ' ~ name ~ ' · ' ~ count ~ ' коп. · ' ~ when ~ status] -%}
           {%- endfor -%}
           {%- if not groups -%}
             {%- set ns.lines = ns.lines + ['│  └─ ' ~ ('Нет копий' if coverage == 'COMPLETE' else '⚪ Нет достоверного списка')] -%}
-          {%- elif groups | count > 12 -%}
-            {%- set ns.lines = ns.lines + ['│  └─ Ещё ' ~ ((groups | count) - 12) ~ ' групп'] -%}
+          {%- elif groups | count > group_limit -%}
+            {%- set ns.lines = ns.lines + ['│  └─ Ещё ' ~ ((groups | count) - group_limit) ~ ' групп'] -%}
           {%- endif -%}
           {%- if coverage != 'COMPLETE' -%}
             {%- set ns.lines = ns.lines + ['│  ⚠ Инвентаризация ' ~ coverage] -%}
@@ -143,22 +148,24 @@ sections:
       - type: markdown
         content: |
           {%- set events = state_attr('sensor.dh_pbs_agent_health', 'task_history') or [] -%}
+          {%- set limits = state_attr('sensor.dh_pbs_agent_health', 'dashboard_limits') or {} -%}
+          {%- set event_limit = limits.task_events | default(10) | int -%}
           {%- set coverage = state_attr('sensor.dh_pbs_agent_health', 'task_history_status') or 'UNAVAILABLE' -%}
           {%- set ns = namespace(lines=['Последние выполнения PBS']) -%}
-          {%- for e in events[:6] -%}
+          {%- for e in events[:event_limit] -%}
             {%- set icon = '🟢' if e.status == 'OK'
                 else '🔴' if e.status == 'FAILED'
                 else '🟡' if e.status == 'RUNNING'
                 else '⚪' -%}
             {%- set when = as_local(as_datetime(e.started_at)).strftime('%d.%m %H:%M') -%}
             {%- set duration = (e.duration_seconds ~ ' с') if e.duration_seconds is not none else '—' -%}
-            {%- set branch = '└─' if loop.last and (events | count) <= 6 else '├─' -%}
+            {%- set branch = '└─' if loop.last and (events | count) <= event_limit else '├─' -%}
             {%- set ns.lines = ns.lines + [branch ~ ' ' ~ icon ~ ' ' ~ when ~ ' · ' ~ e.type ~ ' · ' ~ duration ~ ' · ' ~ e.status] -%}
           {%- endfor -%}
           {%- if not events -%}
             {%- set ns.lines = ns.lines + ['└─ ⚪ ' ~ ('Нет подходящих задач' if coverage == 'AVAILABLE' else 'История недоступна')] -%}
-          {%- elif events | count > 6 -%}
-            {%- set ns.lines = ns.lines + ['└─ Ещё ' ~ ((events | count) - 6) ~ ' событий'] -%}
+          {%- elif events | count > event_limit -%}
+            {%- set ns.lines = ns.lines + ['└─ Ещё ' ~ ((events | count) - event_limit) ~ ' событий'] -%}
           {%- endif -%}
           <pre style="margin:0; padding:0; line-height:1.2; font-family:'Courier New',monospace; white-space:pre; overflow-x:auto;">{{ ns.lines | join('\n') }}</pre>
         grid_options:

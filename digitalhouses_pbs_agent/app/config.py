@@ -24,6 +24,8 @@ KEYS = {
     "monitor_sync_rules": ("monitor", "sync_rules"),
     "monitor_warning_percent": ("monitor", "warning_percent"),
     "monitor_critical_percent": ("monitor", "critical_percent"),
+    "dashboard_backup_groups_limit": ("dashboard", "backup_groups_limit"),
+    "dashboard_task_events_limit": ("dashboard", "task_events_limit"),
 }
 KEYS.update({f"{s}.{k}": (s, k) for s, k in KEYS.values()})
 KEYS["mqtt_ip"] = KEYS["mqtt_host"]
@@ -60,6 +62,8 @@ class Config:
     warning_percent: float
     critical_percent: float
     telemetry_enabled: bool
+    dashboard_backup_groups_limit: int
+    dashboard_task_events_limit: int
 
 
 def _csv(s: str) -> tuple[str, ...]:
@@ -144,4 +148,6 @@ def load_config(path: Path = DEFAULT_CONFIG) -> Config:
         backup_rules=backup, sync_rules=sync,
         warning_percent=warning, critical_percent=critical,
         telemetry_enabled=telemetry_enabled,
+        dashboard_backup_groups_limit=integer("dashboard", "backup_groups_limit", "10", 1, 80),
+        dashboard_task_events_limit=integer("dashboard", "task_events_limit", "10", 1, 50),
     )
