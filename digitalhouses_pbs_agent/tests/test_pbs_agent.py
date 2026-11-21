@@ -53,6 +53,14 @@ class FakePBS:
             return {"version": "4.2.11"}
         if path == "config/datastore":
             return [{"name": "pbs-home", "path": "/"}]
+        if path == "admin/datastore/pbs-home/namespace":
+            return [{"ns": "archive"}]
+        if path == "admin/datastore/pbs-home/groups":
+            if params.get("ns") == "archive":
+                return [{"backup-type": "ct", "backup-id": "1221",
+                         "last-backup": self.now - 7200, "backup-count": 3}]
+            return [{"backup-type": "vm", "backup-id": "2222",
+                     "last-backup": self.now - 3600, "backup-count": 7}]
         if path == "admin/datastore/pbs-home/status":
             return {"total": 1000, "used": self.used, "avail": 1000 - self.used}
         if path == "admin/datastore/pbs-home/snapshots":
@@ -239,7 +247,7 @@ class PBSAgentTests(unittest.TestCase):
     def test_lovelace_markdown_table_keeps_real_line_breaks(self):
         view = (ROOT / "dashboards/ru/13_pbs.yaml").read_text(encoding="utf-8")
         # Folded YAML scalar (>- ) turns the Markdown table into one line.
-        self.assertEqual(view.count("content: |"), 6)
+        self.assertEqual(view.count("content: |"), 7)
         self.assertNotIn("content: >-", view)
         self.assertIn(
             "| Datastore | Заполнено | Свободно |\n"
@@ -248,6 +256,63 @@ class PBSAgentTests(unittest.TestCase):
             "          | {{ d.name }}",
             view,
         )
+
+    def test_dashboard_inventory_includes_namespaces_and_monitored_status(self):
+        sample = self.sample()
+        self.assertEqual(sample["backup_groups_status"], "COMPLETE")
+        groups = {row["group"]: row for row in sample["backup_groups"]}
+        self.assertEqual(groups["vm/2222"]["snapshot_count"], 7)
+        self.assertEqual(groups["vm/2222"]["status"], "OK")
+        self.assertEqual(groups["ct/1221"]["namespace"], "archive")
+        self.assertEqual(groups["ct/1221"]["status"], "NOT_MONITORED")
+        jobs = {(j["type"], j["id"]): j for j in sample["maintenance_jobs"]}
+        self.assertEqual(jobs[("Push Sync", "push-home")]["status"], "OK")
+        self.assertEqual(jobs[("Verify", "verify-home")]["status"], "OK")
+        self.assertEqual(jobs[("Prune", "prune-home")]["status"], "OK")
+        self.assertEqual(jobs[("GC", "pbs-home")]["status"], "OK")
+
+    def test_history_is_actual_tasks_not_fabricated_job_success(self):
+        self.api.tasks = [
+            {"upid": "UPID:pbs:1:2:3:prune:x", "worker_type": "prune",
+             "starttime": self.now - 180, "endtime": self.now - 150, "status": "OK"},
+            {"upid": "UPID:pbs:1:2:3:verificationjob:y", "worker_type": "verificationjob",
+             "starttime": self.now - 60, "endtime": self.now - 30, "status": "ERROR"},
+            {"upid": "UPID:pbs:1:2:3:backup:z", "worker_type": "backup",
+             "starttime": self.now - 10, "endtime": None, "status": None},
+            {"upid": "UPID:pbs:1:2:3:other:w", "worker_type": "other",
+             "starttime": self.now - 40, "endtime": self.now - 20, "status": "OK"},
+        ]
+        sample = self.sample()
+        self.assertEqual(sample["task_history_status"], "AVAILABLE")
+        self.assertEqual([x["type"] for x in sample["task_history"]],
+                         ["Backup", "Verify", "Prune"])
+        self.assertEqual([x["status"] for x in sample["task_history"]],
+                         ["RUNNING", "FAILED", "OK"])
+        self.assertEqual(sample["task_history"][-1]["duration_seconds"], 30)
+
+    def test_optional_inventory_failure_is_visible_without_fake_healthy_groups(self):
+        from app.collector import SourceError
+        original = self.api.get
+        def broken_namespace(path, **params):
+            if path.endswith("/namespace"):
+                raise SourceError("not supported")
+            return original(path, **params)
+        self.api.get = broken_namespace
+        sample = self.sample()
+        self.assertEqual(sample["status"], "HEALTHY")
+        self.assertEqual(sample["backup_groups_status"], "PARTIAL")
+        self.assertIn("namespaces pbs-home: not supported", sample["errors"])
+        self.assertEqual(sample["backup_groups"][0]["group"], "vm/2222")
+
+    def test_dashboard_contains_real_tables_not_fabricated_example_rows(self):
+        from app.mqtt import discovery
+        view = (ROOT / "dashboards/ru/13_pbs.yaml").read_text("utf-8")
+        for attribute in ("maintenance_jobs", "task_history", "backup_groups"):
+            self.assertIn("'" + attribute + "'", discovery(self.config)["components"]["health"]["json_attributes_template"])
+            self.assertIn("'" + attribute + "'", view)
+        self.assertIn("Последние выполнения PBS", view)
+        self.assertIn("Группы резервных копий PBS", view)
+        self.assertNotIn("21.11 02:00", view)
 
     def test_systemd_pbs_lock_exception_is_scoped(self):
         unit = (ROOT / "systemd/digitalhouses_pbs_agent.service").read_text("utf-8")

@@ -1,4 +1,4 @@
-# DH-View-Version: 0.1.1
+# DH-View-Version: 0.1.2
 # DH-View-Date: 2026-11-21
 title: PBS
 path: dh_pbs_agent
@@ -57,6 +57,32 @@ sections:
           {% endfor %}
       - type: markdown
         content: |
+          {% set rows = state_attr('sensor.dh_pbs_agent_health', 'backup_groups') or [] %}
+          {% set coverage = state_attr('sensor.dh_pbs_agent_health', 'backup_groups_status') or 'UNAVAILABLE' %}
+          **Группы резервных копий PBS**
+
+          {% if rows %}
+          | Группа | Копий | Последняя | Возраст | Контроль |
+          | :--- | ---: | :--- | ---: | :--- |
+          {% for b in rows -%}
+          | {{ b.datastore }}/{{ b.namespace ~ '/' if b.namespace else '' }}{{ b.group }} | {{ b.snapshot_count if b.snapshot_count is not none else '—' }} | {{ as_local(as_datetime(b.last_backup_at)).strftime('%d.%m %H:%M') if b.last_backup_at else '—' }} | {{ (b.age_hours ~ ' ч') if b.age_hours is not none else '—' }} | {{ b.status if b.status != 'NOT_MONITORED' else 'Без правила' }} |
+          {% endfor %}
+          {% else %}
+          {% if coverage == 'COMPLETE' %}
+          В datastore пока нет групп резервных копий.
+          {% else %}
+          Не удалось получить список резервных копий.
+          {% endif %}
+          {% endif %}
+          {% if coverage == 'PARTIAL' %}
+
+          ⚠️ Список неполный — подробности в «Ошибки сбора».
+          {% elif coverage == 'UNAVAILABLE' %}
+
+          Инвентаризация недоступна.
+          {% endif %}
+      - type: markdown
+        content: |
           {% set entries = state_attr('sensor.dh_pbs_agent_health', 'backups') or [] %}
           **Контролируемые группы и свежесть копий**
 
@@ -71,40 +97,42 @@ sections:
   - type: grid
     cards:
       - type: heading
-        heading: Push Sync и обслуживание
+        heading: Задания PBS
         heading_style: title
-        icon: mdi:cloud-upload-outline
+        icon: mdi:calendar-check
       - type: markdown
         content: |
-          {% set jobs = state_attr('sensor.dh_pbs_agent_health', 'sync_jobs') or [] %}
-          **PBS Push Sync**
+          {% set jobs = state_attr('sensor.dh_pbs_agent_health', 'maintenance_jobs') or [] %}
+          **Расписание и последний результат**
 
           {% if jobs %}
-          {% for j in jobs %}
-          - {{ j.id }} — {{ j.status }}{% if j.last_run_at is defined %}; запуск: {{ j.last_run_at }}{% endif %}
+          | Тип | Задание | Расписание | Последний запуск | Результат |
+          | :--- | :--- | :--- | :--- | :--- |
+          {% for j in jobs -%}
+          | {{ j.type }} | {{ j.id }} | {{ j.schedule or '—' }} | {{ as_local(as_datetime(j.last_run_at)).strftime('%d.%m %H:%M') if j.last_run_at else '—' }} | {{ j.status }} |
           {% endfor %}
           {% else %}
-          Push Sync не обнаружен.
+          Заданий обслуживания PBS нет или они недоступны.
           {% endif %}
       - type: markdown
         content: |
-          {% set verify = state_attr('sensor.dh_pbs_agent_health', 'verify_jobs') or [] %}
-          {% set prune = state_attr('sensor.dh_pbs_agent_health', 'prune_jobs') or [] %}
-          {% set gc = state_attr('sensor.dh_pbs_agent_health', 'gc') or [] %}
-          **Verify**
-          {% for j in verify %}
-          - {{ j.id }}: {{ j.status }}
-          {% endfor %}
+          {% set history = state_attr('sensor.dh_pbs_agent_health', 'task_history') or [] %}
+          {% set coverage = state_attr('sensor.dh_pbs_agent_health', 'task_history_status') or 'UNAVAILABLE' %}
+          **Последние выполнения PBS**
 
-          **Prune**
-          {% for j in prune %}
-          - {{ j.id }}: {{ j.status }}
+          {% if history %}
+          | Запуск | Операция | Длительность | Результат |
+          | :--- | :--- | ---: | :--- |
+          {% for h in history -%}
+          | {{ as_local(as_datetime(h.started_at)).strftime('%d.%m %H:%M') }} | {{ h.type }} | {{ (h.duration_seconds ~ ' с') if h.duration_seconds is not none else '—' }} | {{ h.status }} |
           {% endfor %}
-
-          **Garbage Collection**
-          {% for d in gc %}
-          - {{ d.datastore }}: {{ d.status.status if d.status is mapping else d.status }}
-          {% endfor %}
+          {% else %}
+          {% if coverage == 'AVAILABLE' %}
+          В истории PBS нет подходящих выполнений.
+          {% else %}
+          История заданий недоступна.
+          {% endif %}
+          {% endif %}
   - type: grid
     cards:
       - type: heading

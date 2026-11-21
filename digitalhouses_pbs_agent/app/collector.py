@@ -213,6 +213,84 @@ def _snapshots(pbs: PBSClient, store: str, ns: str) -> list[dict]:
     return result
 
 
+def _task_history(tasks: list[dict]) -> list[dict]:
+    """Compact, factual history from the same native PBS task list."""
+    names = {"backup": "Backup", "verificationjob": "Verify", "verify": "Verify",
+             "prune": "Prune", "prunejob": "Prune",
+             "garbage_collection": "GC", "gc": "GC",
+             "syncjob": "Sync", "sync": "Sync"}
+    history = []
+    for task in tasks:
+        worker = str(task.get("worker_type") or task.get("worker-type") or "")
+        kind = names.get(worker)
+        if kind is None:
+            continue
+        start = task.get("starttime")
+        end = task.get("endtime")
+        if not isinstance(start, (int, float)) or start <= 0:
+            continue
+        state = str(task.get("status") or "").strip()
+        result = ("RUNNING" if end is None else "OK" if state.upper() == "OK"
+                  else "FAILED" if state else "UNKNOWN")
+        history.append({
+            "type": kind, "task_id": str(task.get("upid") or ""),
+            "started_at": utc(start),
+            "ended_at": utc(end) if isinstance(end, (int, float)) and end > 0 else None,
+            "duration_seconds": round(max(0, end - start)) if isinstance(end, (int, float)) and end >= start else None,
+            "status": result,
+        })
+    return sorted(history, key=lambda row: row["started_at"], reverse=True)[:12]
+
+
+def _backup_inventory(config: Config, pbs: PBSClient, now: float) -> tuple[list[dict], str, list[str]]:
+    """Read all visible PBS backup groups, including namespaces; never infer backup success."""
+    groups = []
+    errors = []
+    rules = {(x.datastore, x.namespace, x.group): x.max_age_hours for x in config.backup_rules}
+    for store in config.datastores:
+        path = f"admin/datastore/{quote(store, safe='')}"
+        namespaces = [""]
+        try:
+            found = pbs.get(path + "/namespace")
+            if not isinstance(found, list) or any(not isinstance(x, dict) for x in found):
+                raise SourceError("invalid PBS namespace list")
+            namespaces += sorted({x["ns"] for x in found
+                                  if isinstance(x.get("ns"), str) and x["ns"]})
+        except SourceError as exc:
+            errors.append(f"namespaces {store}: {exc}")
+        for ns in namespaces:
+            try:
+                rows = pbs.get(path + "/groups", ns=ns if ns else None)
+                if not isinstance(rows, list) or any(not isinstance(x, dict) for x in rows):
+                    raise SourceError("invalid PBS backup group list")
+            except SourceError as exc:
+                errors.append(f"groups {store}/{ns or '-'}: {exc}")
+                continue
+            for row in rows:
+                typ, ident = row.get("backup-type"), row.get("backup-id")
+                if typ not in ("vm", "ct", "host") or ident is None:
+                    continue
+                group = f"{typ}/{ident}"
+                stamp = row.get("last-backup")
+                timestamp = stamp if isinstance(stamp, (int, float)) and 0 < stamp <= now + 300 else None
+                age = age_hours(now, timestamp)
+                threshold = rules.get((store, ns, group))
+                status = ("NOT_MONITORED" if threshold is None else
+                          "UNKNOWN" if age is None else
+                          "OK" if age <= threshold else "OVERDUE")
+                count = row.get("backup-count")
+                groups.append({
+                    "datastore": store, "namespace": ns, "group": group,
+                    "snapshot_count": count if isinstance(count, int) and count >= 0 else None,
+                    "last_backup_at": utc(timestamp) if timestamp is not None else None,
+                    "age_hours": age, "status": status,
+                })
+    groups.sort(key=lambda row: row["last_backup_at"] or "", reverse=True)
+    if len(groups) > 80:
+        errors.append("backup groups: table limited to 80 newest groups")
+    return groups[:80], "PARTIAL" if errors else "COMPLETE", errors
+
+
 def collect(config: Config, pbs: PBSClient | None = None, now: float | None = None) -> dict:
     """Each missing source yields UNKNOWN/UNAVAILABLE, never healthy zeroes."""
     pbs = pbs or PBSClient(config)
@@ -221,7 +299,9 @@ def collect(config: Config, pbs: PBSClient | None = None, now: float | None = No
     result: dict = {
         "observed_at": stamp, "status": "UNAVAILABLE", "pbs_version": None,
         "datastores": [], "backups": [], "backup_sessions": {"active": None, "failed_tasks": [], "last_error": None}, "sync_jobs": [], "verify_jobs": [],
-        "prune_jobs": [], "gc": [], "zfs": zfs_pools(),
+        "prune_jobs": [], "gc": [], "maintenance_jobs": [], "task_history": [],
+        "task_history_status": "UNAVAILABLE", "backup_groups": [],
+        "backup_groups_status": "UNAVAILABLE", "zfs": zfs_pools(),
         "root_fs": root_filesystem(), "filesystems": [], "errors": [], "problems": [],
         "summary": {},
     }
@@ -238,12 +318,15 @@ def collect(config: Config, pbs: PBSClient | None = None, now: float | None = No
         return result
 
     statuses: list[str] = []
+    datastore_config: dict[str, dict] = {}
     # Filesystem paths are from the official datastore configuration, not
     # inferred from snapshot names. Deduplicate by filesystem device ID.
     try:
         config_rows = pbs.get("config/datastore")
         if not isinstance(config_rows, list):
             raise SourceError("PBS datastore config is not a list")
+        datastore_config = {str(x["name"]): x for x in config_rows
+                            if isinstance(x, dict) and x.get("name")}
         paths = {
             str(row.get("name")): str(row["path"])
             for row in config_rows
@@ -345,6 +428,8 @@ def collect(config: Config, pbs: PBSClient | None = None, now: float | None = No
         task_rows = pbs.task_list(limit=100)
         if not isinstance(task_rows, list) or any(not isinstance(x, dict) for x in task_rows):
             raise SourceError("PBS task list is invalid")
+        result["task_history"] = _task_history(task_rows)
+        result["task_history_status"] = "AVAILABLE"
         active = 0
         failed_tasks = []
         for task in task_rows:
@@ -447,11 +532,39 @@ def collect(config: Config, pbs: PBSClient | None = None, now: float | None = No
             gc = pbs.get(f"admin/datastore/{quote(store, safe='')}/gc")
             if not isinstance(gc, dict):
                 raise SourceError("PBS GC response is invalid")
-            result["gc"].append({"datastore": store, "status": last_run(gc)})
+            run = last_run(gc)
+            run["schedule"] = datastore_config.get(store, {}).get("gc-schedule") or run["schedule"]
+            result["gc"].append({"datastore": store, "status": run})
         except SourceError as exc:
             result["gc"].append({"datastore": store, "status": "UNAVAILABLE"})
             result["errors"].append(f"GC {store}: {exc}")
             statuses.append("UNAVAILABLE")
+
+    for field, kind in (("sync_jobs", "Push Sync"), ("verify_jobs", "Verify"),
+                        ("prune_jobs", "Prune")):
+        for job in result[field]:
+            result["maintenance_jobs"].append({
+                "type": kind, "id": job["id"],
+                "schedule": job.get("schedule"), "last_run_at": job.get("last_run_at"),
+                "next_run_at": utc(job["next_run_timestamp"])
+                    if isinstance(job.get("next_run_timestamp"), (int, float))
+                    and job["next_run_timestamp"] > 0 else None,
+                "status": job.get("status", "UNKNOWN"),
+            })
+    for gc in result["gc"]:
+        run = gc["status"] if isinstance(gc["status"], dict) else {}
+        result["maintenance_jobs"].append({
+            "type": "GC", "id": gc["datastore"],
+            "schedule": run.get("schedule"), "last_run_at": run.get("last_run_at"),
+            "next_run_at": utc(run["next_run_timestamp"])
+                if isinstance(run.get("next_run_timestamp"), (int, float))
+                and run["next_run_timestamp"] > 0 else None,
+            "status": run.get("status", "UNAVAILABLE"),
+        })
+    inventory, coverage, inventory_errors = _backup_inventory(config, pbs, now)
+    result["backup_groups"] = inventory
+    result["backup_groups_status"] = coverage
+    result["errors"].extend(inventory_errors)
 
     if result["zfs"]["status"] == "DEGRADED":
         statuses.append("CRITICAL")
