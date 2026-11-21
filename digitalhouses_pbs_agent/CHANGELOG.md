@@ -1,5 +1,18 @@
 # DigitalHouses PBS Agent
 
+## 0.1.13
+
+- Show the actual VM/CT guest ID beside native PBS Backup tasks when the
+  worker identity is explicitly present in PBS worker_id or UPID
+  (e.g. `Backup VM1234`, `Backup CT1221`); otherwise keep `Backup`.
+- Add the daily event count to each HA-local date in the task-history tree
+  (`📅 DD.MM.YYYY (5)`). The count reflects the day's tasks available from
+  PBS, even if only part of the day's history is shown under the configured
+  MQTT Number display limit.
+- Preserve chronological order, native task status/duration and HA-local
+  date/time conversion. No new PBS API requests, services or configuration.
+
+
 ## 0.1.12
 
 - Group the **Последние выполнения PBS** tree by actual run date, with a

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 import time
 from datetime import datetime, timezone
@@ -224,6 +225,36 @@ def _snapshots(pbs: PBSClient, store: str, ns: str) -> list[dict]:
     return result
 
 
+def _backup_guest(task: dict) -> str | None:
+    r"""VM/CT identity from the native PBS backup worker ID, never guessed.
+
+    PBS backup workers use <datastore>:vm-1234 or <datastore>:ct-1221.
+    The task list can include worker_id directly; its UPID encodes special
+    worker-id characters as literal \xHH sequences, e.g. \x3a for ':'.
+    """
+    worker = task.get("worker_id") or task.get("worker-id")
+    if not isinstance(worker, str) or not worker:
+        upid = task.get("upid")
+        if not isinstance(upid, str):
+            return None
+        fields = upid.split(":")
+        if len(fields) < 9 or fields[0] != "UPID" or fields[6] != "backup":
+            return None
+        worker = fields[7]
+    # Decode PBS UPID worker-id escaping for ':' and '-' without interpreting
+    # arbitrary escapes or relying on site-specific datastore names.
+    worker = re.sub(
+        r"\\x([0-9a-fA-F]{2})",
+        lambda match: chr(int(match.group(1), 16)),
+        worker,
+    )
+    match = re.fullmatch(r".+:(vm|ct)-(\d+)", worker, re.IGNORECASE)
+    if not match:
+        return None
+    kind, vmid = match.groups()
+    return kind.upper() + vmid
+
+
 def _task_history(tasks: list[dict]) -> list[dict]:
     """Compact, factual history from the same native PBS task list."""
     names = {"backup": "Backup", "verificationjob": "Verify", "verify": "Verify",
@@ -245,6 +276,7 @@ def _task_history(tasks: list[dict]) -> list[dict]:
                   else "FAILED" if state else "UNKNOWN")
         history.append({
             "type": kind, "task_id": str(task.get("upid") or ""),
+            "guest": _backup_guest(task) if kind == "Backup" else None,
             "started_at": utc(start),
             "ended_at": utc(end) if isinstance(end, (int, float)) and end > 0 else None,
             "duration_seconds": round(max(0, end - start)) if isinstance(end, (int, float)) and end >= start else None,
