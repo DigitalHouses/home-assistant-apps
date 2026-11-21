@@ -1,4 +1,4 @@
-# DH-View-Version: 0.1.9
+# DH-View-Version: 0.1.10
 # DH-View-Date: 2026-11-22
 title: PBS
 path: dh_pbs_agent
@@ -12,6 +12,145 @@ sections:
         heading: Proxmox Backup Server
         heading_style: title
         icon: mdi:backup-restore
+      - type: vertical-stack
+        cards:
+          - type: custom:button-card
+            entity: sensor.dh_pbs_agent_card
+            show_icon: true
+            show_name: true
+            show_label: true
+            update_timer: |
+              [[[
+                return states['sensor.dh_pbs_agent_card']?.state === 'running' ? 100 : 5000;
+              ]]]
+            icon: |
+              [[[
+                const s = states['sensor.dh_pbs_agent_card']?.state;
+                const newer = states['binary_sensor.dh_pbs_agent_update_available']?.state === 'on';
+                return s === 'running' ? 'mdi:progress-clock'
+                  : s === 'error' ? 'mdi:alert-circle'
+                  : s === 'success' ? 'mdi:check-circle'
+                  : newer ? 'mdi:package-up' : 'mdi:backup-restore';
+              ]]]
+            name: |
+              [[[
+                const version = states['sensor.dh_pbs_agent_version']?.state;
+                const latest = states['sensor.dh_pbs_agent_latest_version']?.state;
+                const known = v => v && !['unknown','unavailable','none'].includes(v);
+                const newer = states['binary_sensor.dh_pbs_agent_update_available']?.state === 'on';
+                return 'PBS Agent' + (known(version)
+                  ? ' · v' + version + (newer && known(latest) ? ' → v' + latest : '')
+                  : '');
+              ]]]
+            label: |
+              [[[
+                const s = states['sensor.dh_pbs_agent_card'];
+                if (!s || ['unknown','unavailable'].includes(s.state)) return 'Нет связи с PBS Agent';
+                const a = s.attributes || {};
+                const names = {refresh:'Сбор данных',check:'Проверка версии',
+                  install:'Установка версии',restart:'Перезапуск агента'};
+                if (s.state === 'running') {
+                  const start = Date.parse(a.started_at || '');
+                  const seconds = Number.isFinite(start) ? Math.max(0, Math.floor((Date.now()-start)/1000)) : 0;
+                  return (names[a.operation] || 'Операция') + '… '
+                    + String(Math.floor(seconds/60)).padStart(2,'0') + ':'
+                    + String(seconds%60).padStart(2,'0');
+                }
+                if (s.state === 'error') return 'Ошибка: ' + (a.error || 'операция не выполнена');
+                if (s.state === 'success') return ({
+                    refresh:'Данные обновлены',check:'Версия проверена',
+                    install:'Агент обновлён',restart:'Агент перезапущен'
+                  }[a.operation] || 'Готово') +
+                  (typeof a.duration_seconds === 'number'
+                    ? ' · ' + a.duration_seconds.toFixed(1) + ' сек' : '');
+                if (states['binary_sensor.dh_pbs_agent_update_available']?.state === 'on')
+                  return 'Доступна новая версия';
+                const health = states['sensor.dh_pbs_agent_health']?.state;
+                if (!health || ['unknown','unavailable'].includes(health))
+                  return 'Ожидание данных PBS';
+                return 'PBS: ' + health;
+              ]]]
+            styles:
+              card:
+                - padding: 12px
+                - text-align: left
+              grid:
+                - grid-template-areas: '"i n" "i l"'
+                - grid-template-columns: 48px 1fr
+                - grid-template-rows: min-content min-content
+              img_cell:
+                - width: 40px
+                - justify-content: start
+              icon:
+                - width: 26px
+                - color: |
+                    [[[
+                      const s = states['sensor.dh_pbs_agent_card']?.state;
+                      return s === 'error' ? 'var(--error-color)'
+                        : s === 'running' ? 'var(--info-color, var(--primary-color))'
+                        : s === 'success' ? 'var(--success-color, var(--primary-color))'
+                        : states['binary_sensor.dh_pbs_agent_update_available']?.state === 'on'
+                        ? 'var(--warning-color, orange)' : 'var(--success-color, var(--primary-color))';
+                    ]]]
+              name:
+                - justify-self: start
+                - font-size: 14px
+                - font-weight: 600
+              label:
+                - justify-self: start
+                - white-space: normal
+                - text-align: left
+                - font-size: 13px
+                - color: var(--secondary-text-color)
+            tap_action:
+              action: none
+          - type: custom:mushroom-chips-card
+            alignment: center
+            chips:
+              - type: template
+                icon: mdi:refresh
+                content: Обновить
+                tap_action:
+                  action: perform-action
+                  perform_action: button.press
+                  target:
+                    entity_id: button.dh_pbs_agent_refresh
+              - type: template
+                icon: mdi:cloud-search
+                content: Версия
+                tap_action:
+                  action: perform-action
+                  perform_action: button.press
+                  target:
+                    entity_id: button.dh_pbs_agent_check_updates
+              - type: conditional
+                conditions:
+                  - entity: binary_sensor.dh_pbs_agent_update_available
+                    state: 'on'
+                chip:
+                  type: template
+                  icon: mdi:package-down
+                  icon_color: orange
+                  content: Новая версия
+                  tap_action:
+                    action: perform-action
+                    perform_action: button.press
+                    target:
+                      entity_id: button.dh_pbs_agent_update
+                    confirmation:
+                      text: Установить новый релиз PBS Agent? Мониторинг временно прервётся, сам PBS и резервные копии не перезапускаются.
+              - type: template
+                icon: mdi:restart
+                content: Перезапуск
+                tap_action:
+                  action: perform-action
+                  perform_action: button.press
+                  target:
+                    entity_id: button.dh_pbs_agent_restart_agent
+                  confirmation:
+                    text: Перезапустить только PBS Agent? Сам PBS и задания резервирования продолжат работу.
+        grid_options:
+          columns: 12
       - type: entities
         title: Состояние PBS
         entities:

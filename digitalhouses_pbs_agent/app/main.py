@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import queue
 import logging
 import signal
 import threading
@@ -11,6 +12,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from .collector import collect
+from .control import Controller
 from .config import DEFAULT_CONFIG, load_config
 from .events import transitions
 from .mqtt import Publisher, _read_version, host_ip
@@ -72,6 +74,7 @@ def run(config_path: Path = DEFAULT_CONFIG, state_dir: Path = STATE_DIR) -> int:
         view_limits=ViewLimits(StateStore(state_dir / "view_limits.json")),
         job_registry=StateStore(state_dir / "discovery_jobs.json"),
     )
+    controller = Controller(state_dir, publisher)
     last_problem_state = StateStore(state_dir / "incidents.json")
     current_status = StateStore(state_dir / "runtime.json")
     mqtt_status = StateStore(state_dir / "mqtt.json")
@@ -100,8 +103,36 @@ def run(config_path: Path = DEFAULT_CONFIG, state_dir: Path = STATE_DIR) -> int:
     telemetry_runner.start()
     try:
         publisher.start()
+        next_collection = time.monotonic()
+        next_auto_check = time.monotonic() + 4
         while not stop.is_set():
+            controller.tick()
+            while not publisher.auto_update_commands.empty():
+                controller.set_auto_update(publisher.auto_update_commands.get_nowait())
+            now = time.monotonic()
+            if now >= next_auto_check:
+                if controller.start_check(manual=False):
+                    next_auto_check = now + 24 * 3600
+                else:
+                    next_auto_check = now + 60
+            refresh = False
+            while not publisher.commands.empty():
+                try:
+                    command = publisher.commands.get_nowait()
+                except queue.Empty:
+                    break
+                if command == "refresh":
+                    if controller.begin("refresh"):
+                        refresh = True
+                elif command == "check":
+                    controller.start_check(manual=True)
+                elif command in {"install", "restart"}:
+                    controller.queue_worker(command)
+            if not refresh and now < next_collection:
+                stop.wait(min(1, max(0.05, next_collection - now)))
+                continue
             started = time.monotonic()
+            next_collection = started + config.poll_seconds
             ip = host_ip(config.mqtt_host, config.mqtt_port)
             try:
                 sample = collect(config)
@@ -111,6 +142,15 @@ def run(config_path: Path = DEFAULT_CONFIG, state_dir: Path = STATE_DIR) -> int:
                 state["last_success_at"] = last_success_at
                 ev = transitions(sample, last_problem_state)
                 success = publisher.state(state)
+                controller.collection_at(last_success_at)
+                if refresh:
+                    good = sample["status"] in ("HEALTHY", "DEGRADED", "CRITICAL")
+                    controller.finish(
+                        "refresh",
+                        None if good and success else
+                        ("Нет подтверждения MQTT PUBACK" if not success
+                         else "PBS не предоставил достоверный статус"),
+                    )
                 # Events are not replayed after an MQTT disconnection.
                 if success:
                     for item in ev:
@@ -143,6 +183,8 @@ def run(config_path: Path = DEFAULT_CONFIG, state_dir: Path = STATE_DIR) -> int:
                     "sync_overall": "UNKNOWN", "sync_last_success_at": None,
                 }
                 publisher.state(unavailable)
+                if refresh:
+                    controller.finish("refresh", "Сбор данных PBS завершился ошибкой")
                 current_status.save({
                     "observed_at": observed, "last_success_at": last_success_at,
                     "status": "UNAVAILABLE",
@@ -150,8 +192,9 @@ def run(config_path: Path = DEFAULT_CONFIG, state_dir: Path = STATE_DIR) -> int:
                     "error": f"{type(exc).__name__}: {str(exc)[:160]}",
                     "mqtt_connect_error": publisher.last_connect_error,
                 })
-            elapsed = time.monotonic() - started
-            stop.wait(max(1, config.poll_seconds - elapsed))
+            # Keep operation state responsive independently of the PBS poll cadence.
+            controller.tick()
+            stop.wait(0.1)
     finally:
         publisher.stop()
         telemetry_runner.stop()

@@ -193,6 +193,23 @@ def status() -> int:
     mqtt_reason = mqtt_runtime.get("reason") or runtime.get("mqtt_connect_error")
     if mqtt_state != "CONNECTED" and mqtt_reason:
         print("MQTT connection reason:", mqtt_reason)
+    try:
+        control = StateStore(STATE_DIR / "control.json").load()
+    except (ValueError, OSError):
+        control = {}
+    try:
+        auto_update = StateStore(STATE_DIR / "auto_update.json").load().get("enabled") is True
+    except (ValueError, OSError):
+        auto_update = False
+    print("Auto-update:", "ON" if auto_update else "OFF")
+    print("Latest checked release:", control.get("latest_version") or "unknown")
+    print("Last release check:", control.get("checked_at") or "never")
+    card = control.get("card") or {}
+    if service == "active":
+        print("Last management operation:", card.get("operation") or "none",
+              card.get("state") or "idle")
+        if card.get("state") == "error":
+            print("Management error:", str(card.get("error") or "unknown")[:120])
     print("PBS status:", runtime.get("status", "UNKNOWN"))
     for error in runtime.get("pbs_errors", [])[:8]:
         print("PBS source error:", error)
@@ -228,31 +245,47 @@ def _telemetry_delete() -> int:
 
 
 def _release_update() -> int:
-    import urllib.request
-    url = "https://api.github.com/repos/DigitalHouses/home-assistant-apps/releases?per_page=100"
-    req = urllib.request.Request(url, headers={"User-Agent": "digitalhouses_pbs_agent"})
-    with urllib.request.urlopen(req, timeout=15) as response:
-        releases = json.load(response)
-    versions = []
-    for item in releases:
-        tag = str(item.get("tag_name") or "")
-        match = re.fullmatch(r"digitalhouses_pbs_agent-v(\d+)\.(\d+)\.(\d+)", tag)
-        if match and not item.get("draft") and not item.get("prerelease"):
-            versions.append((tuple(map(int, match.groups())), tag))
-    if not versions:
-        raise ValueError("no stable PBS Agent GitHub Release found")
-    version, tag = max(versions)
-    installed = tuple(map(int, _read_version().split(".")[:3]))
-    if version <= installed:
+    from .releases import latest_release, stable_version
+    tag, version = latest_release()
+    installed = stable_version(_read_version())
+    if stable_version(version) <= installed:
         print("UP_TO_DATE", _read_version())
         return 0
     env = dict(os.environ)
     env["DIGITALHOUSES_SOURCE_REF"] = tag
-    ret = subprocess.run(["bash", str(APP / "install.sh"), "--non-interactive"],
-                         env=env, check=False, timeout=300)
-    if ret.returncode:
-        raise RuntimeError("release update failed")
+    result = subprocess.run(
+        ["bash", str(APP / "install.sh"), "--non-interactive"],
+        env=env, check=False, timeout=900,
+    )
+    if result.returncode:
+        raise RuntimeError("release update failed or rolled back")
+    if stable_version(_read_version()) != stable_version(version):
+        # _read_version reads an installed file, but source swap replaces its content.
+        raise RuntimeError("installed version differs from requested release")
     print("UPDATED", tag)
+    return 0
+
+
+def _release_check() -> int:
+    from .releases import latest_release, stable_version
+    tag, version = latest_release()
+    available = stable_version(version) > stable_version(_read_version())
+    print(("AVAILABLE" if available else "UP_TO_DATE"), version, tag)
+    return 0
+
+
+def _auto_update(value: str) -> int:
+    store = StateStore(STATE_DIR / "auto_update.json")
+    enabled = store.load().get("enabled") is True
+    if value == "status":
+        print("ON" if enabled else "OFF")
+        return 0
+    if value not in ("on", "off"):
+        raise ValueError("auto-update requires on, off or status")
+    new = value == "on"
+    if new != enabled:
+        store.save({"enabled": new})
+    print(("CHANGED" if new != enabled else "UNCHANGED"), "ON" if new else "OFF")
     return 0
 
 
@@ -262,6 +295,9 @@ def main() -> int:
     sub.add_parser("status")
     sub.add_parser("restart")
     sub.add_parser("update")
+    sub.add_parser("check-update")
+    automatic = sub.add_parser("auto-update")
+    automatic.add_argument("action", choices=("on", "off", "status"))
     sub.add_parser("telemetry-delete")
     sub.add_parser("help")
     setparser = sub.add_parser("set")
@@ -269,7 +305,7 @@ def main() -> int:
     args = parser.parse_args()
     try:
         if args.command == "help":
-            print("Usage: dh-pbs-agent status | restart | update | telemetry-delete | set key=value... | help")
+            print("Usage: dh-pbs-agent status | restart | check-update | update | auto-update on|off|status | telemetry-delete | set key=value... | help")
             print("Native INI:", DEFAULT_CONFIG)
             print("Config keys:", ", ".join(sorted(KEYS)))
             print("Secrets: mqtt_password (hidden prompt or mqtt_password=- from stdin).")
@@ -288,6 +324,10 @@ def main() -> int:
             print("RESTARTED")
         elif args.command == "update":
             return _release_update()
+        elif args.command == "check-update":
+            return _release_check()
+        elif args.command == "auto-update":
+            return _auto_update(args.action)
         elif args.command == "telemetry-delete":
             return _telemetry_delete()
         elif args.command == "set":
