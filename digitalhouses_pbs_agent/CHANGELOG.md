@@ -1,5 +1,16 @@
 # DigitalHouses PBS Agent
 
+## 0.1.5
+
+- Replace both INI dashboard display limits with two native Home Assistant MQTT
+  Number entities in the existing PBS Agent device (backup groups and recent
+  task events), default 10 each. Changes take effect immediately.
+- Keep limits in the agent's existing atomic state directory, surviving
+  service/broker restarts, without additional background services.
+- Keep current tree view, entity identity, PBS collection, monitoring and
+  DH Sync placement unchanged. Retained MQTT state carries view_limits.
+
+
 ## 0.1.4
 
 - Display datastore free/total GiB and percentage free on a nested tree line,
