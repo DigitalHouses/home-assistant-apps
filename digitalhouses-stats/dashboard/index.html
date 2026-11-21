@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>DigitalHouses Stats</title>
-  <link rel="stylesheet" href="/assets/styles.css?v=total-inactive-20261121-v2">
+  <link rel="stylesheet" href="/assets/styles.css?v=country-header-20261122-v1">
 </head>
 <body>
   <main class="page">
@@ -70,10 +70,21 @@
 
     <section class="grid">
       <article class="panel">
-        <div class="panel-head">
+        <div class="panel-head country-panel-head">
           <div>
             <h2>Installations by Country</h2>
             <p>Known installations, grouped by country and App/Agent</p>
+          </div>
+          <div class="country-metrics">
+            <div class="country-metric">
+              <span>Countries</span>
+              <strong id="country-count">—</strong>
+            </div>
+            <div class="country-metric">
+              <span>Newest country</span>
+              <strong id="country-newest-name">—</strong>
+              <small id="country-newest-first-seen">—</small>
+            </div>
           </div>
         </div>
         <div class="table-wrap">
@@ -106,6 +117,6 @@
       <button id="refresh" type="button">Refresh</button>
     </footer>
   </main>
-  <script src="/assets/app.js?v=total-inactive-20261121-v2"></script>
+  <script src="/assets/app.js?v=country-header-20261122-v1"></script>
 </body>
 </html>

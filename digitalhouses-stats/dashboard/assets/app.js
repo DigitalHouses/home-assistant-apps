@@ -45,6 +45,20 @@ function renderCountries(rows) {
   body.innerHTML = "";
   let total = 0;
 
+  $("country-count").textContent = rows.length;
+  const newest = rows
+    .filter((row) => row.first_seen)
+    .reduce((latest, row) =>
+      !latest || new Date(row.first_seen) > new Date(latest.first_seen) ? row : latest,
+      null);
+  $("country-newest-name").textContent = newest ? countryName(newest.country) : "—";
+  $("country-newest-first-seen").textContent = newest
+    ? new Date(newest.first_seen).toLocaleString("en-GB", {
+        timeZone: "Asia/Almaty", day: "2-digit", month: "short",
+        year: "numeric", hour: "2-digit", minute: "2-digit", hour12: false
+      }).replace(",", " ·") + " (Almaty)"
+    : "—";
+
   if (!rows.length) {
     body.innerHTML = '<tr><td class="empty" colspan="2">No data</td></tr>';
   }

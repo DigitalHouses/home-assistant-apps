@@ -41,6 +41,13 @@ def test_empty_dashboard_summary() -> None:
     }
 
 
+def test_empty_country_history() -> None:
+    reset_database()
+    response = dashboard_client.get("/v1/stats/countries")
+    assert response.status_code == 200
+    assert response.json() == []
+
+
 def test_empty_dashboard_products_lists_full_catalog() -> None:
     reset_database()
 
@@ -323,6 +330,10 @@ def test_local_stats_use_latest_installation_state() -> None:
     countries = dashboard_client.get("/v1/stats/countries")
     assert countries.status_code == 200
     by_country = {row["country"]: row for row in countries.json()}
+    assert by_country["KZ"]["first_seen"]
+    assert by_country["DE"]["first_seen"]
+    assert by_country["US"]["first_seen"]
+    assert all("first_seen" in country for country in countries.json())
     assert by_country["KZ"]["observed_installations"] == 1
     assert by_country["KZ"]["active_7d"] == 1
     assert by_country["DE"]["active_7d"] == 1
