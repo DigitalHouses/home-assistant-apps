@@ -1,4 +1,4 @@
-# DH-View-Version: 0.1.8
+# DH-View-Version: 0.1.9
 # DH-View-Date: 2026-11-22
 title: PBS
 path: dh_pbs_agent
@@ -65,11 +65,11 @@ sections:
             {%- set ns.lines = ns.lines + ['│  ' ~ branch ~ ' ' ~ icon ~ ' ' ~ d.name] -%}
             {%- if d.backend | default('LOCAL') == 'S3' -%}
               {%- set detail = '☁ S3 · ' ~ (d.status | default('UNKNOWN')) -%}
-            {%- elif d.total_bytes is defined and d.available_bytes is defined and d.total_bytes > 0 -%}
-              {%- set free = (d.available_bytes / 1073741824) | round(1) | string -%}
+            {%- elif d.total_bytes is defined and d.used_bytes is defined and d.total_bytes > 0 -%}
+              {%- set used = (d.used_bytes / 1073741824) | round(1) | string -%}
               {%- set total = (d.total_bytes / 1073741824) | round(1) | string -%}
-              {%- set pct = (100 * d.available_bytes / d.total_bytes) | round(1) | string -%}
-              {%- set detail = free ~ '/' ~ total ~ ' GiB (' ~ pct ~ '%)' -%}
+              {%- set pct = (100 * d.used_bytes / d.total_bytes) | round(1) | string -%}
+              {%- set detail = used ~ '/' ~ total ~ ' GiB (' ~ pct ~ '%)' -%}
             {%- else -%}
               {%- set detail = d.status | default('UNKNOWN') -%}
             {%- endif -%}

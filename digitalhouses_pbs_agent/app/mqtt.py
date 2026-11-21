@@ -50,6 +50,17 @@ def job_identity(sample: dict | None) -> tuple[tuple[str, str], ...]:
     }))
 
 
+# Localized display names do not change PBS job types or MQTT entity identities.
+JOB_TITLES = {
+    "Push Sync": "Отправка копий",
+    "S3 Sync": "Синхронизация S3",
+    "Pull Sync": "Получение копий",
+    "Verify": "Проверка копий",
+    "Prune": "Очистка копий",
+    "GC": "Сборка мусора",
+}
+
+
 def job_components(config: Config, sample: dict | None) -> dict:
     """Discover only actual PBS jobs; names are never installation constants."""
     ident = instance_id(config)
@@ -75,7 +86,7 @@ def job_components(config: Config, sample: dict | None) -> dict:
         props = ", ".join(f"{json.dumps(k)}: {json.dumps(v, ensure_ascii=False)}" for k, v in metadata.items())
         rows[key] = {
             "platform": "sensor",
-            "name": f"{kind} · {name}",
+            "name": f"{JOB_TITLES.get(kind, kind)} · {name}",
             "unique_id": f"{device_id}_{key}",
             "default_entity_id": f"sensor.dh_pbs_agent_{ident}_{key}",
             "state_topic": base + "/state",
@@ -129,16 +140,16 @@ def discovery(config: Config, sample: dict | None = None) -> dict:
             item["json_attributes_template"] = "{{ {" + fields + "} | tojson }}"
         components[key] = item
 
-    sensor("hostname", "Hostname", "value_json.hostname", icon="mdi:server")
-    sensor("ip", "IP", "value_json.ip", icon="mdi:ip-network")
-    sensor("version", "Version", "value_json.agent_version", icon="mdi:information-outline")
-    sensor("health", "PBS health", "value_json.status", attributes=True, section="health")
-    sensor("last_collection", "Last successful collection", "value_json.last_success_at | default('unknown', true)", icon="mdi:clock-check-outline")
-    sensor("backup_last_success", "Last successful backup", "value_json.backup_last_success_at | default('unknown', true)")
-    sensor("backup_age_hours", "Backup age", "value_json.backup_age_hours | default('unknown', true)")
-    sensor("sync_state", "Push Sync", "value_json.sync_overall", icon="mdi:cloud-upload-outline")
-    sensor("sync_last_success", "Push Sync last success", "value_json.sync_last_success_at | default('unknown', true)")
-    sensor("zfs_pool_health", "ZFS pool", "value_json.zfs.status", icon="mdi:database-check")
+    sensor("hostname", "Имя сервера", "value_json.hostname", icon="mdi:server")
+    sensor("ip", "IP-адрес", "value_json.ip", icon="mdi:ip-network")
+    sensor("version", "Версия агента", "value_json.agent_version", icon="mdi:information-outline")
+    sensor("health", "Состояние PBS", "value_json.status", attributes=True, section="health")
+    sensor("last_collection", "Последний успешный опрос", "value_json.last_success_at | default('unknown', true)", icon="mdi:clock-check-outline")
+    sensor("backup_last_success", "Последняя успешная резервная копия", "value_json.backup_last_success_at | default('unknown', true)")
+    sensor("backup_age_hours", "Возраст резервной копии", "value_json.backup_age_hours | default('unknown', true)")
+    sensor("sync_state", "Синхронизация копий", "value_json.sync_overall", icon="mdi:cloud-upload-outline")
+    sensor("sync_last_success", "Последняя успешная синхронизация", "value_json.sync_last_success_at | default('unknown', true)")
+    sensor("zfs_pool_health", "Состояние ZFS", "value_json.zfs.status", icon="mdi:database-check")
     # Native HA MQTT Number controls, in the same device as all PBS entities.
     for key, title in (("backup_groups", "Групп резервных копий"),
                        ("task_events", "Последних событий")):
@@ -157,7 +168,7 @@ def discovery(config: Config, sample: dict | None = None) -> dict:
             "icon": "mdi:format-list-numbered",
         }
     components["problem"] = {
-        "platform": "binary_sensor", "name": "PBS problem",
+        "platform": "binary_sensor", "name": "Проблема PBS",
         "unique_id": f"{device_id}_problem",
         "default_entity_id": "binary_sensor.dh_pbs_agent_problem",
         "device_class": "problem", "state_topic": base + "/state",
@@ -171,11 +182,17 @@ def discovery(config: Config, sample: dict | None = None) -> dict:
         suffix = store.lower().replace("-", "_")
         # Each datastore has its own stable metric key, no overwrites.
         arr = f"(value_json.datastores | selectattr('name', 'equalto', '{store}') | list | first | default({{}}))"
-        sensor(f"datastore_{suffix}_used_percent", store + " used %", arr + ".used_percent | default('unknown', true)",
+        sensor(f"datastore_{suffix}_used_percent", store + " · занято, %", arr + ".used_percent | default('unknown', true)",
                section="datastore", display_name=store, metric="used_percent")
-        sensor(f"datastore_{suffix}_available_gib", store + " available GiB",
+        sensor(f"datastore_{suffix}_available_gib", store + " · свободно, ГиБ",
                f"(({arr}.available_bytes / 1073741824) | round(2)) if {arr}.available_bytes is defined else 'unknown'",
                section="datastore", display_name=store, metric="available_gib")
+    EVENT_TITLES = {
+        "backup": "События резервного копирования",
+        "sync": "События синхронизации",
+        "storage": "События хранилищ",
+        "maintenance": "События обслуживания",
+    }
     catalog = {
         "backup": ["backup_failed", "backup_overdue", "backup_recovered", "service_unavailable", "service_recovered"],
         "sync": ["sync_failed", "sync_overdue", "sync_recovered"],
@@ -184,7 +201,7 @@ def discovery(config: Config, sample: dict | None = None) -> dict:
     }
     for cat, event_types in catalog.items():
         components[f"{cat}_event"] = {
-            "platform": "event", "name": cat.title() + " event",
+            "platform": "event", "name": EVENT_TITLES[cat],
             "unique_id": f"{device_id}_{cat}_event",
             "default_entity_id": f"event.dh_pbs_agent_{cat}_event",
             "state_topic": base + "/event/" + cat,

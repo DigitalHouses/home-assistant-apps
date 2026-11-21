@@ -276,7 +276,7 @@ class PBSAgentTests(unittest.TestCase):
                 if key.startswith("job_")}
         self.assertEqual(len(jobs), 2)
         verify = jobs[job_component_key("Verify", "weekly-remote")]
-        self.assertEqual(verify["name"], "Verify · weekly-remote")
+        self.assertEqual(verify["name"], "Проверка копий · weekly-remote")
         self.assertEqual(verify["platform"], "sensor")
         self.assertIn('"pbs_section": "job"', verify["json_attributes_template"])
         self.assertIn("value_json.maintenance_jobs", verify["value_template"])
@@ -285,6 +285,45 @@ class PBSAgentTests(unittest.TestCase):
         self.assertNotEqual(remote["device"]["identifiers"], home["device"]["identifiers"])
         self.assertNotEqual(job_component_key("Verify", "x-y"),
                             job_component_key("Verify", "x_y"))
+
+    def test_russian_discovery_names_preserve_stable_mqtt_identity(self):
+        parts = discovery(self.config, {"maintenance_jobs": [
+            {"type": "Verify", "id": "job-serzhan", "status": "OK"}
+        ]})["components"]
+        expected_names = {
+            "hostname": "Имя сервера",
+            "ip": "IP-адрес",
+            "version": "Версия агента",
+            "health": "Состояние PBS",
+            "last_collection": "Последний успешный опрос",
+            "backup_last_success": "Последняя успешная резервная копия",
+            "backup_age_hours": "Возраст резервной копии",
+            "sync_state": "Синхронизация копий",
+            "sync_last_success": "Последняя успешная синхронизация",
+            "zfs_pool_health": "Состояние ZFS",
+            "problem": "Проблема PBS",
+            "backup_event": "События резервного копирования",
+            "sync_event": "События синхронизации",
+            "storage_event": "События хранилищ",
+            "maintenance_event": "События обслуживания",
+            "view_backup_groups_limit": "Групп резервных копий",
+            "view_task_events_limit": "Последних событий",
+        }
+        for key, label in expected_names.items():
+            self.assertEqual(parts[key]["name"], label)
+            self.assertEqual(parts[key]["unique_id"], "dh_pbs_agent_pbs_home_" + key)
+        for key, component in parts.items():
+            if key.startswith("datastore_"):
+                self.assertTrue(component["name"].startswith("pbs-home · "))
+                self.assertIn("pbs_section", component["json_attributes_template"])
+        from app.mqtt import job_component_key
+        job = parts[job_component_key("Verify", "job-serzhan")]
+        self.assertEqual(job["name"], "Проверка копий · job-serzhan")
+        self.assertEqual(job["unique_id"],
+                         "dh_pbs_agent_pbs_home_" + job_component_key("Verify", "job-serzhan"))
+        self.assertIn('pbs_job_type', job["json_attributes_template"])
+        self.assertEqual(parts["health"]["default_entity_id"], "sensor.dh_pbs_agent_health")
+        self.assertEqual(parts["problem"]["default_entity_id"], "binary_sensor.dh_pbs_agent_problem")
 
     def test_dynamic_job_discovery_and_expired_job_cleanup(self):
         import threading
@@ -452,8 +491,9 @@ class PBSAgentTests(unittest.TestCase):
 
     def test_dashboard_uses_correct_percentage_and_independent_limits(self):
         view = (ROOT / "dashboards/ru/13_pbs.yaml").read_text(encoding="utf-8")
-        self.assertIn("d.available_bytes / d.total_bytes", view)
-        self.assertIn("free ~ '/' ~ total ~ ' GiB ('", view)
+        self.assertIn("d.used_bytes / d.total_bytes", view)
+        self.assertIn("used ~ '/' ~ total ~ ' GiB ('", view)
+        self.assertNotIn("d.available_bytes / d.total_bytes", view)
         self.assertIn("detail_prefix ~ '└─ '", view)
         self.assertIn("groups[:group_limit]", view)
         self.assertIn("events[:event_limit]", view)

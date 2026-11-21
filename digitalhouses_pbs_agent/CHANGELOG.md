@@ -1,5 +1,16 @@
 # DigitalHouses PBS Agent
 
+## 0.1.9
+
+- Display local datastore USED / TOTAL GiB and percent USED in the compact
+  PBS tree, using actual native PBS used_bytes and total_bytes.
+- Localize Home Assistant MQTT Discovery display names for existing health,
+  network, ZFS, backup, sync, datastore, job, and event entities into Russian.
+- Preserve every MQTT unique_id, entity ID, event_type, state, command topic,
+  role marker and PBS job identity; S3 capacity is not invented.
+- Keep standalone native HA Dashboard (no mandatory custom cards).
+
+
 ## 0.1.8
 
 - Restore a fully standalone PBS View using native Home Assistant entities
