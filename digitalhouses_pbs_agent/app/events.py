@@ -23,7 +23,7 @@ def _confirmed_recovery(key: str, old: dict, payload: dict) -> bool:
         return any(
             x.get("status") == "OK" and
             f"backup:{x['datastore']}:{x['namespace']}:{x['group']}" == key
-            for x in payload.get("backups", [])
+            for x in payload.get("backups", []) + payload.get("backup_groups", [])
         )
     if kind == "sync_overdue":
         return any(

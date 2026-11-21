@@ -1,4 +1,4 @@
-# DigitalHouses PBS Agent v0.1.14
+# DigitalHouses PBS Agent v0.1.15
 
 Standalone **read-only** Linux/systemd monitoring agent for a local Proxmox Backup
 Server 4.x. HOME pilot: Debian MediaServer/PBS VM; no dependency on Plex Agent,
@@ -25,6 +25,39 @@ status, snapshots, **push** sync, verify, prune and GC jobs, plus local
 read-only ZFS and filesystem status. It does not run or
 edit PBS jobs, backup snapshots, PVE jobs, Plex, ZFS or retention.
 A job appearing as OK is **not** proof of restore verification.
+
+## Agent-rendered trees, auto freshness and HA timezone (v0.1.15)
+
+The PBS Agent computes four small, retained MQTT text sensors used by its
+canonical DH Sync View: backup group tree, maintenance job tree, task history,
+and summary. This includes ordering, date grouping, day counts, status icons,
+colours, timestamps, display caps and incremental transfer size. The Lovelace
+View simply reads each sensor's `text` attribute; per-datastore card text and
+colours are also supplied by PBS Agent MQTT discovery attributes.
+
+All discovered PBS backup groups are checked against the built-in 36-hour
+maximum age appropriate for daily PVE backups. A manual backup_rules threshold,
+if provided, takes priority. This checks *existing backup groups*, not PVE's
+scheduler; a VM which has never been backed up and does not yet exist in PBS
+cannot be discovered and is not marked healthy.
+
+The new DH Sync `packages/common/dh_pbs_agent_timezone_package.yaml` contains
+a single HA automation publishing `now().tzinfo.key` to retained MQTT topic
+`DigitalHouses/Global/digitalhouses_pbs_agent/ha_timezone`. The Agent
+subscribes to the topic, validates the IANA zone and keeps it locally between
+restarts. Home Assistant timezone is authoritative for **all dates/times in
+all PBS trees**, including DST and midnight rollover. Until the HA package
+becomes active and publishes, the trees explicitly warn about UTC fallback.
+Package installation through DH Sync is automatic; Home Assistant automations
+may require reload after first installation of the package (no custom token,
+per-site timezone config or HA REST credentials needed).
+
+Because PBS has no reliable physical allocation per deduplicated backup, only
+the real `upload-statistics.compressed-size` is shown for completed runs when
+available. If no incremental sizes are visible, the diagnostic MQTT
+`sensor.dh_pbs_agent_upload_stats` reports `available/total`, with reason
+counts in attributes (`API_ERROR`, `NO_MATCH`, `NO_STATISTICS`,
+`AMBIGUOUS`). Missing stats do not downgrade PBS health.
 
 ## Actual uploaded increment per PBS snapshot (v0.1.14)
 

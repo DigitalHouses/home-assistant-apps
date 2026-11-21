@@ -26,11 +26,43 @@ LOG = logging.getLogger("digitalhouses_pbs_agent")
 def display_state(sample: dict, config, ip: str | None) -> dict:
     data = dict(sample)
     data["agent_version"] = _read_version()
+    for store in data.get("datastores", []):
+        name = store.get("name", "PBS")
+        backend = store.get("backend")
+        health = store.get("health")
+        percent = store.get("used_percent")
+        if backend == "S3":
+            store.update(card_name=name, card_secondary="S3 · объём не определён",
+                         card_percent=0, card_color="grey", card_icon="mdi:cloud-outline")
+        elif type(percent) in (int, float):
+            store["card_name"] = f"{name} · занято {percent:.1f}%"
+            total = store.get("total_bytes")
+            used = store.get("used_bytes")
+            store["card_secondary"] = (
+                f"Занято {used/1073741824:.2f} / {total/1073741824:.2f} GiB"
+                if type(total) in (int, float) and type(used) in (int, float)
+                else f"Занято {percent:.1f}%"
+            )
+            store["card_percent"] = percent
+            store["card_color"] = {"HEALTHY": "green",
+                                   "DEGRADED": "orange",
+                                   "CRITICAL": "red"}.get(health, "grey")
+            store["card_icon"] = ("mdi:database-check" if health == "HEALTHY"
+                                  else "mdi:database-alert" if health in ("DEGRADED", "CRITICAL")
+                                  else "mdi:database")
+        else:
+            store.update(card_name=name, card_secondary="Данные недоступны",
+                         card_percent=0, card_color="grey", card_icon="mdi:database")
     import socket
     data["hostname"] = socket.gethostname()
     data["ip"] = ip or "unknown"
     completed = [x for x in data.get("backups", [])
                  if x.get("last_success_at") is not None]
+    if not completed:
+        completed = [{
+            "last_success_at": g.get("last_backup_at"),
+            "age_hours": g.get("age_hours"),
+        } for g in data.get("backup_groups", []) if g.get("last_backup_at")]
     latest = max(completed, key=lambda x: x["last_success_at"]) if completed else None
     data["backup_last_success_at"] = latest["last_success_at"] if latest else None
     data["backup_age_hours"] = max(
@@ -73,6 +105,7 @@ def run(config_path: Path = DEFAULT_CONFIG, state_dir: Path = STATE_DIR) -> int:
         config,
         view_limits=ViewLimits(StateStore(state_dir / "view_limits.json")),
         job_registry=StateStore(state_dir / "discovery_jobs.json"),
+        timezone_store=StateStore(state_dir / "ha_timezone.json"),
     )
     controller = Controller(state_dir, publisher)
     last_problem_state = StateStore(state_dir / "incidents.json")

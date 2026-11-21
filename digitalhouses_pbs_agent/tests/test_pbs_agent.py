@@ -350,20 +350,20 @@ class PBSAgentTests(unittest.TestCase):
         ]}
         self.assertTrue(pub.state(basic))
         published = pub.client.publish.call_args_list
-        self.assertEqual(len(published), 2)
+        self.assertEqual(len(published), 6)  # discovery, state, four text sensors
         config = json.loads(published[0].args[1])
         self.assertIn(job_component_key("Verify", "site-verify"), config["components"])
         self.assertEqual(pub.job_registry.load()["jobs"], [["Verify", "site-verify"]])
         pub.client.reset_mock()
         self.assertTrue(pub.state(basic))
-        self.assertEqual(pub.client.publish.call_count, 1)
+        self.assertEqual(pub.client.publish.call_count, 5)
         replacement = {"status": "HEALTHY", "maintenance_jobs": [
             {"type": "Verify", "id": "different-home", "status": "OK"}
         ]}
         pub.client.reset_mock()
         self.assertTrue(pub.state(replacement))
         sent = pub.client.publish.call_args_list
-        self.assertEqual(len(sent), 3)
+        self.assertEqual(len(sent), 7)
         removal = json.loads(sent[0].args[1])
         self.assertEqual(removal["components"][job_component_key("Verify", "site-verify")],
                          {"platform": "sensor"})
@@ -391,30 +391,36 @@ class PBSAgentTests(unittest.TestCase):
             self.assertIn(store, entry["name"])
             self.assertEqual(entry["default_entity_id"], "sensor.dh_pbs_agent_" + key)
         view = (ROOT / "dashboards/ru/13_pbs.yaml").read_text(encoding="utf-8")
-        self.assertIn("if backend == 'S3'", view)
-        self.assertIn("S3 · объём не определён", view)
-        self.assertIn("if health == 'CRITICAL'", view)
-        self.assertIn("elif health == 'DEGRADED'", view)
-        self.assertIn("elif health == 'HEALTHY'", view)
+        for key in ("card_name", "card_secondary", "card_color",
+                    "card_icon", "card_percent"):
+            self.assertIn(f"state_attr(entity, '{key}')", view)
+            self.assertIn("'" + key + "':", sensors["datastore_lab_archive_used_percent"]["json_attributes_template"])
+        from app.main import display_state
+        sample = self.sample()
+        store = display_state(sample, self.config, "192.0.2.1")["datastores"][0]
+        self.assertEqual(store["card_name"], "pbs-home · занято 50.0%")
+        self.assertEqual(store["card_color"], "green")
+        self.assertEqual(store["card_icon"], "mdi:database-check")
+        sample["datastores"][0]["backend"] = "S3"
+        s3 = display_state(sample, self.config, "192.0.2.1")["datastores"][0]
+        self.assertEqual(s3["card_color"], "grey")
+        self.assertEqual(s3["card_secondary"], "S3 · объём не определён")
         self.assertIn("'bar_size': 'medium'", view)
         self.assertIn("'tap_action': {'action': 'more-info'}", view)
 
     def test_ui_is_standalone_with_dynamic_store_and_job_names(self):
         view = (ROOT / "dashboards/ru/13_pbs.yaml").read_text(encoding="utf-8")
         self.assertIn("type: custom:auto-entities", view)
-        self.assertIn("type': 'custom:entity-progress-card-template'", view)
-        self.assertIn("states.sensor", view)
+        self.assertIn("custom:entity-progress-card-template", view)
         self.assertIn("pbs_section') == 'datastore'", view)
         self.assertIn("pbs_metric') == 'used_percent'", view)
-        self.assertIn("state_attr('sensor.dh_pbs_agent_health',", view)
-        self.assertNotIn("~ d.name]", view)
-        self.assertNotIn("Datastore (' ~ (ds | count)", view)
-        self.assertIn("~ j.id ~", view)
-        self.assertIn("store_prefix = (g.datastore ~ '/') if (ds | count) > 1 else ''", view)
-        self.assertIn("heading: Хранилища PBS", view)
-        self.assertIn("heading: Резервные копии", view)
-        for hardcoded in ("pbs-serzhan", "dh-weekly-serzhan", "pbs-core"):
-            self.assertNotIn(hardcoded, view)
+        for name in ("backup", "jobs", "history"):
+            self.assertIn(f"state_attr('sensor.dh_pbs_agent_{name}_tree', 'text')", view)
+        self.assertNotIn("as_local(as_datetime", view)
+        self.assertNotIn("events[:event_limit]", view)
+        self.assertNotIn("for g in groups[:group_limit]", view)
+        for site in ("pbs-serzhan", "dh-weekly-serzhan", "pbs-core"):
+            self.assertNotIn(site, view)
         self.assertIn("number.dh_pbs_agent_backup_groups_limit", view)
         self.assertIn("number.dh_pbs_agent_task_events_limit", view)
 
@@ -432,17 +438,13 @@ class PBSAgentTests(unittest.TestCase):
 
     def test_dashboard_uses_compact_pve_style_tree_not_wide_tables(self):
         view = (ROOT / "dashboards/ru/13_pbs.yaml").read_text(encoding="utf-8")
-        self.assertEqual(view.count("<pre style="), 3)
-        self.assertNotIn("├─ Datastore", view)
+        self.assertEqual(view.count("<pre style="), 4)
+        for kind in ("backup", "jobs", "history"):
+            self.assertIn(f"sensor.dh_pbs_agent_{kind}_tree", view)
         self.assertIn("heading: Хранилища PBS", view)
         self.assertIn("custom:entity-progress-card-template", view)
-        self.assertIn("Группы резервных копий", view)
-        self.assertIn("Контроль свежести", view)
-        self.assertIn("Последние выполнения", view)
-        self.assertIn("S3 Sync", view)
-        self.assertIn("ns.lines | join('\\n')", view)
+        self.assertNotIn("ns.lines | join", view)
         self.assertNotIn("| Datastore | Заполнено", view)
-        self.assertNotIn("content: >-", view)
 
     def test_view_limits_native_mqtt_numbers_and_persistence(self):
         from app.state import StateStore, ViewLimits
@@ -501,7 +503,10 @@ class PBSAgentTests(unittest.TestCase):
         send("backup_groups", "13.0")
         self.assertEqual(pub.view_limits.snapshot()["backup_groups"], 13)
         self.assertEqual(pub.last_state["view_limits"]["backup_groups"], 13)
-        self.assertEqual(json.loads(transport.publish.call_args.args[1])["view_limits"]["backup_groups"], 13)
+        state_publish = [call for call in transport.publish.call_args_list
+                         if call.args[0].endswith("/state")]
+        self.assertEqual(json.loads(state_publish[-1].args[1])["view_limits"]["backup_groups"], 13)
+        self.assertEqual(sum("/tree/" in call.args[0] for call in transport.publish.call_args_list), 4)
         self.assertTrue(transport.publish.call_args.kwargs["retain"])
         self.assertEqual(ViewLimits(store).snapshot()["backup_groups"], 13)
         count = transport.publish.call_count
@@ -515,13 +520,15 @@ class PBSAgentTests(unittest.TestCase):
         self.assertEqual(pub.view_limits.snapshot()["task_events"], 15)
 
     def test_maintenance_tree_has_schedule_above_last_run(self):
-        view = (ROOT / "dashboards/ru/13_pbs.yaml").read_text(encoding="utf-8")
-        self.assertIn("type_indent ~ branch ~ ' 🕒 ' ~ schedule", view)
-        self.assertIn("type_indent ~ child_indent ~ '└─ ' ~ icon ~ ' ' ~ j.id", view)
-        self.assertNotIn("when ~ ' · ' ~ schedule", view)
-        self.assertIn("shown_kinds.items", view)
-        self.assertIn("j.schedule or 'без расписания'", view)
-        self.assertIn("as_local(as_datetime(j.last_run_at))", view)
+        from app.view import render_trees
+        data = {"maintenance_jobs": [{
+            "type": "Verify", "id": "dh-weekly", "schedule": "sun 07:00",
+            "last_run_at": "2026-11-21T21:02:00+00:00", "status": "OK",
+        }]}
+        result = render_trees(data, "Asia/Almaty", {})["jobs"]
+        self.assertIn("└─ Verify (1)", result)
+        self.assertIn("   └─ 🕒 sun 07:00", result)
+        self.assertIn("      └─ 🟢 dh-weekly · OK · 22.11 02:02", result)
 
     def test_backup_guest_identity_from_actual_pbs_worker_only(self):
         from app.collector import _backup_guest, _task_history
@@ -619,6 +626,9 @@ class PBSAgentTests(unittest.TestCase):
         def getter(path, **params):
             if path.endswith("/snapshots") and params.get("ns") == "archive":
                 return []
+            if path.endswith("/groups") and not params.get("ns"):
+                return [{"backup-type": "vm", "backup-id": "2222",
+                         "last-backup": start, "backup-count": 1}]
             if path.endswith("/snapshot-information"):
                 return {"upload-statistics": {"compressed-size": 118111600,
                                                "size": 107374182400}}
@@ -630,6 +640,10 @@ class PBSAgentTests(unittest.TestCase):
         self.assertEqual(result["status"], "HEALTHY")
         self.assertEqual(result["task_history"][0]["guest"], "VM2222")
         self.assertEqual(result["task_history"][0]["uploaded_compressed_bytes"], 118111600)
+        self.assertEqual(result["backup_groups"][0]["last_uploaded_compressed_bytes"], 118111600)
+        from app.view import render_trees
+        group_tree = render_trees(result, "Asia/Almaty", {})["backup"]
+        self.assertIn("vm/2222 · 1 коп. · +0.11 GiB", group_tree)
         self.assertTrue(cache)
 
     def test_upload_increment_requires_unique_matching_successful_snapshot(self):
@@ -726,49 +740,74 @@ class PBSAgentTests(unittest.TestCase):
         self.assertNotIn("uploaded_compressed_bytes", history[0])
 
     def test_upload_tree_shows_increment_not_snapshot_total(self):
-        view = (ROOT / "dashboards/ru/13_pbs.yaml").read_text(encoding="utf-8")
-        self.assertIn("bytes = e.uploaded_compressed_bytes | default(none)", view)
-        self.assertIn("' · +' ~ ('%.2f' | format(bytes / 1073741824)) ~ ' GiB'", view)
-        self.assertIn("e.type ~ e.transfer ~ ' · ' ~ e.duration", view)
-        self.assertNotIn("e.logical_size", view)
+        from app.view import _size, render_trees
+        self.assertEqual(_size(118111600), " · +0.11 GiB")
+        self.assertEqual(_size(1848210), " · +1.8 MiB")
+        self.assertEqual(_size(0), " · +0 B")
+        self.assertEqual(_size(None), "")
+        data = {"task_history": [
+            {"started_at": "2026-11-21T21:03:00+00:00", "type": "Backup",
+             "guest": "VM2222", "uploaded_compressed_bytes": 118111600,
+             "duration_seconds": 32, "status": "OK"},
+            {"started_at": "2026-11-21T21:02:00+00:00", "type": "Backup",
+             "guest": "VM1000", "duration_seconds": 12, "status": "OK"},
+        ]}
+        tree = render_trees(data, "Asia/Almaty", {})["history"]
+        self.assertIn("Backup VM2222 · +0.11 GiB · 32 с · OK", tree)
+        self.assertIn("Backup VM1000 · 12 с · OK", tree)
+        self.assertNotIn("100 GiB", tree)
 
     def test_task_history_groups_by_home_assistant_local_day(self):
-        view = (ROOT / "dashboards/ru/13_pbs.yaml").read_text(encoding="utf-8")
-        self.assertIn("local_start = as_local(as_datetime(e.started_at))", view)
-        self.assertIn("local_start.strftime('%d.%m.%Y')", view)
-        self.assertIn("local_start.strftime('%H:%M')", view)
-        self.assertIn("branch ~ ' 📅 ' ~ day", view)
-        self.assertIn("ns.entries | selectattr('day', 'equalto', day) | list", view)
-        self.assertIn("child = '└─' if loop.last else '├─'", view)
-        self.assertIn("indent ~ child ~ ' ' ~ icon ~ ' ' ~ e.time", view)
-        self.assertIn("events[:event_limit]", view)
-        self.assertIn("events | count > event_limit", view)
-        self.assertIn("История недоступна", view)
-        self.assertNotIn("as_local(as_datetime(e.started_at)).strftime('%d.%m %H:%M')", view)
+        from app.view import render_trees
+        events = [
+            {"started_at": "2026-11-21T21:03:00+00:00",
+             "type": "Backup", "status": "OK", "duration_seconds": 32},
+            {"started_at": "2026-11-21T18:03:00+00:00",
+             "type": "Prune", "status": "OK", "duration_seconds": 1},
+        ]
+        data = {"task_history": events}
+        almaty = render_trees(data, "Asia/Almaty", {})["history"]
+        utc = render_trees(data, "UTC", {})["history"]
+        self.assertIn("📅 22.11.2026 (1)", almaty)
+        self.assertIn("02:03 · Backup", almaty)
+        self.assertIn("📅 21.11.2026 (1)", almaty)
+        self.assertIn("23:03 · Prune", almaty)
+        self.assertIn("📅 21.11.2026 (2)", utc)
+        self.assertNotIn("22.11.2026", utc)
+        missing = render_trees(data, None, {})["history"]
+        self.assertIn("⚠ Часовой пояс HA не получен; временно UTC", missing)
 
     def test_task_history_labels_local_day_counts_and_guests(self):
-        view = (ROOT / "dashboards/ru/13_pbs.yaml").read_text(encoding="utf-8")
-        self.assertIn("for e in events -%}", view)
-        self.assertIn("ns.all_days = ns.all_days + [as_local(as_datetime(e.started_at))", view)
-        self.assertIn("day_total = ns.all_days | select('equalto', day) | list | count", view)
-        self.assertIn("branch ~ ' 📅 ' ~ day ~ ' (' ~ day_total ~ ')'", view)
-        self.assertIn("'type': e.type ~ (' ' ~ e.guest if e.guest | default(none) else '')", view)
-        self.assertIn("for e in events[:event_limit] -%}", view)
+        from app.view import render_trees
+        events = [
+            {"started_at": f"2026-11-21T21:0{i}:00+00:00",
+             "type": "Backup", "guest": f"VM{i}", "status": "OK",
+             "duration_seconds": i+1}
+            for i in range(5, -1, -1)
+        ]
+        data = {"task_history": events, "task_history_status": "AVAILABLE"}
+        limited = render_trees(data, "Asia/Almaty", {"task_events": 2})["history"]
+        self.assertIn("📅 22.11.2026 (6)", limited)
+        self.assertIn("Backup VM5", limited)
+        self.assertNotIn("Backup VM1", limited)
+        self.assertIn("└─ Ещё 4 событий", limited)
 
     def test_dashboard_uses_correct_percentage_and_independent_limits(self):
         view = (ROOT / "dashboards/ru/13_pbs.yaml").read_text(encoding="utf-8")
-        self.assertIn("state_attr(storage.entity_id, 'used_gib')", view)
-        self.assertIn("state_attr(storage.entity_id, 'total_gib')", view)
-        self.assertIn("~ ' / ' ~ ('%.2f' | format(total | float))", view)
-        self.assertIn("name ~ ' · занято '", view)
-        self.assertIn("percent = '%.2f' | format(used_percent)", view)
+        self.assertIn("state_attr(entity, 'card_name')", view)
+        self.assertIn("state_attr(entity, 'card_secondary')", view)
+        self.assertIn("state_attr(entity, 'card_percent')", view)
+        self.assertIn("state_attr(entity, 'card_color')", view)
         self.assertNotIn("d.available_bytes / d.total_bytes", view)
-        self.assertNotIn("detail_prefix ~ '└─ '", view)
-        self.assertIn("groups[:group_limit]", view)
-        self.assertIn("events[:event_limit]", view)
-        self.assertIn("limits.backup_groups | default(10)", view)
-        self.assertIn("limits.task_events | default(10)", view)
-        self.assertNotIn("без правила", view)
+        from app.view import render_trees
+        data = {"backup_groups": [{"group": "vm/2222", "datastore": "store",
+                 "snapshot_count": 1, "status": "OK", "age_hours": 1},
+                {"group": "vm/3333", "datastore": "store",
+                 "snapshot_count": 1, "status": "OK", "age_hours": 1}]}
+        content = render_trees(data, "Asia/Almaty", {"backup_groups": 1})["backup"]
+        self.assertIn("Ещё 1 групп", content)
+        self.assertIn("vm/2222", content)
+        self.assertNotIn("vm/3333", content)
 
     def test_history_has_more_than_twelve_real_events(self):
         self.api.tasks = [
@@ -813,13 +852,123 @@ class PBSAgentTests(unittest.TestCase):
         self.assertEqual(groups["vm/2222"]["snapshot_count"], 7)
         self.assertEqual(groups["vm/2222"]["status"], "OK")
         self.assertEqual(groups["ct/1221"]["namespace"], "archive")
-        self.assertEqual(groups["ct/1221"]["status"], "NOT_MONITORED")
+        self.assertEqual(groups["ct/1221"]["status"], "OK")
+        self.assertEqual(groups["ct/1221"]["freshness_source"], "automatic")
+        self.assertEqual(groups["ct/1221"]["freshness_hours"], 36.0)
         jobs = {(j["type"], j["id"]): j for j in sample["maintenance_jobs"]}
         self.assertEqual(jobs[("Push Sync", "push-home")]["status"], "OK")
         self.assertEqual(jobs[("Verify", "verify-home")]["status"], "OK")
         self.assertEqual(jobs[("Prune", "prune-home")]["status"], "OK")
         self.assertEqual(jobs[("GC", "pbs-home")]["status"], "OK")
         self.assertEqual(jobs[("GC", "pbs-home")]["schedule"], "sun 04:00")
+
+    def test_automatic_freshness_default_override_and_recovery(self):
+        from app.collector import AUTO_FRESHNESS_HOURS
+        from app.events import transitions
+        self.assertEqual(AUTO_FRESHNESS_HOURS, 36.0)
+        from app.state import StateStore
+        saved = StateStore(self.folder / "auto_freshness_incidents.json")
+        original_get = self.api.get
+        def stale_groups(path, **params):
+            if path.endswith("/groups") and params.get("ns") == "archive":
+                return [{"backup-type": "ct", "backup-id": "1221",
+                         "last-backup": self.now - 48 * 3600,
+                         "backup-count": 3}]
+            return original_get(path, **params)
+        self.api.get = stale_groups
+        first = self.sample()
+        found = {x["group"]: x for x in first["backup_groups"]}
+        self.assertEqual(found["vm/2222"]["freshness_source"], "configured")
+        self.assertEqual(found["vm/2222"]["freshness_hours"], 24)
+        self.assertEqual(found["ct/1221"]["freshness_source"], "automatic")
+        self.assertEqual(found["ct/1221"]["status"], "OVERDUE")
+        self.assertEqual(first["freshness_summary"]["overdue"], 1)
+        self.assertEqual(first["status"], "CRITICAL")
+        self.assertEqual([x["key"] for x in first["problems"]
+                          if x["type"] == "backup_overdue"],
+                         ["backup:pbs-home:archive:ct/1221"])
+        started = transitions(first, saved)
+        self.assertTrue(any(x["payload"]["event_type"] == "backup_overdue" for x in started))
+        self.assertEqual(transitions(first, saved), [])
+        self.api.get = original_get
+        recovered = self.sample()
+        self.assertEqual(recovered["freshness_summary"]["ok"], 2)
+        ended = transitions(recovered, saved)
+        self.assertTrue(any(x["payload"]["event_type"] == "backup_recovered" for x in ended))
+
+    def test_published_ha_timezone_is_retained_and_reformats_tree(self):
+        import threading, types
+        from unittest.mock import Mock
+        from app.mqtt import Publisher, HA_TIMEZONE_TOPIC
+        from app.state import StateStore, ViewLimits
+        pub = Publisher.__new__(Publisher)
+        pub._state_lock = threading.Lock()
+        pub.base = "DigitalHouses/Global/digitalhouses_pbs_agent/pbs_home"
+        pub.timezone_store = StateStore(self.folder / "ha_timezone.json")
+        pub.ha_timezone = None
+        pub.view_limits = ViewLimits()
+        pub.last_state = {"status": "HEALTHY", "view_limits": pub.view_limits.snapshot(),
+                          "task_history": [{
+                              "started_at": "2026-11-21T21:03:00+00:00",
+                              "type": "Backup", "guest": "VM2222",
+                              "status": "OK", "duration_seconds": 32,
+                          }]}
+        transport = Mock()
+        retained = types.SimpleNamespace(
+            topic=HA_TIMEZONE_TOPIC, payload=b"Asia/Almaty", retain=True)
+        pub._on_message(transport, None, retained)
+        self.assertEqual(pub.ha_timezone, "Asia/Almaty")
+        self.assertEqual(pub.timezone_store.load()["timezone"], "Asia/Almaty")
+        self.assertEqual(pub.last_state["ha_timezone"], "Asia/Almaty")
+        sent = [c for c in transport.publish.call_args_list
+                if c.args[0].endswith("/tree/history")]
+        self.assertEqual(len(sent), 1)
+        self.assertIn("02:03", json.loads(sent[0].args[1])["text"])
+        self.assertIn("22.11.2026", json.loads(sent[0].args[1])["text"])
+        before = transport.publish.call_count
+        invalid = types.SimpleNamespace(topic=HA_TIMEZONE_TOPIC,
+                                        payload=b"Bad/Unknown_Zone", retain=True)
+        pub._on_message(transport, None, invalid)
+        self.assertEqual(transport.publish.call_count, before)
+        pub._on_message(transport, None, retained)
+        self.assertEqual(transport.publish.call_count, before)
+        package = (ROOT / "packages/common/dh_pbs_agent_timezone_package.yaml").read_text()
+        self.assertIn('payload: "{{ now().tzinfo.key }}"', package)
+        self.assertIn('retain: true', package)
+
+    def test_tree_content_is_own_mqtt_payload_not_large_health_attribute(self):
+        from app.mqtt import discovery
+        parts = discovery(self.config)["components"]
+        for name in ("backup", "jobs", "history", "summary"):
+            item = parts["tree_" + name]
+            self.assertEqual(item["platform"], "sensor")
+            self.assertIn("/tree/" + name, item["state_topic"])
+            self.assertIn("value_json.text", item["json_attributes_template"])
+        health = parts["health"]["json_attributes_template"]
+        self.assertNotIn("backup_tree", health)
+        self.assertNotIn("history_tree", health)
+        self.assertIn("sensor.dh_pbs_agent_summary_tree",
+                      (ROOT / "dashboards/ru/13_pbs.yaml").read_text())
+
+    def test_upload_failure_is_diagnostic_not_fabricated_zero(self):
+        from app.collector import _backup_upload_stats, _task_history, SourceError
+        start = self.now - 60
+        rows = [{"worker_type": "backup", "worker_id": "pbs-home:vm/2222",
+                 "starttime": start, "endtime": start + 30, "status": "OK"}]
+        old = self.api.get
+        def broken_detail(path, **params):
+            if path.endswith("/snapshots"):
+                return [{"backup-type": "vm", "backup-id": "2222",
+                         "backup-time": start}]
+            if path.endswith("/snapshot-information"):
+                raise SourceError("API failed")
+            return old(path, **params)
+        self.api.get = broken_detail
+        hist = _task_history(rows)
+        _backup_upload_stats(self.api, hist, [{"datastore": "pbs-home",
+             "namespace": "", "group": "vm/2222"}], {})
+        self.assertNotIn("uploaded_compressed_bytes", hist[0])
+        self.assertEqual(hist[0]["upload_status"], "API_ERROR")
 
     def test_history_is_actual_tasks_not_fabricated_job_success(self):
         self.api.tasks = [
@@ -872,11 +1021,16 @@ class PBSAgentTests(unittest.TestCase):
         from app.mqtt import discovery
         view = (ROOT / "dashboards/ru/13_pbs.yaml").read_text("utf-8")
         for attribute in ("maintenance_jobs", "task_history", "backup_groups"):
-            self.assertIn("'" + attribute + "'", discovery(self.config)["components"]["health"]["json_attributes_template"])
-            self.assertIn("'" + attribute + "'", view)
-        self.assertIn("Последние выполнения PBS", view)
-        self.assertIn("Группы резервных копий (", view)
+            self.assertIn("'" + attribute + "'",
+                          discovery(self.config)["components"]["health"]["json_attributes_template"])
+        for kind in ("backup", "jobs", "history"):
+            self.assertIn(f"state_attr('sensor.dh_pbs_agent_{kind}_tree', 'text')", view)
+            self.assertIn("tree_" + kind, discovery(self.config)["components"])
         self.assertNotIn("21.11 02:00", view)
+        from app.view import render_trees
+        result = render_trees(self.sample(), "Asia/Almaty", {})
+        self.assertIn("Последние выполнения PBS", result["history"])
+        self.assertIn("Группы резервных копий (", result["backup"])
 
     def test_systemd_pbs_lock_exception_is_scoped(self):
         unit = (ROOT / "systemd/digitalhouses_pbs_agent.service").read_text("utf-8")

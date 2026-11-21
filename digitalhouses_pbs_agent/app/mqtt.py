@@ -13,6 +13,9 @@ from typing import Any, Callable
 
 from .config import Config, PRODUCT_ID, REPO
 from .state import StateStore, ViewLimits, VIEW_LIMIT_RANGES
+from .view import render_trees, validate_timezone
+
+HA_TIMEZONE_TOPIC = "DigitalHouses/Global/digitalhouses_pbs_agent/ha_timezone"
 
 
 def _read_version() -> str:
@@ -144,10 +147,38 @@ def discovery(config: Config, sample: dict | None = None) -> dict:
             item["json_attributes_template"] = "{{ {" + fields + "} | tojson }}"
         components[key] = item
 
+    # Three ready-to-render texts: Lovelace contains no backup/date logic.
+    for name, label in (("backup", "Группы PBS"),
+                        ("jobs", "Задания PBS"),
+                        ("history", "История PBS"),
+                        ("summary", "Сводка PBS")):
+        tree_topic = base + "/tree/" + name
+        components["tree_" + name] = {
+            "platform": "sensor",
+            "name": label,
+            "unique_id": f"{device_id}_tree_{name}",
+            "default_entity_id": f"sensor.dh_pbs_agent_{name}_tree",
+            "state_topic": tree_topic,
+            "value_template": "{{ value_json.status }}",
+            "json_attributes_topic": tree_topic,
+            "json_attributes_template":
+                "{{ {'text': value_json.text, 'ha_timezone': value_json.ha_timezone} | tojson }}",
+            "availability": availability, "entity_category": "diagnostic",
+            "icon": "mdi:file-tree-outline",
+        }
+
     sensor("hostname", "Имя сервера", "value_json.hostname", icon="mdi:server")
     sensor("ip", "IP-адрес", "value_json.ip", icon="mdi:ip-network")
     sensor("version", "Версия агента", "value_json.agent_version", icon="mdi:information-outline")
     sensor("health", "Состояние PBS", "value_json.status", attributes=True, section="health")
+    sensor("ha_timezone", "Часовой пояс HA",
+           "value_json.ha_timezone | default('unknown', true)",
+           icon="mdi:earth")
+    sensor("upload_stats", "Размеры новых данных",
+           "(value_json.upload_summary.available | string) ~ '/' ~ (value_json.upload_summary.total | string) if value_json.upload_summary is defined else 'unknown'",
+           icon="mdi:database-arrow-up",
+           extra_attributes=("'reasons': value_json.upload_summary.reasons | default({})"
+                             " if value_json.upload_summary is defined else {}"))
     sensor("last_collection", "Последний успешный опрос", "value_json.last_success_at | default('unknown', true)", icon="mdi:clock-check-outline")
     sensor("backup_last_success", "Последняя успешная резервная копия", "value_json.backup_last_success_at | default('unknown', true)")
     sensor("backup_age_hours", "Возраст резервной копии", "value_json.backup_age_hours | default('unknown', true)")
@@ -194,7 +225,12 @@ def discovery(config: Config, sample: dict | None = None) -> dict:
             "'used_gib': ((" + arr + ".used_bytes / 1073741824) | round(2)) "
             "if " + arr + ".used_bytes is defined else none, "
             "'pbs_health': " + arr + ".health | default('UNKNOWN', true), "
-            "'pbs_backend': " + arr + ".backend | default('LOCAL', true)"
+            "'pbs_backend': " + arr + ".backend | default('LOCAL', true), "
+            "'card_name': " + arr + ".card_name | default('', true), "
+            "'card_secondary': " + arr + ".card_secondary | default('', true), "
+            "'card_color': " + arr + ".card_color | default('grey', true), "
+            "'card_icon': " + arr + ".card_icon | default('mdi:database', true), "
+            "'card_percent': " + arr + ".card_percent | default(0)"
         )
         sensor(f"datastore_{suffix}_used_percent", store + " · занято, %", arr + ".used_percent | default('unknown', true)",
                section="datastore", display_name=store, metric="used_percent",
@@ -307,12 +343,19 @@ def discovery(config: Config, sample: dict | None = None) -> dict:
 
 class Publisher:
     def __init__(self, config: Config, *, view_limits: ViewLimits | None = None,
-                 job_registry: StateStore | None = None):
+                 job_registry: StateStore | None = None,
+                 timezone_store: StateStore | None = None):
         import paho.mqtt.client as mqtt
         self.config = config
         self.view_limits = view_limits if view_limits is not None else ViewLimits()
         self._state_lock = threading.Lock()
         self.job_registry = job_registry
+        self.timezone_store = timezone_store
+        try:
+            saved_timezone = timezone_store.load().get("timezone") if timezone_store else None
+        except (OSError, ValueError):
+            saved_timezone = None
+        self.ha_timezone = validate_timezone(saved_timezone)
         saved_jobs = job_registry.load().get("jobs", []) if job_registry else []
         self._known_jobs = {
             (str(row[0]), str(row[1])) for row in saved_jobs
@@ -355,6 +398,16 @@ class Publisher:
         self.last_ack_at = datetime.now(timezone.utc).isoformat()
         return True
 
+    def _publish_trees(self, client: Any, payload: dict) -> None:
+        texts = render_trees(payload, getattr(self, "ha_timezone", None),
+                             payload.get("view_limits") or self.view_limits.snapshot())
+        for name, value in texts.items():
+            msg = {"status": "OK", "text": value,
+                   "ha_timezone": getattr(self, "ha_timezone", None) or "unknown"}
+            client.publish(self.base + "/tree/" + name,
+                           json.dumps(msg, ensure_ascii=False, separators=(",", ":")),
+                           qos=1, retain=True)
+
     def _on_connect(self, client: Any, userdata: Any, flags: Any, reason_code: Any, properties: Any) -> None:
         if getattr(reason_code, "is_failure", False):
             self.connected = False
@@ -387,12 +440,32 @@ class Publisher:
                 self._announce_jobs(client, current)
             client.subscribe(self.base + "/set/view/+", qos=1)
         client.subscribe(self.base + "/command/+", qos=1)
+        client.subscribe(HA_TIMEZONE_TOPIC, qos=1)
         if self.last_control is not None:
             enqueue(self.base + "/operation", self.last_control)
             if current is not None:
                 enqueue(self.base + "/state", current)
+                self._publish_trees(client, current)
 
     def _on_message(self, client: Any, userdata: Any, message: Any) -> None:
+        if message.topic == HA_TIMEZONE_TOPIC:
+            try:
+                value = validate_timezone(message.payload.decode("utf-8").strip())
+            except UnicodeDecodeError:
+                value = None
+            if value and value != self.ha_timezone:
+                self.ha_timezone = value
+                if self.timezone_store:
+                    self.timezone_store.save({"timezone": value})
+                with self._state_lock:
+                    if self.last_state is not None:
+                        updated = {**self.last_state, "ha_timezone": value}
+                        self.last_state = updated
+                        client.publish(self.base + "/state",
+                                       json.dumps(updated, ensure_ascii=False, separators=(",", ":")),
+                                       qos=1, retain=True)
+                        self._publish_trees(client, updated)
+            return
         # Do not replay stale retained commands when the broker reconnects.
         if getattr(message, "retain", False):
             return
@@ -428,6 +501,7 @@ class Publisher:
                 client.publish(self.base + "/state",
                                json.dumps(new_state, ensure_ascii=False, separators=(",", ":")),
                                qos=1, retain=True)
+                self._publish_trees(client, new_state)
 
     def _on_disconnect(self, client: Any, userdata: Any, flags: Any, reason_code: Any, properties: Any) -> None:
         self.connected = False
@@ -462,7 +536,8 @@ class Publisher:
         # Queue while locked so an incoming Number command cannot be overwritten
         # by a concurrent polling publish with older view settings.
         with self._state_lock:
-            updated = {**payload, "view_limits": self.view_limits.snapshot()}
+            updated = {**payload, "view_limits": self.view_limits.snapshot(),
+                       "ha_timezone": getattr(self, "ha_timezone", None)}
             self.last_state = updated
             if not self.connected:
                 return False
@@ -473,6 +548,7 @@ class Publisher:
             ):
                 self._announce_jobs(self.client, updated)
             info = self.client.publish(self.base + "/state", data, qos=1, retain=True)
+            self._publish_trees(self.client, updated)
         if info.rc != 0:
             return False
         info.wait_for_publish(timeout=5)
