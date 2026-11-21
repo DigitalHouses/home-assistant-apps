@@ -1,4 +1,4 @@
-# DigitalHouses PBS Agent v0.1.5
+# DigitalHouses PBS Agent v0.1.6
 
 Standalone **read-only** Linux/systemd monitoring agent for a local Proxmox Backup
 Server 4.x. HOME pilot: Debian MediaServer/PBS VM; no dependency on Plex Agent,
@@ -25,6 +25,14 @@ status, snapshots, **push** sync, verify, prune and GC jobs, plus local
 read-only ZFS and filesystem status. It does not run or
 edit PBS jobs, backup snapshots, PVE jobs, Plex, ZFS or retention.
 A job appearing as OK is **not** proof of restore verification.
+
+## Maintenance schedule tree (v0.1.6)
+
+The PBS jobs card shows a compact hierarchy: job type > clock and native PBS
+schedule > actual last-run result. A timestamp on the result line is converted
+to the Home Assistant local timezone; the schedule string is displayed exactly
+as PBS reports it and is not a timestamp. Multiple jobs of a type have separate
+schedule and result pairs. No task configuration is modified.
 
 ## MQTT Number controls for tree display (v0.1.5)
 
@@ -86,7 +94,7 @@ Install only from the published immutable GitHub Release:
 For a published release, on the local PBS VM as root:
 
 ~~~bash
-DIGITALHOUSES_SOURCE_REF=digitalhouses_pbs_agent-v0.1.5 \
+DIGITALHOUSES_SOURCE_REF=digitalhouses_pbs_agent-v0.1.6 \
   bash install.sh --non-interactive \
   --set mqtt_host=YOUR_MQTT_HOST \
   --set pbs_datastores=YOUR_PBS_DATASTORE
