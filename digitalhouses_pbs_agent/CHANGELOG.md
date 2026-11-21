@@ -1,5 +1,13 @@
 # DigitalHouses PBS Agent
 
+## 0.1.11
+
+- Show the existing MQTT `switch.dh_pbs_agent_auto_update` as **Автообновление**
+  in the **Диагностика → PBS Agent** entities card.
+- Preserve the OFF-by-default behavior and all MQTT topics, identifiers,
+  control implementation, scheduled jobs, and monitoring logic.
+
+
 ## 0.1.10
 
 - Use one release-aware installer command to resolve the newest *published stable*

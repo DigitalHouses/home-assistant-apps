@@ -1,4 +1,4 @@
-# DigitalHouses PBS Agent v0.1.10
+# DigitalHouses PBS Agent v0.1.11
 
 Standalone **read-only** Linux/systemd monitoring agent for a local Proxmox Backup
 Server 4.x. HOME pilot: Debian MediaServer/PBS VM; no dependency on Plex Agent,

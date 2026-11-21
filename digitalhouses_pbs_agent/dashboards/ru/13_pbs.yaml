@@ -1,4 +1,4 @@
-# DH-View-Version: 0.1.10
+# DH-View-Version: 0.1.11
 # DH-View-Date: 2026-11-22
 title: PBS
 path: dh_pbs_agent
@@ -335,6 +335,8 @@ sections:
           - entity: sensor.dh_pbs_agent_hostname
           - entity: sensor.dh_pbs_agent_ip
           - entity: sensor.dh_pbs_agent_version
+          - entity: switch.dh_pbs_agent_auto_update
+            name: Автообновление
       - type: entities
         title: Настройки отображения
         entities:
