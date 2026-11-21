@@ -41,6 +41,7 @@ from discovery import (
 from operation_status import operation_payload
 from runtime_state import load_last_refresh, save_last_refresh
 from telemetry import TelemetryClient, TelemetryRunner
+from sync_discovery import SYNC_TOPIC, build_sync_payload
 
 APP_VERSION_RE = re.compile(r"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$")
 APP_VERSION = os.environ.get("APP_VERSION")
@@ -121,6 +122,7 @@ class BackblazeMonitorApp:
             self.log.error("MQTT connection failed with code %s", return_code)
             return
         self.mqtt_connected.set()
+        self.publish_text(SYNC_TOPIC, build_sync_payload(APP_VERSION), retain=True)
         client.subscribe(HA_STATUS_TOPIC, qos=1)
         client.subscribe(REFRESH_COMMAND_TOPIC, qos=1)
         client.subscribe(TELEMETRY_DELETE_COMMAND_TOPIC, qos=1)
