@@ -1,4 +1,4 @@
-# DH-View-Version: 0.1.13
+# DH-View-Version: 0.1.14
 # DH-View-Date: 2026-11-22
 title: PBS
 path: dh_pbs_agent
@@ -377,10 +377,22 @@ sections:
             {%- if day not in ns.dates -%}
               {%- set ns.dates = ns.dates + [day] -%}
             {%- endif -%}
+            {%- set bytes = e.uploaded_compressed_bytes | default(none) -%}
+            {%- set transfer = '' -%}
+            {%- if bytes is number and bytes >= 0 -%}
+              {%- if bytes >= 10737418 -%}
+                {%- set transfer = ' · +' ~ ('%.2f' | format(bytes / 1073741824)) ~ ' GiB' -%}
+              {%- elif bytes >= 1024 -%}
+                {%- set transfer = ' · +' ~ ('%.1f' | format(bytes / 1048576)) ~ ' MiB' -%}
+              {%- else -%}
+                {%- set transfer = ' · +' ~ bytes ~ ' B' -%}
+              {%- endif -%}
+            {%- endif -%}
             {%- set ns.entries = ns.entries + [{
                 'day': day,
                 'time': local_start.strftime('%H:%M'),
                 'type': e.type ~ (' ' ~ e.guest if e.guest | default(none) else ''),
+                'transfer': transfer,
                 'duration': (e.duration_seconds ~ ' с') if e.duration_seconds is not none else '—',
                 'status': e.status
               }] -%}
@@ -400,7 +412,7 @@ sections:
               {%- set child = '└─' if loop.last else '├─' -%}
               {%- set ns.lines = ns.lines + [
                   indent ~ child ~ ' ' ~ icon ~ ' ' ~ e.time ~ ' · ' ~
-                  e.type ~ ' · ' ~ e.duration ~ ' · ' ~ e.status
+                  e.type ~ e.transfer ~ ' · ' ~ e.duration ~ ' · ' ~ e.status
                 ] -%}
             {%- endfor -%}
           {%- endfor -%}

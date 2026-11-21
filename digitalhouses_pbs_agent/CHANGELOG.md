@@ -1,5 +1,18 @@
 # DigitalHouses PBS Agent
 
+## 0.1.14
+
+- Show the real compressed upload of a completed PBS Backup as
+  `+0.11 GiB` (or MiB for small payloads) in the task-history tree.
+- Read `snapshot-information.upload-statistics.compressed-size` for a
+  verifiably matching guest, datastore, namespace and snapshot time.
+  Never report logical snapshot size as daily incremental upload.
+- Missing, deleted, ambiguous or in-progress snapshots show no transfer
+  value. Preserve existing PBS health, alert scope and task status.
+- Cache immutable upload statistics per running process; use native
+  read-only PBS API with no new daemon, credentials or configuration.
+
+
 ## 0.1.13
 
 - Show the actual VM/CT guest ID beside native PBS Backup tasks when the

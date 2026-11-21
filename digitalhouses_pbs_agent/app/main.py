@@ -93,6 +93,8 @@ def run(config_path: Path = DEFAULT_CONFIG, state_dir: Path = STATE_DIR) -> int:
         last_success_at = current_status.load().get("last_success_at")
     except (ValueError, OSError):
         last_success_at = None
+    # In-process only; repeated polls do not re-query immutable snapshot stats.
+    upload_cache: dict = {}
     stop = threading.Event()
 
     def stopped(_signal, _frame):
@@ -135,7 +137,7 @@ def run(config_path: Path = DEFAULT_CONFIG, state_dir: Path = STATE_DIR) -> int:
             next_collection = started + config.poll_seconds
             ip = host_ip(config.mqtt_host, config.mqtt_port)
             try:
-                sample = collect(config)
+                sample = collect(config, upload_cache=upload_cache)
                 if sample["status"] in ("HEALTHY", "DEGRADED", "CRITICAL"):
                     last_success_at = sample["observed_at"]
                 state = display_state(sample, config, ip)

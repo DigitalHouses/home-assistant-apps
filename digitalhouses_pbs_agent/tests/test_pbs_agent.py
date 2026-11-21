@@ -527,6 +527,10 @@ class PBSAgentTests(unittest.TestCase):
         from app.collector import _backup_guest, _task_history
         examples = [
             ({"worker_id": "pbs-serzhan:vm-1234"}, "VM1234"),
+            ({"worker_id": "pbs-serzhan:vm/1234"}, "VM1234"),
+            ({"worker-id": "pbs-serzhan:ct/1221"}, "CT1221"),
+            ({"worker_id": "ignored-format",
+              "upid": r"UPID:pbs:00011F53:011064D4:00000336:667B4F54:backup:pbs\x2dbackup\x3avm-168:root@pam:"}, "VM168"),
             ({"worker-id": "archive:ct-1221"}, "CT1221"),
             ({"upid": r"UPID:pbs:00011F53:011064D4:00000336:667B4F54:backup:pbs\x2dbackup\x3avm-168:pve-user@pbs:"}, "VM168"),
             ({"upid": r"UPID:pbs:00011F53:011064D4:00000336:667B4F54:backup:store\x3act-4321:user@pbs:"}, "CT4321"),
@@ -557,6 +561,176 @@ class PBSAgentTests(unittest.TestCase):
         self.assertEqual([row["guest"] for row in history],
                          ["VM1234", None, None])
         self.assertEqual(history[0]["duration_seconds"], 30)
+
+    def test_compressed_upload_increment_uses_exact_snapshot_statistics(self):
+        from app.collector import _backup_upload_stats, _task_history
+        start = self.now - 40
+        rows = [{
+            "worker_type": "backup", "worker_id": "pbs-home:vm-2222",
+            "upid": "UPID:pbs:1:2:3:4:backup:pbs-home:root@pam:",
+            "starttime": start, "endtime": start + 32, "status": "OK"
+        }]
+        history = _task_history(rows)
+        groups = [{"datastore": "pbs-home", "namespace": "", "group": "vm/2222"}]
+        snapshots = [{"backup-type": "vm", "backup-id": "2222", "backup-time": start}]
+        calls = []
+        saved = self.api.get
+
+        def matching_get(path, **params):
+            if path.endswith("/snapshots"):
+                return snapshots if not params.get("ns") else []
+            if path.endswith("/snapshot-information"):
+                calls.append((path, dict(params)))
+                return {"upload-statistics": {
+                    "size": 107374182400,
+                    "compressed-size": 118111600,
+                    "count": 35, "duplicates": 0
+                }}
+            return saved(path, **params)
+
+        self.api.get = matching_get
+        cache = {}
+        _backup_upload_stats(self.api, history, groups, cache)
+        self.assertEqual(history[0]["uploaded_compressed_bytes"], 118111600)
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(calls[0][1], {
+            "backup-type": "vm", "backup-id": "2222", "backup-time": start,
+            "ns": None
+        })
+        history_again = _task_history(rows)
+        _backup_upload_stats(self.api, history_again, groups, cache)
+        self.assertEqual(history_again[0]["uploaded_compressed_bytes"], 118111600)
+        self.assertEqual(len(calls), 1, "must reuse immutable stats on next poll")
+
+        # Deleted snapshots cannot reuse a stale cached value.
+        snapshots.clear()
+        empty = _task_history(rows)
+        _backup_upload_stats(self.api, empty, groups, cache)
+        self.assertNotIn("uploaded_compressed_bytes", empty[0])
+
+    def test_upload_increment_is_present_in_normal_collected_history(self):
+        start = self.now - 60
+        self.api.tasks = [{"worker_type": "backup", "worker_id": "pbs-home:vm/2222",
+                           "starttime": start, "endtime": start + 30,
+                           "status": "OK", "upid": "UPID:pbs:1:2:3:4:backup:ignored:root@pam:"}]
+        self.api.snapshots = [{"backup-type": "vm", "backup-id": "2222",
+                               "backup-time": start}]
+        old = self.api.get
+        def getter(path, **params):
+            if path.endswith("/snapshots") and params.get("ns") == "archive":
+                return []
+            if path.endswith("/snapshot-information"):
+                return {"upload-statistics": {"compressed-size": 118111600,
+                                               "size": 107374182400}}
+            return old(path, **params)
+        self.api.get = getter
+        cache = {}
+        with patch("app.collector.zfs_pools", return_value={"status": "HEALTHY", "pools": []}):
+            result = collect(self.config, self.api, now=self.now, upload_cache=cache)
+        self.assertEqual(result["status"], "HEALTHY")
+        self.assertEqual(result["task_history"][0]["guest"], "VM2222")
+        self.assertEqual(result["task_history"][0]["uploaded_compressed_bytes"], 118111600)
+        self.assertTrue(cache)
+
+    def test_upload_increment_requires_unique_matching_successful_snapshot(self):
+        from app.collector import _backup_upload_stats, _task_history
+        start = self.now - 50
+        rows = [
+            {"worker_type": "backup", "worker_id": "pbs-home:vm-2222",
+             "starttime": start, "endtime": start + 30, "status": "OK"},
+            {"worker_type": "backup", "worker_id": "other-store:vm-2222",
+             "starttime": start, "endtime": start + 30, "status": "OK"},
+            {"worker_type": "backup", "worker_id": "pbs-home:ct-1221",
+             "starttime": start, "endtime": None, "status": ""},
+            {"worker_type": "backup", "starttime": start,
+             "endtime": start + 20, "status": "OK"},
+        ]
+        history = _task_history(rows)
+        groups = [{"datastore": "pbs-home", "namespace": "", "group": "vm/2222"},
+                  {"datastore": "other-store", "namespace": "", "group": "vm/2222"}]
+        old = self.api.get
+        info_calls = []
+        def getter(path, **params):
+            if path.endswith("/snapshots"):
+                if "other-store" in path:
+                    return [{"backup-type": "vm", "backup-id": "2222", "backup-time": start}]
+                return [{"backup-type": "vm", "backup-id": "2222", "backup-time": start},
+                        {"backup-type": "vm", "backup-id": "2222", "backup-time": start+1}]
+            if path.endswith("/snapshot-information"):
+                info_calls.append(path)
+                return {"upload-statistics": {"compressed-size": 11000000}}
+            return old(path, **params)
+        self.api.get = getter
+        _backup_upload_stats(self.api, history, groups, {})
+        self.assertNotIn("uploaded_compressed_bytes", history[0],
+                         "two possible snapshots must not be assigned")
+        self.assertEqual(history[1]["uploaded_compressed_bytes"], 11000000,
+                         "same VM in another datastore is an independent identity")
+        self.assertNotIn("uploaded_compressed_bytes", history[2],
+                         "running backup has no final transfer size")
+        self.assertNotIn("uploaded_compressed_bytes", history[3],
+                         "unknown worker guest cannot get fabricated size")
+        self.assertEqual(len(info_calls), 1)
+
+    def test_same_snapshot_not_attributed_to_two_nearby_tasks(self):
+        from app.collector import _backup_upload_stats, _task_history
+        now = self.now
+        rows = [
+            {"worker_type": "backup", "worker_id": "pbs-home:vm/2222",
+             "starttime": now - 110, "endtime": now - 90, "status": "OK"},
+            {"worker_type": "backup", "worker_id": "pbs-home:vm/2222",
+             "starttime": now - 70, "endtime": now - 50, "status": "OK"},
+        ]
+        snapshots = [{"backup-type": "vm", "backup-id": "2222",
+                      "backup-time": now - 75}]
+        old = self.api.get
+        info_calls = []
+        def getter(path, **params):
+            if path.endswith("/snapshots"):
+                return snapshots
+            if path.endswith("/snapshot-information"):
+                info_calls.append(path)
+                return {"upload-statistics": {"compressed-size": 120000000}}
+            return old(path, **params)
+        self.api.get = getter
+        history = _task_history(rows)
+        _backup_upload_stats(self.api, history, [
+            {"datastore": "pbs-home", "namespace": "", "group": "vm/2222"}], {})
+        self.assertTrue(all("uploaded_compressed_bytes" not in x for x in history))
+        self.assertEqual(info_calls, [])
+
+    def test_upload_increment_unknown_or_missing_stats_is_not_zero(self):
+        from app.collector import _backup_upload_stats, _task_history, SourceError
+        start = self.now - 60
+        rows = [{"worker_type": "backup", "worker_id": "pbs-home:vm-2222",
+                 "starttime": start, "endtime": start + 32, "status": "OK"}]
+        groups = [{"datastore": "pbs-home", "namespace": "", "group": "vm/2222"}]
+        old = self.api.get
+        def getter(path, **params):
+            if path.endswith("/snapshots"):
+                return [{"backup-type": "vm", "backup-id": "2222", "backup-time": start}]
+            if path.endswith("/snapshot-information"):
+                return {"upload-statistics": {"size": 107374182400}}
+            return old(path, **params)
+        self.api.get = getter
+        history = _task_history(rows)
+        _backup_upload_stats(self.api, history, groups, {})
+        self.assertNotIn("uploaded_compressed_bytes", history[0])
+        def failed(path, **params):
+            if path.endswith("/snapshot-information"):
+                raise SourceError("unavailable")
+            return getter(path, **params)
+        self.api.get = failed
+        history = _task_history(rows)
+        _backup_upload_stats(self.api, history, groups, {})
+        self.assertNotIn("uploaded_compressed_bytes", history[0])
+
+    def test_upload_tree_shows_increment_not_snapshot_total(self):
+        view = (ROOT / "dashboards/ru/13_pbs.yaml").read_text(encoding="utf-8")
+        self.assertIn("bytes = e.uploaded_compressed_bytes | default(none)", view)
+        self.assertIn("' · +' ~ ('%.2f' | format(bytes / 1073741824)) ~ ' GiB'", view)
+        self.assertIn("e.type ~ e.transfer ~ ' · ' ~ e.duration", view)
+        self.assertNotIn("e.logical_size", view)
 
     def test_task_history_groups_by_home_assistant_local_day(self):
         view = (ROOT / "dashboards/ru/13_pbs.yaml").read_text(encoding="utf-8")

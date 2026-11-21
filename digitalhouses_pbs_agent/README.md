@@ -1,4 +1,4 @@
-# DigitalHouses PBS Agent v0.1.13
+# DigitalHouses PBS Agent v0.1.14
 
 Standalone **read-only** Linux/systemd monitoring agent for a local Proxmox Backup
 Server 4.x. HOME pilot: Debian MediaServer/PBS VM; no dependency on Plex Agent,
@@ -25,6 +25,23 @@ status, snapshots, **push** sync, verify, prune and GC jobs, plus local
 read-only ZFS and filesystem status. It does not run or
 edit PBS jobs, backup snapshots, PVE jobs, Plex, ZFS or retention.
 A job appearing as OK is **not** proof of restore verification.
+
+## Actual uploaded increment per PBS snapshot (v0.1.14)
+
+**Последние выполнения PBS** shows the amount of compressed *new chunk
+payload uploaded in that run* next to the VM/CT, such as
+`Backup VM2222 · +0.11 GiB · 32 с · OK`. It is taken from the native
+PBS `admin/datastore/<store>/snapshot-information` endpoint,
+`upload-statistics.compressed-size`, and is **not** the total logical
+snapshot size nor the exact net disk-space increase after deduplication.
+
+The Agent matches an actual completed backup task with its guest,
+datastore, namespace and snapshot time. Ambiguous, missing, deleted,
+in-progress or unreported snapshots have **no amount shown**; the Agent
+never substitutes the logical size or zero. This optional metric does
+not change PBS health or generate alerts. Data is fetched read-only and
+immutable results are cached for the running Agent process to avoid
+repeating detail queries on every 5-minute poll.
 
 ## Backup guest identity and day totals (v0.1.13)
 
