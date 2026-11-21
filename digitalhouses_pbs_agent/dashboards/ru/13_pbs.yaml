@@ -1,4 +1,4 @@
-# DH-View-Version: 0.1.11
+# DH-View-Version: 0.1.12
 # DH-View-Date: 2026-11-22
 title: PBS
 path: dh_pbs_agent
@@ -366,16 +366,39 @@ sections:
           {%- set limits = state_attr('sensor.dh_pbs_agent_health', 'view_limits') or {} -%}
           {%- set event_limit = limits.task_events | default(10) | int -%}
           {%- set coverage = state_attr('sensor.dh_pbs_agent_health', 'task_history_status') or 'UNAVAILABLE' -%}
-          {%- set ns = namespace(lines=['Последние выполнения PBS']) -%}
+          {# Keep the collector's newest-first order; group by HA-local day. #}
+          {%- set ns = namespace(lines=['Последние выполнения PBS'], dates=[], entries=[]) -%}
           {%- for e in events[:event_limit] -%}
-            {%- set icon = '🟢' if e.status == 'OK'
-                else '🔴' if e.status == 'FAILED'
-                else '🟡' if e.status == 'RUNNING'
-                else '⚪' -%}
-            {%- set when = as_local(as_datetime(e.started_at)).strftime('%d.%m %H:%M') -%}
-            {%- set duration = (e.duration_seconds ~ ' с') if e.duration_seconds is not none else '—' -%}
-            {%- set branch = '└─' if loop.last and (events | count) <= event_limit else '├─' -%}
-            {%- set ns.lines = ns.lines + [branch ~ ' ' ~ icon ~ ' ' ~ when ~ ' · ' ~ e.type ~ ' · ' ~ duration ~ ' · ' ~ e.status] -%}
+            {%- set local_start = as_local(as_datetime(e.started_at)) -%}
+            {%- set day = local_start.strftime('%d.%m.%Y') -%}
+            {%- if day not in ns.dates -%}
+              {%- set ns.dates = ns.dates + [day] -%}
+            {%- endif -%}
+            {%- set ns.entries = ns.entries + [{
+                'day': day,
+                'time': local_start.strftime('%H:%M'),
+                'type': e.type,
+                'duration': (e.duration_seconds ~ ' с') if e.duration_seconds is not none else '—',
+                'status': e.status
+              }] -%}
+          {%- endfor -%}
+          {%- for day in ns.dates -%}
+            {%- set day_events = ns.entries | selectattr('day', 'equalto', day) | list -%}
+            {%- set last_day = loop.last and (events | count) <= event_limit -%}
+            {%- set branch = '└─' if last_day else '├─' -%}
+            {%- set indent = '   ' if last_day else '│  ' -%}
+            {%- set ns.lines = ns.lines + [branch ~ ' 📅 ' ~ day] -%}
+            {%- for e in day_events -%}
+              {%- set icon = '🟢' if e.status == 'OK'
+                  else '🔴' if e.status == 'FAILED'
+                  else '🟡' if e.status == 'RUNNING'
+                  else '⚪' -%}
+              {%- set child = '└─' if loop.last else '├─' -%}
+              {%- set ns.lines = ns.lines + [
+                  indent ~ child ~ ' ' ~ icon ~ ' ' ~ e.time ~ ' · ' ~
+                  e.type ~ ' · ' ~ e.duration ~ ' · ' ~ e.status
+                ] -%}
+            {%- endfor -%}
           {%- endfor -%}
           {%- if not events -%}
             {%- set ns.lines = ns.lines + ['└─ ⚪ ' ~ ('Нет подходящих задач' if coverage == 'AVAILABLE' else 'История недоступна')] -%}

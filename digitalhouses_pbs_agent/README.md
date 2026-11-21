@@ -1,4 +1,4 @@
-# DigitalHouses PBS Agent v0.1.11
+# DigitalHouses PBS Agent v0.1.12
 
 Standalone **read-only** Linux/systemd monitoring agent for a local Proxmox Backup
 Server 4.x. HOME pilot: Debian MediaServer/PBS VM; no dependency on Plex Agent,
@@ -25,6 +25,16 @@ status, snapshots, **push** sync, verify, prune and GC jobs, plus local
 read-only ZFS and filesystem status. It does not run or
 edit PBS jobs, backup snapshots, PVE jobs, Plex, ZFS or retention.
 A job appearing as OK is **not** proof of restore verification.
+
+## PBS task history by Home Assistant local date (v0.1.12)
+
+In **Последние выполнения PBS**, actual native PBS task history is grouped
+under `📅 DD.MM.YYYY` rows. Each task shows `HH:MM · Type · Duration · Status`
+with its status icon. **Both date and time** are computed by Home Assistant's
+`as_local(as_datetime(e.started_at))`, not the PBS server timezone. The
+newest-first ordering and user-configurable MQTT Number event limit are kept;
+if the history exceeds the limit, the remainder count stays visible.
+No MQTT identity, collector behavior or PBS task logic changes.
 
 ## Dynamic PBS storage progress cards (v0.1.11)
 
