@@ -2,11 +2,14 @@
 from __future__ import annotations
 
 import json
+import math
+import threading
 import socket
 from pathlib import Path
 from typing import Any, Callable
 
 from .config import Config, PRODUCT_ID, REPO
+from .state import ViewLimits, VIEW_LIMIT_RANGES
 
 
 def _read_version() -> str:
@@ -61,6 +64,23 @@ def discovery(config: Config) -> dict:
     sensor("sync_state", "Push Sync", "value_json.sync_overall", icon="mdi:cloud-upload-outline")
     sensor("sync_last_success", "Push Sync last success", "value_json.sync_last_success_at | default('unknown', true)")
     sensor("zfs_pool_health", "ZFS pool", "value_json.zfs.status", icon="mdi:database-check")
+    # Native HA MQTT Number controls, in the same device as all PBS entities.
+    for key, title in (("backup_groups", "Групп резервных копий"),
+                       ("task_events", "Последних событий")):
+        low, high = VIEW_LIMIT_RANGES[key]
+        components["view_" + key + "_limit"] = {
+            "platform": "number",
+            "name": title,
+            "unique_id": f"{device_id}_view_{key}_limit",
+            "default_entity_id": f"number.dh_pbs_agent_{key}_limit",
+            "state_topic": base + "/state",
+            "value_template": "{{ value_json.view_limits." + key + " | default(10) }}",
+            "command_topic": base + "/set/view/" + key,
+            "min": low, "max": high, "step": 1, "mode": "box",
+            "qos": 1, "retain": False,
+            "availability": availability, "entity_category": "config",
+            "icon": "mdi:format-list-numbered",
+        }
     components["problem"] = {
         "platform": "binary_sensor", "name": "PBS problem",
         "unique_id": f"{device_id}_problem",
@@ -102,9 +122,11 @@ def discovery(config: Config) -> dict:
 
 
 class Publisher:
-    def __init__(self, config: Config):
+    def __init__(self, config: Config, *, view_limits: ViewLimits | None = None):
         import paho.mqtt.client as mqtt
         self.config = config
+        self.view_limits = view_limits if view_limits is not None else ViewLimits()
+        self._state_lock = threading.Lock()
         self.id = instance_id(config)
         self.base = f"DigitalHouses/Global/{PRODUCT_ID}/{self.id}"
         self.discovery_topic = f"homeassistant/device/dh_pbs_agent_{self.id}/config"
@@ -121,6 +143,7 @@ class Publisher:
         self.client.will_set(self.base + "/availability", payload="offline", qos=1, retain=True)
         self.client.on_connect = self._on_connect
         self.client.on_disconnect = self._on_disconnect
+        self.client.on_message = self._on_message
 
     def _send(self, topic: str, payload: dict | str, *, retain: bool) -> bool:
         if not self.connected:
@@ -161,8 +184,37 @@ class Publisher:
             "product_path": PRODUCT_ID,
         })
         enqueue(self.discovery_topic, discovery(self.config))
-        if self.last_state is not None:
-            enqueue(self.base + "/state", self.last_state)
+        client.subscribe(self.base + "/set/view/+", qos=1)
+        with self._state_lock:
+            if self.last_state is not None:
+                enqueue(self.base + "/state", self.last_state)
+
+    def _on_message(self, client: Any, userdata: Any, message: Any) -> None:
+        # Do not replay stale retained commands when the broker reconnects.
+        if getattr(message, "retain", False):
+            return
+        prefix = self.base + "/set/view/"
+        if not message.topic.startswith(prefix):
+            return
+        key = message.topic[len(prefix):]
+        if key not in VIEW_LIMIT_RANGES:
+            return
+        try:
+            raw = message.payload.decode("utf-8").strip()
+            number = float(raw)
+            if not math.isfinite(number) or not number.is_integer():
+                return
+            limits = self.view_limits.update(key, int(number))
+        except (ValueError, UnicodeDecodeError, OSError):
+            return
+        # MQTT callback cannot block waiting for its own PUBACK.
+        with self._state_lock:
+            if self.last_state is not None:
+                new_state = {**self.last_state, "view_limits": limits}
+                self.last_state = new_state
+                client.publish(self.base + "/state",
+                               json.dumps(new_state, ensure_ascii=False, separators=(",", ":")),
+                               qos=1, retain=True)
 
     def _on_disconnect(self, client: Any, userdata: Any, flags: Any, reason_code: Any, properties: Any) -> None:
         self.connected = False
@@ -177,8 +229,23 @@ class Publisher:
         self.client.loop_start()
 
     def state(self, payload: dict) -> bool:
-        self.last_state = payload
-        return self._send(self.base + "/state", payload, retain=True)
+        # Queue while locked so an incoming Number command cannot be overwritten
+        # by a concurrent polling publish with older view settings.
+        with self._state_lock:
+            updated = {**payload, "view_limits": self.view_limits.snapshot()}
+            self.last_state = updated
+            if not self.connected:
+                return False
+            data = json.dumps(updated, ensure_ascii=False, separators=(",", ":"))
+            info = self.client.publish(self.base + "/state", data, qos=1, retain=True)
+        if info.rc != 0:
+            return False
+        info.wait_for_publish(timeout=5)
+        if not info.is_published():
+            return False
+        from datetime import datetime, timezone
+        self.last_ack_at = datetime.now(timezone.utc).isoformat()
+        return True
 
     def event(self, category: str, payload: dict) -> bool:
         if category not in {"backup", "sync", "storage", "maintenance"}:

@@ -216,6 +216,8 @@ class PBSAgentTests(unittest.TestCase):
         class FakeTransport:
             def publish(self, topic, payload, qos, retain):
                 published.append((topic, qos, retain))
+            def subscribe(self, topic, qos):
+                published.append((topic, qos, False))
         publisher.client = FakeTransport()
         changes = []
         publisher.on_connection_change = lambda state, reason: changes.append((state, reason))
@@ -266,26 +268,75 @@ class PBSAgentTests(unittest.TestCase):
         self.assertNotIn("| Datastore | Заполнено", view)
         self.assertNotIn("content: >-", view)
 
-    def test_view_limits_defaults_and_native_cli(self):
-        from app.cli import change_config
+    def test_view_limits_native_mqtt_numbers_and_persistence(self):
+        from app.state import StateStore, ViewLimits
         from app.main import display_state
-        self.assertEqual(self.config.dashboard_backup_groups_limit, 10)
-        self.assertEqual(self.config.dashboard_task_events_limit, 10)
-        state = display_state(self.sample(), self.config, "192.0.2.1")
-        self.assertEqual(state["view_limits"], {"backup_groups": 10, "task_events": 10})
-        attrs = discovery(self.config)["components"]["health"]["json_attributes_template"]
-        self.assertIn("'view_limits': value_json.view_limits", attrs)
-        self.assertEqual(
-            change_config(self.ini, ["dashboard_backup_groups_limit=15",
-                                     "dashboard_task_events_limit=20"], restart=False),
-            "CHANGED")
-        updated = load_config(self.ini)
-        self.assertEqual(updated.dashboard_backup_groups_limit, 15)
-        self.assertEqual(updated.dashboard_task_events_limit, 20)
+        from app.config import KEYS
+        self.assertNotIn("dashboard_backup_groups_limit", KEYS)
+        self.assertNotIn("dashboard_task_events_limit", KEYS)
+        path = self.folder / "view_limits.json"
+        limits = ViewLimits(StateStore(path))
+        self.assertEqual(limits.snapshot(), {"backup_groups": 10, "task_events": 10})
+        self.assertNotIn("view_limits", display_state(self.sample(), self.config, "192.0.2.1"))
+        self.assertEqual(limits.update("backup_groups", 24)["backup_groups"], 24)
+        self.assertEqual(limits.update("task_events", 30)["task_events"], 30)
+        self.assertEqual(ViewLimits(StateStore(path)).snapshot(), {
+            "backup_groups": 24, "task_events": 30
+        })
         with self.assertRaises(ValueError):
-            change_config(self.ini, ["dashboard_backup_groups_limit=81"], restart=False)
+            limits.update("backup_groups", 81)
         with self.assertRaises(ValueError):
-            change_config(self.ini, ["dashboard_task_events_limit=51"], restart=False)
+            limits.update("task_events", 51)
+        with self.assertRaises(ValueError):
+            limits.update("task_events", 1.5)
+        self.assertEqual(limits.snapshot(), {"backup_groups": 24, "task_events": 30})
+        comps = discovery(self.config)["components"]
+        for key, upper in (("backup_groups", 80), ("task_events", 50)):
+            number = comps["view_" + key + "_limit"]
+            self.assertEqual(number["platform"], "number")
+            self.assertEqual(number["entity_category"], "config")
+            self.assertEqual(number["min"], 1)
+            self.assertEqual(number["max"], upper)
+            self.assertEqual(number["step"], 1)
+            self.assertEqual(number["mode"], "box")
+            self.assertEqual(number["command_topic"].split("/")[-1], key)
+            self.assertIn("value_json.view_limits." + key, number["value_template"])
+        self.assertEqual(len(discovery(self.config)["device"]["identifiers"]), 1)
+        self.assertIn("'view_limits': value_json.view_limits",
+                      comps["health"]["json_attributes_template"])
+
+    def test_mqtt_number_changes_republish_state_without_service_restart(self):
+        import threading
+        import types
+        from unittest.mock import Mock
+        from app.mqtt import Publisher
+        from app.state import StateStore, ViewLimits
+        store = StateStore(self.folder / "view_limits.json")
+        pub = Publisher.__new__(Publisher)
+        pub.base = "DigitalHouses/Global/digitalhouses_pbs_agent/pbs_home"
+        pub.view_limits = ViewLimits(store)
+        pub._state_lock = threading.Lock()
+        pub.last_state = {"status": "HEALTHY", "view_limits": pub.view_limits.snapshot()}
+        transport = Mock()
+        def send(key, value, *, retained=False):
+            topic = pub.base + "/set/view/" + key
+            message = types.SimpleNamespace(topic=topic, payload=value.encode(), retain=retained)
+            pub._on_message(transport, None, message)
+        send("backup_groups", "13.0")
+        self.assertEqual(pub.view_limits.snapshot()["backup_groups"], 13)
+        self.assertEqual(pub.last_state["view_limits"]["backup_groups"], 13)
+        self.assertEqual(json.loads(transport.publish.call_args.args[1])["view_limits"]["backup_groups"], 13)
+        self.assertTrue(transport.publish.call_args.kwargs["retain"])
+        self.assertEqual(ViewLimits(store).snapshot()["backup_groups"], 13)
+        count = transport.publish.call_count
+        for invalid in ("-1", "81", "12.4", "NaN", "not_a_number"):
+            send("backup_groups", invalid)
+        send("not_a_setting", "10")
+        send("backup_groups", "7", retained=True)
+        self.assertEqual(transport.publish.call_count, count)
+        self.assertEqual(pub.view_limits.snapshot()["backup_groups"], 13)
+        send("task_events", "15")
+        self.assertEqual(pub.view_limits.snapshot()["task_events"], 15)
 
     def test_dashboard_uses_correct_percentage_and_independent_limits(self):
         view = (ROOT / "dashboards/ru/13_pbs.yaml").read_text(encoding="utf-8")

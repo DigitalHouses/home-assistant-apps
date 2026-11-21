@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import os
 import tempfile
+import threading
 from pathlib import Path
 
 
@@ -35,3 +36,36 @@ class StateStore:
         finally:
             if os.path.exists(name):
                 os.unlink(name)
+
+
+# Display-only Home Assistant MQTT Number settings; not part of the agent INI.
+VIEW_LIMIT_RANGES = {"backup_groups": (1, 80), "task_events": (1, 50)}
+
+
+class ViewLimits:
+    def __init__(self, store: StateStore | None = None):
+        self.store = store
+        self.lock = threading.Lock()
+        saved = store.load() if store else {}
+        self.values = {}
+        for key, (low, high) in VIEW_LIMIT_RANGES.items():
+            value = saved.get(key, 10)
+            self.values[key] = value if type(value) is int and low <= value <= high else 10
+
+    def snapshot(self) -> dict:
+        with self.lock:
+            return dict(self.values)
+
+    def update(self, key: str, value: int) -> dict:
+        if key not in VIEW_LIMIT_RANGES:
+            raise ValueError("invalid view limit key")
+        low, high = VIEW_LIMIT_RANGES[key]
+        if type(value) is not int or not low <= value <= high:
+            raise ValueError("invalid view limit value")
+        with self.lock:
+            if self.values[key] != value:
+                updated = {**self.values, key: value}
+                if self.store:
+                    self.store.save(updated)
+                self.values = updated
+            return dict(self.values)

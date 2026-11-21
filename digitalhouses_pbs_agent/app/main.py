@@ -14,7 +14,7 @@ from .collector import collect
 from .config import DEFAULT_CONFIG, load_config
 from .events import transitions
 from .mqtt import Publisher, _read_version, host_ip
-from .state import StateStore
+from .state import StateStore, ViewLimits
 from .telemetry import TelemetryClient, TelemetryRunner
 
 STATE_DIR = Path("/var/lib/digitalhouses_pbs_agent")
@@ -27,7 +27,6 @@ def display_state(sample: dict, config, ip: str | None) -> dict:
     import socket
     data["hostname"] = socket.gethostname()
     data["ip"] = ip or "unknown"
-    data["view_limits"] = {"backup_groups": config.dashboard_backup_groups_limit, "task_events": config.dashboard_task_events_limit}
     completed = [x for x in data.get("backups", [])
                  if x.get("last_success_at") is not None]
     latest = max(completed, key=lambda x: x["last_success_at"]) if completed else None
@@ -68,7 +67,7 @@ def run(config_path: Path = DEFAULT_CONFIG, state_dir: Path = STATE_DIR) -> int:
         build_info_path=Path(__file__).resolve().parents[1] / "BUILD_INFO",
     )
     telemetry_runner = TelemetryRunner(telemetry)
-    publisher = Publisher(config)
+    publisher = Publisher(config, view_limits=ViewLimits(StateStore(state_dir / "view_limits.json")))
     last_problem_state = StateStore(state_dir / "incidents.json")
     current_status = StateStore(state_dir / "runtime.json")
     mqtt_status = StateStore(state_dir / "mqtt.json")
@@ -135,7 +134,6 @@ def run(config_path: Path = DEFAULT_CONFIG, state_dir: Path = STATE_DIR) -> int:
                     "gc": [], "maintenance_jobs": [], "task_history": [],
                     "task_history_status": "UNAVAILABLE", "backup_groups": [],
                     "backup_groups_status": "UNAVAILABLE", "pull_sync_jobs": [], "zfs": {"status": "UNKNOWN", "pools": []},
-                    "view_limits": {"backup_groups": config.dashboard_backup_groups_limit, "task_events": config.dashboard_task_events_limit},
                     "summary": {}, "errors": [f"{type(exc).__name__}: {str(exc)[:160]}"],
                     "backup_last_success_at": None, "backup_age_hours": None,
                     "sync_overall": "UNKNOWN", "sync_last_success_at": None,

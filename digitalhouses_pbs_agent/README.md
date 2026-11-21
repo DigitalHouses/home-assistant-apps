@@ -1,4 +1,4 @@
-# DigitalHouses PBS Agent v0.1.4
+# DigitalHouses PBS Agent v0.1.5
 
 Standalone **read-only** Linux/systemd monitoring agent for a local Proxmox Backup
 Server 4.x. HOME pilot: Debian MediaServer/PBS VM; no dependency on Plex Agent,
@@ -26,29 +26,25 @@ read-only ZFS and filesystem status. It does not run or
 edit PBS jobs, backup snapshots, PVE jobs, Plex, ZFS or retention.
 A job appearing as OK is **not** proof of restore verification.
 
-## Dashboard tree display settings (v0.1.4)
+## MQTT Number controls for tree display (v0.1.5)
 
-Datastores now show their name on one line and free/total GiB with a percentage
-of free space on the next indented line. S3-backed stores keep their backend
-status instead of showing the local cache capacity as cloud capacity.
-Backup groups without a monitoring rule omit the redundant status text.
+Both display limits are MQTT Number entities belonging to the existing PBS
+Agent device in Home Assistant (Settings > Devices & services > MQTT):
+- 'Групп резервных копий' (1..80, default 10)
+- 'Последних событий' (1..50, default 10)
 
-Both display-only limits are in the same native agent INI:
+Changing either number updates the retained PBS health state and View
+immediately. Values survive service restarts in the existing
+/var/lib/digitalhouses_pbs_agent/view_limits.json atomic state file, not
+in the native INI. No manual MQTT publish or service restart is needed.
 
-~~~ini
-[dashboard]
-backup_groups_limit = 10
-task_events_limit = 10
-~~~
+The previous v0.1.4 [dashboard] INI keys are no longer used. Existing INI
+files are otherwise preserved by the installer. No PBS tasks, alerts, backup
+freshness thresholds or Sync operations are changed.
 
-Defaults are 10 for existing installations even when the section is absent.
-Change them with the native CLI:
-  dh-pbs-agent set dashboard_backup_groups_limit=20 dashboard_task_events_limit=20
-
-Valid ranges: 1..80 groups and 1..50 history events. The agent publishes
-these limits in the retained health MQTT attributes, and the DH Sync view
-uses them to display rows. The values do not change backup checks or alerts.
-Install the agent release and refresh the dashboard view to apply the change.
+Datastores continue to show the name on one line and free/total GiB with the
+actual free percentage on the second line. S3 datastores retain backend status
+rather than showing a misleading cloud-capacity percentage.
 
 ## Compact PBS dashboard and native S3 monitoring (v0.1.3)
 
@@ -90,7 +86,7 @@ Install only from the published immutable GitHub Release:
 For a published release, on the local PBS VM as root:
 
 ~~~bash
-DIGITALHOUSES_SOURCE_REF=digitalhouses_pbs_agent-v0.1.4 \
+DIGITALHOUSES_SOURCE_REF=digitalhouses_pbs_agent-v0.1.5 \
   bash install.sh --non-interactive \
   --set mqtt_host=YOUR_MQTT_HOST \
   --set pbs_datastores=YOUR_PBS_DATASTORE
@@ -137,9 +133,6 @@ sync_rules = push-home|36
 warning_percent = 80
 critical_percent = 90
 
-[dashboard]
-backup_groups_limit = 10
-task_events_limit = 10
 ```
 
 The two freshness rule lists are optional. Each `backup_rules` rule is
