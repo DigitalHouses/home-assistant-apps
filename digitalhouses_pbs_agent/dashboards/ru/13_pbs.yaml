@@ -1,4 +1,4 @@
-# DH-View-Version: 0.1.7
+# DH-View-Version: 0.1.8
 # DH-View-Date: 2026-11-22
 title: PBS
 path: dh_pbs_agent
@@ -12,42 +12,20 @@ sections:
         heading: Proxmox Backup Server
         heading_style: title
         icon: mdi:backup-restore
-      - type: custom:auto-entities
-        show_empty: false
-        unique: true
-        card:
-          type: entities
-          title: Состояние PBS
-        filter:
-          include:
-            - attributes:
-                pbs_product: digitalhouses_pbs_agent
-                pbs_metric: health
-              options:
-                name: Состояние
-            - attributes:
-                pbs_product: digitalhouses_pbs_agent
-                pbs_metric: problem
-              options:
-                name: Есть проблемы
-            - attributes:
-                pbs_product: digitalhouses_pbs_agent
-                pbs_metric: last_collection
-              options:
-                name: Последний сбор
-            - attributes:
-                pbs_product: digitalhouses_pbs_agent
-                pbs_metric: zfs_pool_health
-              options:
-                name: ZFS
+      - type: entities
+        title: Состояние PBS
+        entities:
+          - entity: sensor.dh_pbs_agent_health
+            name: Состояние
+          - entity: binary_sensor.dh_pbs_agent_problem
+            name: Есть проблемы
+          - entity: sensor.dh_pbs_agent_last_collection
+            name: Последний сбор
+          - entity: sensor.dh_pbs_agent_zfs_pool_health
+            name: ZFS
       - type: markdown
         content: |
-          {%- set pbs_health = states.sensor
-              | selectattr('attributes.pbs_product', 'equalto', 'digitalhouses_pbs_agent')
-              | selectattr('attributes.pbs_section', 'equalto', 'health')
-              | list -%}
-          {%- set health_entity = pbs_health[0].entity_id if pbs_health else 'sensor.dh_pbs_agent_health' -%}
-          {% set a = state_attr(health_entity, 'summary') or {} %}
+          {% set a = state_attr('sensor.dh_pbs_agent_health', 'summary') or {} %}
           **Сводка PBS**
 
           {% if a %}
@@ -71,16 +49,11 @@ sections:
         icon: mdi:database
       - type: markdown
         content: |
-          {%- set pbs_health = states.sensor
-              | selectattr('attributes.pbs_product', 'equalto', 'digitalhouses_pbs_agent')
-              | selectattr('attributes.pbs_section', 'equalto', 'health')
-              | list -%}
-          {%- set health_entity = pbs_health[0].entity_id if pbs_health else 'sensor.dh_pbs_agent_health' -%}
-          {%- set ds = state_attr(health_entity, 'datastores') or [] -%}
-          {%- set groups = state_attr(health_entity, 'backup_groups') or [] -%}
-          {%- set rules = state_attr(health_entity, 'backups') or [] -%}
-          {%- set coverage = state_attr(health_entity, 'backup_groups_status') or 'UNAVAILABLE' -%}
-          {%- set limits = state_attr(health_entity, 'view_limits') or {} -%}
+          {%- set ds = state_attr('sensor.dh_pbs_agent_health', 'datastores') or [] -%}
+          {%- set groups = state_attr('sensor.dh_pbs_agent_health', 'backup_groups') or [] -%}
+          {%- set rules = state_attr('sensor.dh_pbs_agent_health', 'backups') or [] -%}
+          {%- set coverage = state_attr('sensor.dh_pbs_agent_health', 'backup_groups_status') or 'UNAVAILABLE' -%}
+          {%- set limits = state_attr('sensor.dh_pbs_agent_health', 'view_limits') or {} -%}
           {%- set group_limit = limits.backup_groups | default(10) | int -%}
           {%- set ns = namespace(lines=['PBS', '├─ Datastore (' ~ (ds | count) ~ ')']) -%}
           {%- for d in ds -%}
@@ -100,7 +73,8 @@ sections:
             {%- else -%}
               {%- set detail = d.status | default('UNKNOWN') -%}
             {%- endif -%}
-            {%- set ns.lines = ns.lines + ['│       └─ ' ~ icon ~ ' ' ~ detail] -%}
+            {%- set detail_prefix = '│  │  ' if not loop.last else '│     ' -%}
+            {%- set ns.lines = ns.lines + [detail_prefix ~ '└─ ' ~ icon ~ ' ' ~ detail] -%}
           {%- endfor -%}
           {%- if not ds -%}
             {%- set ns.lines = ns.lines + ['│  └─ ⚪ Нет данных'] -%}
@@ -113,7 +87,8 @@ sections:
             {%- set when = as_local(as_datetime(g.last_backup_at)).strftime('%d.%m %H:%M') if g.last_backup_at else '—' -%}
             {%- set status = '' if g.status == 'NOT_MONITORED' else ' · ' ~ g.status -%}
             {%- set count = (g.snapshot_count | string) if g.snapshot_count is not none else '?' -%}
-            {%- set name = (g.namespace ~ '/' if g.namespace else '') ~ g.group -%}
+            {%- set store_prefix = (g.datastore ~ '/') if (ds | count) > 1 else '' -%}
+            {%- set name = store_prefix ~ (g.namespace ~ '/' if g.namespace else '') ~ g.group -%}
             {%- set branch = '└─' if loop.last and groups | count <= group_limit else '├─' -%}
             {%- set ns.lines = ns.lines + ['│  ' ~ branch ~ ' ' ~ icon ~ ' ' ~ name ~ ' · ' ~ count ~ ' коп. · ' ~ when ~ status] -%}
           {%- endfor -%}
@@ -148,12 +123,7 @@ sections:
         icon: mdi:calendar-check
       - type: markdown
         content: |
-          {%- set pbs_health = states.sensor
-              | selectattr('attributes.pbs_product', 'equalto', 'digitalhouses_pbs_agent')
-              | selectattr('attributes.pbs_section', 'equalto', 'health')
-              | list -%}
-          {%- set health_entity = pbs_health[0].entity_id if pbs_health else 'sensor.dh_pbs_agent_health' -%}
-          {%- set jobs = state_attr(health_entity, 'maintenance_jobs') or [] -%}
+          {%- set jobs = state_attr('sensor.dh_pbs_agent_health', 'maintenance_jobs') or [] -%}
           {%- set kinds = ['Push Sync','S3 Sync','Pull Sync','Verify','Prune','GC'] -%}
           {%- set shown_kinds = namespace(items=[]) -%}
           {%- for kind in kinds -%}
@@ -191,15 +161,10 @@ sections:
           columns: 12
       - type: markdown
         content: |
-          {%- set pbs_health = states.sensor
-              | selectattr('attributes.pbs_product', 'equalto', 'digitalhouses_pbs_agent')
-              | selectattr('attributes.pbs_section', 'equalto', 'health')
-              | list -%}
-          {%- set health_entity = pbs_health[0].entity_id if pbs_health else 'sensor.dh_pbs_agent_health' -%}
-          {%- set events = state_attr(health_entity, 'task_history') or [] -%}
-          {%- set limits = state_attr(health_entity, 'view_limits') or {} -%}
+          {%- set events = state_attr('sensor.dh_pbs_agent_health', 'task_history') or [] -%}
+          {%- set limits = state_attr('sensor.dh_pbs_agent_health', 'view_limits') or {} -%}
           {%- set event_limit = limits.task_events | default(10) | int -%}
-          {%- set coverage = state_attr(health_entity, 'task_history_status') or 'UNAVAILABLE' -%}
+          {%- set coverage = state_attr('sensor.dh_pbs_agent_health', 'task_history_status') or 'UNAVAILABLE' -%}
           {%- set ns = namespace(lines=['Последние выполнения PBS']) -%}
           {%- for e in events[:event_limit] -%}
             {%- set icon = '🟢' if e.status == 'OK'
@@ -225,41 +190,22 @@ sections:
         heading: Диагностика
         heading_style: title
         icon: mdi:information-outline
-      - type: custom:auto-entities
-        show_empty: false
-        unique: true
-        card:
-          type: entities
-          title: PBS Agent
-        filter:
-          include:
-            - attributes:
-                pbs_product: digitalhouses_pbs_agent
-                pbs_metric: hostname
-            - attributes:
-                pbs_product: digitalhouses_pbs_agent
-                pbs_metric: ip
-            - attributes:
-                pbs_product: digitalhouses_pbs_agent
-                pbs_metric: version
-      - type: custom:auto-entities
-        show_empty: false
-        unique: true
-        card:
-          type: entities
-          title: Настройки отображения
-        filter:
-          include:
-            - entity_id: "number.dh_pbs_agent_*_limit"
-              device_model: PBS Agent
+      - type: entities
+        title: PBS Agent
+        entities:
+          - entity: sensor.dh_pbs_agent_hostname
+          - entity: sensor.dh_pbs_agent_ip
+          - entity: sensor.dh_pbs_agent_version
+      - type: entities
+        title: Настройки отображения
+        entities:
+          - entity: number.dh_pbs_agent_backup_groups_limit
+            name: Групп резервных копий
+          - entity: number.dh_pbs_agent_task_events_limit
+            name: Последних событий
       - type: markdown
         content: |
-          {%- set pbs_health = states.sensor
-              | selectattr('attributes.pbs_product', 'equalto', 'digitalhouses_pbs_agent')
-              | selectattr('attributes.pbs_section', 'equalto', 'health')
-              | list -%}
-          {%- set health_entity = pbs_health[0].entity_id if pbs_health else 'sensor.dh_pbs_agent_health' -%}
-          {% set errors = state_attr(health_entity, 'errors') or [] %}
+          {% set errors = state_attr('sensor.dh_pbs_agent_health', 'errors') or [] %}
           **Ошибки сбора**
           {% if errors %}
           {% for error in errors %}
