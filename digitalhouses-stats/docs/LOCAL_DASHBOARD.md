@@ -35,7 +35,7 @@ nginx maps the following browser paths to the loopback-only statistics API:
 /api/products
 /api/versions
 /api/countries
-/api/history?days=30
+/api/history?days=30\n/api/installation-history?days=7
 ```
 
 The underlying API process uses `/v1/stats/*` on `127.0.0.1:8081`.
@@ -78,6 +78,12 @@ The dashboard summary shows:
 - total accepted heartbeat count;
 - the latest heartbeat time, rendered locally in the browser.
 
-The activity chart compares unique active installations with accepted heartbeat
-volume for each UTC calendar day. The selected period also shows total
-heartbeats, number of active days and peak active installations.
+The seven-day installation chart renders one vertical stacked column per UTC
+day, oldest to newest. The full bar is the number of registered installations
+at the end of that day (today is measured at current time). The darker part
+shows the unique (product, installation_id) pairs that reported a heartbeat
+within the preceding rolling seven days. The lighter part is the remainder;
+no separate heartbeat-volume series is drawn. The current day's chart uses
+the same seven-day activity window as the summary's Active 7d metric.
+Registration history is based on the current installations table and cannot
+reconstruct explicitly deleted registrations.

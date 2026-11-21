@@ -447,3 +447,44 @@ def test_dashboard_healthz() -> None:
     response = dashboard_client.get("/healthz")
     assert response.status_code == 200
     assert response.json() == {"status": "ok"}
+
+
+
+def test_seven_day_installation_history() -> None:
+    reset_database()
+
+    empty = dashboard_client.get("/v1/stats/installation-history?days=7")
+    assert empty.status_code == 200
+    assert len(empty.json()) == 7
+    assert all(row["total_installations"] == 0 for row in empty.json())
+    assert all(row["active_installations"] == 0 for row in empty.json())
+
+    product = "digitalhouses_pve_agent"
+    installation_id = str(uuid.uuid4())
+    response = telemetry_client.post(
+        "/v1/heartbeat",
+        json={
+            "schema": 1,
+            "telemetry_policy_version": 2,
+            "installation_id": installation_id,
+            "product": product,
+            "version": "0.5.96",
+        },
+        headers={
+            "Authorization": f"Bearer {'aa' * 32}",
+            "Content-Type": "application/json",
+            "CF-IPCountry": "KZ",
+        },
+    )
+    assert response.status_code == 204
+
+    history = dashboard_client.get("/v1/stats/installation-history?days=7")
+    assert history.status_code == 200
+    rows = history.json()
+    assert len(rows) == 7
+    assert rows[-1]["total_installations"] == 1
+    assert rows[-1]["active_installations"] == 1
+    assert all(
+        row["active_installations"] <= row["total_installations"]
+        for row in rows
+    )
