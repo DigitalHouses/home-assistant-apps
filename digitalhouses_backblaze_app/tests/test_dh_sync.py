@@ -64,6 +64,7 @@ class BackblazeDhSyncTests(unittest.TestCase):
         self.assertLess(connect.index("build_sync_payload(APP_VERSION)"),
                         connect.index("APP_AVAILABILITY_TOPIC"))
         self.assertIn("from sync_discovery import SYNC_TOPIC, build_sync_payload", app)
+        self.assertIn("self.client.publish(topic, payload, qos=1, retain=retain)", app)
         discovery = (APP / "rootfs/app/discovery.py").read_text(encoding="utf-8")
         self.assertIn('BASE_TOPIC = "DigitalHouses/Global/backblaze"', discovery)
         self.assertIn('DEVICE_ID = "digitalhouses_backblaze"', discovery)
