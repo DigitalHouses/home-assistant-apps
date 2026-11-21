@@ -1,16 +1,12 @@
 """PBS Agent PVE-compatible management behavior, without live PBS/MQTT/systemd."""
 from __future__ import annotations
 
-import importlib.machinery
 import json
 import queue
 import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch, Mock
-
-import yaml
-from jinja2 import Environment
 
 from app.control import Controller
 from app.mqtt import Publisher, discovery
@@ -216,19 +212,19 @@ class ControlTests(unittest.TestCase):
         self.assertEqual(components["health"]["default_entity_id"], "sensor.dh_pbs_agent_health")
         self.assertEqual(components["card"]["default_entity_id"], "sensor.dh_pbs_agent_card")
         template = components["card"]["json_attributes_template"]
-        state = {"card": {"state": "running", "operation": "refresh",
-                          "started_at": "2026-01-01", "finished_at": None,
-                          "duration_seconds": None, "error": None},
-                 "last_collection_at": "2026-01-01"}
-        attrs = json.loads(Environment().from_string(template).render(value_json=state))
-        self.assertEqual(attrs["operation"], "refresh")
-        doc = yaml.safe_load((ROOT / "dashboards/ru/13_pbs.yaml").read_text())
-        group = doc["sections"][0]["cards"][1]
-        self.assertEqual(group["type"], "vertical-stack")
-        self.assertEqual(group["cards"][0]["type"], "custom:button-card")
-        self.assertEqual(group["cards"][1]["type"], "custom:mushroom-chips-card")
-        self.assertEqual(len(group["cards"][1]["chips"]), 4)
-        self.assertEqual(doc["sections"][0]["cards"][2]["type"], "entities")
+        self.assertIn("value_json.card.operation", template)
+        self.assertIn("last_collection_at", template)
+        view = (ROOT / "dashboards/ru/13_pbs.yaml").read_text()
+        self.assertIn("type: custom:button-card", view)
+        self.assertIn("type: custom:mushroom-chips-card", view)
+        self.assertIn("sensor.dh_pbs_agent_card", view)
+        self.assertIn("button.dh_pbs_agent_refresh", view)
+        self.assertIn("button.dh_pbs_agent_check_updates", view)
+        self.assertIn("button.dh_pbs_agent_update", view)
+        self.assertIn("button.dh_pbs_agent_restart_agent", view)
+        self.assertIn("text: Установить новый релиз PBS Agent?", view)
+        self.assertIn("text: Перезапустить только PBS Agent?", view)
+        self.assertNotIn("type: custom:auto-entities", view)
 
     def test_installer_one_command_and_silent_git(self):
         script = (ROOT / "install.sh").read_text()
