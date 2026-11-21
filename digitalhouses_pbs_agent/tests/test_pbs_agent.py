@@ -266,15 +266,15 @@ class PBSAgentTests(unittest.TestCase):
         self.assertNotIn("| Datastore | Заполнено", view)
         self.assertNotIn("content: >-", view)
 
-    def test_dashboard_limits_defaults_and_native_cli(self):
+    def test_view_limits_defaults_and_native_cli(self):
         from app.cli import change_config
         from app.main import display_state
         self.assertEqual(self.config.dashboard_backup_groups_limit, 10)
         self.assertEqual(self.config.dashboard_task_events_limit, 10)
         state = display_state(self.sample(), self.config, "192.0.2.1")
-        self.assertEqual(state["dashboard_limits"], {"backup_groups": 10, "task_events": 10})
+        self.assertEqual(state["view_limits"], {"backup_groups": 10, "task_events": 10})
         attrs = discovery(self.config)["components"]["health"]["json_attributes_template"]
-        self.assertIn("'dashboard_limits': value_json.dashboard_limits", attrs)
+        self.assertIn("'view_limits': value_json.view_limits", attrs)
         self.assertEqual(
             change_config(self.ini, ["dashboard_backup_groups_limit=15",
                                      "dashboard_task_events_limit=20"], restart=False),

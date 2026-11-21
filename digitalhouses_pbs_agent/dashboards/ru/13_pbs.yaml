@@ -53,7 +53,7 @@ sections:
           {%- set groups = state_attr('sensor.dh_pbs_agent_health', 'backup_groups') or [] -%}
           {%- set rules = state_attr('sensor.dh_pbs_agent_health', 'backups') or [] -%}
           {%- set coverage = state_attr('sensor.dh_pbs_agent_health', 'backup_groups_status') or 'UNAVAILABLE' -%}
-          {%- set limits = state_attr('sensor.dh_pbs_agent_health', 'dashboard_limits') or {} -%}
+          {%- set limits = state_attr('sensor.dh_pbs_agent_health', 'view_limits') or {} -%}
           {%- set group_limit = limits.backup_groups | default(10) | int -%}
           {%- set ns = namespace(lines=['PBS', '├─ Datastore (' ~ (ds | count) ~ ')']) -%}
           {%- for d in ds -%}
@@ -148,7 +148,7 @@ sections:
       - type: markdown
         content: |
           {%- set events = state_attr('sensor.dh_pbs_agent_health', 'task_history') or [] -%}
-          {%- set limits = state_attr('sensor.dh_pbs_agent_health', 'dashboard_limits') or {} -%}
+          {%- set limits = state_attr('sensor.dh_pbs_agent_health', 'view_limits') or {} -%}
           {%- set event_limit = limits.task_events | default(10) | int -%}
           {%- set coverage = state_attr('sensor.dh_pbs_agent_health', 'task_history_status') or 'UNAVAILABLE' -%}
           {%- set ns = namespace(lines=['Последние выполнения PBS']) -%}
