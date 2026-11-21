@@ -1,4 +1,4 @@
-# DigitalHouses PBS Agent v0.1.8
+# DigitalHouses PBS Agent v0.1.9
 
 Standalone **read-only** Linux/systemd monitoring agent for a local Proxmox Backup
 Server 4.x. HOME pilot: Debian MediaServer/PBS VM; no dependency on Plex Agent,
@@ -25,6 +25,20 @@ status, snapshots, **push** sync, verify, prune and GC jobs, plus local
 read-only ZFS and filesystem status. It does not run or
 edit PBS jobs, backup snapshots, PVE jobs, Plex, ZFS or retention.
 A job appearing as OK is **not** proof of restore verification.
+
+## Used capacity and Russian entity names (v0.1.9)
+
+The local datastore tree now shows USED / TOTAL GiB (percent USED), directly
+from native PBS used_bytes/total_bytes; previously it displayed FREE / TOTAL.
+For S3-backed datastores it keeps the backend/status rather than claiming
+remote bucket capacity.
+
+Human-facing MQTT Discovery names (including per-datastore and per-job
+sensors, event entities and main diagnostic sensors) are localized into
+Russian. The actual PBS datastore/job names remain unchanged and are always
+dynamic. Technical MQTT unique IDs, topics, Home Assistant entity IDs and
+status/event values are unchanged to preserve existing dashboards and alerts.
+Home Assistant may preserve a custom name assigned previously by a user.
 
 ## Standalone Home Assistant View (v0.1.8)
 
@@ -153,7 +167,7 @@ Install only from the published immutable GitHub Release:
 For a published release, on the local PBS VM as root:
 
 ~~~bash
-DIGITALHOUSES_SOURCE_REF=digitalhouses_pbs_agent-v0.1.8 \
+DIGITALHOUSES_SOURCE_REF=digitalhouses_pbs_agent-v0.1.9 \
   bash install.sh --non-interactive \
   --set mqtt_host=YOUR_MQTT_HOST \
   --set pbs_datastores=YOUR_PBS_DATASTORE
