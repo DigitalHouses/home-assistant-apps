@@ -6,11 +6,21 @@ import sys
 import unittest
 from pathlib import Path
 
-import yaml
-
 APP = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(APP / "rootfs" / "app"))
 from sync_discovery import SYNC_TOPIC, build_sync_payload
+
+
+def meaningful_lines(path: Path) -> list[str]:
+    """Compare approved YAML resources byte-for-byte except comments.
+
+    The repository validator performs YAML parsing; runtime unit tests do not
+    introduce a new PyYAML dependency into the Backblaze App build.
+    """
+    return [
+        line for line in path.read_text(encoding="utf-8").splitlines()
+        if not line.lstrip().startswith("#")
+    ]
 
 
 class BackblazeDhSyncTests(unittest.TestCase):
@@ -59,56 +69,29 @@ class BackblazeDhSyncTests(unittest.TestCase):
         self.assertIn('DEVICE_ID = "digitalhouses_backblaze"', discovery)
 
     def test_published_view_preserves_approved_example(self):
-        canonical = yaml.safe_load(
-            (APP / "dashboards/ru/backblaze.yaml").read_text(encoding="utf-8")
-        )
-        reference = yaml.safe_load(
-            (APP / "examples/lovelace/dh_app_backblaze_dashboard.yaml").read_text(
-                encoding="utf-8"
-            )
-        )
-        self.assertEqual(canonical, reference)
-        self.assertEqual(canonical["title"], "Backblaze")
-        self.assertEqual(canonical["path"], "backblaze")
-        self.assertEqual(canonical["type"], "sections")
-        self.assertNotIn("views", canonical)
-        self.assertEqual(
-            len(list((APP / "dashboards/ru").glob("*.yaml"))), 1
-        )
-        self.assertIn("sensor.dh_backblaze_storage_tree",
-                      (APP / "dashboards/ru/backblaze.yaml").read_text(
-                          encoding="utf-8"
-                      ))
-        history = [
-            card
-            for section in canonical["sections"]
-            for card in section["cards"]
-            if card.get("type") == "statistics-graph"
-        ]
-        self.assertEqual(len(history), 1)
-        self.assertEqual(history[0]["days_to_show"], 30)
-        self.assertEqual(history[0]["chart_type"], "bar")
+        canonical = APP / "dashboards/ru/backblaze.yaml"
+        reference = APP / "examples/lovelace/dh_app_backblaze_dashboard.yaml"
+        self.assertEqual(meaningful_lines(canonical), meaningful_lines(reference))
+        view = canonical.read_text(encoding="utf-8")
+        self.assertIn("\ntitle: Backblaze\npath: backblaze\n", view)
+        self.assertIn("type: sections", view)
+        self.assertNotIn("\nviews:", view)
+        self.assertIn("sensor.dh_backblaze_storage_tree", view)
+        self.assertIn("type: statistics-graph", view)
+        self.assertIn("chart_type: bar", view)
+        self.assertIn("days_to_show: 30", view)
+        self.assertEqual(len(list((APP / "dashboards/ru").glob("*.yaml"))), 1)
 
     def test_published_package_keeps_recorder_identity(self):
-        canonical = yaml.safe_load(
-            (APP / "packages/common/dh_app_backblaze_package.yaml").read_text(
-                encoding="utf-8"
-            )
-        )
-        reference = yaml.safe_load(
-            (APP / "examples/packages/dh_app_backblaze_package.yaml").read_text(
-                encoding="utf-8"
-            )
-        )
-        self.assertEqual(canonical, reference)
-        self.assertEqual(set(canonical), {"dh_app_backblaze_package"})
-        self.assertEqual(
-            canonical["dh_app_backblaze_package"]["recorder"]["include"]["entities"],
-            ["sensor.dh_backblaze_storage_used", "sensor.dh_backblaze_files"],
-        )
-        self.assertEqual(
-            len(list((APP / "packages/common").glob("*.yaml"))), 1
-        )
+        canonical = APP / "packages/common/dh_app_backblaze_package.yaml"
+        reference = APP / "examples/packages/dh_app_backblaze_package.yaml"
+        self.assertEqual(meaningful_lines(canonical), meaningful_lines(reference))
+        package = canonical.read_text(encoding="utf-8")
+        self.assertIn("dh_app_backblaze_package:\n", package)
+        self.assertEqual(package.count("        - sensor."), 2)
+        self.assertIn("sensor.dh_backblaze_storage_used", package)
+        self.assertIn("sensor.dh_backblaze_files", package)
+        self.assertEqual(len(list((APP / "packages/common").glob("*.yaml"))), 1)
 
 
 if __name__ == "__main__":
