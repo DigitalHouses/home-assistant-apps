@@ -29,6 +29,16 @@ h1 { margin: 6px 0 3px; font-size: clamp(28px, 4vw, 44px); letter-spacing: -.04e
 .chart-panel { margin-bottom: 14px; }
 .panel-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 14px; margin-bottom: 18px; }
 .panel-head h2 { margin: 0 0 3px; font-size: 17px; }
+/* Compact counts in the country table heading. */
+.country-panel-head { flex-wrap: wrap; }
+.country-metrics { display: flex; align-items: flex-start; gap: 22px; margin-left: auto; }
+.country-metric { display: flex; flex-direction: column; min-width: 0; gap: 3px; }
+.country-metric > span { color: #8b94a0; font-size: 12px; }
+.country-metric > strong { color: #293341; font-size: 19px; line-height: 1.2; }
+.country-metric > small { color: #929aa5; font-size: 11px; white-space: nowrap; }
+@media (max-width: 560px) {
+  .country-metrics { width: 100%; margin-left: 0; justify-content: space-between; }
+}
 select { border: 1px solid #dce1e7; background: #fff; padding: 8px 10px; border-radius: 9px; color: #334; }
 
 /* Two separate bars per UTC date: total registered and inactive. */
@@ -114,6 +124,7 @@ button:hover { background: #f7f8fa; }
   .card strong { font-size: 30px; }
   .card .time-value { font-size: 19px; }
   .panel { padding: 16px; }
-  .chart { height: 220px; gap: 5px; }\n  .chart-hint { margin-left: 0; }
+  .chart { height: 220px; gap: 5px; }
+  .chart-hint { margin-left: 0; }
   .day-label { font-size: 9px; }
 }

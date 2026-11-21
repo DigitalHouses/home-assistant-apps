@@ -42,7 +42,7 @@ The underlying API process uses `/v1/stats/*` on `127.0.0.1:8081`.
 
 Version and country distributions count each installation only in the value
 from its latest heartbeat. The dashboard combines product and country views into one table, with full
-English country names and all App/Agent counts shown under each country. Its
+English country names and all App/Agent counts shown under each country. The country header also shows the current country count and the most recently first-seen country, including the timestamp of its earliest recorded heartbeat (displayed in Asia/Almaty). Its
 bottom Total sums known installations across countries. The `/api/countries`
 response already includes `products` breakdown entries (no installation IDs
 or tokens), so the API remains unchanged.

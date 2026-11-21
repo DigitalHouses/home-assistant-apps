@@ -172,20 +172,27 @@ def countries(
                     installation_id,
                     received_at DESC,
                     id DESC
+            ),
+            first_seen AS (
+                SELECT country, min(received_at) AS first_seen
+                FROM heartbeats
+                GROUP BY country
             )
             SELECT
-                country,
-                product,
+                l.country,
+                l.product,
+                f.first_seen,
                 count(*) AS observed_installations,
                 count(*) FILTER (
-                    WHERE received_at >= now() - interval '7 days'
+                    WHERE l.received_at >= now() - interval '7 days'
                 ) AS active_7d,
                 count(*) FILTER (
-                    WHERE received_at >= now() - interval '30 days'
+                    WHERE l.received_at >= now() - interval '30 days'
                 ) AS active_30d
-            FROM latest
-            GROUP BY country, product
-            ORDER BY country, observed_installations DESC, product
+            FROM latest AS l
+            JOIN first_seen AS f ON f.country = l.country
+            GROUP BY l.country, l.product, f.first_seen
+            ORDER BY l.country, observed_installations DESC, l.product
             """
         ),
         {"product": product},
@@ -198,6 +205,7 @@ def countries(
             country,
             {
                 "country": country,
+                "first_seen": row["first_seen"].isoformat(),
                 "observed_installations": 0,
                 "active_7d": 0,
                 "active_30d": 0,
