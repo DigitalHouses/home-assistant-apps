@@ -11,7 +11,9 @@ TAG="${DIGITALHOUSES_SOURCE_REF:-}"
 declare -a CHANGES=()
 usage() {
   cat <<'EOF'
-Usage: DIGITALHOUSES_SOURCE_REF=digitalhouses_pbs_agent-vX.Y.Z bash install.sh [--non-interactive] [--set key=value] [--mqtt-password-stdin]
+Usage: bash install.sh [--non-interactive] [--set key=value ...] [--mqtt-password-stdin]
+By default installs the latest published stable GitHub Release, pinned to its tag.
+Optional DIGITALHOUSES_SOURCE_REF=digitalhouses_pbs_agent-vX.Y.Z pins a specific version.
 Native INI settings are identical to dh-pbs-agent set. MQTT password only by stdin.
 TELEMETRY: [telemetry] enabled=true sends product, version and random installation ID.
 Privacy: https://github.com/DigitalHouses/home-assistant-apps/blob/main/docs/standards/PRODUCT_TELEMETRY_POLICY.md
@@ -29,6 +31,39 @@ while (($#)); do
   esac
 done
 [[ "$(id -u)" -eq 0 ]] || { echo "ERROR: root required" >&2; exit 1; }
+# Production convenience: select the newest *published stable release*, never main.
+# Resolve once and pin the exact immutable tag before downloading source.
+if [[ -z "$TAG" ]]; then
+  command -v python3 >/dev/null 2>&1 || { echo "ERROR: python3 required to resolve release" >&2; exit 1; }
+  TAG="$(python3 - <<'PYRELEASE'
+import json, re, urllib.request
+url = "https://api.github.com/repos/DigitalHouses/home-assistant-apps/releases"
+stable = []
+for page in range(1, 11):
+    req = urllib.request.Request(
+        f"{url}?per_page=100&page={page}",
+        headers={"User-Agent": "DigitalHouses-PBS-Agent", "Accept": "application/vnd.github+json"},
+    )
+    with urllib.request.urlopen(req, timeout=12) as response:
+        rows = json.load(response)
+    if not isinstance(rows, list):
+        raise SystemExit("ERROR: invalid GitHub Releases response")
+    for row in rows:
+        if not isinstance(row, dict) or row.get("draft") or row.get("prerelease") or not row.get("published_at"):
+            continue
+        tag = str(row.get("tag_name", ""))
+        match = re.fullmatch(r"digitalhouses_pbs_agent-v(\d+)\.(\d+)\.(\d+)", tag)
+        if match:
+            stable.append((tuple(map(int, match.groups())), tag))
+    if len(rows) < 100:
+        break
+if not stable:
+    raise SystemExit("ERROR: no published PBS Agent stable release")
+print(max(stable)[1])
+PYRELEASE
+)"
+  echo "RELEASE $TAG"
+fi
 if [[ "$TAG" =~ ^digitalhouses_pbs_agent-v([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
   EXPECTED="${TAG#digitalhouses_pbs_agent-v}"
 elif [[ "${DIGITALHOUSES_ALLOW_NON_RELEASE_REF:-0}" == "1" && -n "$TAG" ]]; then
@@ -58,6 +93,25 @@ STAGE="$TMP/stage"
 OLD="$TMP/old"
 BACKUP_CONFIG="$TMP/existing.conf"
 CANDIDATE="$TMP/candidate.conf"
+MAIN_UNIT="/etc/systemd/system/$SERVICE"
+CONTROL_UNIT="/etc/systemd/system/digitalhouses_pbs_agent-control.service"
+CONTROL_RUNNER="/usr/local/libexec/digitalhouses-pbs-agent-control-runner"
+CLI="/usr/local/bin/dh-pbs-agent"
+ROOT_GUIDE="/root/dh-pbs-agent.txt"
+# Restore all management artifacts as well as the running service on failure.
+preserve_file() {
+  local key="$1" file="$2"
+  if [[ -f "$file" ]]; then cp -p "$file" "$TMP/$key.old"; fi
+}
+restore_file() {
+  local key="$1" file="$2"
+  if [[ -f "$TMP/$key.old" ]]; then cp -p "$TMP/$key.old" "$file"; else rm -f "$file"; fi
+}
+preserve_file main_unit "$MAIN_UNIT"
+preserve_file control_unit "$CONTROL_UNIT"
+preserve_file control_runner "$CONTROL_RUNNER"
+preserve_file cli "$CLI"
+preserve_file guide "$ROOT_GUIDE"
 ACTIVE_BEFORE=0
 SWAPPED=0
 COMPLETED=0
@@ -72,6 +126,11 @@ cleanup() {
       else
         rm -f "$CONFIG"
       fi
+      restore_file main_unit "$MAIN_UNIT"
+      restore_file control_unit "$CONTROL_UNIT"
+      restore_file control_runner "$CONTROL_RUNNER"
+      restore_file cli "$CLI"
+      restore_file guide "$ROOT_GUIDE"
       systemctl daemon-reload || true
       if ((ACTIVE_BEFORE == 1)); then systemctl start "$SERVICE" || true; fi
     fi
@@ -80,7 +139,7 @@ cleanup() {
   rm -rf "$TMP"
 }
 trap cleanup EXIT
-git clone --quiet --depth 1 --branch "$TAG" "$REPO" "$TMP/repo"
+git -c advice.detachedHead=false clone --quiet --depth 1 --branch "$TAG" "$REPO" "$TMP/repo"
 ACTUAL="$(cat "$TMP/repo/$PRODUCT/VERSION")"
 [[ -z "$EXPECTED" || "$ACTUAL" == "$EXPECTED" ]] || { echo "ERROR: VERSION does not match release tag" >&2; exit 1; }
 COMMIT="$(git -C "$TMP/repo" rev-parse HEAD)"
@@ -127,9 +186,12 @@ if [[ -d "$TARGET" ]]; then mv "$TARGET" "$OLD"; fi
 mv "$STAGE" "$TARGET"
 SWAPPED=1
 install -m 600 "$CANDIDATE" "$CONFIG"
-install -m 755 "$TARGET/bin/dh-pbs-agent" /usr/local/bin/dh-pbs-agent
-install -m 644 "$TARGET/systemd/digitalhouses_pbs_agent.service" "/etc/systemd/system/$SERVICE"
-install -m 600 "$TARGET/dh-pbs-agent.txt" /root/dh-pbs-agent.txt
+install -m 755 "$TARGET/bin/dh-pbs-agent" "$CLI"
+install -d -m 755 /usr/local/libexec
+install -m 755 "$TARGET/bin/digitalhouses-pbs-agent-control-runner" "$CONTROL_RUNNER"
+install -m 644 "$TARGET/systemd/digitalhouses_pbs_agent-control.service" "$CONTROL_UNIT"
+install -m 644 "$TARGET/systemd/digitalhouses_pbs_agent.service" "$MAIN_UNIT"
+install -m 600 "$TARGET/dh-pbs-agent.txt" "$ROOT_GUIDE"
 systemctl daemon-reload
 systemctl enable "$SERVICE" >/dev/null
 systemctl start "$SERVICE"

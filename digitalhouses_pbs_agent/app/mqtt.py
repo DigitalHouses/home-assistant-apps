@@ -5,6 +5,7 @@ import json
 import hashlib
 import re
 import math
+import queue
 import threading
 import socket
 from pathlib import Path
@@ -208,6 +209,78 @@ def discovery(config: Config, sample: dict | None = None) -> dict:
             "event_types": event_types, "qos": 1, "availability": availability,
             "entity_category": "diagnostic",
         }
+    # PVE-compatible, stable native MQTT controls. Never reinterpret the
+    # existing Number settings or PBS native task identities.
+    commands = {
+        "refresh": ("Обновить данные", "mdi:refresh"),
+        "check_updates": ("Проверить версию", "mdi:cloud-search"),
+        "update": ("Установить обновление", "mdi:package-down"),
+        "restart_agent": ("Перезапустить агент", "mdi:restart"),
+    }
+    routes = {"refresh": "refresh", "check_updates": "check",
+              "update": "install", "restart_agent": "restart"}
+    for key, (title, icon) in commands.items():
+        components[key] = {
+            "platform": "button", "name": title,
+            "unique_id": f"{device_id}_{key}",
+            "default_entity_id": f"button.dh_pbs_agent_{key}",
+            "command_topic": base + "/command/" + routes[key],
+            "payload_press": "PRESS", "qos": 1, "retain": False,
+            "availability": availability, "entity_category": "diagnostic",
+            "icon": icon,
+        }
+
+    def operation_sensor(key: str, name: str, expression: str, icon: str,
+                         attr_expression: str | None = None) -> None:
+        item = {
+            "platform": "sensor", "name": name,
+            "unique_id": f"{device_id}_{key}",
+            "default_entity_id": f"sensor.dh_pbs_agent_{key}",
+            "state_topic": base + "/operation",
+            "value_template": "{{ " + expression + " }}",
+            "availability": availability, "entity_category": "diagnostic",
+            "icon": icon,
+        }
+        if attr_expression:
+            item["json_attributes_topic"] = base + "/operation"
+            item["json_attributes_template"] = "{{ " + attr_expression + " | tojson }}"
+        components[key] = item
+
+    operation_sensor("card", "Управление PBS Agent", "value_json.card.state",
+                     "mdi:backup-restore",
+                     "{'operation': value_json.card.operation, 'started_at': value_json.card.started_at, 'finished_at': value_json.card.finished_at, 'duration_seconds': value_json.card.duration_seconds, 'error': value_json.card.error, 'last_collection_at': value_json.last_collection_at}")
+    operation_sensor("refresh_state", "Состояние обновления данных",
+                     "value_json.refresh.state", "mdi:refresh",
+                     "value_json.refresh")
+    operation_sensor("last_refresh", "Последнее ручное обновление",
+                     "value_json.last_refresh | default('unknown', true)",
+                     "mdi:clock-check")
+    operation_sensor("latest_version", "Последняя версия",
+                     "value_json.latest_version | default('unknown', true)", "mdi:tag-check")
+    operation_sensor("update_status", "Состояние проверки версии",
+                     "value_json.update_status | default('idle', true)", "mdi:progress-wrench")
+    components["update_available"] = {
+        "platform": "binary_sensor", "name": "Доступна новая версия",
+        "unique_id": f"{device_id}_update_available",
+        "default_entity_id": "binary_sensor.dh_pbs_agent_update_available",
+        "state_topic": base + "/operation",
+        "value_template": "{{ 'ON' if value_json.update_available == true else 'OFF' if value_json.update_available == false else 'unknown' }}",
+        "payload_on": "ON", "payload_off": "OFF",
+        "availability": availability, "entity_category": "diagnostic",
+        "icon": "mdi:package-up",
+    }
+    components["auto_update"] = {
+        "platform": "switch", "name": "Автоматическое обновление",
+        "unique_id": f"{device_id}_auto_update",
+        "default_entity_id": "switch.dh_pbs_agent_auto_update",
+        "command_topic": base + "/command/auto_update",
+        "state_topic": base + "/operation",
+        "value_template": "{{ 'ON' if value_json.auto_update == true else 'OFF' }}",
+        "payload_on": "ON", "payload_off": "OFF",
+        "state_on": "ON", "state_off": "OFF",
+        "qos": 1, "retain": False, "availability": availability,
+        "entity_category": "config", "icon": "mdi:autorenew",
+    }
     components.update(job_components(config, sample))
     return {
         "device": {"identifiers": [device_id], "name": "DigitalHouses PBS Agent " + ident,
@@ -240,6 +313,9 @@ class Publisher:
         self.last_connect_error: str | None = None
         self.last_state: dict | None = None
         self.last_ack_at: str | None = None
+        self.last_control: dict | None = None
+        self.commands: queue.SimpleQueue[str] = queue.SimpleQueue()
+        self.auto_update_commands: queue.SimpleQueue[bool] = queue.SimpleQueue()
         self.on_connection_change: Callable[[str, str | None], None] | None = None
         self.client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, client_id="dh_pbs_agent_" + self.id)
         self.client.reconnect_delay_set(60, 60)
@@ -296,12 +372,25 @@ class Publisher:
             else:
                 self._announce_jobs(client, current)
             client.subscribe(self.base + "/set/view/+", qos=1)
+        client.subscribe(self.base + "/command/+", qos=1)
+        if self.last_control is not None:
+            enqueue(self.base + "/operation", self.last_control)
             if current is not None:
                 enqueue(self.base + "/state", current)
 
     def _on_message(self, client: Any, userdata: Any, message: Any) -> None:
         # Do not replay stale retained commands when the broker reconnects.
         if getattr(message, "retain", False):
+            return
+        command_prefix = self.base + "/command/"
+        if message.topic == command_prefix + "auto_update":
+            if message.payload in (b"ON", b"OFF"):
+                self.auto_update_commands.put(message.payload == b"ON")
+            return
+        if message.topic.startswith(command_prefix):
+            action = message.topic[len(command_prefix):]
+            if action in {"refresh", "check", "install", "restart"} and message.payload == b"PRESS":
+                self.commands.put(action)
             return
         prefix = self.base + "/set/view/"
         if not message.topic.startswith(prefix):
@@ -378,6 +467,10 @@ class Publisher:
         from datetime import datetime, timezone
         self.last_ack_at = datetime.now(timezone.utc).isoformat()
         return True
+
+    def control(self, payload: dict) -> bool:
+        self.last_control = payload
+        return self._send(self.base + "/operation", payload, retain=True)
 
     def event(self, category: str, payload: dict) -> bool:
         if category not in {"backup", "sync", "storage", "maintenance"}:
