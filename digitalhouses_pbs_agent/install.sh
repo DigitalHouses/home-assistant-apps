@@ -111,6 +111,9 @@ backup_rules =
 sync_rules =
 warning_percent = 80
 critical_percent = 90
+[dashboard]
+backup_groups_limit = 10
+task_events_limit = 10
 EOF
 fi
 chmod 600 "$CANDIDATE"

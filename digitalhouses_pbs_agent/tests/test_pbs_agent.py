@@ -266,6 +266,48 @@ class PBSAgentTests(unittest.TestCase):
         self.assertNotIn("| Datastore | Заполнено", view)
         self.assertNotIn("content: >-", view)
 
+    def test_view_limits_defaults_and_native_cli(self):
+        from app.cli import change_config
+        from app.main import display_state
+        self.assertEqual(self.config.dashboard_backup_groups_limit, 10)
+        self.assertEqual(self.config.dashboard_task_events_limit, 10)
+        state = display_state(self.sample(), self.config, "192.0.2.1")
+        self.assertEqual(state["view_limits"], {"backup_groups": 10, "task_events": 10})
+        attrs = discovery(self.config)["components"]["health"]["json_attributes_template"]
+        self.assertIn("'view_limits': value_json.view_limits", attrs)
+        self.assertEqual(
+            change_config(self.ini, ["dashboard_backup_groups_limit=15",
+                                     "dashboard_task_events_limit=20"], restart=False),
+            "CHANGED")
+        updated = load_config(self.ini)
+        self.assertEqual(updated.dashboard_backup_groups_limit, 15)
+        self.assertEqual(updated.dashboard_task_events_limit, 20)
+        with self.assertRaises(ValueError):
+            change_config(self.ini, ["dashboard_backup_groups_limit=81"], restart=False)
+        with self.assertRaises(ValueError):
+            change_config(self.ini, ["dashboard_task_events_limit=51"], restart=False)
+
+    def test_dashboard_uses_correct_percentage_and_independent_limits(self):
+        view = (ROOT / "dashboards/ru/13_pbs.yaml").read_text(encoding="utf-8")
+        self.assertIn("d.available_bytes / d.total_bytes", view)
+        self.assertIn("free ~ '/' ~ total ~ ' GiB ('", view)
+        self.assertIn("│       └─", view)
+        self.assertIn("groups[:group_limit]", view)
+        self.assertIn("events[:event_limit]", view)
+        self.assertIn("limits.backup_groups | default(10)", view)
+        self.assertIn("limits.task_events | default(10)", view)
+        self.assertNotIn("без правила", view)
+
+    def test_history_has_more_than_twelve_real_events(self):
+        self.api.tasks = [
+            {"upid": f"UPID:pbs:1:2:3:prune:{i}", "worker_type": "prune",
+             "starttime": self.now - 60 * i,
+             "endtime": self.now - 60 * i + 10, "status": "OK"}
+            for i in range(25)
+        ]
+        sample = self.sample()
+        self.assertEqual(len(sample["task_history"]), 25)
+
     def test_native_s3_and_pull_job_visible_with_real_result(self):
         self.api.backend = "bucket=pbs-b2,client=backblaze,type=s3"
         self.api.pull_status = "OK"

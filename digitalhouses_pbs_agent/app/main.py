@@ -27,6 +27,7 @@ def display_state(sample: dict, config, ip: str | None) -> dict:
     import socket
     data["hostname"] = socket.gethostname()
     data["ip"] = ip or "unknown"
+    data["view_limits"] = {"backup_groups": config.dashboard_backup_groups_limit, "task_events": config.dashboard_task_events_limit}
     completed = [x for x in data.get("backups", [])
                  if x.get("last_success_at") is not None]
     latest = max(completed, key=lambda x: x["last_success_at"]) if completed else None
@@ -134,6 +135,7 @@ def run(config_path: Path = DEFAULT_CONFIG, state_dir: Path = STATE_DIR) -> int:
                     "gc": [], "maintenance_jobs": [], "task_history": [],
                     "task_history_status": "UNAVAILABLE", "backup_groups": [],
                     "backup_groups_status": "UNAVAILABLE", "pull_sync_jobs": [], "zfs": {"status": "UNKNOWN", "pools": []},
+                    "view_limits": {"backup_groups": config.dashboard_backup_groups_limit, "task_events": config.dashboard_task_events_limit},
                     "summary": {}, "errors": [f"{type(exc).__name__}: {str(exc)[:160]}"],
                     "backup_last_success_at": None, "backup_age_hours": None,
                     "sync_overall": "UNKNOWN", "sync_last_success_at": None,

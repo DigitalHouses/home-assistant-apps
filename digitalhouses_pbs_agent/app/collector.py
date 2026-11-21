@@ -250,7 +250,7 @@ def _task_history(tasks: list[dict]) -> list[dict]:
             "duration_seconds": round(max(0, end - start)) if isinstance(end, (int, float)) and end >= start else None,
             "status": result,
         })
-    return sorted(history, key=lambda row: row["started_at"], reverse=True)[:12]
+    return sorted(history, key=lambda row: row["started_at"], reverse=True)[:50]
 
 
 def _backup_inventory(config: Config, pbs: PBSClient, now: float) -> tuple[list[dict], str, list[str]]:

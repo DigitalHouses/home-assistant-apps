@@ -1,4 +1,4 @@
-# DigitalHouses PBS Agent v0.1.3
+# DigitalHouses PBS Agent v0.1.4
 
 Standalone **read-only** Linux/systemd monitoring agent for a local Proxmox Backup
 Server 4.x. HOME pilot: Debian MediaServer/PBS VM; no dependency on Plex Agent,
@@ -25,6 +25,30 @@ status, snapshots, **push** sync, verify, prune and GC jobs, plus local
 read-only ZFS and filesystem status. It does not run or
 edit PBS jobs, backup snapshots, PVE jobs, Plex, ZFS or retention.
 A job appearing as OK is **not** proof of restore verification.
+
+## Dashboard tree display settings (v0.1.4)
+
+Datastores now show their name on one line and free/total GiB with a percentage
+of free space on the next indented line. S3-backed stores keep their backend
+status instead of showing the local cache capacity as cloud capacity.
+Backup groups without a monitoring rule omit the redundant status text.
+
+Both display-only limits are in the same native agent INI:
+
+~~~ini
+[dashboard]
+backup_groups_limit = 10
+task_events_limit = 10
+~~~
+
+Defaults are 10 for existing installations even when the section is absent.
+Change them with the native CLI:
+  dh-pbs-agent set dashboard_backup_groups_limit=20 dashboard_task_events_limit=20
+
+Valid ranges: 1..80 groups and 1..50 history events. The agent publishes
+these limits in the retained health MQTT attributes, and the DH Sync view
+uses them to display rows. The values do not change backup checks or alerts.
+Install the agent release and refresh the dashboard view to apply the change.
 
 ## Compact PBS dashboard and native S3 monitoring (v0.1.3)
 
@@ -66,7 +90,7 @@ Install only from the published immutable GitHub Release:
 For a published release, on the local PBS VM as root:
 
 ~~~bash
-DIGITALHOUSES_SOURCE_REF=digitalhouses_pbs_agent-v0.1.3 \
+DIGITALHOUSES_SOURCE_REF=digitalhouses_pbs_agent-v0.1.4 \
   bash install.sh --non-interactive \
   --set mqtt_host=YOUR_MQTT_HOST \
   --set pbs_datastores=YOUR_PBS_DATASTORE
@@ -112,6 +136,10 @@ backup_rules = pbs-home|-|vm/2222|36
 sync_rules = push-home|36
 warning_percent = 80
 critical_percent = 90
+
+[dashboard]
+backup_groups_limit = 10
+task_events_limit = 10
 ```
 
 The two freshness rule lists are optional. Each `backup_rules` rule is

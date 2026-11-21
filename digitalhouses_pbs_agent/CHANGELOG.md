@@ -1,5 +1,16 @@
 # DigitalHouses PBS Agent
 
+## 0.1.4
+
+- Display datastore free/total GiB and percentage free on a nested tree line,
+  with no fabricated remote S3 capacity.
+- Hide redundant status text for unmonitored backup groups.
+- Add two independent native INI dashboard limits (default 10 each):
+  backup_groups_limit and task_events_limit, published through existing MQTT
+  health attributes for DH Sync. Display settings do not change monitoring.
+- Preserve PBS job history and existing alert/Sync contracts.
+
+
 ## 0.1.3
 
 - Replace the three wide Markdown PBS tables with compact status trees,

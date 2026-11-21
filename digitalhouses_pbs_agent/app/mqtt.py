@@ -48,7 +48,7 @@ def discovery(config: Config) -> dict:
         }
         if attributes:
             item["json_attributes_topic"] = base + "/state"
-            item["json_attributes_template"] = "{{ {'summary': value_json.summary, 'datastores': value_json.datastores, 'backups': value_json.backups, 'sync_jobs': value_json.sync_jobs, 'verify_jobs': value_json.verify_jobs, 'prune_jobs': value_json.prune_jobs, 'gc': value_json.gc, 'maintenance_jobs': value_json.maintenance_jobs, 'task_history': value_json.task_history, 'task_history_status': value_json.task_history_status, 'backup_groups': value_json.backup_groups, 'backup_groups_status': value_json.backup_groups_status, 'zfs': value_json.zfs, 'errors': value_json.errors, 'observed_at': value_json.observed_at} | tojson }}"
+            item["json_attributes_template"] = "{{ {'summary': value_json.summary, 'datastores': value_json.datastores, 'backups': value_json.backups, 'sync_jobs': value_json.sync_jobs, 'verify_jobs': value_json.verify_jobs, 'prune_jobs': value_json.prune_jobs, 'gc': value_json.gc, 'maintenance_jobs': value_json.maintenance_jobs, 'task_history': value_json.task_history, 'task_history_status': value_json.task_history_status, 'backup_groups': value_json.backup_groups, 'backup_groups_status': value_json.backup_groups_status, 'view_limits': value_json.view_limits, 'zfs': value_json.zfs, 'errors': value_json.errors, 'observed_at': value_json.observed_at} | tojson }}"
         components[key] = item
 
     sensor("hostname", "Hostname", "value_json.hostname", icon="mdi:server")
