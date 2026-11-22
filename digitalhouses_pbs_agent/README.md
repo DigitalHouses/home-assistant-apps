@@ -172,16 +172,17 @@ e.g. `sensor.dh_pbs_agent_datastore_pbs_serzhan_used_gib`:
   data are not imported into Recorder, and no separate history database,
   component or HACS graph dependency is added.
 
-**Dashboard revision 0.1.21.1:** the `statistics-graph` is generated
-as a complete per-datastore card inside a dynamic `grid` instead of
-passing a possibly empty entity list into an already-created graph.
-This prevents intermittent **«Ошибка конфигурации»** on first navigation
-while `auto-entities` initializes, without a workaround of pressing F5.
-A short *«Ожидание данных графика PBS…»* is shown while no numeric
-datastore sensor exists. Each present datastore has its own 30-day bar
-chart with the same daily `max` and hover value. To apply the revision,
-use **DH Sync → Проверить и обновить**; no new binary agent release,
-Recorder change or Home Assistant restart is needed.
+**Dashboard revision 0.1.21.2:** per-datastore charts now use an
+`auto-entities` `entity_id` wildcard and standard filter `options`
+instead of a Jinja loop that constructed nested card dictionaries.
+The filter selects only PBS Agent `used_gib` sensors, skipping unknown and
+unavailable readings; `this.entity_id` creates a separate complete
+`statistics-graph` for each matching datastore. This remains portable
+to any PBS host and multiple datastore names, without hardcoded site IDs,
+new MQTT sensors or lost Recorder history. It retains the previous
+empty-card guard and 30-day daily `max` tooltip behavior.
+Use **DH Sync → Проверить и обновить** to apply the YAML-only change.
+No Agent binary release, other product modification, or HA restart is required.
 
 The chart is not itself an SVG and includes Home Assistant's native
 interactive hover tooltips. Previous v0.1.17–0.1.19 RRD chart rendering
