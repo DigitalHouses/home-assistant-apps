@@ -1,5 +1,16 @@
 # DigitalHouses PBS Agent v0.1.18
 
+**Required operational UI/CLI target:** reuse the actual maintained
+[PVE Agent CLI and UI](../digitalhouses_pve_agent/README.md), including
+applicable commands, **exact** user-visible messages, status structure,
+version transition and HA card layout/text—not an independently designed
+lookalike. PBS/Plex-specific monitoring, permissions and safety behavior
+remain independent. Standards:
+[Linux Agent Management](../docs/standards/DH_LINUX_AGENT_MANAGEMENT_STANDARD.md) ·
+[Unified Product Status Card](../docs/standards/UNIFIED_PRODUCT_STATUS_CARD_STANDARD.md).
+**This is a requirement for focused alignment; this documentation change
+does not claim current CLI/HA implementations have full PVE parity.**
+
 Standalone **read-only** Linux/systemd monitoring agent for a local Proxmox Backup
 Server 4.x. HOME pilot: Debian MediaServer/PBS VM; no dependency on Plex Agent,
 PVE Agent, Cloudflare, Tailscale, Ansible or CORE.

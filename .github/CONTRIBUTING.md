@@ -19,6 +19,17 @@ DigitalHouses components use two delivery types:
 
 Shared repository contracts live under `docs/standards/`. Product-specific engineering records live under `docs/<product>/`.
 
+**Linux Agent UX rule:** before changing `dh-*-agent` CLI output, operation
+controls or Home Assistant status cards, read the **current PVE Agent**
+implementation on `main`. Its applicable command text, status layout,
+update/restart messages, error behavior, HA card text/chip placement and
+operation lifecycle are the required reference, not merely a functional
+inspiration. Preserve product-specific monitoring and safety requirements.
+See [Linux Agent Management Standard](../docs/standards/DH_LINUX_AGENT_MANAGEMENT_STANDARD.md)
+and [Unified Product Status Card Standard](../docs/standards/UNIFIED_PRODUCT_STATUS_CARD_STANDARD.md).
+Document justified differences and test actual user-visible output.
+Do not add a shared CLI library solely for stylistic consistency.
+
 Repository validation follows three layers:
 
 ```text

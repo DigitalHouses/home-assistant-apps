@@ -93,6 +93,54 @@ Icons and colors: progress clock during an authoritative operation; error/red on
 
 Localized labels and explanation belong to the HA dashboard; machine state values remain language-independent.
 
+### Linux Agent UI fidelity: PVE is the reference
+
+For **Linux Agents**, the maintained
+[PVE canonical Dashboard](../../digitalhouses_pve_agent/dashboards/ru/10_pve_proxmox.yaml)
+and [PVE reference card](../../digitalhouses_pve_agent/examples/dh_pve_agent_card_ru.yaml)
+are the **required starting point** for product status-and-control UX. The
+operational reference is the **current** PVE source on `main`, not an
+assistant-authored approximation or an earlier release screenshot.
+
+Where applicable, replicate the **actual PVE** control composition and the
+user-visible **Russian text** without rewording:
+
+- Same card position and layout, product name/version/`vCurrent → vTarget`
+  treatment, status hierarchy, color/icon meaning and available-update
+  indication.
+- Same chip order and labels: **Обновить · Версия · [Новая версия] ·
+  Перезапуск**; equivalent button behavior and confirmation where required.
+- Same wording for version-check result, install/restart/refresh progress,
+  operation duration, failure and stale/unavailable conditions, and
+  time-since-last-collection when that fact is available.
+- The Agent, not the frontend, must own the operation's authoritative state,
+  real measured duration, error and verified installed/target versions. The
+  UI may format a live timer but must not invent completion or data freshness.
+- Copy PVE card behavior/format where applicable; substitute only the product
+  name, functional icon, entity IDs and truly product-specific facts. Preserve
+  the established canonical View/section structure and place added
+  product-specific cards within it rather than creating arbitrary new grid
+  sections.
+
+These are **behavioral and textual parity requirements**, not a request to
+copy PVE's infrastructure probes, UPS safety gates, hardware sections, or
+privileged commands into PBS/Plex. A needed exception must be explained
+in that product's documentation and exercised by tests. Follow the existing
+operation-state contracts in this document and
+[Operation UI Standard](OPERATION_UI_STANDARD.md); correct a conflict in the
+reference/standard before treating it as a pattern to reproduce.
+
+**Acceptance:** compare rendered/fixture-based HA operation card examples
+for idle, update available, check (current/new), running install, completed
+install, error, MQTT unavailable and subsequent idle. Check exact
+applicable labels, version pairs, chip order, placement and actions against
+current PVE. Do not claim parity merely because both cards expose the same
+buttons or MQTT fields. Apply product by product rather than adding a
+repository-wide CI gate before existing agents are migrated.
+
+CLI parity is separately mandatory under
+[Linux Agent Management Standard](DH_LINUX_AGENT_MANAGEMENT_STANDARD.md).
+
 ## 5. Ownership: Agent versus HAOS App
 
 **Linux Agents** own `refresh`, stable-release `check`, `install`, and Agent service `restart` as documented runtime operations; publish aggregate state and reconcile completion across service restarts. Updating or restarting the Agent must not be represented as rebooting its managed host, VMs or underlying service.

@@ -1,7 +1,7 @@
 # DigitalHouses Linux Agent Management Standard
 
 **Status: MANDATORY**  
-**Applies to:** all DigitalHouses Linux/systemd agents, initially `digitalhouses_plex_agent` and `digitalhouses_pve_agent`.  
+**Applies to:** all DigitalHouses Linux/systemd agents, including PVE, PBS and Plex Agents.
 **Compliance:** documentation is not implementation. An agent release must satisfy and test this contract before claiming compliance.
 
 This is the normative shared standard for CLI commands, native configuration, the root quick reference and Linux host identity in Home Assistant. Product-specific parameters remain defined in each agent's README. Do not introduce a second config database, management daemon or API.
@@ -21,6 +21,55 @@ Mandatory subcommands (using the product's full executable path):
 - `restart`: restart **only** the existing agent systemd unit, not Plex/PVE/VMs or other services.
 - `set key=value [key=value ...]`: native, idempotent config management. Support one or multiple key/value pairs.
 - `help`: list all CLI commands and every supported configurable key, validation constraints and the full reference URL.
+
+## 1.1. PVE Agent is the operational CLI reference (mandatory)
+
+**Copy the existing behavior, not an approximate imitation.** For the common
+administrative interface, the **current maintained PVE Agent on `main`** is
+the authoritative reference. Developers must inspect these sources **before**
+designing or modifying the CLI of another Linux Agent:
+
+- [PVE CLI implementation](../../digitalhouses_pve_agent/app/cli.py)
+- [PVE CLI executable](../../digitalhouses_pve_agent/bin/dh-pve-agent)
+- [PVE README and command reference](../../digitalhouses_pve_agent/README.md)
+- [PVE CLI tests](../../digitalhouses_pve_agent/tests/)
+
+Port the PVE presentation and behavior to PBS, Plex and future Linux Agents,
+replacing only the product name, command/service/config paths and real
+product-specific facts. Common text is shared **verbatim** wherever the action
+and meaning are the same. Do not redesign labels, output layout, command
+semantics, success/error messages or update formatting simply because another
+presentation seems equivalent.
+
+| Common action | Canonical PVE-facing behavior to reproduce |
+| --- | --- |
+| `status` | Compact, human-readable summary: `DigitalHouses <Product> Agent <installed-version> | commit <commit>` where verified; uppercase section headers; indented, aligned `Key: value` fields; stable order of applicable common sections such as `SYSTEM` and `MQTT`, followed by the relevant product monitoring blocks; explicitly distinguish LIVE from STALE/UNAVAILABLE. Read existing runtime state rather than triggering expensive probes. |
+| `update` | Emit `UP_TO_DATE <installed-version>` if current; otherwise **before** installation emit `UPDATING <installed-version> -> <target-version>` and **only after actual version verification** emit `UPDATED <installed-version>`. Use a version, not the Git tag, as the final result. Preserve stdout flushing and nonzero failure behavior. |
+| `restart` | Show `Restarted <product-systemd-unit>` only after a successful agent-only restart. Refuse to misrepresent an inactive agent as restarted. |
+| `set` | Print exactly `CHANGED` or `UNCHANGED` with PVE-equivalent atomicity, safety, secret handling and conditional restart. |
+| `auto-update on/off/status` | Report `CHANGED ON/OFF`, `UNCHANGED ON/OFF` or `ON/OFF` with the same meanings and persistence rules. |
+| `help` | Match the PVE usage-line structure, absolute binary paths, command explanations, full native config key reference, constraints, protected secret input and documentation link; list genuine product extensions separately. |
+| Errors | Prefix user-facing failures with `ERROR:`, use a nonzero exit status, avoid Python exception class names/tracebacks and secret-bearing raw inputs; align the wording of equivalent failure scenarios with PVE. |
+
+**Product-specific exceptions are narrow.** PBS replaces PVE's hardware/UPS
+sections with real datastore, snapshot, task, sync and capacity information;
+Plex replaces them with real media/server facts. Domain-specific CLI commands
+(for example PBS `check-update` or `telemetry-delete`) may be added without
+changing common commands. Safety gates or runtime distinctions needed by the
+product (such as UPS protection on PVE) remain product-owned. Never copy a
+hardware probe, privileged action, unsafe assumption, unavailable datum or
+secret merely for visual parity.
+
+No new shared runtime library, CLI framework, daemon, configuration store or
+product coupling is required. Reuse the proven implementation pattern locally;
+each agent continues working independently. Preserve stable public CLI paths,
+systemd units and Home Assistant MQTT identities.
+
+**PVE is a moving, reviewed reference:** on every applicable CLI/HA-UI change,
+reopen the current source on `main` instead of relying on a remembered
+example or an old screenshot. If an existing PVE presentation contradicts
+the repository's explicit safety/state contract, fix/resolve that conflict
+in the reference and standard before propagating it; do not copy a defect.
 
 ## 2. Configuration
 
@@ -70,5 +119,21 @@ Before marking an agent compliant, test and document:
 3. Direct native configuration edits and unattended Ansible bootstrap; settings survive service/host restarts.
 4. Short installed `/root` TXT with fully qualified commands and correct GitHub link.
 5. Correct host Linux hostname/IP diagnostic sensors, no new HA device identity, and accurate updates after IP changes and MQTT reconnect.
+6. PVE-parity CLI **golden-output tests** for the applicable `status`,
+   `update` (up-to-date, new version, completed, failed/rollback),
+   `restart`, `set`, `auto-update`, `help` and `ERROR:` paths. Compare
+   the emitted section structure, field alignment, labels, message tokens,
+   version pair and exit status to the current PVE reference under equivalent
+   fixture states. Replace only product names/paths and real domain fields;
+   explicitly document genuine exceptions.
+7. No misleading live/stale values, invented installed versions, false
+   success after a worker exits without installing, changed semantics,
+   or additional dependencies solely to imitate a CLI layout.
+
+**Adoption is per product.** This standard establishes the required target;
+its publication does not by itself mean PBS/Plex CLI output is already
+equivalent to PVE, and does not silently fail unchanged products in CI.
+Add product-specific tests and complete the actual port in each product's
+focused implementation and release.
 
 **Separate policy:** an agent's MQTT failure mode (`MQTT_PAUSED` etc.) is product-specific and is **not** imposed on all agents by this management standard.

@@ -1,8 +1,20 @@
 # DigitalHouses Plex Agent
 
+
 [![CI](https://github.com/DigitalHouses/home-assistant-apps/actions/workflows/validate.yml/badge.svg)](https://github.com/DigitalHouses/home-assistant-apps/actions/workflows/validate.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](../LICENSE)
 ![Type: Linux agent](https://img.shields.io/badge/type-Linux%20agent-555555.svg)
+
+**Required operational UI/CLI target:** reuse the actual maintained
+[PVE Agent CLI and UI](../digitalhouses_pve_agent/README.md), including
+applicable commands, **exact** user-visible messages, status structure,
+version transition and HA card layout/text—not an independently designed
+lookalike. PBS/Plex-specific monitoring, permissions and safety behavior
+remain independent. Standards:
+[Linux Agent Management](../docs/standards/DH_LINUX_AGENT_MANAGEMENT_STANDARD.md) ·
+[Unified Product Status Card](../docs/standards/UNIFIED_PRODUCT_STATUS_CARD_STANDARD.md).
+**This is a requirement for focused alignment; this documentation change
+does not claim current CLI/HA implementations have full PVE parity.**
 
 Native Linux agent for Plex Media Server workload, playback, transcoding and library observability in Home Assistant through MQTT Discovery.
 
