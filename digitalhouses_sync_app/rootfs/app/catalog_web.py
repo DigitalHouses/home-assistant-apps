@@ -188,9 +188,7 @@ def make_server(sources: ProductSources, inventory=None, *, version: str = 'deve
                     "<section><h2>Автоматическая синхронизация</h2>"
                     "<p>GitHub DigitalHouses → Dashboard и Packages. "
                     "Обновление автоматическое и по кнопке, без подтверждений. "
-                    "Обычные YAML-пакеты перечитываются без перезапуска. "
-                    "Изменения Recorder по кнопке применяются проверенным "
-                    "перезапуском Home Assistant Core (не HAOS).</p>"
+                    "Home Assistant не перезапускается.</p>"
                     + (
                         "<form class='sync-now' action='./' method='post'>"
                         "<input type='hidden' name='op' value='sync'>"
@@ -214,28 +212,14 @@ def make_server(sources: ProductSources, inventory=None, *, version: str = 'deve
                     reload = {"Requested": "YAML-перезагрузка запрошена",
                               "Unavailable": "YAML-перезагрузка недоступна",
                               "Not available": "YAML-перезагрузка недоступна",
-                              "Core restart needed": "будет применено перезапуском Core",
                               "Not needed": "изменений нет"}.get(
                                   packages.get("reload"), "—")
                     summary += ("<p>Packages: <b>" + _h(loader) +
                                 "</b> · " + _h(reload) + "</p>")
-                    core = packages.get("core")
-                    if core is not None:
-                        label = {
-                            "Required": "нужен перезапуск Home Assistant Core",
-                            "Requested": "перезапуск Home Assistant Core запрошен",
-                            "Not needed": "конфигурация Recorder уже применялась",
-                            "Failed": "ошибка перезапуска Home Assistant Core",
-                            "Unavailable": "применение Recorder недоступно",
-                        }.get(core, "—")
-                        summary += "<p>Recorder: <b>" + _h(label) + "</b></p>"
-                    if core in ("Required", "Failed", "Unavailable"):
-                        summary += (
-                            "<p class='muted'>Нажмите «Проверить и обновить», чтобы "
-                            "после проверки конфигурации применить Recorder "
-                            "через перезапуск Home Assistant Core. "
-                            "HAOS и PBS не перезапускаются.</p>"
-                        )
+                    if packages.get("reload") != "Not needed":
+                        summary += ("<p class='muted'>Новые интеграции в пакетах "
+                                    "могут потребовать обычного перезапуска HA. "
+                                    "DH Sync не перезапускает Home Assistant.</p>")
                 dashboard = status.get("dashboard")
                 if isinstance(dashboard, dict) and dashboard.get("dashboards"):
                     summary += "<p><b>Панели Dashboard</b></p><ul>"

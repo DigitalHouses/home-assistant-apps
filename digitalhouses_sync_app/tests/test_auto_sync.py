@@ -6,7 +6,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from auto_sync import AutoSync, configured_packages, package_identity, package_keys, has_recorder_config
+from auto_sync import AutoSync, configured_packages, package_identity, package_keys
 from panel_config import PANEL_DIRECTORY, PANEL_REPOSITORY
 
 REPO = "https://github.com/DigitalHouses/any-repo"
@@ -66,12 +66,8 @@ class AutomaticSyncTests(unittest.TestCase):
             "homeassistant:\n  packages: !include_dir_merge_named packages/\n")
         self.backend = FakeBackend()
         self.publisher = RecordingPublisher()
-        self.core_calls = []
-        self.app = AutoSync(
-            home, self.data, backend=self.backend, publisher=self.publisher,
-            core_checker=lambda: self.core_calls.append("check") or True,
-            core_restarter=lambda: self.core_calls.append("restart"),
-        )
+        self.app = AutoSync(home, self.data, backend=self.backend,
+                            publisher=self.publisher)
 
     def test_first_install_and_idempotent_second_pass(self):
         first = self.app.sync(CLAIMS)
@@ -99,95 +95,6 @@ class AutomaticSyncTests(unittest.TestCase):
         self.assertEqual(updated["updated"], 1)
         self.assertEqual(self.backend.invalidate_calls, 2)
         self.assertEqual((self.root / "packages/dh/dh_example_package.yaml").read_bytes(), PACKAGE_NEW)
-
-    def test_recorder_config_only_restarts_core_on_manual_refresh_once(self):
-        auto = self.app.sync(CLAIMS)
-        self.assertEqual(auto["packages"]["core"], "Required")
-        self.assertEqual(self.core_calls, [], "automatic MQTT/hourly sync must not restart Core")
-        self.assertFalse((self.data / "recorder_core_activation.json").exists())
-
-        requested = self.app.sync(CLAIMS, refresh=True)
-        self.assertEqual(requested["state"], "OK", requested["issues"])
-        self.assertEqual(requested["packages"]["core"], "Requested")
-        self.assertEqual(requested["updated"], 0)  # already installed by v0.6.2
-        self.assertEqual(self.core_calls, ["check", "restart"])
-        receipt = json.loads((self.data / "recorder_core_activation.json").read_text())
-        self.assertEqual(len(receipt["revision"]), 64)
-
-        repeat = self.app.sync(CLAIMS, refresh=True)
-        self.assertEqual(repeat["packages"]["core"], "Not needed")
-        self.assertEqual(self.core_calls, ["check", "restart"], "idempotent manual update")
-
-    def test_new_recorder_package_revision_requires_next_single_core_restart(self):
-        self.app.sync(CLAIMS, refresh=True)
-        first = self.app._recorder_active_revision()
-        self.assertEqual(self.core_calls, ["check", "restart"])
-
-        self.backend.raw["example/packages/common/dh_example_package.yaml"] = PACKAGE_NEW
-        auto = self.app.sync(CLAIMS)
-        self.assertEqual(auto["updated"], 1)
-        self.assertEqual(auto["packages"]["core"], "Required")
-        self.assertEqual(self.app._recorder_active_revision(), first)
-        self.assertEqual(self.core_calls, ["check", "restart"])
-
-        manual = self.app.sync(CLAIMS, refresh=True)
-        self.assertEqual(manual["packages"]["core"], "Requested")
-        self.assertEqual(self.core_calls, ["check", "restart", "check", "restart"])
-        self.assertNotEqual(self.app._recorder_active_revision(), first)
-
-    def test_nonrecorder_package_never_restarts_core(self):
-        source = b"dh_example_package:\n  script:\n    example:\n      sequence: []\n"
-        self.backend.raw["example/packages/common/dh_example_package.yaml"] = source
-        auto = self.app.sync(CLAIMS)
-        self.assertNotIn("core", auto["packages"])
-        result = self.app.sync(CLAIMS, refresh=True)
-        self.assertNotIn("core", result["packages"])
-        self.assertEqual(self.core_calls, [])
-
-    def test_invalid_core_configuration_refuses_restart_and_leaves_pending(self):
-        self.app.sync(CLAIMS)
-        self.app.core_checker = lambda: False
-        report = self.app.sync(CLAIMS, refresh=True)
-        self.assertEqual(report["packages"]["core"], "Failed")
-        self.assertIn("config", " ".join(report["issues"]).lower())
-        self.assertEqual(self.core_calls, [])
-        self.assertIsNone(self.app._recorder_active_revision())
-        self.app.core_checker = lambda: self.core_calls.append("check") or True
-        retry = self.app.sync(CLAIMS, refresh=True)
-        self.assertEqual(retry["packages"]["core"], "Requested")
-        self.assertEqual(self.core_calls, ["check", "restart"])
-
-    def test_failed_restart_does_not_acknowledge_recorder_revision(self):
-        self.app.sync(CLAIMS)
-        def fail():
-            raise RuntimeError("Supervisor rejected restart")
-        self.app.core_restarter = fail
-        result = self.app.sync(CLAIMS, refresh=True)
-        self.assertEqual(result["packages"]["core"], "Failed")
-        self.assertIsNone(self.app._recorder_active_revision())
-        self.app.core_restarter = lambda: self.core_calls.append("restart")
-        retry = self.app.sync(CLAIMS, refresh=True)
-        self.assertEqual(retry["packages"]["core"], "Requested")
-        self.assertEqual(self.core_calls, ["check", "check", "restart"])
-
-    def test_package_detection_is_yaml_aware_not_substring_guess(self):
-        self.assertTrue(has_recorder_config(PACKAGE))
-        self.assertTrue(has_recorder_config(PACKAGE_NEW))
-        self.assertFalse(has_recorder_config(
-            b"# recorder:\ndh_example_package:\n  script: {}\n"
-        ))
-        self.assertFalse(has_recorder_config(
-            b"dh_example_package:\n  script:\n    recorder: echo test\n"
-        ))
-
-    def test_recorder_restart_missing_callbacks_is_visible_not_claimed(self):
-        self.app.sync(CLAIMS)
-        self.app.core_checker = None
-        self.app.core_restarter = None
-        result = self.app.sync(CLAIMS, refresh=True)
-        self.assertEqual(result["packages"]["core"], "Unavailable")
-        self.assertTrue(any("restart API unavailable" in issue for issue in result["issues"]))
-        self.assertIsNone(self.app._recorder_active_revision())
 
     def test_mqtt_dashboard_is_completely_ignored(self):
         claims = {"example/old": {**CLAIMS["example/default"], "dashboard": "dh-legacy"},

@@ -1,10 +1,8 @@
 """Automatic owner-only Git -> Home Assistant YAML synchronization.
 
 Both dashboards and packages use the same routine: discover, find by YAML
-identity, compare bytes, back up, atomically replace. No approvals.
-Manual refresh requests one checked Home Assistant Core restart when the
-managed Recorder package configuration has not yet been activated.
-No HAOS reboot, .storage writes, source version gates or deletions.
+identity, compare bytes, back up, atomically replace. No buttons or approval.
+No Home Assistant restarts, .storage writes, source version gates or deletions.
 """
 from __future__ import annotations
 
@@ -68,26 +66,6 @@ def package_keys(raw: bytes) -> list[str]:
             raise SyncError("Duplicate package key")
         result.append(key)
     return result
-
-
-def has_recorder_config(raw: bytes) -> bool:
-    """Recognize Recorder inside canonical package YAML, not in comments.
-
-    The package has one top-level key whose value is a mapping. Do not
-    interpret arbitrary strings as active configuration.
-    """
-    try:
-        document = yaml.compose(raw.decode("utf-8", "strict"), Loader=yaml.BaseLoader)
-    except (UnicodeError, yaml.YAMLError, RecursionError) as exc:
-        raise SyncError("Package YAML is invalid") from exc
-    if not isinstance(document, yaml.MappingNode):
-        return False
-    return any(
-        isinstance(body, yaml.MappingNode)
-        and any(isinstance(key, yaml.ScalarNode) and key.value == "recorder"
-                for key, _ in body.value)
-        for _, body in document.value
-    )
 
 
 def package_identity(raw: bytes) -> str:
@@ -174,15 +152,12 @@ def _safe_file(root: Path, relative: Path) -> Path:
 class AutoSync:
     def __init__(self, root: Path = Path("/homeassistant"),
                  data: Path = Path("/data/dh-sync-auto"), *, backend=None,
-                 publisher=None, reloader=None, core_checker=None,
-                 core_restarter=None):
+                 publisher=None, reloader=None):
         self.root = Path(root)
         self.data = Path(data)
         self.backend = backend if backend is not None else BACKEND
         self.publisher = publisher
         self.reloader = reloader
-        self.core_checker = core_checker
-        self.core_restarter = core_restarter
         self.lock = threading.RLock()
         self.report = {
             "last_run": "", "state": "Ожидание MQTT", "updated": 0,
@@ -391,37 +366,6 @@ class AutoSync:
                 LOG.exception("Recovery failed: %s", file.parent.name)
                 raise SyncError("An unfinished YAML transaction needs recovery")
 
-    def _recorder_revision(self, sources: list[dict]) -> str | None:
-        """Fingerprint successfully installed canonical Recorder packages.
-
-        A digest tracks only Recorder configuration, not arbitrary Dashboard
-        edits. It also detects the already-installed PBS package after DH Sync
-        upgrades from an older release with no activation receipt.
-        """
-        recorder = [src for src in sources if has_recorder_config(src["bytes"])]
-        if not recorder:
-            return None
-        local = self._local_packages()
-        items = []
-        for source in recorder:
-            relative = self._destination(source, local)
-            target = _safe_file(self.root, relative)
-            if not target.exists() or target.read_bytes() != source["bytes"]:
-                raise SyncError("Recorder package not installed: " + source["identity"])
-            items.append((source["identity"], digest(source["bytes"])))
-        return digest(json.dumps(sorted(items), separators=(",", ":")).encode("utf-8"))
-
-    def _recorder_active_revision(self) -> str | None:
-        receipt = self.data / "recorder_core_activation.json"
-        if not receipt.exists() or receipt.is_symlink():
-            return None
-        try:
-            data = json.loads(receipt.read_text("utf-8"))
-            value = data.get("revision")
-            return value if isinstance(value, str) and re.fullmatch("[0-9a-f]{64}", value) else None
-        except (OSError, ValueError, TypeError):
-            return None
-
     def sync(self, claims: dict, *, refresh: bool = False) -> dict:
         with self.lock:
             if refresh:
@@ -478,26 +422,9 @@ class AutoSync:
                         outcome = "Skipped: " + str(exc)[:150]
                         report["issues"].append(label + ": " + str(exc)[:150])
                     report["resources"].append({"name": label, "status": outcome})
-                recorder_revision = None
-                if report["packages"] is not None and not loader_problem:
-                    try:
-                        recorder_revision = self._recorder_revision(package_sources)
-                        if recorder_revision is not None:
-                            report["packages"]["core"] = (
-                                "Not needed" if recorder_revision == self._recorder_active_revision()
-                                else "Required"
-                            )
-                    except Exception as exc:
-                        report["packages"]["core"] = "Unavailable"
-                        report["issues"].append("Recorder package activation: " + str(exc)[:150])
-
                 if changed_packages or (report["packages"] and
                                         report["packages"]["loader"] == "Configured"):
-                    if (refresh and recorder_revision is not None
-                            and report["packages"]["core"] == "Required"):
-                        # Core restart below applies ALL YAML in this pass.
-                        report["packages"]["reload"] = "Core restart needed"
-                    elif self.reloader is not None:
+                    if self.reloader is not None:
                         try:
                             self.reloader()
                             report["packages"]["reload"] = "Requested"
@@ -515,34 +442,6 @@ class AutoSync:
                         report["issues"].extend(report["dashboard"].get("issues", []))
                     except Exception as exc:
                         report["issues"].append("DigitalHouses panels: " + str(exc)[:150])
-                # "Проверить и обновить" applies Recorder configuration, not
-                # just reloadable YAML. An hourly/retained MQTT sync never
-                # restarts Core unexpectedly. The activation fingerprint
-                # allows a one-time catch-up for already-installed packages.
-                if (refresh and recorder_revision is not None
-                        and report["packages"]["core"] == "Required"):
-                    if self.core_checker is None or self.core_restarter is None:
-                        report["packages"]["core"] = "Unavailable"
-                        report["issues"].append("Recorder Core restart API unavailable")
-                    else:
-                        try:
-                            if not self.core_checker():
-                                raise SyncError("Home Assistant configuration check failed")
-                            self.core_restarter()
-                            # Store only a confirmed *request*, not a claim that
-                            # Recorder has already produced historical statistics.
-                            self.data.mkdir(parents=True, exist_ok=True)
-                            _save_json(self.data / "recorder_core_activation.json", {
-                                "revision": recorder_revision,
-                                "requested_at": datetime.now(timezone.utc).isoformat(),
-                            })
-                            report["packages"]["core"] = "Requested"
-                        except Exception as exc:
-                            report["packages"]["core"] = "Failed"
-                            report["issues"].append(
-                                "Recorder Core restart: " + str(exc)[:150]
-                            )
-
                 if report["issues"]:
                     report["state"] = "Partial" if report["updated"] or report["unchanged"] else "Error"
             except Exception as exc:

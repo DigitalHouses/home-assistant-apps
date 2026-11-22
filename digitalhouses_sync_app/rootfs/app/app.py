@@ -22,7 +22,7 @@ PRODUCT_ID = "digitalhouses_sync_app"
 BASE = "DigitalHouses/Global/" + PRODUCT_ID
 DISCOVERY = "homeassistant/device/" + PRODUCT_ID + "/config"
 STARTED_AT = datetime.now(timezone.utc).isoformat()
-VERSION = os.environ.get("APP_VERSION", "0.6.3-local")
+VERSION = os.environ.get("APP_VERSION", "0.6.4-local")
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 LOG = logging.getLogger("dh_sync")
 
@@ -120,13 +120,10 @@ def main() -> None:
     telemetry_runner = TelemetryRunner(telemetry)
     sources = ProductSources()  # In-memory only; MQTT is the registry.
     # Publish YAML files and register the DigitalHouses panel over HA API.
-    # No direct .storage edits. An explicit manual update restarts HA Core
-    # once for unapplied Recorder config after a successful config check.
+    # No direct .storage edits, HA restart, or operator interaction.
     auto = AutoSync()
     auto.publisher = DashboardPublisher(auto.root, auto.data)
     auto.reloader = lambda: CoreAPI().reload_configuration()
-    auto.core_checker = lambda: CoreAPI().check_config()
-    auto.core_restarter = lambda: CoreAPI().restart_core()
     wake = threading.Event()
     ingress = make_server(
         sources, version=VERSION, port=8099, auto_status=auto.status,

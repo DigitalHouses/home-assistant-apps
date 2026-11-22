@@ -64,17 +64,6 @@ class CoreAPI:
         if not isinstance(result, list):
             raise SyncError("Invalid Home Assistant reload_all response")
 
-    def restart_core(self) -> None:
-        """Restart Core only (not HAOS/Supervisor) after a validated change.
-
-        Uses the same existing Supervisor-token-authenticated Core API proxy
-        as reload_all. The HTTP result acknowledges the request, not completion
-        of the subsequent Core boot or Recorder statistics compilation.
-        """
-        result = self._rest("services/homeassistant/restart", post=True, timeout=30)
-        if not isinstance(result, list):
-            raise SyncError("Invalid Home Assistant restart response")
-
     def dashboard(self) -> dict:
         try:
             import websocket
