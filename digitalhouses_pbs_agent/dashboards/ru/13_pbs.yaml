@@ -264,7 +264,7 @@ sections:
         heading: Занято на диске PBS · 30 дней
         heading_style: title
         icon: mdi:chart-bar
-      # Portable across PBS hosts and datastore names.
+      # Portable across PBS hosts, renamed entities and datastore names.
       # Create complete graphs only for discovered numeric datastore sensors;
       # the grid itself remains valid while Home Assistant is still loading.
       - type: custom:auto-entities
@@ -279,7 +279,7 @@ sections:
         card_param: cards
         filter:
           include:
-            - entity_id: sensor.dh_pbs_agent_datastore_*_used_gib
+            - domain: sensor
               attributes:
                 pbs_product: digitalhouses_pbs_agent
                 pbs_section: datastore
@@ -298,6 +298,8 @@ sections:
           exclude:
             - state: unknown
             - state: unavailable
+            - state: none
+            - state: ''
         sort:
           method: entity_id
         grid_options:
