@@ -1,28 +1,5 @@
 # Changelog
 
-## 0.6.3
-
-- Fix new PBS Recorder package showing `Статистика не найдена` after
-  DH Sync «Проверить и обновить»: the old `homeassistant.reload_all`
-  reloads only reloadable YAML domains and cannot activate changes to the
-  Recorder include filter.
-- For a canonical package containing a Recorder block, track its installed
-  SHA-256 content revision under `/data/dh-sync-auto/`. The automatic
-  retained-MQTT/hourly synchronization reports `Core restart required`
-  but **never restarts Core in the background**.
-- On the explicit admin **«Проверить и обновить»** action, validate HA
-  configuration using the existing Supervisor Core API proxy, then
-  request a **Core-only restart** once for a previously unapplied Recorder
-  revision, even if its YAML files were installed by DH Sync 0.6.2.
-  An unchanged revision is idempotent; failure leaves a visible retry
-  status and does not claim completion. No confirmation prompts, HAOS
-  reboot, extra credentials, altered Recorder DB settings or other
-  App/Agent code changes.
-- Distinguish YAML quick-reload outcomes from Recorder Core restart in
-  the DH Sync admin Ingress. Retain existing GitHub owner admission, YAML
-  atomic backups, and dashboard synchronization.
-
-
 ## 0.6.2
 
 - Implement DH Sync telemetry using shared protocol v1 / policy v2 with explicit HA App consent.
