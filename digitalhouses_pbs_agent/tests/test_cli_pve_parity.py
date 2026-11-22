@@ -355,7 +355,7 @@ class PBSPVEHAGoldenTests(unittest.TestCase):
         self.assertEqual(source.count("\n  - type: grid\n"), 4)
         self.assertIn("path: dh_pbs_agent", source)
         self.assertIn("heading: Занято на диске PBS · 30 дней", source)
-        self.assertIn("'type': 'statistics-graph'", source)
+        self.assertIn("type: statistics-graph", source)
         self.assertIn("'chart_type': 'bar'", source)
         self.assertIn("'period': 'day'", source)
         self.assertIn("'days_to_show': 30", source)
