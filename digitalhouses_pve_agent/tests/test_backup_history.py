@@ -286,6 +286,64 @@ def test_first_scan_does_not_replay_old_events_and_transitions_dedup(tmp_path):
     assert _monitor(tmp_path).outbox.pending() == ()
 
 
+def test_backup_failure_event_includes_verified_guest_error_and_name(tmp_path):
+    monitor = _monitor(tmp_path)
+    upid = "UPID:pve:002324B3:1019E2E7:6B021460:vzdump::root@pam:"
+    running = build_run(
+        _task(upid=upid, status="RUNNING"),
+        parse_log(["INFO: Starting Backup of VM 99100 (qemu)"], {}),
+    )
+    monitor.process({"coverage": "available", "runs": [running]})
+    assert monitor.outbox.pending() == ()
+
+    parsed = parse_log([
+        "INFO: starting new backup job: vzdump 99100 --storage pbs-serzhan",
+        "INFO: Starting Backup of VM 99100 (qemu)",
+        "INFO: VM Name: ha-prod",
+        "ERROR: Backup of VM 99100 failed - no such logical volume pve/vm-100-disk-1",
+    ], {})
+    failed = build_run(_task(upid=upid, status="job errors"), parsed)
+    monitor.process({"coverage": "available", "runs": [failed]})
+    monitor.process({"coverage": "available", "runs": [failed]})
+    pending = monitor.outbox.pending()
+    assert len(pending) == 1
+    payload = pending[0].payload
+    assert payload["event_type"] == "backup_job_failed"
+    assert payload["job_name"] == "vzdump · pbs-serzhan"
+    assert payload["error"] == "job errors"
+    assert payload["guests"] == [{
+        "id": "99100", "kind": "VM", "status": "failed",
+        "name": "ha-prod", "error": "no such logical volume pve/vm-100-disk-1",
+    }]
+
+
+def test_backup_failure_notification_is_portable_and_admin_delivery_is_optional():
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[1]
+    portable = (root / "packages/locales/ru/"
+                "dh_pve_agent_notification_local_package.yaml").read_text()
+    admin = (root / "examples/packages/locales/ru/"
+             "dh_pve_agent_backup_write2admins.yaml").read_text()
+
+    assert "id: dh_pve_agent_backup_failed_notification" in portable
+    assert "entity_id: event.dh_pve_agent_backup" in portable
+    assert "backup_job_failed" in portable
+    assert "action: persistent_notification.create" in portable
+    assert "script.write2admins" not in portable
+    assert "id: dh_pve_agent_backup_failed_write2admins" in admin
+    assert "action: script.write2admins" in admin
+    assert "action: persistent_notification.create" not in admin
+    assert "g.error" in portable and "g.error" in admin
+    assert "a.error" in portable and "a.error" in admin
+    assert "ns.missing" in portable and "ns.missing" in admin
+    assert "ns.unknown" in portable and "ns.unknown" in admin
+    assert "ns.skipped" in portable and "ns.skipped" in admin
+    # Both packages use one backup-failure event only; no success alert spam.
+    assert portable.count("- backup_job_failed") == 1
+    assert admin.count("- backup_job_failed") == 1
+
+
 def test_entity_attributes_stay_below_ha_limit_at_50_runs(tmp_path):
     monitor = _monitor(tmp_path)
     giant = [

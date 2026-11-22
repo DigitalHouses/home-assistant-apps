@@ -301,8 +301,13 @@ class BackupHistory:
                     "event_type": kind, "event_id": upid, "job_id": run["job_id"],
                     "job_name": run["label"], "started_at": run["started_at"],
                     "ended_at": run["ended_at"], "duration_seconds": run["duration_seconds"],
-                    "guests": [{"id": g["id"], "kind": g["kind"], "status": g["status"]}
-                               for g in run["guests"]],
+                    "error": run.get("error"),
+                    "guests": [
+                        {"id": g["id"], "kind": g["kind"], "status": g["status"],
+                         **({"name": g["name"]} if g.get("name") else {}),
+                         **({"error": g["error"]} if g.get("error") else {})}
+                        for g in run["guests"]
+                    ],
                 })
         self.observed = dict(list({**self.observed, **current}.items())[-200:])
         self.last_scan = int(datetime.now(timezone.utc).timestamp())

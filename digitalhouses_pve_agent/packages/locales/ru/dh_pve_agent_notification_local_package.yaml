@@ -1151,3 +1151,61 @@ dh_pve_agent_notification_local_package:
             title: "🔋🔴 UPS: батарея всё ещё требует замены"
             message: >-
               {% set charge = states('sensor.dh_pve_agent_ups_battery_charge') %}{% set voltage = states('sensor.dh_pve_agent_ups_battery_voltage') %}REPLACE BATTERY остаётся активным · заряд: {{ '—' if charge in ['unknown', 'unavailable', 'none', ''] else charge }}% · напряжение батареи: {{ '—' if voltage in ['unknown', 'unavailable', 'none', ''] else voltage }} В. Напоминание повторяется каждый час, пока UPS не снимет это состояние.
+
+    # Отдельный обработчик резервного копирования. Не меняет PVE/UPS уведомления.
+    - id: dh_pve_agent_backup_failed_notification
+      alias: DH PVE Agent · Ошибка резервного копирования
+      mode: queued
+      max: 20
+
+      triggers:
+        - trigger: event.received
+          target:
+            entity_id: event.dh_pve_agent_backup
+          options:
+            event_type:
+              - backup_job_failed
+          id: backup_job_failed
+
+      variables:
+        backup_title: "🚨💾 PVE: ошибка резервного копирования"
+        backup_message: >-
+          {%- set a = trigger.to_state.attributes -%}
+          {%- set guests = a.guests | default([], true) -%}
+          {%- set ns = namespace(parts=['Задание: ' ~ (a.job_name | default('vzdump', true))], missing=[], skipped=[], unknown=[]) -%}
+          {%- for g in guests -%}
+            {%- if g.status == 'failed' -%}
+              {%- set label = g.kind ~ ' ' ~ g.id -%}
+              {%- if g.name | default('') -%}{%- set label = label ~ ' (' ~ g.name ~ ')' -%}{%- endif -%}
+              {%- if g.error | default('') -%}{%- set label = label ~ ' — ' ~ g.error -%}{%- endif -%}
+              {%- set ns.missing = ns.missing + [label] -%}
+            {%- elif g.status == 'skipped' -%}
+              {%- set ns.skipped = ns.skipped + [g.kind ~ ' ' ~ g.id] -%}
+            {%- elif g.status == 'unknown' -%}
+              {%- set ns.unknown = ns.unknown + [g.kind ~ ' ' ~ g.id] -%}
+            {%- endif -%}
+          {%- endfor -%}
+          {%- if ns.missing -%}
+            {%- set ns.parts = ns.parts + ['Не скопировано: ' ~ (ns.missing | join('; '))] -%}
+          {%- elif a.error | default('') -%}
+            {%- set ns.parts = ns.parts + ['Ошибка: ' ~ a.error] -%}
+          {%- else -%}
+            {%- set ns.parts = ns.parts + ['Нет подтверждения успешного копирования'] -%}
+          {%- endif -%}
+          {%- if ns.skipped -%}
+            {%- set ns.parts = ns.parts + ['Пропущено: ' ~ (ns.skipped | join(', '))] -%}
+          {%- endif -%}
+          {%- if ns.unknown -%}
+            {%- set ns.parts = ns.parts + ['Без подтверждения: ' ~ (ns.unknown | join(', '))] -%}
+          {%- endif -%}
+          {%- if guests -%}
+            {%- set success_count = (guests | selectattr('status', 'eq', 'success') | list | length) -%}
+            {%- set ns.parts = ns.parts + ['Успешно: ' ~ success_count ~ ' из ' ~ (guests | length) ~ ' обработанных гостей'] -%}
+          {%- endif -%}
+          {{- ns.parts | join(' · ') -}}
+
+      actions:
+        - action: persistent_notification.create
+          data:
+            title: "{{ backup_title }}"
+            message: "{{ backup_message }}"
