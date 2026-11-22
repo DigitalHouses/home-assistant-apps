@@ -408,7 +408,7 @@ class PBSAgentTests(unittest.TestCase):
         self.assertEqual(s3["card_color"], "grey")
         self.assertEqual(s3["card_secondary"], "S3 · объём не определён")
         self.assertIn("'bar_size': 'medium'", view)
-        self.assertIn("'tap_action': {'action': 'more-info'}", view)
+        self.assertIn("'tap_action': {'action': 'more-info', 'entity': entity}", view)
 
     def test_ui_is_standalone_with_dynamic_store_and_job_names(self):
         view = (ROOT / "dashboards/ru/13_pbs.yaml").read_text(encoding="utf-8")

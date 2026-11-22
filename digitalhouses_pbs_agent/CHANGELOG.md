@@ -1,5 +1,13 @@
 # DigitalHouses PBS Agent
 
+## 0.1.21
+
+- Clicking a PBS datastore progress bar opens the Home Assistant native **more-info/history graph of that datastore's occupied percentage (%)**. Its dynamic `tap_action` explicitly targets the clicked `*_used_percent` sensor, including multi-datastore installations.
+- Mark existing percent sensors as numeric `state_class: measurement`, `unit_of_measurement: "%"`, with one-decimal precision and unknown (not zero) for missing/unavailable/S3 measurements. Preserve entity IDs, existing progress cards and GiB history.
+- Extend only the PBS Agent's own Recorder package with the dynamic `sensor.dh_pbs_agent_datastore_*_used_percent` include alongside `*_used_gib`. Recorder requires a Core restart to apply inclusion; DH Sync and unrelated products are **not** modified.
+- Add percent-discovery, multi-store click targeting, Recorder include and regression tests. No new chart dependency, database, service or PBS backup behavior changes.
+
+
 ## 0.1.20
 
 - Replace the static inline-SVG datastore chart with Home Assistant's

@@ -1,4 +1,4 @@
-# DH-View-Version: 0.1.20
+# DH-View-Version: 0.1.21
 # DH-View-Date: 2026-11-22
 title: PBS
 path: dh_pbs_agent
@@ -242,7 +242,7 @@ sections:
                   'color': color,
                   'bar_color': color,
                   'bar_size': 'medium',
-                  'tap_action': {'action': 'more-info'}
+                  'tap_action': {'action': 'more-info', 'entity': entity}
                 }] %}
               {% endif %}
             {% endfor %}

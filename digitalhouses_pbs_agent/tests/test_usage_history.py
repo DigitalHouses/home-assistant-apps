@@ -50,6 +50,77 @@ class PBSHistoryTests(unittest.TestCase):
         self.assertIn("datastore", sensor["json_attributes_template"])
         self.assertNotIn("usage_chart", parts)
 
+    def test_clickable_percent_sensor_is_numeric_and_statistics_eligible(self):
+        """The progress row targets its own % history in native HA more-info."""
+        with tempfile.TemporaryDirectory() as d:
+            parts = discovery(config_in(Path(d), "pbs-serzhan,pbs-core"))["components"]
+        for store in ("pbs_serzhan", "pbs_core"):
+            key = f"datastore_{store}_used_percent"
+            sensor = parts[key]
+            self.assertEqual(sensor["default_entity_id"],
+                             f"sensor.dh_pbs_agent_{key}")
+            self.assertEqual(sensor["state_class"], "measurement")
+            self.assertEqual(sensor["unit_of_measurement"], "%")
+            self.assertEqual(sensor["suggested_display_precision"], 1)
+            self.assertEqual(sensor["entity_category"], "diagnostic")
+            self.assertIn(".used_percent", sensor["value_template"])
+            self.assertIn("is number", sensor["value_template"])
+            self.assertIn("else none", sensor["value_template"])
+            self.assertIn("!= 'S3'", sensor["value_template"])
+            self.assertIn(f'"{store.replace("_", "-")}"', sensor["value_template"])
+            self.assertIn('"pbs_metric": "used_percent"',
+                          sensor["json_attributes_template"])
+
+    def test_clicking_progress_row_opens_own_percent_more_info_not_gib(self):
+        from jinja2 import Environment
+
+        import yaml
+        parsed = yaml.safe_load(VIEW.read_text())
+        template = parsed["sections"][1]["cards"][1]["filter"]["template"]
+        assert "entity-progress-card-template" in template
+        sensors = {
+            "sensor.dh_pbs_agent_datastore_pbs_serzhan_used_percent": {
+                "state": "13.3",
+                "attrs": {
+                    "pbs_product": "digitalhouses_pbs_agent",
+                    "pbs_section": "datastore",
+                    "pbs_metric": "used_percent",
+                    "card_name": "pbs-serzhan · занято 13.3%",
+                },
+            },
+            "sensor.dh_pbs_agent_datastore_pbs_core_used_percent": {
+                "state": "47.8",
+                "attrs": {
+                    "pbs_product": "digitalhouses_pbs_agent",
+                    "pbs_section": "datastore",
+                    "pbs_metric": "used_percent",
+                    "card_name": "pbs-core · занято 47.8%",
+                },
+            },
+        }
+        class SensorRef:
+            def __init__(self, eid):
+                self.entity_id = eid
+                self.name = eid
+
+        def state_attr(eid, attr):
+            return sensors[eid]["attrs"].get(attr)
+
+        def states(eid):
+            return sensors[eid]["state"]
+
+        rendered = Environment().from_string(template).render(
+            states=type("States", (), {"sensor": [SensorRef(eid) for eid in sensors]})(),
+            state_attr=state_attr,
+        )
+        # HA uses the per-card entity as the target. An explicit tap entity is
+        # essential for generated multi-datastore cards and future template changes.
+        for entity in sensors:
+            self.assertIn("'entity': '" + entity + "'", rendered)
+            self.assertIn("'action': 'more-info', 'entity': '" + entity + "'", rendered)
+        self.assertEqual(rendered.count("'action': 'more-info'"), 2)
+        self.assertNotIn("used_gib", rendered)
+
     def test_discovery_supports_multiple_datastores_and_never_hardcodes_a_store(self):
         with tempfile.TemporaryDirectory() as d:
             parts = discovery(config_in(Path(d), "pbs-serzhan,pbs-core"))["components"]
@@ -72,22 +143,29 @@ class PBSHistoryTests(unittest.TestCase):
         self.assertIn("  recorder:\n    include:\n      entity_globs:", source)
         globs = [line.strip()[2:] for line in source.splitlines()
                  if line.startswith("        - sensor.")]
-        self.assertEqual(globs, ["sensor.dh_pbs_agent_datastore_*_used_gib"])
-        pattern = globs[0]
+        self.assertEqual(globs, [
+            "sensor.dh_pbs_agent_datastore_*_used_gib",
+            "sensor.dh_pbs_agent_datastore_*_used_percent",
+        ])
         with tempfile.TemporaryDirectory() as d:
             parts = discovery(config_in(Path(d), "pbs-serzhan,pbs-core"))["components"]
-        targets = [parts["datastore_" + name + "_used_gib"]["default_entity_id"]
-                   for name in ("pbs_serzhan", "pbs_core")]
-        for entity in targets:
-            self.assertTrue(fnmatchcase(entity, pattern), entity)
+        for name in ("pbs_serzhan", "pbs_core"):
+            for metric in ("used_gib", "used_percent"):
+                entity = parts[f"datastore_{name}_{metric}"]["default_entity_id"]
+                self.assertTrue(any(fnmatchcase(entity, pattern) for pattern in globs), entity)
+                self.assertTrue(all(
+                    fnmatchcase(entity, pattern) == pattern.endswith(metric)
+                    for pattern in globs
+                ))
         for not_numeric in (
             "sensor.dh_pbs_agent_health",
-            "sensor.dh_pbs_agent_datastore_pbs_serzhan_used_percent",
+            "sensor.dh_pbs_agent_datastore_pbs_serzhan_available_gib",
             "sensor.dh_pbs_agent_backup_tree",
             "sensor.dh_pbs_agent_usage_chart",
             "event.dh_pbs_agent_backup_event",
         ):
-            self.assertFalse(fnmatchcase(not_numeric, pattern), not_numeric)
+            self.assertFalse(any(fnmatchcase(not_numeric, glob) for glob in globs),
+                             not_numeric)
 
         # Distinct package root prevents collision with the existing timezone
         # automation, and there are no host/database overrides.

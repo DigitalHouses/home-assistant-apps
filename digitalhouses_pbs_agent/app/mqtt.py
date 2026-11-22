@@ -234,9 +234,21 @@ def discovery(config: Config, sample: dict | None = None) -> dict:
             "'card_icon': " + arr + ".card_icon | default('mdi:database', true), "
             "'card_percent': " + arr + ".card_percent | default(0)"
         )
-        sensor(f"datastore_{suffix}_used_percent", store + " · занято, %", arr + ".used_percent | default('unknown', true)",
+        # The progress card's more-info dialog must display real % history.
+        # A typed numeric MQTT sensor is eligible for HA Recorder statistics;
+        # missing, unhealthy or S3-only capacity must not become fake 0%.
+        sensor(f"datastore_{suffix}_used_percent", store + " · занято, %",
+               f"(({arr}.used_percent) | round(2))"
+               f" if {arr}.used_percent is number"
+               f" and {arr}.health | default('UNAVAILABLE') != 'UNAVAILABLE'"
+               f" and {arr}.backend | default('LOCAL') != 'S3' else none",
                section="datastore", display_name=store, metric="used_percent",
                extra_attributes=details)
+        components[f"datastore_{suffix}_used_percent"].update({
+            "state_class": "measurement",
+            "unit_of_measurement": "%",
+            "suggested_display_precision": 1,
+        })
         # Historical occupied capacity: one numeric MQTT sensor per datastore.
         # HA Recorder owns long-term statistics and native daily hover tooltips.
         # Preserve diagnostic provenance markers for dynamic auto-entities.
