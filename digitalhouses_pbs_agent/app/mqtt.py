@@ -323,7 +323,7 @@ def discovery(config: Config, sample: dict | None = None) -> dict:
 
     operation_sensor("card", "Управление PBS Agent", "value_json.card.state",
                      "mdi:backup-restore",
-                     "{'operation': value_json.card.operation, 'started_at': value_json.card.started_at, 'finished_at': value_json.card.finished_at, 'duration_seconds': value_json.card.duration_seconds, 'error': value_json.card.error, 'last_collection_at': value_json.last_collection_at}")
+                     "{'operation': value_json.card.operation, 'started_at': value_json.card.started_at, 'finished_at': value_json.card.finished_at, 'duration_seconds': value_json.card.duration_seconds, 'error': value_json.card.error, 'last_collection_at': value_json.last_collection_at, 'from_version': value_json.card.from_version | default(none), 'target_version': value_json.card.target_version | default(none)}")
     operation_sensor("refresh_state", "Состояние обновления данных",
                      "value_json.refresh.state", "mdi:refresh",
                      "value_json.refresh")

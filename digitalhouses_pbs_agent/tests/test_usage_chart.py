@@ -127,13 +127,33 @@ class UsageChartTests(unittest.TestCase):
         view = (ROOT / "dashboards/ru/13_pbs.yaml").read_text()
         section = view.split("heading: Занято на диске PBS · 30 дней", 1)[1].split(
             "heading: Задания PBS", 1)[0]
-        self.assertIn("column_span: 2", view)
+        self.assertNotIn("column_span: 2", view)
+        # Product CI installs only the Agent runtime requirements, no
+        # PyYAML. Check exact section boundaries without adding a dependency.
+        sections = view.split("\n  - type: grid\n")
+        self.assertEqual(len(sections), 5)  # header + original 4 sections
+        self.assertIn("heading: Proxmox Backup Server", sections[1])
+        second = sections[2]
+        self.assertLess(second.index("heading: Хранилища PBS"),
+                        second.index("heading: Резервные копии"))
+        self.assertLess(second.index("heading: Резервные копии"),
+                        second.index("heading: Занято на диске PBS · 30 дней"))
+        self.assertIn("entity: sensor.dh_pbs_agent_usage_chart", second)
+        self.assertIn("heading: Задания PBS", sections[3])
+        self.assertIn("heading: Диагностика", sections[4])
         self.assertIn("custom:button-card", section)
         self.assertIn("entity?.attributes?.html", section)
         self.assertNotIn("data_generator:", section)
         self.assertNotIn("apexcharts-card", section)
         self.assertNotIn("new Date(", section)
         self.assertNotIn(".map(", section)
+        from app.usage_chart import render_usage_chart, GIB
+        chart = render_usage_chart({}, [{
+            "name": "pbs-home", "used_bytes": 120 * GIB,
+            "health": "HEALTHY", "backend": "LOCAL",
+        }], OBSERVED, "Asia/Almaty")["html"]
+        self.assertNotIn("min-width:600px", chart)
+        self.assertIn('viewBox="0 0 480 207"', chart)
 
     def test_publisher_keeps_full_rrd_in_ram_only_and_timezone_reformats_chart(self):
         with tempfile.TemporaryDirectory() as d:

@@ -44,6 +44,49 @@ class PBSLocalCliTests(unittest.TestCase):
         self.assertTrue(seen["kwargs"]["check"])
         self.assertTrue(seen["kwargs"]["capture_output"])
 
+    def test_rrd_uses_running_local_https_proxy_not_uninitialized_debug_cache(self):
+        class Proc:
+            stdout = json.dumps({"data": [
+                {"time": 1795300000, "used": 124000000000},
+                {"time": 1795301800, "used": 124500000000},
+            ]})
+        observed = []
+        with patch("app.collector.os.environ", {"PROXMOX_DEBUG_API_CODE": "1", "LANG": "C"}):
+            with patch("app.collector.subprocess.run", return_value=Proc()) as run:
+                results = PBSClient().get_rrd("pbs-serzhan")
+                observed.append(run.call_args)
+        self.assertEqual(len(results), 2)
+        argv, kwargs = observed[0].args[0], observed[0].kwargs
+        self.assertEqual(argv, [
+            "proxmox-backup-debug", "api", "get",
+            "/admin/datastore/pbs-serzhan/rrd",
+            "--timeframe", "month", "--cf", "AVERAGE",
+            "--output-format", "json",
+        ])
+        self.assertNotIn("PROXMOX_DEBUG_API_CODE", kwargs["env"],
+                         "standard PBS CLI must query running HTTPS cache")
+        self.assertEqual(kwargs["env"]["LANG"], "C")
+        self.assertEqual(kwargs["timeout"], 25)
+        self.assertTrue(kwargs["check"])
+
+    def test_rrd_proxy_rejects_bad_names_and_preserves_read_only_failure(self):
+        pbs = PBSClient()
+        for store in ("", "../outside", "a/b", "foo\nbar", "a" * 200):
+            with self.subTest(store=store):
+                with self.assertRaises(SourceError):
+                    pbs.get_rrd(store)
+        error = subprocess.CalledProcessError(
+            255, "proxmox-backup-debug", stderr="connection refused"
+        )
+        with patch("app.collector.subprocess.run", side_effect=error):
+            with self.assertRaisesRegex(SourceError, "PBS RRD HTTPS proxy failed.*connection refused"):
+                pbs.get_rrd("pbs-serzhan")
+        class Invalid:
+            stdout = "not JSON"
+        with patch("app.collector.subprocess.run", return_value=Invalid()):
+            with self.assertRaisesRegex(SourceError, "invalid JSON"):
+                pbs.get_rrd("pbs-serzhan")
+
     def test_nonzero_cli_error_does_not_become_success(self):
         with patch("app.collector.subprocess.run",
                    side_effect=subprocess.CalledProcessError(1, "proxmox-backup-debug")):
