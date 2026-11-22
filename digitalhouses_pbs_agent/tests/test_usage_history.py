@@ -61,6 +61,43 @@ class PBSHistoryTests(unittest.TestCase):
         self.assertEqual(first["state_topic"], second["state_topic"])
         self.assertEqual(first["unit_of_measurement"], second["unit_of_measurement"])
 
+    def test_canonical_recorder_package_includes_dynamic_numeric_datastores_only(self):
+        """Mirror the proven PVE include.entity_globs Recorder package."""
+        from fnmatch import fnmatchcase
+        root = ROOT / "packages/common"
+        package = root / "dh_pbs_agent_recorder_package.yaml"
+        self.assertTrue(package.is_file(), "DH Sync must discover the Recorder package")
+        source = package.read_text(encoding="utf-8")
+        self.assertIn("dh_pbs_agent_recorder_package:\n", source)
+        self.assertIn("  recorder:\n    include:\n      entity_globs:", source)
+        globs = [line.strip()[2:] for line in source.splitlines()
+                 if line.startswith("        - sensor.")]
+        self.assertEqual(globs, ["sensor.dh_pbs_agent_datastore_*_used_gib"])
+        pattern = globs[0]
+        with tempfile.TemporaryDirectory() as d:
+            parts = discovery(config_in(Path(d), "pbs-serzhan,pbs-core"))["components"]
+        targets = [parts["datastore_" + name + "_used_gib"]["default_entity_id"]
+                   for name in ("pbs_serzhan", "pbs_core")]
+        for entity in targets:
+            self.assertTrue(fnmatchcase(entity, pattern), entity)
+        for not_numeric in (
+            "sensor.dh_pbs_agent_health",
+            "sensor.dh_pbs_agent_datastore_pbs_serzhan_used_percent",
+            "sensor.dh_pbs_agent_backup_tree",
+            "sensor.dh_pbs_agent_usage_chart",
+            "event.dh_pbs_agent_backup_event",
+        ):
+            self.assertFalse(fnmatchcase(not_numeric, pattern), not_numeric)
+
+        # Distinct package root prevents collision with the existing timezone
+        # automation, and there are no host/database overrides.
+        timezone_package = (root / "dh_pbs_agent_timezone_package.yaml").read_text()
+        self.assertIn("dh_pbs_agent_timezone_package:", timezone_package)
+        self.assertNotIn("dh_pbs_agent_recorder_package:", timezone_package)
+        for forbidden in ("db_url:", "purge_keep_days:", "host:", "password:",
+                          "sensor.dh_pbs_agent_datastore_pbs_serzhan_used_gib"):
+            self.assertNotIn(forbidden, source)
+
     def test_use_existing_backblaze_native_stat_graph_pattern(self):
         example = REFERENCE.read_text()
         config = VIEW.read_text()

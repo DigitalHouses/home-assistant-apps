@@ -135,6 +135,17 @@ e.g. `sensor.dh_pbs_agent_datastore_pbs_serzhan_used_gib`:
   existing `custom:auto-entities` supply one or several actual local
   datastores to the native graph. Unknown/unavailable/S3 figures never
   appear as fake zeroes.
+- The canonical DH Sync common package
+  `packages/common/dh_pbs_agent_recorder_package.yaml` contains a minimal
+  `recorder.include.entity_globs` entry for
+  `sensor.dh_pbs_agent_datastore_*_used_gib`. This is necessary when the
+  existing HA Recorder has an include allowlist. It does **not** configure
+  or change `db_url`, PostgreSQL, retention or another product's filters.
+  It follows the established PVE and Backblaze Recorder package pattern.
+  **After DH Sync → Обновить, check configuration and restart Home Assistant**
+  to activate the Recorder filter; quick YAML reload is insufficient.
+  Long-term statistics may first become visible after the next statistics
+  compilation cycle; previously missed days are not backfilled.
 - HA Recorder maintains the measurements and long-term statistics.
   The new sensor has **no historical HA statistics before its installation**:
   the 30-day window fills naturally over time. Existing PBS-native RRD
