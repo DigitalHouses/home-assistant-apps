@@ -72,3 +72,17 @@ def test_package_keeps_problem_and_threshold_decisions_in_app():
     assert "recorder.purge_entities" not in text
     assert "time_pattern" not in text
     assert "dh_proxmox_" not in text
+
+
+def test_pve_agent_process_cpu_and_overload_are_recorded():
+    """Store agent CPU load and overload edges with existing PVE metrics."""
+    from pathlib import Path
+    package = (Path(__file__).resolve().parents[1] / "packages/common/"
+               "dh_pve_agent_package.yaml").read_text(encoding="utf-8")
+    recorder = package.split("  recorder:", 1)[1].split("  logbook:", 1)[0]
+    for entity in (
+        "sensor.dh_pve_agent_process_cpu_usage",
+        "binary_sensor.dh_pve_agent_cpu_overload",
+    ):
+        assert recorder.count("        - " + entity + "\n") == 1
+    assert "sensor.dh_pve_agent_cpu_usage" in recorder
