@@ -1,4 +1,4 @@
-# DH Sync 0.6.2 — Current architecture
+# DH Sync 0.6.3 — Current architecture
 
 Authoritative standard: [DH Sync Developer Standard](../../docs/standards/DH_SYNC_DEVELOPER_STANDARD.md).
 
@@ -9,7 +9,7 @@ Authoritative standard: [DH Sync Developer Standard](../../docs/standards/DH_SYN
 - Product Packages: `<product_path>/packages/common/*.yaml` and `packages/locales/ru/*.yaml`.
 - Panel YAML determines native Dashboard fields and ordered, reusable View references. MQTT `dashboard` is ignored.
 - Publish through HA's supported Lovelace Storage WebSocket API; no direct `.storage` edits or local View YAML copies.
-- Packages are synchronized atomically with backups under `/data/dh-sync-auto/`; do not update other Apps/Agents or restart HA.
+- Packages are synchronized atomically with backups under `/data/dh-sync-auto/`. Normal YAML changes use quick reload. Recorder configuration changes require a Core restart; automatic MQTT/hourly sync only flags them. On the admin **«Проверить и обновить»** action, a SHA-256 revision comparison and Home Assistant configuration check gate one Core-only restart request, recorded under `/data/dh-sync-auto/recorder_core_activation.json`. No HAOS/Supervisor or other App/Agent restarts, and no new services/credentials.
 - No migration, old panel adoption, product-version gates or manual confirmation.
 
 Implementation: `rootfs/app/panel_config.py`, `auto_sync.py`, `dashboard_runtime.py`, `git_source.py`.
