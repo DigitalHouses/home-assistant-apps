@@ -1,5 +1,104 @@
 # DigitalHouses PBS Agent
 
+## 0.1.20
+
+- Replace the static inline-SVG datastore chart with Home Assistant's
+  native **statistics-graph** bar card, exactly following the established
+  DigitalHouses Backblaze history pattern. The 30-day daily columns have
+  built-in hover tooltips showing the date and actual numeric GiB value.
+- Discover one real numeric MQTT sensor per configured datastore
+  (`sensor.dh_pbs_agent_datastore_<name>_used_gib`) from live PBS
+  `used_bytes`, with `unit_of_measurement: GiB`,
+  `state_class: measurement` and stable existing datastore provenance
+  metadata. HA Recorder owns the long-term statistics; no custom graphing
+  library, new HACS dependency or separate database is needed.
+- Use existing installed `custom:auto-entities` to pass dynamic datastore
+  sensors into the native `statistics-graph`, with `chart_type: bar`,
+  `period: day`, `days_to_show: 30`, `stat_types: [max]`.
+  Explicitly label the chart as the **daily maximum** occupied capacity,
+  not the last reading of a day or sum of uploaded VM/CT snapshot sizes.
+- The new numeric sensor's Recorder history begins after installation;
+  old PBS RRD readings are **not** automatically backfilled into HA.
+  Omit unavailable/S3 capacity rather than representing it as zero.
+- Delete the now-unneeded custom SVG renderer, retained HTML chart MQTT
+  sensor/topic publications and additional PBS RRD API polling path.
+  Retain the existing four-section dashboard layout with the graph at
+  the bottom of column 2, PVE-parity management card, backup trees and
+  all PBS/CORE backup jobs unchanged.
+
+
+## 0.1.19
+
+- Align the **actual PBS Agent CLI** with current PVE Agent 0.5.96,
+  per the mandatory DigitalHouses Linux Agent Management Standard.
+  The old flat `status` becomes a compact, aligned, sectioned
+  `DigitalHouses PBS Agent <version> | commit <commit>` overview:
+  `SYSTEM`, `MQTT`, `PBS`, `MONITORING`, `UPDATES`, `TELEMETRY`.
+  All product facts come from the existing local runtime cache; no
+  status-time PBS/MQTT network probes, fabricated current health, or
+  new background service.
+- Match PVE CLI messages exactly for common operations:
+  `UP_TO_DATE version`, `UPDATING old -> target` **before** installation,
+  `UPDATED version` only after verifying the installed version,
+  `Restarted digitalhouses_pbs_agent.service`, `CHANGED`/
+  `UNCHANGED`, `CHANGED ON/OFF`, `UNCHANGED ON/OFF`, and
+  `ERROR: ...` without Python exception names or secret values.
+- Use PVE-style absolute-path `help`, native INI keys and limits,
+  safe hidden-password instructions, configuration transaction rollback
+  on failed service restart, and refusal to start stopped Agents
+  through `restart` or `update`. Keep PBS-specific commands.
+- Base the **canonical HA control card** directly on the maintained PVE
+  Dashboard (exact Russian status-operation text, timer, colors,
+  four chip labels/order and confirmation placement). Use PBS entity
+  IDs, functional icon and safe PBS-only confirmations. Preserve
+  the already required from/target version pair while installing.
+- Keep all four PBS Dashboard sections, datastore chart and trees,
+  original MQTT identities, existing PBS/local job semantics, and
+  read-only collection. PVE/Plex implementations are untouched.
+- Add golden-output CLI and HA parity tests against the **current**
+  PVE source, plus installer validation, failure and rollback cases.
+
+
+## 0.1.18
+
+- Restore the original four-section PBS Dashboard layout: move the new
+  30-day occupied-disk chart to the bottom of the second section, after
+  datastore cards and backup-group tree. Remove two-column spanning and
+  chart horizontal scrollbar.
+- Fix RRD cache not initialized on PBS 4.2: a direct in-process
+  debug CLI call does not own the server RRD cache. Query the monthly
+  RRD through the standard PBS localhost HTTPS proxy CLI mode instead,
+  which accesses the running service's initialized cache.
+  Only the optional RRD history call changes transport.
+- Align operational feedback with PVE Agent: installed vX -> target vY
+  before and during installation, persistent from/target attributes,
+  exact version-check result, tenths-of-a-second timer/duration,
+  error details and time since last successful collection.
+- Verify the actual running version reaches the target before marking
+  a completed updater worker as successful. Keep MQTT topic identity,
+  background checks, native worker, five-second result lifecycle
+  and auto-update semantics. No backup-job or DH Sync changes.
+
+
+## 0.1.17
+
+- Add a 30-day daily bar graph for **physically used datastore filesystem
+  capacity**. Use the native read-only PBS
+  `admin/datastore/{store}/rrd?timeframe=month&cf=AVERAGE` data source and
+  each day's last valid RRD point; today's current datastore status is used
+  as the most recent measurement.
+- Agent prepares the 30 HA-timezone day buckets, real GiB values, tooltip
+  times, scaled bars, ranges and deltas. Dynamic local datastores are supported.
+  Missing days stay empty; no interpolation, fake zeroes or database.
+- Render a compact accessible inline SVG in one retained MQTT diagnostic
+  sensor. The existing button-card displays its ready-made HTML without
+  doing chart arithmetic or requiring another frontend dependency.
+- Standalone RRD read errors do not downgrade PBS health; show today's
+  live value and the reason when historical RRD is unavailable.
+- Preserve existing jobs, backups, backup-group and task history trees,
+  telemetry, DH Sync contracts, and view-limit controls.
+
+
 ## 0.1.16
 
 - Fix observed HOME PBS 4.2.10 incremental-size diagnostics:

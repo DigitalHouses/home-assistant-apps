@@ -76,6 +76,61 @@ class ControlTests(unittest.TestCase):
         self.assertFalse(self.control.available)
         self.assertEqual(self.control.card["duration_seconds"], 3.1)
 
+    def test_install_displays_precise_from_to_and_checks_result_version(self):
+        self.control.latest_version = "0.1.18"
+        self.control.available = True
+        with patch("app.control._read_version", return_value="0.1.17"):
+            with patch("app.control.subprocess.run", return_value=Mock(returncode=0)):
+                self.assertTrue(self.control.queue_worker("install"))
+        self.assertEqual(self.control.card["from_version"], "0.1.17")
+        self.assertEqual(self.control.card["target_version"], "0.1.18")
+        self.assertEqual(self.transport.published[-1]["card"]["from_version"], "0.1.17")
+        request = self.control.request.load()
+        self.control.worker.save({
+            "request_id": request["request_id"], "state": "completed",
+            "error": None, "duration_seconds": 2.5,
+        })
+        with patch("app.control._read_version", return_value="0.1.18"):
+            self.control.tick()
+        self.assertEqual(self.control.card["state"], "success")
+        self.assertFalse(self.control.available)
+
+    def test_install_version_mismatch_is_error_not_success(self):
+        self.control.latest_version = "0.1.18"
+        self.control.available = True
+        with patch("app.control._read_version", return_value="0.1.17"):
+            with patch("app.control.subprocess.run", return_value=Mock(returncode=0)):
+                self.assertTrue(self.control.queue_worker("install"))
+            request = self.control.request.load()
+            self.control.worker.save({
+                "request_id": request["request_id"], "state": "completed",
+                "error": None, "duration_seconds": 1.4,
+            })
+            self.control.tick()
+        self.assertEqual(self.control.card["state"], "error")
+        self.assertIn("ожидалась v0.1.18", self.control.card["error"])
+        self.assertTrue(self.control.available)
+
+    def test_pbs_card_matches_pve_operational_feedback(self):
+        view = (ROOT / "dashboards/ru/13_pbs.yaml").read_text()
+        pve = (ROOT.parent / "digitalhouses_pve_agent"
+               / "dashboards/ru/10_pve_proxmox.yaml").read_text()
+        for expected in ("Версия актуальна", "Доступна новая версия",
+                         "Обновлено", "Перезапуск агента", "Проверка версии",
+                         "Установка версии", "duration_seconds",
+                         "last_collection_at", "from_version", "target_version"):
+            self.assertIn(expected, view)
+        self.assertIn("tenths = Math.max", view)
+        self.assertIn("toFixed(1).replace('.', ',')", view)
+        self.assertIn("button.dh_pbs_agent_update", view)
+        self.assertIn("button.dh_pve_agent_update", pve)
+        from app.config import load_config
+        cfg = self.path / "operational.ini"
+        cfg.write_text("[mqtt]\nhost=broker\n[pbs]\ndatastores=pbs-home\n")
+        card = discovery(load_config(cfg))["components"]["card"]
+        self.assertIn("from_version", card["json_attributes_template"])
+        self.assertIn("target_version", card["json_attributes_template"])
+
     def test_restart_survives_agent_restart_with_worker_result(self):
         with patch("app.control.subprocess.run", return_value=Mock(returncode=0)):
             self.assertTrue(self.control.queue_worker("restart"))
@@ -222,8 +277,8 @@ class ControlTests(unittest.TestCase):
         self.assertIn("button.dh_pbs_agent_check_updates", view)
         self.assertIn("button.dh_pbs_agent_update", view)
         self.assertIn("button.dh_pbs_agent_restart_agent", view)
-        self.assertIn("text: Установить новый релиз PBS Agent?", view)
-        self.assertIn("text: Перезапустить только PBS Agent?", view)
+        self.assertIn("Установить новую версию PBS Agent?", view)
+        self.assertIn("Перезапустить PBS Agent?", view)
         self.assertIn("type: custom:auto-entities", view)
         self.assertIn("custom:entity-progress-card-template", view)
 

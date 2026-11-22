@@ -5,6 +5,7 @@ import argparse
 import json
 import queue
 import logging
+import os
 import signal
 import threading
 import time
@@ -111,15 +112,26 @@ def run(config_path: Path = DEFAULT_CONFIG, state_dir: Path = STATE_DIR) -> int:
     last_problem_state = StateStore(state_dir / "incidents.json")
     current_status = StateStore(state_dir / "runtime.json")
     mqtt_status = StateStore(state_dir / "mqtt.json")
+    try:
+        previous_mqtt = mqtt_status.load()
+    except (ValueError, OSError):
+        previous_mqtt = {}
+    last_connected = previous_mqtt.get("last_connected")
     def on_mqtt_connection(status: str, reason: str | None) -> None:
+        nonlocal last_connected
+        observed = datetime.now(timezone.utc).isoformat()
+        if status == "CONNECTED":
+            last_connected = observed
         mqtt_status.save({
             "status": status,
             "reason": reason,
-            "observed_at": datetime.now(timezone.utc).isoformat(),
+            "observed_at": observed,
+            "last_connected": last_connected,
         })
     mqtt_status.save({
         "status": "CONNECTING", "reason": None,
         "observed_at": datetime.now(timezone.utc).isoformat(),
+        "last_connected": last_connected,
     })
     publisher.on_connection_change = on_mqtt_connection
     try:
@@ -191,10 +203,23 @@ def run(config_path: Path = DEFAULT_CONFIG, state_dir: Path = STATE_DIR) -> int:
                     for item in ev:
                         publisher.event(item["category"], item["payload"])
                 current_status.save({
+                    "pid": os.getpid(),
                     "observed_at": sample["observed_at"],
                     "last_success_at": last_success_at,
                     "status": sample["status"], "mqtt": "CONNECTED" if publisher.connected else "DISCONNECTED",
                     "mqtt_last_ack": publisher.last_ack_at,
+                    "mqtt_publish_state": success,
+                    "pbs_version": sample.get("pbs_version"),
+                    "datastores": [{
+                        "name": x.get("name"), "health": x.get("health"),
+                        "used_percent": x.get("used_percent"),
+                    } for x in sample.get("datastores", []) if isinstance(x, dict)],
+                    "summary": {
+                        "backup_groups": len(sample.get("backup_groups", [])),
+                        "maintenance_jobs": len(sample.get("maintenance_jobs", [])),
+                        "active_problems": sample.get("summary", {}).get("active_problems"),
+                        "sync_overall": sample.get("sync_overall"),
+                    },
                     "error_count": len(sample["errors"]),
                     "pbs_errors": sample["errors"][:8],
                     "mqtt_connect_error": publisher.last_connect_error,
@@ -221,9 +246,11 @@ def run(config_path: Path = DEFAULT_CONFIG, state_dir: Path = STATE_DIR) -> int:
                 if refresh:
                     controller.finish("refresh", "Сбор данных PBS завершился ошибкой")
                 current_status.save({
+                    "pid": os.getpid(),
                     "observed_at": observed, "last_success_at": last_success_at,
                     "status": "UNAVAILABLE",
                     "mqtt": "CONNECTED" if publisher.connected else "DISCONNECTED",
+                    "mqtt_publish_state": False,
                     "error": f"{type(exc).__name__}: {str(exc)[:160]}",
                     "mqtt_connect_error": publisher.last_connect_error,
                 })

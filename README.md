@@ -51,6 +51,7 @@ Engineering documentation is separated into shared standards and product-specifi
 - [DigitalHouses Contract Data Policy](docs/standards/CONTRACT_DATA_POLICY.md)
 - [DH Sync Developer Standard — публикация MQTT /sync, Views и Packages](docs/standards/DH_SYNC_DEVELOPER_STANDARD.md)
 - [DigitalHouses Events & Notifications Standard](docs/standards/EVENTS_AND_NOTIFICATIONS_STANDARD.md)
+- [DigitalHouses Linux Agent Management Standard — PVE CLI is the mandatory operational reference](docs/standards/DH_LINUX_AGENT_MANAGEMENT_STANDARD.md)
 - [DigitalHouses Unified Product Status Card Standard](docs/standards/UNIFIED_PRODUCT_STATUS_CARD_STANDARD.md)
 - [DigitalHouses Release Policy](docs/standards/RELEASE_POLICY.md)
 - [Immutable Delivery, Compact Backup and Telemetry Standard](docs/standards/IMMUTABLE_DELIVERY_AND_TELEMETRY_STANDARD.md)

@@ -1,4 +1,4 @@
-# DigitalHouses Sync App — 0.6.2
+# DigitalHouses Sync App — 0.6.3
 
 **Single standard:** [DH Sync Developer Standard](../docs/standards/DH_SYNC_DEVELOPER_STANDARD.md).
 
@@ -10,10 +10,22 @@ DH Sync publishes GitHub-owned Home Assistant panels and packages, using retaine
 - Use the sequence of entries in each panel file as the tab order. MQTT `dashboard` is ignored.
 - Apply dashboard content via Home Assistant's official WebSocket APIs (Storage mode), not direct `.storage` edits or local View YAML copies.
 - Synchronize packages from `packages/common/*.yaml` and `packages/locales/ru/*.yaml`, with safe atomic writes and backups.
-- Automatically request a quick HA configuration reload when packages change. Never restart HA or change other Apps/Agents.
+- Automatically request a quick HA YAML reload for ordinary package changes. For Recorder configuration, the admin button **«Проверить и обновить»** checks HA configuration and requests a **single Home Assistant Core restart** if the canonical Recorder package revision is not yet activated; subsequent clicks with the same revision are idempotent. The automatic MQTT/hourly cycle never restarts Core; no HAOS/Supervisor reboot or other Agent/App restart.
 - Automatically sync after retained MQTT changes and then hourly. The admin Ingress button **«Проверить и обновить»** forces a fresh GitHub scan and immediately applies changed dashboards/packages. No confirmation.
 
 **Clean start:** v0.6.0 does not migrate old dashboards, former View folders, or MQTT routing. Existing dashboard URLs present in the new YAML are updated; unrelated or legacy panels are not deleted automatically.
+
+**Recorder on HOME:** DH Sync 0.6.2 installed `dh_pbs_agent_recorder_package`
+but `homeassistant.reload_all` cannot reload its entity inclusion filter.
+After upgrading DH Sync to **0.6.3**, press «Проверить и обновить» once.
+It detects already-installed Recorder packages through a persistent,
+content-based activation receipt, performs `check_config`, and requests a
+Home Assistant **Core-only** restart via the existing Supervisor-token-authenticated
+HA API. The source revision is then marked requested; a second click with
+unchanged Recorder resources will not trigger another restart.
+A configuration-check or Core API failure remains visible and retryable.
+The graph will show statistics only after HA Recorder collects new states
+and completes statistics aggregation. No history is invented or backfilled.
 
 Tests: `PYTHONPATH=digitalhouses_sync_app/rootfs/app:digitalhouses_sync_app/tests python -m unittest discover -s digitalhouses_sync_app/tests -p 'test_*.py'`
 

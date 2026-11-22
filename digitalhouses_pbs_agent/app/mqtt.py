@@ -8,6 +8,7 @@ import math
 import queue
 import threading
 import socket
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
 
@@ -236,6 +237,21 @@ def discovery(config: Config, sample: dict | None = None) -> dict:
         sensor(f"datastore_{suffix}_used_percent", store + " · занято, %", arr + ".used_percent | default('unknown', true)",
                section="datastore", display_name=store, metric="used_percent",
                extra_attributes=details)
+        # Historical occupied capacity: one numeric MQTT sensor per datastore.
+        # HA Recorder owns long-term statistics and native daily hover tooltips.
+        # Preserve diagnostic provenance markers for dynamic auto-entities.
+        sensor(f"datastore_{suffix}_used_gib", store + " · занято, GiB",
+               f"(({arr}.used_bytes / 1073741824) | round(2))"
+               f" if {arr}.used_bytes is defined"
+               f" and {arr}.health | default('UNAVAILABLE') != 'UNAVAILABLE'"
+               f" and {arr}.backend | default('LOCAL') != 'S3' else none",
+               section="datastore", display_name=store, metric="used_gib",
+               icon="mdi:database")
+        components[f"datastore_{suffix}_used_gib"].update({
+            "state_class": "measurement",
+            "unit_of_measurement": "GiB",
+            "suggested_display_precision": 2,
+        })
         sensor(f"datastore_{suffix}_available_gib", store + " · свободно, ГиБ",
                f"(({arr}.available_bytes / 1073741824) | round(2)) if {arr}.available_bytes is defined else 'unknown'",
                section="datastore", display_name=store, metric="available_gib")
@@ -299,7 +315,7 @@ def discovery(config: Config, sample: dict | None = None) -> dict:
 
     operation_sensor("card", "Управление PBS Agent", "value_json.card.state",
                      "mdi:backup-restore",
-                     "{'operation': value_json.card.operation, 'started_at': value_json.card.started_at, 'finished_at': value_json.card.finished_at, 'duration_seconds': value_json.card.duration_seconds, 'error': value_json.card.error, 'last_collection_at': value_json.last_collection_at}")
+                     "{'operation': value_json.card.operation, 'started_at': value_json.card.started_at, 'finished_at': value_json.card.finished_at, 'duration_seconds': value_json.card.duration_seconds, 'error': value_json.card.error, 'last_collection_at': value_json.last_collection_at, 'from_version': value_json.card.from_version | default(none), 'target_version': value_json.card.target_version | default(none)}")
     operation_sensor("refresh_state", "Состояние обновления данных",
                      "value_json.refresh.state", "mdi:refresh",
                      "value_json.refresh")
@@ -537,8 +553,11 @@ class Publisher:
         # Queue while locked so an incoming Number command cannot be overwritten
         # by a concurrent polling publish with older view settings.
         with self._state_lock:
-            updated = {**payload, "view_limits": self.view_limits.snapshot(),
-                       "ha_timezone": getattr(self, "ha_timezone", None)}
+            updated = {
+                **payload,
+                "view_limits": self.view_limits.snapshot(),
+                "ha_timezone": getattr(self, "ha_timezone", None),
+            }
             self.last_state = updated
             if not self.connected:
                 return False

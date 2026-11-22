@@ -1,4 +1,15 @@
-# DigitalHouses PBS Agent v0.1.16
+# DigitalHouses PBS Agent v0.1.20
+
+**Required operational UI/CLI target:** reuse the actual maintained
+[PVE Agent CLI and UI](../digitalhouses_pve_agent/README.md), including
+applicable commands, **exact** user-visible messages, status structure,
+version transition and HA card layout/text—not an independently designed
+lookalike. PBS/Plex-specific monitoring, permissions and safety behavior
+remain independent. Standards:
+[Linux Agent Management](../docs/standards/DH_LINUX_AGENT_MANAGEMENT_STANDARD.md) ·
+[Unified Product Status Card](../docs/standards/UNIFIED_PRODUCT_STATUS_CARD_STANDARD.md).
+**This is a requirement for focused alignment; this documentation change
+does not claim current CLI/HA implementations have full PVE parity.**
 
 Standalone **read-only** Linux/systemd monitoring agent for a local Proxmox Backup
 Server 4.x. HOME pilot: Debian MediaServer/PBS VM; no dependency on Plex Agent,
@@ -25,6 +36,163 @@ status, snapshots, **push** sync, verify, prune and GC jobs, plus local
 read-only ZFS and filesystem status. It does not run or
 edit PBS jobs, backup snapshots, PVE jobs, Plex, ZFS or retention.
 A job appearing as OK is **not** proof of restore verification.
+
+## Canonical PVE CLI and HA operational parity (v0.1.19)
+
+The mandatory [Linux Agent Management Standard](../docs/standards/DH_LINUX_AGENT_MANAGEMENT_STANDARD.md)
+and [Unified Product Status Card Standard](../docs/standards/UNIFIED_PRODUCT_STATUS_CARD_STANDARD.md)
+make the **current** PVE Agent the exact CLI/operational UI reference.
+PBS now follows PVE's common output and Russian operational labels rather
+than independently redesigning equivalents. Product-specific PBS monitoring,
+security properties and native commands remain independent.
+
+Root CLI examples (read-only status does **not** query PBS or MQTT):
+
+```text
+/usr/local/bin/dh-pbs-agent status
+DigitalHouses PBS Agent 0.1.19 | commit <verified-commit>
+SYSTEM
+  Service:   active/running | uptime <seconds>
+  Hostname:  <actual Linux hostname>
+  IP:        <actual Linux VM IP>
+MQTT
+  Broker:    <configured host:port>
+  State:     CONNECTED | retry 60s, connect timeout 5s
+  Connected: <last connection timestamp>
+  PUBACK:    <last confirmed publish timestamp>
+  Publish:   ACKNOWLEDGED
+  Error:     none known
+PBS
+  Status:    HEALTHY
+  Version:   <actual PBS version>
+  Datastore: <name> | HEALTHY | used <percent>
+MONITORING
+  Data:      LIVE, <age>s old
+  Groups:    <count>
+  Jobs:      <count>
+UPDATES
+  Auto:      ON
+  Latest:    <latest checked stable version>
+TELEMETRY
+  Enabled:   ON
+```
+
+Fields and values are **examples of layout**, never fabricated runtime data.
+A stopped/mismatched/stale Agent prints `STALE/UNAVAILABLE` instead of
+replaying old green PBS/MQTT observations.
+
+```text
+/usr/local/bin/dh-pbs-agent update
+UP_TO_DATE 0.1.19
+
+# When a verified newer release exists:
+UPDATING 0.1.19 -> 0.1.20
+UPDATED 0.1.20
+
+/usr/local/bin/dh-pbs-agent restart
+Restarted digitalhouses_pbs_agent.service
+
+/usr/local/bin/dh-pbs-agent auto-update on
+CHANGED ON
+/usr/local/bin/dh-pbs-agent auto-update on
+UNCHANGED ON
+```
+
+The exact installed/current versions are only printed when verified;
+an unsuccessful installer never reports `UPDATED`. `set` validates the
+complete native INI change, writes atomically and rolls back on failed
+restart, preserving owner/mode/comments. `help` lists all actual PBS
+native INI keys, constraints and secret-input instructions. The extra
+`check-update` and `telemetry-delete` commands remain product-specific.
+
+The canonical View takes its control card text/timer/icon/color/chip order
+directly from the maintained PVE View, substituting PBS identity and
+PBS-specific safety confirmations. The previous durable `vX → vY`
+display during a running Agent installation is preserved. PBS datastore
+bars, thirty-day chart, backup trees and four-column section layout are
+unchanged. Golden tests compare the rendered statuses, precise CLI
+messages and copied HA operation script against the live PVE source in
+this repository.
+
+## Occupied datastore capacity: native HA history graph (v0.1.20)
+
+The **second PBS Dashboard column** ends with a native Home Assistant
+`statistics-graph` card, matching DigitalHouses Backblaze App's proven
+history display. It shows **30 daily bars** for occupied capacity, with
+**date and occupied GiB visible on mouse hover**. The header explicitly
+says *Занято за день (максимум)* because native HA `max` long-term
+statistics represent the **daily peak**, not the final value at midnight.
+After Prune/GC the bar for the day can therefore still reflect earlier
+higher usage; the next day's bar reflects the lower level.
+
+The Agent publishes a numeric MQTT sensor for each local datastore,
+e.g. `sensor.dh_pbs_agent_datastore_pbs_serzhan_used_gib`:
+- Source: current real `used_bytes` from native PBS datastore status,
+  divided by 1,073,741,824 (GiB), rounded to two decimals
+- MQTT Discovery: `state_class: measurement`,
+  `unit_of_measurement: GiB`, `suggested_display_precision: 2`
+- Real datastore metadata (`pbs_product/pbs_section/pbs_metric`) lets the
+  existing `custom:auto-entities` supply one or several actual local
+  datastores to the native graph. Unknown/unavailable/S3 figures never
+  appear as fake zeroes.
+- The canonical DH Sync common package
+  `packages/common/dh_pbs_agent_recorder_package.yaml` contains a minimal
+  `recorder.include.entity_globs` entry for
+  `sensor.dh_pbs_agent_datastore_*_used_gib`. This is necessary when the
+  existing HA Recorder has an include allowlist. It does **not** configure
+  or change `db_url`, PostgreSQL, retention or another product's filters.
+  It follows the established PVE and Backblaze Recorder package pattern.
+  **DH Sync 0.6.3+:** «Проверить и обновить» checks configuration and
+  requests the one-time Home Assistant Core restart automatically when a
+  Recorder package revision still needs activation. Before 0.6.3, a
+  manual Home Assistant restart is required; quick YAML reload is
+  insufficient.
+  Long-term statistics may first become visible after the next statistics
+  compilation cycle; previously missed days are not backfilled.
+- HA Recorder maintains the measurements and long-term statistics.
+  The new sensor has **no historical HA statistics before its installation**:
+  the 30-day window fills naturally over time. Existing PBS-native RRD
+  data are not imported into Recorder, and no separate history database,
+  component or HACS graph dependency is added.
+
+The chart is not itself an SVG and includes Home Assistant's native
+interactive hover tooltips. Previous v0.1.17–0.1.19 RRD chart rendering
+and its unnecessary monthly RRD CLI polling are removed. PBS Agent only
+publishes the current measurement during its normal collection cycle.
+The chart is deliberately at the **bottom of the second existing
+section**, and all other UI/CLI operations retain PVE operational parity.
+
+## Dashboard layout and PVE-style operational control (v0.1.18)
+
+The dashboard retains four original sections: PBS operations/health,
+datastore usage and backup groups, scheduled jobs/task history, and
+diagnostics. The 30-day usage graph sits at the **bottom of the second
+section**, does not span multiple columns and fits without horizontal
+scrolling.
+
+The PBS Agent operation card mirrors PVE Agent's user-facing lifecycle:
+the upgrade path shows the installed vX and new vY both before and
+while installing. Checking a version reports whether it is current,
+running actions show a 0.1-second stopwatch, successful actions report
+duration, failures show the cause and idle status shows elapsed time
+since the last collection. A worker success does not count as an
+installed update unless the current agent version reaches the target.
+
+Historical note: in 0.1.18–0.1.19 the old SVG graph queried the PBS
+RRD via the running local proxy to fix `RRD cache not initialized`.
+**That RRD chart and its polling were retired in 0.1.20** in favor of
+native HA Recorder statistics and hoverable columns.
+
+## Historical custom capacity chart (v0.1.17–v0.1.19, superseded)
+
+Previous releases rendered a PBS RRD-derived 30-day SVG using the
+`sensor.dh_pbs_agent_usage_chart` HTML attribute. Its browser hover did
+not behave as a real chart, motivating the switch in v0.1.20 to the native
+HA Recorder `statistics-graph`. The old MQTT chart and RRD collector
+were removed. The observable quantity remains real occupied capacity
+on the datastore's filesystem, **not** the sum of logical backup sizes
+or compressed upload amounts; unrelated files on the same filesystem
+can also contribute.
 
 ## Correct incremental size collection (v0.1.16)
 

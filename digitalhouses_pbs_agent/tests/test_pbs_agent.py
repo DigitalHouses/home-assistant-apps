@@ -68,6 +68,8 @@ class FakePBS:
             return {"total": 1000, "used": self.used, "avail": 1000 - self.used}
         if path == "admin/datastore/pbs-home/snapshots":
             return self.snapshots
+        if path == "admin/datastore/pbs-home/rrd":
+            return list(getattr(self, "rrd", []))
         if path == "admin/sync":
             records = [{"id": "push-home", "sync-direction": "push",
                         "last-run-state": self.sync_status,
@@ -269,7 +271,7 @@ class PBSAgentTests(unittest.TestCase):
                       remote["components"]["health"]["json_attributes_template"])
         stores = [item for item in remote["components"].values()
                   if item.get("name", "").startswith("vault-")]
-        self.assertEqual(len(stores), 4)
+        self.assertEqual(len(stores), 6)  # three metrics per datastore, includes numeric GiB
         for item in stores:
             self.assertIn('"pbs_section": "datastore"', item["json_attributes_template"])
         jobs = {key: value for key, value in remote["components"].items()
@@ -350,7 +352,7 @@ class PBSAgentTests(unittest.TestCase):
         ]}
         self.assertTrue(pub.state(basic))
         published = pub.client.publish.call_args_list
-        self.assertEqual(len(published), 6)  # discovery, state, four text sensors
+        self.assertEqual(len(published), 6)  # discovery, state, four existing trees
         config = json.loads(published[0].args[1])
         self.assertIn(job_component_key("Verify", "site-verify"), config["components"])
         self.assertEqual(pub.job_registry.load()["jobs"], [["Verify", "site-verify"]])

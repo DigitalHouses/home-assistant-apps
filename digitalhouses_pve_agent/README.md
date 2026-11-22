@@ -1,8 +1,15 @@
 # DigitalHouses PVE Agent
 
+
 [![CI](https://github.com/DigitalHouses/home-assistant-apps/actions/workflows/validate.yml/badge.svg)](https://github.com/DigitalHouses/home-assistant-apps/actions/workflows/validate.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](../LICENSE)
 ![Type: Linux agent](https://img.shields.io/badge/type-Linux%20agent-555555.svg)
+
+**Shared Linux Agent operational UX:** PVE Agent is the canonical reference
+for applicable CLI command text, `status` output, update/restart/version
+feedback and the Home Assistant status/control card. The normative contract
+is in [Linux Agent Management Standard](../docs/standards/DH_LINUX_AGENT_MANAGEMENT_STANDARD.md)
+and [Unified Product Status Card Standard](../docs/standards/UNIFIED_PRODUCT_STATUS_CARD_STANDARD.md).
 
 Native Linux agent for **Proxmox VE 8.x** (previously verified) and **9.x** (requires live acceptance) that publishes host, CPU, memory, storage, disk/SMART, GPU, fan, VM/LXC and optional NUT/UPS observability to Home Assistant through MQTT Discovery.
 
