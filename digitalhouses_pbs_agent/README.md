@@ -142,11 +142,8 @@ e.g. `sensor.dh_pbs_agent_datastore_pbs_serzhan_used_gib`:
   existing HA Recorder has an include allowlist. It does **not** configure
   or change `db_url`, PostgreSQL, retention or another product's filters.
   It follows the established PVE and Backblaze Recorder package pattern.
-  **DH Sync 0.6.3+:** «Проверить и обновить» checks configuration and
-  requests the one-time Home Assistant Core restart automatically when a
-  Recorder package revision still needs activation. Before 0.6.3, a
-  manual Home Assistant restart is required; quick YAML reload is
-  insufficient.
+  **After DH Sync → Обновить, check configuration and restart Home Assistant**
+  to activate the Recorder filter; quick YAML reload is insufficient.
   Long-term statistics may first become visible after the next statistics
   compilation cycle; previously missed days are not backfilled.
 - HA Recorder maintains the measurements and long-term statistics.
