@@ -332,14 +332,15 @@ def test_backup_discovery_contains_stable_sensor_number_and_event():
 
 def test_dashboard_uses_collapsible_tree_and_number():
     from pathlib import Path
-    import yaml
 
     raw = (Path(__file__).resolve().parents[1] / "dashboards" / "ru" /
            "10_pve_proxmox.yaml").read_text()
     assert "<details" in raw
     assert "state !== 'success'" in raw
     assert "number.dh_pve_agent_backup_history_limit" in raw
-    yaml.safe_load(raw)
+    assert "sensor.dh_pve_agent_backup_history" in raw
+    # The repository contract validator already parses canonical dashboard YAML.
+    # Avoid adding PyYAML to the agent runtime just for this view smoke test.
 
 
 def test_active_task_is_included_from_source_all():
