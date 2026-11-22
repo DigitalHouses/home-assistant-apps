@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.5.99
+
+- Add the existing `sensor.dh_pve_agent_process_cpu_usage` and `binary_sensor.dh_pve_agent_cpu_overload` to the canonical DH Sync PVE Recorder include list. This retains agent process load and overload transitions for comparison with native `vzdump` history; no new collectors, polling, alerts, or changes to other products.
+
 ## 0.5.98
 
 - Enrich existing QoS 1 `backup_job_failed` machine events with verified per-guest `name` and `error` plus task-level `error`. Preserve the UPID deduplication, no historical alert replay, successful event behavior, and the read-only backup observer.

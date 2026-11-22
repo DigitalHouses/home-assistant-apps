@@ -21,6 +21,8 @@ dh_pve_agent_package:
     include:
       entities:
         - sensor.dh_pve_agent_cpu_usage
+        - sensor.dh_pve_agent_process_cpu_usage
+        - binary_sensor.dh_pve_agent_cpu_overload
         - sensor.dh_pve_agent_cpu_temperature
         - sensor.dh_pve_agent_cpu_frequency
         - sensor.dh_pve_agent_memory_usage
