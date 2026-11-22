@@ -152,44 +152,47 @@ class PBSHistoryTests(unittest.TestCase):
             self.assertNotIn(forbidden, source)
 
     def test_native_statistics_graph_is_constructed_only_with_an_entity(self):
-        """Regression: avoid transient config error while auto-entities loads."""
+        """Portable chart: one complete card for every discovered PBS datastore."""
         example = REFERENCE.read_text(encoding="utf-8")
         source = VIEW.read_text(encoding="utf-8")
         chart = source.split("heading: Занято на диске PBS · 30 дней", 1)[1].split(
             "heading: Задания PBS", 1,
         )[0]
 
-        # A dynamically populated entities: [] could reach statistics-graph
-        # before Jinja finishes resolving all MQTT entities. Instead build
-        # complete statistics cards inside a grid, which accepts empty cards.
         self.assertIn("type: custom:auto-entities", chart)
         self.assertIn("show_empty: false", chart)
         self.assertIn("else:\n          type: markdown\n          content: Ожидание данных графика PBS", chart)
         self.assertIn("card:\n          type: grid\n          columns: 1\n          square: false", chart)
         self.assertIn("card_param: cards", chart)
         self.assertNotIn("card_param: entities", chart)
-        self.assertIn("{% set ns = namespace(cards=[]) %}", chart)
-        self.assertIn("{% set ns.cards = ns.cards + [{", chart)
-        self.assertIn("'type': 'statistics-graph'", chart)
-        self.assertIn("'entities': [{", chart)
-        self.assertIn("'entity': storage.entity_id", chart)
-        self.assertIn("'name': state_attr(storage.entity_id, 'pbs_display_name')", chart)
-        self.assertIn("{{- ns.cards -}}", chart)
-        self.assertNotIn("        sort:\n", chart)
-        self.assertNotIn("unique: true", chart)
-        self.assertIn("states.sensor | sort(attribute='entity_id')", chart)
-        self.assertIn("pbs_metric') == 'used_gib'", chart)
-        self.assertIn("and states(storage.entity_id) not in", chart)
+        self.assertIn("domain: sensor", chart)
+        self.assertNotIn("entity_id: sensor.dh_pbs_agent_datastore_*_used_gib", chart)
+        for marker in ("pbs_product: digitalhouses_pbs_agent",
+                       "pbs_section: datastore", "pbs_metric: used_gib"):
+            self.assertIn(marker, chart)
+        self.assertIn("type: statistics-graph", chart)
+        self.assertIn("entities:\n                  - this.entity_id", chart)
+        self.assertIn("title: Занято за день (максимум)", chart)
+        self.assertIn("chart_type: bar", chart)
+        self.assertIn("period: day", chart)
+        self.assertIn("days_to_show: 30", chart)
+        self.assertIn("stat_types:\n                  - max", chart)
+        self.assertIn("- state: unknown", chart)
+        self.assertIn("- state: unavailable", chart)
+        self.assertIn("- state: none", chart)
+        self.assertIn("sort:\n          method: entity_id", chart)
+        self.assertNotIn("{%", chart)
+        self.assertNotIn("namespace(cards=", chart)
+        self.assertNotIn("sensor.dh_pbs_agent_datastore_pbs_serzhan_used_gib", chart)
 
-        # All native HA options remain the same as working Backblaze example.
-        for key, value in (
-            ("type", "statistics-graph"),
-            ("chart_type", "bar"), ("period", "day"),
-            ("days_to_show", "30"), ("stat_types", "['max']"),
-        ):
-            self.assertIn(f"'{key}': '{value}'" if key not in
-                          ("days_to_show", "stat_types") else
-                          (f"'{key}': {value}"), chart)
+        # Check installed Discovery contract for two arbitrary datastore names.
+        with tempfile.TemporaryDirectory() as d:
+            parts = discovery(config_in(Path(d), "alpha-store,remote-backups"))["components"]
+        for name in ("alpha_store", "remote_backups"):
+            self.assertEqual(
+                parts[f"datastore_{name}_used_gib"]["default_entity_id"],
+                f"sensor.dh_pbs_agent_datastore_{name}_used_gib",
+            )
         for snippet in (
             "type: statistics-graph", "chart_type: bar", "period: day",
             "days_to_show: 30", "stat_types:", "- max",
@@ -207,7 +210,7 @@ class PBSHistoryTests(unittest.TestCase):
                         second.index("heading: Резервные копии"))
         self.assertLess(second.index("heading: Резервные копии"),
                         second.index("heading: Занято на диске PBS · 30 дней"))
-        self.assertIn("'title': 'Занято за день (максимум)'", second)
+        self.assertIn("title: Занято за день (максимум)", second)
         self.assertIn("heading: Задания PBS", sections[3])
         self.assertIn("heading: Диагностика", sections[4])
 

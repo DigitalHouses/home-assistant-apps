@@ -1,4 +1,4 @@
-# DH-View-Version: 0.1.21.1
+# DH-View-Version: 0.1.21.2
 # DH-View-Date: 2026-11-22
 title: PBS
 path: dh_pbs_agent
@@ -264,11 +264,9 @@ sections:
         heading: Занято на диске PBS · 30 дней
         heading_style: title
         icon: mdi:chart-bar
-      # Construct one complete statistics-graph card per available datastore.
-      # A native statistics-graph requires a nonempty entities list at creation.
-      # With a directly populated entity list it can briefly receive [] before
-      # auto-entities template is ready, producing "Ошибка конфигурации".
-      # A grid accepts zero cards safely; graphs are created only with entities.
+      # Portable across PBS hosts, renamed entities and datastore names.
+      # Create complete graphs only for discovered numeric datastore sensors;
+      # the grid itself remains valid while Home Assistant is still loading.
       - type: custom:auto-entities
         show_empty: false
         else:
@@ -280,29 +278,30 @@ sections:
           square: false
         card_param: cards
         filter:
-          template: |-
-            {% set ns = namespace(cards=[]) %}
-            {% for storage in states.sensor | sort(attribute='entity_id') %}
-              {% if state_attr(storage.entity_id, 'pbs_product') == 'digitalhouses_pbs_agent'
-                  and state_attr(storage.entity_id, 'pbs_section') == 'datastore'
-                  and state_attr(storage.entity_id, 'pbs_metric') == 'used_gib'
-                  and states(storage.entity_id) not in ['unknown', 'unavailable', 'none', ''] %}
-                {% set ns.cards = ns.cards + [{
-                  'type': 'statistics-graph',
-                  'title': 'Занято за день (максимум)',
-                  'entities': [{
-                    'entity': storage.entity_id,
-                    'name': state_attr(storage.entity_id, 'pbs_display_name') or storage.name
-                  }],
-                  'chart_type': 'bar',
-                  'period': 'day',
-                  'days_to_show': 30,
-                  'stat_types': ['max'],
-                  'hide_legend': false
-                }] %}
-              {% endif %}
-            {% endfor %}
-            {{- ns.cards -}}
+          include:
+            - domain: sensor
+              attributes:
+                pbs_product: digitalhouses_pbs_agent
+                pbs_section: datastore
+                pbs_metric: used_gib
+              options:
+                type: statistics-graph
+                title: Занято за день (максимум)
+                entities:
+                  - this.entity_id
+                chart_type: bar
+                period: day
+                days_to_show: 30
+                stat_types:
+                  - max
+                hide_legend: false
+          exclude:
+            - state: unknown
+            - state: unavailable
+            - state: none
+            - state: ''
+        sort:
+          method: entity_id
         grid_options:
           columns: 12
   - type: grid
