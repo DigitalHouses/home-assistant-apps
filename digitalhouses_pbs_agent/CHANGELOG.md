@@ -1,5 +1,37 @@
 # DigitalHouses PBS Agent
 
+## 0.1.19
+
+- Align the **actual PBS Agent CLI** with current PVE Agent 0.5.96,
+  per the mandatory DigitalHouses Linux Agent Management Standard.
+  The old flat `status` becomes a compact, aligned, sectioned
+  `DigitalHouses PBS Agent <version> | commit <commit>` overview:
+  `SYSTEM`, `MQTT`, `PBS`, `MONITORING`, `UPDATES`, `TELEMETRY`.
+  All product facts come from the existing local runtime cache; no
+  status-time PBS/MQTT network probes, fabricated current health, or
+  new background service.
+- Match PVE CLI messages exactly for common operations:
+  `UP_TO_DATE version`, `UPDATING old -> target` **before** installation,
+  `UPDATED version` only after verifying the installed version,
+  `Restarted digitalhouses_pbs_agent.service`, `CHANGED`/
+  `UNCHANGED`, `CHANGED ON/OFF`, `UNCHANGED ON/OFF`, and
+  `ERROR: ...` without Python exception names or secret values.
+- Use PVE-style absolute-path `help`, native INI keys and limits,
+  safe hidden-password instructions, configuration transaction rollback
+  on failed service restart, and refusal to start stopped Agents
+  through `restart` or `update`. Keep PBS-specific commands.
+- Base the **canonical HA control card** directly on the maintained PVE
+  Dashboard (exact Russian status-operation text, timer, colors,
+  four chip labels/order and confirmation placement). Use PBS entity
+  IDs, functional icon and safe PBS-only confirmations. Preserve
+  the already required from/target version pair while installing.
+- Keep all four PBS Dashboard sections, datastore chart and trees,
+  original MQTT identities, existing PBS/local job semantics, and
+  read-only collection. PVE/Plex implementations are untouched.
+- Add golden-output CLI and HA parity tests against the **current**
+  PVE source, plus installer validation, failure and rollback cases.
+
+
 ## 0.1.18
 
 - Restore the original four-section PBS Dashboard layout: move the new
