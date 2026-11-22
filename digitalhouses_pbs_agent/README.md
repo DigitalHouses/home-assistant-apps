@@ -1,4 +1,4 @@
-# DigitalHouses PBS Agent v0.1.20
+# DigitalHouses PBS Agent v0.1.21
 
 **Required operational UI/CLI target:** reuse the actual maintained
 [PVE Agent CLI and UI](../digitalhouses_pve_agent/README.md), including
@@ -113,6 +113,26 @@ bars, thirty-day chart, backup trees and four-column section layout are
 unchanged. Golden tests compare the rendered statuses, precise CLI
 messages and copied HA operation script against the live PVE source in
 this repository.
+
+## Click datastore usage row: percentage (%) history (v0.1.21)
+
+Click the existing **Хранилища PBS** row (e.g. `pbs-serzhan · занято
+13.3%`) to open the native Home Assistant **more-info history graph** of
+`sensor.dh_pbs_agent_datastore_pbs_serzhan_used_percent`. Each row opens
+its own datastore's percent sensor, with the same progress bar/layout.
+
+The MQTT percentage sensor now has a numeric state with
+`state_class: measurement` and `unit_of_measurement: "%"` for long-term
+statistics. The PBS Recorder package includes both `*_used_percent` and
+`*_used_gib`. The existing 30-day **GiB** chart below is unchanged.
+
+**Activation:** install PBS Agent 0.1.21, then **DH Sync → Проверить и
+обновить** to install the revised PBS View/Recorder package. Because
+`homeassistant.reload_all` does not apply Recorder include filters, check
+configuration and restart **Home Assistant Core once** for percentage history
+collection. DH Sync itself is outside this project and is not modified.
+Percentage history accumulates from that point; it is not backfilled from
+past GiB values. No new popup/chart component is needed.
 
 ## Occupied datastore capacity: native HA history graph (v0.1.20)
 
