@@ -1,4 +1,4 @@
-# DH-View-Version: 0.1.21
+# DH-View-Version: 0.1.21.1
 # DH-View-Date: 2026-11-22
 title: PBS
 path: dh_pbs_agent
@@ -264,38 +264,45 @@ sections:
         heading: Занято на диске PBS · 30 дней
         heading_style: title
         icon: mdi:chart-bar
-      # Identical native statistics-graph pattern as DigitalHouses Backblaze.
-      # Dynamic list of REAL local datastore capacity sensors; Recorder provides
-      # the daily history, while the card provides native hover values.
+      # Construct one complete statistics-graph card per available datastore.
+      # A native statistics-graph requires a nonempty entities list at creation.
+      # With a directly populated entity list it can briefly receive [] before
+      # auto-entities template is ready, producing "Ошибка конфигурации".
+      # A grid accepts zero cards safely; graphs are created only with entities.
       - type: custom:auto-entities
         show_empty: false
+        else:
+          type: markdown
+          content: Ожидание данных графика PBS…
         card:
-          type: statistics-graph
-          title: Занято за день (максимум)
-          chart_type: bar
-          period: day
-          days_to_show: 30
-          stat_types:
-            - max
-          hide_legend: false
-        card_param: entities
+          type: grid
+          columns: 1
+          square: false
+        card_param: cards
         filter:
           template: |-
-            {% set ns = namespace(items=[]) %}
+            {% set ns = namespace(cards=[]) %}
             {% for storage in states.sensor | sort(attribute='entity_id') %}
               {% if state_attr(storage.entity_id, 'pbs_product') == 'digitalhouses_pbs_agent'
                   and state_attr(storage.entity_id, 'pbs_section') == 'datastore'
                   and state_attr(storage.entity_id, 'pbs_metric') == 'used_gib'
                   and states(storage.entity_id) not in ['unknown', 'unavailable', 'none', ''] %}
-                {% set ns.items = ns.items + [{
-                  'entity': storage.entity_id,
-                  'name': state_attr(storage.entity_id, 'pbs_display_name') or storage.name
+                {% set ns.cards = ns.cards + [{
+                  'type': 'statistics-graph',
+                  'title': 'Занято за день (максимум)',
+                  'entities': [{
+                    'entity': storage.entity_id,
+                    'name': state_attr(storage.entity_id, 'pbs_display_name') or storage.name
+                  }],
+                  'chart_type': 'bar',
+                  'period': 'day',
+                  'days_to_show': 30,
+                  'stat_types': ['max'],
+                  'hide_legend': false
                 }] %}
               {% endif %}
             {% endfor %}
-            {{- ns.items -}}
-        sort:
-          method: entity_id
+            {{- ns.cards -}}
         grid_options:
           columns: 12
   - type: grid

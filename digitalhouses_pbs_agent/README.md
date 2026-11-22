@@ -172,6 +172,17 @@ e.g. `sensor.dh_pbs_agent_datastore_pbs_serzhan_used_gib`:
   data are not imported into Recorder, and no separate history database,
   component or HACS graph dependency is added.
 
+**Dashboard revision 0.1.21.1:** the `statistics-graph` is generated
+as a complete per-datastore card inside a dynamic `grid` instead of
+passing a possibly empty entity list into an already-created graph.
+This prevents intermittent **«Ошибка конфигурации»** on first navigation
+while `auto-entities` initializes, without a workaround of pressing F5.
+A short *«Ожидание данных графика PBS…»* is shown while no numeric
+datastore sensor exists. Each present datastore has its own 30-day bar
+chart with the same daily `max` and hover value. To apply the revision,
+use **DH Sync → Проверить и обновить**; no new binary agent release,
+Recorder change or Home Assistant restart is needed.
+
 The chart is not itself an SVG and includes Home Assistant's native
 interactive hover tooltips. Previous v0.1.17–0.1.19 RRD chart rendering
 and its unnecessary monthly RRD CLI polling are removed. PBS Agent only
