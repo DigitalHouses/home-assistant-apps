@@ -1,4 +1,4 @@
-# DH Sync 0.6.2 — Documentation
+# DH Sync 0.6.4 — Documentation
 
 The active specification is [DH Sync Developer Standard](../docs/standards/DH_SYNC_DEVELOPER_STANDARD.md).
 

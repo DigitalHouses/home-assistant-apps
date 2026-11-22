@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.4
+
+- Emergency rollback of the unauthorized cross-project changes introduced in v0.6.3 (PR #608).
+- Restores the exact DH Sync v0.6.2 runtime, automatic YAML synchronization and reload-only behavior.
+- No Recorder Core restart feature, no new permissions, no change to PBS Agent, dashboards or backup jobs.
+- New release number is required because a previous immutable v0.6.2 tag already exists; v0.6.4 is the deployable rollback.
+
 ## 0.6.2
 
 - Implement DH Sync telemetry using shared protocol v1 / policy v2 with explicit HA App consent.

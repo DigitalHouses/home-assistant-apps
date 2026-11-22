@@ -1,4 +1,4 @@
-# DigitalHouses Sync App — 0.6.2
+# DigitalHouses Sync App — 0.6.4
 
 **Single standard:** [DH Sync Developer Standard](../docs/standards/DH_SYNC_DEVELOPER_STANDARD.md).
 
