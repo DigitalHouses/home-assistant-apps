@@ -59,6 +59,24 @@ _CLEAN_MARKERS = (
     "reached target system power off",
     "systemd-shutdown",
 )
+# Filter only the current-boot *guest* history at the journald source.
+# The full previous-boot journal is still required to classify host shutdowns.
+# Keep every message type recognized by parse_guest_shutdown_journal,
+# including unscoped force-stop lines that belong to the active guest.
+_CURRENT_BOOT_GUEST_GREP = (
+    r"(?i)(stopping\s+(?:vm|ct)\s+\d+"
+    r"|(?:starting|end)\s+task\s+UPID:.*?:(?:qmshutdown|vzshutdown):"
+    r"|vm\s+\d+\b.*qmp.*guest-shutdown"
+    r"|(?:vm|ct)\s*\d+.*task ended"
+    r"|all VMs and CTs stopped"
+    r"|vm quit/powerdown failed"
+    r"|vm still running - terminating now with sigkill"
+    r"|the system will power off now"
+    r"|system is powering down"
+    r"|reached target shutdown\.target"
+    r"|reached target system power off"
+    r"|systemd-shutdown)"
+)
 _FSD_REASONS = {
     "on_battery_fsd",
     "low_battery_fsd",
@@ -560,7 +578,10 @@ def _default_previous_boot_journal_reader() -> str:
 
 def _default_current_boot_journal_reader() -> str:
     completed = subprocess.run(
-        ["journalctl", "-b", "0", "-o", "short-iso-precise", "--no-pager"],
+        [
+            "journalctl", "-b", "0", "-o", "short-iso-precise", "--no-pager",
+            "--grep", _CURRENT_BOOT_GUEST_GREP,
+        ],
         capture_output=True,
         text=True,
         timeout=20.0,

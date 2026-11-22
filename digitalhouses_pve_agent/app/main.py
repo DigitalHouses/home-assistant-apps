@@ -20,6 +20,7 @@ from .fan_hardware_ipmi_passive import AsrockAst2500PassiveFanAdapter
 from .fan_hardware_beelink import BeelinkIt8613FanAdapter
 from .fan_hardware_hwmon import HwmonPwmFanAdapter
 from .fan_runtime import FanAwareRuntime as ProblemAwareRuntime
+from .guest_events import PveGuestEventMonitor
 from .identity import resolve_identity
 from .migration_cleanup import cleanup_legacy_mqtt_namespace
 from .machine_event_outbox import MachineEventOutbox
@@ -73,6 +74,8 @@ DEFAULT_STATE_DIR = Path("/var/lib/digitalhouses_pve_agent")
 FAST_SECONDS = 10.0
 SLOW_SECONDS = 60.0
 HEALTH_SECONDS = 3600.0
+# Passive event stream handles normal transitions; occasionally reconcile missed events.
+EVENT_RECONCILE_SECONDS = 300.0
 RESTART_EXIT_CODE = 75
 PROCESS_STARTED_AT = datetime.now(timezone.utc).isoformat()
 
@@ -408,6 +411,10 @@ def run(config: AppConfig, *, state_dir: Path = DEFAULT_STATE_DIR) -> int:
     backup_publish_due = True
     backup_last_published: dict | None = None
     backup_event_flush_at = 0.0
+    guest_event_pending = threading.Event()
+    backup_event_pending = threading.Event()
+    guest_event_followup_at: float | None = None
+    guest_reconcile_interval = SLOW_SECONDS
 
 
     def observe_card_operation(operation: str, phase: str, error: str | None) -> None:
@@ -492,11 +499,23 @@ def run(config: AppConfig, *, state_dir: Path = DEFAULT_STATE_DIR) -> int:
     signal.signal(signal.SIGINT, stop)
     signal.signal(signal.SIGHUP, reload_policy)
 
+    def wake_guest_event() -> None:
+        guest_event_pending.set()
+        bridge.wake_requested.set()
+
+    def wake_backup_event() -> None:
+        backup_event_pending.set()
+        bridge.wake_requested.set()
+
+    guest_event_monitor = PveGuestEventMonitor(wake_guest_event, wake_backup_event)
+
     log.info("Запуск DigitalHouses PVE Agent %s", _version())
     telemetry_runner.start()
     if ups_runtime is not None:
         log.info("Найден сохраненный UPS %s", ups_runtime.config.name)
     bridge.start()
+    # Subscribe before the startup inventory; events during the scan remain pending.
+    guest_event_monitor.start()
 
     try:
         while not stop_event.is_set():
@@ -657,6 +676,28 @@ def run(config: AppConfig, *, state_dir: Path = DEFAULT_STATE_DIR) -> int:
                 memory_manual_refresh = bridge.refresh_requested.is_set()
                 memory_force_due = memory_force_due or memory_manual_refresh
                 runtime.process_events()
+                # Cheap reconciliation when the journal stream is unavailable;
+                # sparse safety reconciliation when it is healthy.
+                target_interval = (
+                    EVENT_RECONCILE_SECONDS if guest_event_monitor.healthy
+                    else SLOW_SECONDS
+                )
+                if guest_reconcile_interval != target_interval:
+                    runtime.scheduler.set_interval(
+                        "guests", target_interval, now=time.monotonic()
+                    )
+                    guest_reconcile_interval = target_interval
+                if guest_event_pending.is_set():
+                    guest_event_pending.clear()
+                    runtime.run_collection(("guests",))
+                    # The PVE RRD state cache can lag the completed task event.
+                    guest_event_followup_at = time.monotonic() + 5.0
+                elif (
+                    guest_event_followup_at is not None
+                    and time.monotonic() >= guest_event_followup_at
+                ):
+                    guest_event_followup_at = None
+                    runtime.run_collection(("guests",))
                 runtime.tick(time.monotonic())
 
                 if memory_pending is not None and memory_pending.done():
@@ -689,6 +730,9 @@ def run(config: AppConfig, *, state_dir: Path = DEFAULT_STATE_DIR) -> int:
                     bridge.publish_memory_diagnostics(memory_monitor.payload())
 
                 if backup_history is not None and backup_reader is not None:
+                    if backup_event_pending.is_set():
+                        backup_event_pending.clear()
+                        backup_last_check = None
                     while not bridge.backup_limit_updates.empty():
                         requested_limit = bridge.backup_limit_updates.get_nowait()
                         if backup_history.set_limit(requested_limit):
@@ -820,6 +864,7 @@ def run(config: AppConfig, *, state_dir: Path = DEFAULT_STATE_DIR) -> int:
             bridge.wake_requested.wait(1.0)
             bridge.wake_requested.clear()
     finally:
+        guest_event_monitor.stop()
         if backup_reader is not None:
             backup_reader.cancel()
         backup_worker.shutdown(wait=False, cancel_futures=True)
