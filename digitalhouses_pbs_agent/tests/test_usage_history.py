@@ -72,54 +72,29 @@ class PBSHistoryTests(unittest.TestCase):
                           sensor["json_attributes_template"])
 
     def test_clicking_progress_row_opens_own_percent_more_info_not_gib(self):
-        from jinja2 import Environment
-
-        import yaml
-        parsed = yaml.safe_load(VIEW.read_text())
-        template = parsed["sections"][1]["cards"][1]["filter"]["template"]
-        assert "entity-progress-card-template" in template
-        sensors = {
-            "sensor.dh_pbs_agent_datastore_pbs_serzhan_used_percent": {
-                "state": "13.3",
-                "attrs": {
-                    "pbs_product": "digitalhouses_pbs_agent",
-                    "pbs_section": "datastore",
-                    "pbs_metric": "used_percent",
-                    "card_name": "pbs-serzhan · занято 13.3%",
-                },
-            },
-            "sensor.dh_pbs_agent_datastore_pbs_core_used_percent": {
-                "state": "47.8",
-                "attrs": {
-                    "pbs_product": "digitalhouses_pbs_agent",
-                    "pbs_section": "datastore",
-                    "pbs_metric": "used_percent",
-                    "card_name": "pbs-core · занято 47.8%",
-                },
-            },
-        }
-        class SensorRef:
-            def __init__(self, eid):
-                self.entity_id = eid
-                self.name = eid
-
-        def state_attr(eid, attr):
-            return sensors[eid]["attrs"].get(attr)
-
-        def states(eid):
-            return sensors[eid]["state"]
-
-        rendered = Environment().from_string(template).render(
-            states=type("States", (), {"sensor": [SensorRef(eid) for eid in sensors]})(),
-            state_attr=state_attr,
-        )
-        # HA uses the per-card entity as the target. An explicit tap entity is
-        # essential for generated multi-datastore cards and future template changes.
-        for entity in sensors:
-            self.assertIn("'entity': '" + entity + "'", rendered)
-            self.assertIn("'action': 'more-info', 'entity': '" + entity + "'", rendered)
-        self.assertEqual(rendered.count("'action': 'more-info'"), 2)
-        self.assertNotIn("used_gib", rendered)
+        """Contract test without Jinja/PyYAML dependencies on GitHub CI."""
+        source = VIEW.read_text(encoding="utf-8")
+        start = source.index("heading: Хранилища PBS")
+        end = source.index("heading: Резервные копии", start)
+        progress = source[start:end]
+        self.assertIn("type: custom:auto-entities", progress)
+        self.assertIn("'type': 'custom:entity-progress-card-template'", progress)
+        self.assertIn("'pbs_metric') == 'used_percent'", progress)
+        self.assertIn("{% set entity = storage.entity_id %}", progress)
+        self.assertIn("'entity': entity", progress)
+        self.assertIn("'tap_action': {'action': 'more-info', 'entity': entity}", progress)
+        self.assertEqual(progress.count("'tap_action':"), 1)
+        self.assertNotIn("used_gib", progress)
+        self.assertNotIn("pbs_serzhan_used_percent", progress)
+        self.assertNotIn("pbs_core_used_percent", progress)
+        # Every distinct datastore gets its own numeric % entity in Discovery;
+        # dynamic `entity` above keeps the per-card more-info target matched.
+        with tempfile.TemporaryDirectory() as d:
+            parts = discovery(config_in(Path(d), "pbs-serzhan,pbs-core"))["components"]
+        for store in ("pbs_serzhan", "pbs_core"):
+            key = f"datastore_{store}_used_percent"
+            self.assertEqual(parts[key]["default_entity_id"],
+                             f"sensor.dh_pbs_agent_{key}")
 
     def test_discovery_supports_multiple_datastores_and_never_hardcodes_a_store(self):
         with tempfile.TemporaryDirectory() as d:
