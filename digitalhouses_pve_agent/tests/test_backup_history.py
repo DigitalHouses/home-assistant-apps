@@ -117,6 +117,7 @@ def test_reader_is_strictly_read_only_uses_task_log_and_caches_completed():
         if path == "/cluster/backup":
             return [{"id": "home-nightly", "comment": "Ночное копирование"}]
         if path == "/nodes/pve/tasks":
+            assert argv[argv.index("--source") + 1] == "all"
             return [{**task}, {"upid": "OTHER", "type": "vncshell", "starttime": 1}]
         if path.endswith("/log"):
             return [{"n": n, "t": line} for n, line in enumerate(_lines())]
@@ -238,3 +239,25 @@ def test_dashboard_uses_collapsible_tree_and_number():
     assert "state !== 'success'" in raw
     assert "number.dh_pve_agent_backup_history_limit" in raw
     yaml.safe_load(raw)
+
+
+def test_active_task_is_included_from_source_all():
+    task = _task(upid="UPID:pve:0:0:0:vzdump::root@pam:", status="RUNNING")
+    def api(argv):
+        if argv[2] == "/cluster/backup":
+            return []
+        if argv[2] == "/nodes/pve/tasks":
+            assert "--source" in argv and argv[argv.index("--source")+1] == "all"
+            return [task]
+        if argv[2].endswith("/log"):
+            return [{"t": "INFO: Starting Backup of VM 2222 (qemu)"}]
+        raise AssertionError(argv)
+    run = BackupReader("pve", api).read(10)["runs"][0]
+    assert run["status"] == "running"
+    assert run["guests"][0]["status"] == "running"
+
+
+def test_missing_endtime_does_not_imply_running():
+    row = _task(status="")
+    row.pop("endtime")
+    assert build_run(row, parse_log([], {}))["status"] == "unknown"

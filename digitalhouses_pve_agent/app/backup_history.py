@@ -110,7 +110,7 @@ def parse_log(lines: list[str], configured_jobs: dict[str, str]) -> dict:
 def _status(row: dict, parsed: dict) -> str:
     raw = str(row.get("exitstatus") or row.get("status") or "").strip()
     endtime = row.get("endtime")
-    if raw.upper() == "RUNNING" or (endtime is None and raw.lower() in {"", "running"}):
+    if raw.upper() == "RUNNING":
         return "running"
     if any(g["status"] == "failed" for g in parsed["guests"]):
         return "failed"
@@ -186,7 +186,7 @@ class BackupReader:
         except (OSError, subprocess.SubprocessError, ValueError, TypeError):
             job_coverage = "unavailable"
         tasks = self._get(f"/nodes/{self.node}/tasks", "--typefilter", "vzdump",
-                          "--limit", str(max(100, limit * 2)))
+                          "--source", "all", "--limit", str(max(100, limit * 2)))
         if not isinstance(tasks, list):
             raise ValueError("invalid vzdump task API response")
         rows = [x for x in tasks if isinstance(x, dict) and x.get("type") == "vzdump"
@@ -200,7 +200,7 @@ class BackupReader:
             upid = row["upid"]
             # Completed logs do not change; refresh only running tasks.
             cached = self._logs.get(upid)
-            if cached is None or cached["status"] == "running":
+            if cached is None or cached["status"] == "running" or not cached.get("log_available", False):
                 try:
                     response = self._get(f"/nodes/{self.node}/tasks/{upid}/log", "--limit", "5000")
                     if not isinstance(response, list):

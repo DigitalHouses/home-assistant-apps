@@ -102,7 +102,7 @@ inferred from the PVE log; use PBS Agent for those. If size cannot be
 verified, the tree leaves it empty. Unavailable task API/log data does
 not become a false backup success.
 
-The observer uses read-only native `pvesh get` operations at most once
+The observer reads active and archived tasks (`--source all`) using read-only native `pvesh get` operations at most once
 per 60-second scan, with completed-log caching and one independent worker.
 It does not create, run, delete or reschedule backup jobs; PVE/UPS core
 collection and NUT protection are unaffected. It reads only the local
