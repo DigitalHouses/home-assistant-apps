@@ -8,12 +8,14 @@ import math
 import queue
 import threading
 import socket
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
 
 from .config import Config, PRODUCT_ID, REPO
 from .state import StateStore, ViewLimits, VIEW_LIMIT_RANGES
 from .view import render_trees, validate_timezone
+from .usage_chart import render_usage_chart
 
 HA_TIMEZONE_TOPIC = "DigitalHouses/Global/digitalhouses_pbs_agent/ha_timezone"
 
@@ -166,6 +168,28 @@ def discovery(config: Config, sample: dict | None = None) -> dict:
             "availability": availability, "entity_category": "diagnostic",
             "icon": "mdi:file-tree-outline",
         }
+
+    # The Agent owns all history, timezone, labels and bar heights.
+    # Home Assistant receives ready HTML in one standalone diagnostic sensor.
+    components["usage_chart"] = {
+        "platform": "sensor",
+        "name": "Занято на диске PBS · 30 дней",
+        "unique_id": f"{device_id}_usage_chart",
+        "default_entity_id": "sensor.dh_pbs_agent_usage_chart",
+        "state_topic": base + "/usage-chart",
+        "value_template": "{{ value_json.status }}",
+        "json_attributes_topic": base + "/usage-chart",
+        "json_attributes_template": (
+            "{{ {'html': value_json.html, 'days': value_json.days, "
+            "'available': value_json.available, "
+            "'latest_used_gib': value_json.latest_used_gib, "
+            "'delta_gib': value_json.delta_gib, "
+            "'ha_timezone': value_json.ha_timezone} | tojson }}"
+        ),
+        "availability": availability,
+        "entity_category": "diagnostic",
+        "icon": "mdi:chart-bar",
+    }
 
     sensor("hostname", "Имя сервера", "value_json.hostname", icon="mdi:server")
     sensor("ip", "IP-адрес", "value_json.ip", icon="mdi:ip-network")
@@ -409,6 +433,28 @@ class Publisher:
                            json.dumps(msg, ensure_ascii=False, separators=(",", ":")),
                            qos=1, retain=True)
 
+    def _publish_usage_chart(self, client: Any, payload: dict) -> None:
+        try:
+            chart = render_usage_chart(
+                getattr(self, "_last_usage_rrd", {}),
+                payload.get("datastores") or [],
+                payload.get("observed_at") or datetime.now(timezone.utc).isoformat(),
+                getattr(self, "ha_timezone", None),
+            )
+        except (ValueError, TypeError, OverflowError):
+            # Optional chart errors must not mark PBS backup monitoring unhealthy.
+            chart = {
+                "status": "NO_DATA",
+                "html": '<div style="padding:24px">Нет достоверной истории PBS</div>',
+                "days": 30, "available": 0, "latest_used_gib": None,
+                "delta_gib": None, "ha_timezone": getattr(self, "ha_timezone", None),
+            }
+        client.publish(
+            self.base + "/usage-chart",
+            json.dumps(chart, ensure_ascii=False, separators=(",", ":")),
+            qos=1, retain=True,
+        )
+
     def _on_connect(self, client: Any, userdata: Any, flags: Any, reason_code: Any, properties: Any) -> None:
         if getattr(reason_code, "is_failure", False):
             self.connected = False
@@ -447,6 +493,7 @@ class Publisher:
             if current is not None:
                 enqueue(self.base + "/state", current)
                 self._publish_trees(client, current)
+                self._publish_usage_chart(client, current)
 
     def _on_message(self, client: Any, userdata: Any, message: Any) -> None:
         if message.topic == HA_TIMEZONE_TOPIC:
@@ -466,6 +513,7 @@ class Publisher:
                                        json.dumps(updated, ensure_ascii=False, separators=(",", ":")),
                                        qos=1, retain=True)
                         self._publish_trees(client, updated)
+                        self._publish_usage_chart(client, updated)
             return
         # Do not replay stale retained commands when the broker reconnects.
         if getattr(message, "retain", False):
@@ -503,6 +551,7 @@ class Publisher:
                                json.dumps(new_state, ensure_ascii=False, separators=(",", ":")),
                                qos=1, retain=True)
                 self._publish_trees(client, new_state)
+                self._publish_usage_chart(client, new_state)
 
     def _on_disconnect(self, client: Any, userdata: Any, flags: Any, reason_code: Any, properties: Any) -> None:
         self.connected = False
@@ -537,8 +586,14 @@ class Publisher:
         # Queue while locked so an incoming Number command cannot be overwritten
         # by a concurrent polling publish with older view settings.
         with self._state_lock:
-            updated = {**payload, "view_limits": self.view_limits.snapshot(),
-                       "ha_timezone": getattr(self, "ha_timezone", None)}
+            # Keep the 30-minute RRD samples in the Agent's RAM only; MQTT
+            # carries the pre-rendered 30 bars, never thousands of RRD rows.
+            self._last_usage_rrd = payload.get("usage_rrd") or {}
+            updated = {k: v for k, v in payload.items() if k != "usage_rrd"}
+            updated.update({
+                "view_limits": self.view_limits.snapshot(),
+                "ha_timezone": getattr(self, "ha_timezone", None),
+            })
             self.last_state = updated
             if not self.connected:
                 return False
@@ -550,6 +605,7 @@ class Publisher:
                 self._announce_jobs(self.client, updated)
             info = self.client.publish(self.base + "/state", data, qos=1, retain=True)
             self._publish_trees(self.client, updated)
+            self._publish_usage_chart(self.client, updated)
         if info.rc != 0:
             return False
         info.wait_for_publish(timeout=5)

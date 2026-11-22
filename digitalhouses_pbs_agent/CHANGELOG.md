@@ -1,5 +1,24 @@
 # DigitalHouses PBS Agent
 
+## 0.1.17
+
+- Add a 30-day daily bar graph for **physically used datastore filesystem
+  capacity**. Use the native read-only PBS
+  `admin/datastore/{store}/rrd?timeframe=month&cf=AVERAGE` data source and
+  each day's last valid RRD point; today's current datastore status is used
+  as the most recent measurement.
+- Agent prepares the 30 HA-timezone day buckets, real GiB values, tooltip
+  times, scaled bars, ranges and deltas. Dynamic local datastores are supported.
+  Missing days stay empty; no interpolation, fake zeroes or database.
+- Render a compact accessible inline SVG in one retained MQTT diagnostic
+  sensor. The existing button-card displays its ready-made HTML without
+  doing chart arithmetic or requiring another frontend dependency.
+- Standalone RRD read errors do not downgrade PBS health; show today's
+  live value and the reason when historical RRD is unavailable.
+- Preserve existing jobs, backups, backup-group and task history trees,
+  telemetry, DH Sync contracts, and view-limit controls.
+
+
 ## 0.1.16
 
 - Fix observed HOME PBS 4.2.10 incremental-size diagnostics:

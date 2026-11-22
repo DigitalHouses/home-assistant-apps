@@ -1,4 +1,4 @@
-# DH-View-Version: 0.1.15
+# DH-View-Version: 0.1.17
 # DH-View-Date: 2026-11-22
 title: PBS
 path: dh_pbs_agent
@@ -214,6 +214,43 @@ sections:
       - type: markdown
         content: |
           <pre style="margin:0; padding:0; line-height:1.2; font-family:'Courier New',monospace; white-space:pre; overflow-x:auto;">{{ state_attr('sensor.dh_pbs_agent_backup_tree', 'text') or 'Ожидание данных PBS Agent…' }}</pre>
+        grid_options:
+          columns: 12
+  - type: grid
+    column_span: 2
+    cards:
+      - type: heading
+        heading: Занято на диске PBS · 30 дней
+        heading_style: title
+        icon: mdi:chart-bar
+      - type: custom:button-card
+        entity: sensor.dh_pbs_agent_usage_chart
+        show_icon: false
+        show_name: false
+        show_state: false
+        show_label: false
+        show_entity_picture: false
+        tap_action:
+          action: none
+        custom_fields:
+          chart: |
+            [[[
+              return entity?.attributes?.html || 'Ожидание истории PBS Agent…';
+            ]]]
+        styles:
+          card:
+            - padding: 12px
+            - width: 100%
+          grid:
+            - grid-template-areas: '"chart"'
+            - grid-template-columns: minmax(0, 1fr)
+            - grid-template-rows: min-content
+          custom_fields:
+            chart:
+              - display: block
+              - overflow: hidden
+              - width: 100%
+              - text-align: left
         grid_options:
           columns: 12
   - type: grid
