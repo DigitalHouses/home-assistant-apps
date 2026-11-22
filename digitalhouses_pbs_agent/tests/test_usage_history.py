@@ -1,0 +1,149 @@
+"""PBS occupied disk capacity: native HA Recorder daily bar history + hover."""
+from __future__ import annotations
+
+import json
+from pathlib import Path
+import tempfile
+import threading
+import types
+import unittest
+from unittest.mock import Mock
+
+from app.config import load_config
+from app.mqtt import Publisher, HA_TIMEZONE_TOPIC, discovery
+from app.state import StateStore, ViewLimits
+
+
+ROOT = Path(__file__).resolve().parents[1]
+REPO = ROOT.parent
+VIEW = ROOT / "dashboards/ru/13_pbs.yaml"
+REFERENCE = REPO / "digitalhouses_backblaze_app/dashboards/ru/backblaze.yaml"
+
+
+def config_in(root: Path, stores: str = "pbs-serzhan"):
+    p = root / "agent.ini"
+    p.write_text("[mqtt]\nhost=broker\n[pbs]\ndatastores=" + stores + "\n",
+                 encoding="utf-8")
+    return load_config(p)
+
+
+class PBSHistoryTests(unittest.TestCase):
+    def test_numeric_capacity_sensor_is_long_term_statistics_eligible(self):
+        with tempfile.TemporaryDirectory() as d:
+            parts = discovery(config_in(Path(d)))["components"]
+        key = "datastore_pbs_serzhan_used_gib"
+        sensor = parts[key]
+        self.assertEqual(sensor["platform"], "sensor")
+        self.assertEqual(sensor["default_entity_id"],
+                         "sensor.dh_pbs_agent_datastore_pbs_serzhan_used_gib")
+        self.assertEqual(sensor["state_class"], "measurement")
+        self.assertEqual(sensor["unit_of_measurement"], "GiB")
+        self.assertEqual(sensor["suggested_display_precision"], 2)
+        self.assertEqual(sensor["entity_category"], "diagnostic")
+        self.assertNotIn("device_class", sensor)  # same as working Backblaze example
+        self.assertIn(".used_bytes / 1073741824", sensor["value_template"])
+        self.assertIn("| round(2)", sensor["value_template"])
+        self.assertIn("else none", sensor["value_template"])
+        self.assertIn("!= 'S3'", sensor["value_template"])
+        self.assertIn("'pbs_metric':", sensor["json_attributes_template"].replace('"pbs_metric"', "'pbs_metric'"))
+        self.assertIn("used_gib", sensor["json_attributes_template"])
+        self.assertIn("datastore", sensor["json_attributes_template"])
+        self.assertNotIn("usage_chart", parts)
+
+    def test_discovery_supports_multiple_datastores_and_never_hardcodes_a_store(self):
+        with tempfile.TemporaryDirectory() as d:
+            parts = discovery(config_in(Path(d), "pbs-serzhan,pbs-core"))["components"]
+        first = parts["datastore_pbs_serzhan_used_gib"]
+        second = parts["datastore_pbs_core_used_gib"]
+        self.assertNotEqual(first["unique_id"], second["unique_id"])
+        self.assertIn('"pbs-serzhan"', first["value_template"])
+        self.assertIn('"pbs-core"', second["value_template"])
+        self.assertEqual(first["state_topic"], second["state_topic"])
+        self.assertEqual(first["unit_of_measurement"], second["unit_of_measurement"])
+
+    def test_use_existing_backblaze_native_stat_graph_pattern(self):
+        example = REFERENCE.read_text()
+        config = VIEW.read_text()
+        for expected in ("type: statistics-graph", "chart_type: bar",
+                         "period: day", "days_to_show: 30", "stat_types:",
+                         "- max", "card_param: entities"):
+            self.assertIn(expected, config)
+            if expected != "card_param: entities":
+                self.assertIn(expected, example)
+        self.assertIn("pbs_metric') == 'used_gib'", config)
+        self.assertIn("states.sensor | sort(attribute='entity_id')", config)
+        self.assertIn("'entity': storage.entity_id", config)
+        self.assertNotIn("sensor.dh_pbs_agent_usage_chart", config)
+        self.assertNotIn("custom_fields:", config)
+
+    def test_layout_remains_original_four_sections_and_graph_last_in_second(self):
+        source = VIEW.read_text()
+        sections = source.split("\n  - type: grid\n")
+        self.assertEqual(len(sections), 5)
+        second = sections[2]
+        self.assertLess(second.index("heading: Хранилища PBS"),
+                        second.index("heading: Резервные копии"))
+        self.assertLess(second.index("heading: Резервные копии"),
+                        second.index("heading: Занято на диске PBS · 30 дней"))
+        self.assertIn("title: Занято за день (максимум)", second)
+        self.assertIn("heading: Задания PBS", sections[3])
+        self.assertIn("heading: Диагностика", sections[4])
+
+    def test_mqtt_stays_numeric_and_does_not_publish_inline_svg_or_rrd_rows(self):
+        with tempfile.TemporaryDirectory() as folder:
+            p = Path(folder)
+            cfg = config_in(p)
+            pub = Publisher.__new__(Publisher)
+            pub.config = cfg
+            pub.base = "DigitalHouses/Global/digitalhouses_pbs_agent/pbs_serzhan"
+            pub.discovery_topic = "homeassistant/device/dh_pbs_agent_pbs_serzhan/config"
+            pub._state_lock = threading.Lock()
+            pub._known_jobs = set()
+            pub._discovery_primed = False
+            pub.job_registry = StateStore(p / "jobs.json")
+            pub.timezone_store = StateStore(p / "timezone.json")
+            pub.ha_timezone = "Asia/Almaty"
+            pub.view_limits = ViewLimits()
+            pub.last_state = None
+            pub.last_ack_at = None
+            pub.connected = True
+            pub.client = Mock()
+            pub.client.publish.return_value.rc = 0
+            pub.client.publish.return_value.is_published.return_value = True
+            payload = {
+                "status": "HEALTHY",
+                "observed_at": "2026-11-22T01:00:00+00:00",
+                "datastores": [{"name": "pbs-serzhan",
+                                "used_bytes": 143_000_000_000,
+                                "available_bytes": 900_000_000_000,
+                                "health": "HEALTHY", "backend": "LOCAL"}],
+                "maintenance_jobs": [], "backup_groups": [], "task_history": [],
+            }
+            self.assertTrue(pub.state(payload))
+            state_messages = [call for call in pub.client.publish.call_args_list
+                              if call.args[0].endswith("/state")]
+            self.assertEqual(len(state_messages), 1)
+            posted = json.loads(state_messages[0].args[1])
+            self.assertEqual(posted["datastores"][0]["used_bytes"], 143_000_000_000)
+            self.assertEqual(posted["datastores"][0]["backend"], "LOCAL")
+            self.assertTrue(state_messages[0].kwargs.get("retain"))
+            self.assertFalse(any(call.args[0].endswith("/usage-chart")
+                                 for call in pub.client.publish.call_args_list))
+            pub.client.reset_mock()
+            pub._on_message(pub.client, None, types.SimpleNamespace(
+                topic=HA_TIMEZONE_TOPIC, payload=b"UTC", retain=True))
+            self.assertFalse(any(call.args[0].endswith("/usage-chart")
+                                 for call in pub.client.publish.call_args_list))
+            self.assertEqual(pub.last_state["ha_timezone"], "UTC")
+
+    def test_removed_custom_rrd_pipeline_keeps_collector_simple(self):
+        collector = (ROOT / "app/collector.py").read_text()
+        mqtt = (ROOT / "app/mqtt.py").read_text()
+        self.assertNotIn("get_rrd", collector)
+        self.assertNotIn("usage_rrd", collector)
+        self.assertNotIn("usage_chart", mqtt)
+        self.assertFalse((ROOT / "app/usage_chart.py").exists())
+
+
+if __name__ == "__main__":
+    unittest.main()

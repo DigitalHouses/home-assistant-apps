@@ -123,37 +123,6 @@ class PBSAgentTests(unittest.TestCase):
         self.assertEqual(data["summary"]["push_jobs"], 1)
         self.assertEqual(data["problems"], [])
 
-    def test_datastore_rrd_month_uses_real_used_bytes_and_no_snapshot_sums(self):
-        from app.usage_chart import GIB
-        self.api.rrd = [
-            {"time": self.now - 86400, "used": 100 * GIB, "available": 200 * GIB},
-            {"time": self.now - 3600, "used": 105 * GIB},
-            {"time": self.now, "used": None},
-        ]
-        sample = self.sample()
-        self.assertEqual(sample["usage_rrd"]["pbs-home"]["rows"], [
-            {"time": self.now - 86400, "used": 100 * GIB},
-            {"time": self.now - 3600, "used": 105 * GIB},
-            {"time": self.now, "used": None},
-        ])
-        self.assertEqual(sample["status"], "HEALTHY")
-
-    def test_missing_optional_rrd_does_not_downgrade_pbs_backup_health(self):
-        from app.collector import SourceError
-        original = self.api.get
-        def fail_rrd(path, **params):
-            if path.endswith("/rrd"):
-                self.assertEqual(params, {"timeframe": "month", "cf": "AVERAGE"})
-                raise SourceError("PBS RRD not available")
-            return original(path, **params)
-        self.api.get = fail_rrd
-        sample = self.sample()
-        self.assertEqual(sample["status"], "HEALTHY")
-        self.assertEqual(sample["usage_rrd"]["pbs-home"]["rows"], [])
-        self.assertIn("PBS RRD not available", sample["usage_rrd"]["pbs-home"]["error"])
-        self.assertEqual(sample["errors"], [])
-        self.assertEqual(sample["problems"], [])
-
     def test_never_backed_up_is_no_snapshot_and_deduplicated(self):
         self.api.snapshots = []
         state = self.sample()
@@ -302,7 +271,7 @@ class PBSAgentTests(unittest.TestCase):
                       remote["components"]["health"]["json_attributes_template"])
         stores = [item for item in remote["components"].values()
                   if item.get("name", "").startswith("vault-")]
-        self.assertEqual(len(stores), 4)
+        self.assertEqual(len(stores), 6)  # three metrics per datastore, includes numeric GiB
         for item in stores:
             self.assertIn('"pbs_section": "datastore"', item["json_attributes_template"])
         jobs = {key: value for key, value in remote["components"].items()
@@ -383,20 +352,20 @@ class PBSAgentTests(unittest.TestCase):
         ]}
         self.assertTrue(pub.state(basic))
         published = pub.client.publish.call_args_list
-        self.assertEqual(len(published), 7)  # discovery, state, four trees, usage chart
+        self.assertEqual(len(published), 6)  # discovery, state, four existing trees
         config = json.loads(published[0].args[1])
         self.assertIn(job_component_key("Verify", "site-verify"), config["components"])
         self.assertEqual(pub.job_registry.load()["jobs"], [["Verify", "site-verify"]])
         pub.client.reset_mock()
         self.assertTrue(pub.state(basic))
-        self.assertEqual(pub.client.publish.call_count, 6)
+        self.assertEqual(pub.client.publish.call_count, 5)
         replacement = {"status": "HEALTHY", "maintenance_jobs": [
             {"type": "Verify", "id": "different-home", "status": "OK"}
         ]}
         pub.client.reset_mock()
         self.assertTrue(pub.state(replacement))
         sent = pub.client.publish.call_args_list
-        self.assertEqual(len(sent), 8)
+        self.assertEqual(len(sent), 7)
         removal = json.loads(sent[0].args[1])
         self.assertEqual(removal["components"][job_component_key("Verify", "site-verify")],
                          {"platform": "sensor"})
