@@ -3,9 +3,9 @@
 ### Dashboard hotfix 0.1.21.2 (no Agent binary update)
 
 - Replace chart-specific Jinja card generation with native auto-entities
-  include/exclude filters and per-entity card options. Each numeric
+  metadata-based include/exclude filters and per-entity card options. Each numeric
   datastore `used_gib` sensor generates one complete native statistics graph.
-- Match datastore sensors by wildcard and PBS Agent metadata. Works on
+- Match datastore sensors by PBS Agent metadata, independent of entity ID. Works on
   arbitrary HOME/CORE names and with one or several configured datastores.
 - Preserve existing MQTT entity IDs, historical GiB/% data, 30-day daily
   max hover chart, dynamic empty/loading guard and all other PBS cards.
