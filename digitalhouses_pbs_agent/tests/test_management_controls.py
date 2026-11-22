@@ -277,8 +277,8 @@ class ControlTests(unittest.TestCase):
         self.assertIn("button.dh_pbs_agent_check_updates", view)
         self.assertIn("button.dh_pbs_agent_update", view)
         self.assertIn("button.dh_pbs_agent_restart_agent", view)
-        self.assertIn("text: Установить новый релиз PBS Agent?", view)
-        self.assertIn("text: Перезапустить только PBS Agent?", view)
+        self.assertIn("Установить новую версию PBS Agent?", view)
+        self.assertIn("Перезапустить PBS Agent?", view)
         self.assertIn("type: custom:auto-entities", view)
         self.assertIn("custom:entity-progress-card-template", view)
 

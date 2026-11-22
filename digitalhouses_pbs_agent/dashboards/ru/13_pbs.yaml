@@ -1,4 +1,4 @@
-# DH-View-Version: 0.1.18
+# DH-View-Version: 0.1.19
 # DH-View-Date: 2026-11-22
 title: PBS
 path: dh_pbs_agent
@@ -16,37 +16,38 @@ sections:
         cards:
           - type: custom:button-card
             entity: sensor.dh_pbs_agent_card
+            update_timer: |
+              [[[
+                return states['sensor.dh_pbs_agent_card']?.state === 'running'
+                  ? 100 : 5000;
+              ]]]
             show_icon: true
             show_name: true
             show_label: true
-            update_timer: |
-              [[[
-                return states['sensor.dh_pbs_agent_card']?.state === 'running' ? 100 : 5000;
-              ]]]
             icon: |
               [[[
                 const s = states['sensor.dh_pbs_agent_card']?.state;
-                const newer = states['binary_sensor.dh_pbs_agent_update_available']?.state === 'on';
+                const upgrade = states['binary_sensor.dh_pbs_agent_update_available']?.state === 'on';
                 return s === 'running' ? 'mdi:progress-clock'
                   : s === 'error' ? 'mdi:alert-circle'
                   : s === 'success' ? 'mdi:check-circle'
-                  : newer ? 'mdi:package-up' : 'mdi:backup-restore';
+                  : upgrade ? 'mdi:package-up'
+                  : 'mdi:backup-restore';
               ]]]
             name: |
               [[[
                 const installed = states['sensor.dh_pbs_agent_version']?.state;
                 const latest = states['sensor.dh_pbs_agent_latest_version']?.state;
-                const status = states['sensor.dh_pbs_agent_card'];
-                const a = status?.attributes || {};
+                const available = states['binary_sensor.dh_pbs_agent_update_available']?.state === 'on';
+                const operation = states['sensor.dh_pbs_agent_card'];
+                const attrs = operation?.attributes || {};
+                const installing = operation?.state === 'running' && attrs.operation === 'install';
                 const valid = (v) =>
-                  typeof v === 'string' && !['unknown','unavailable','none',''].includes(v);
-                const installing = a.operation === 'install' &&
-                  ['running','success','error'].includes(status?.state);
-                const source = installing && valid(a.from_version) ? a.from_version : installed;
-                const target = installing && valid(a.target_version) ? a.target_version : latest;
-                const verified = installing ||
-                  states['binary_sensor.dh_pbs_agent_update_available']?.state === 'on';
-                const upgrade = verified && valid(source) && valid(target) && source !== target;
+                  typeof v === 'string' && !['unknown', 'unavailable', 'none', ''].includes(v);
+                const source = installing && valid(attrs.from_version) ? attrs.from_version : installed;
+                const target = installing && valid(attrs.target_version) ? attrs.target_version : latest;
+                const upgrade = (available || installing) &&
+                  valid(source) && valid(target) && target !== source;
                 return 'PBS Agent' + (valid(source)
                   ? ' · v' + source + (upgrade ? ' → v' + target : '')
                   : '');
@@ -67,24 +68,18 @@ sections:
                 };
                 const duration = (value) =>
                   typeof value === 'number'
-                    ? value.toFixed(1).replace('.', ',') + ' сек'
-                    : '—';
-                const valid = (v) =>
-                  typeof v === 'string' && !['unknown','unavailable','none',''].includes(v);
-                const versions = operation === 'install' &&
-                  valid(a.from_version) && valid(a.target_version)
-                  ? ' · v' + a.from_version + ' → v' + a.target_version : '';
+                  ? value.toFixed(1).replace('.', ',') + ' сек'
+                  : '—';
                 if (item.state === 'running') {
                   const start = Date.parse(a.started_at || '');
-                  if (!Number.isFinite(start)) return (names[operation] || 'Операция') + versions + '…';
+                  if (!Number.isFinite(start)) return (names[operation] || 'Операция') + '…';
                   const tenths = Math.max(0, Math.floor((Date.now() - start) / 100));
                   const mm = String(Math.floor(tenths / 600)).padStart(2, '0');
                   const ss = String(Math.floor((tenths % 600) / 10)).padStart(2, '0');
-                  return (names[operation] || 'Операция') + versions +
-                    '… ' + mm + ':' + ss + ',' + (tenths % 10);
+                  return (names[operation] || 'Операция') + '… ' + mm + ':' + ss + ',' + tenths % 10;
                 }
                 if (item.state === 'error') {
-                  return 'Ошибка' + versions + ': ' + (a.error || 'операция не выполнена');
+                  return 'Ошибка: ' + (a.error || 'операция не выполнена');
                 }
                 if (item.state === 'success') {
                   let message = {
@@ -98,24 +93,21 @@ sections:
                     message = available === 'on' ? 'Доступна новая версия'
                       : available === 'off' ? 'Версия актуальна' : 'Проверка завершена';
                   }
-                  return message + versions + ' · ' + duration(a.duration_seconds);
+                  return message + ' · ' + duration(a.duration_seconds);
                 }
+                // A verified new release stays visible after the five-second result.
                 if (states['binary_sensor.dh_pbs_agent_update_available']?.state === 'on') {
-                  const current = states['sensor.dh_pbs_agent_version']?.state;
-                  const latest = states['sensor.dh_pbs_agent_latest_version']?.state;
-                  const change = valid(current) && valid(latest) && current !== latest
-                    ? ' · v' + current + ' → v' + latest : '';
-                  return 'Доступна новая версия' + change;
+                  return 'Доступна новая версия';
                 }
                 const ts = Date.parse(a.last_collection_at || '');
                 if (!Number.isFinite(ts)) return 'Ожидание данных';
-                const seconds = Math.max(0, Math.floor((Date.now() - ts) / 1000));
-                if (seconds < 60) return 'Обновлено ' + seconds + ' сек назад';
-                const minutes = Math.floor(seconds / 60);
-                if (minutes < 60) return 'Обновлено ' + minutes + ' мин назад';
-                const hours = Math.floor(minutes / 60);
-                if (hours < 24) return 'Обновлено ' + hours + ' ч назад';
-                return 'Обновлено ' + Math.floor(hours / 24) + ' д назад';
+                const sec = Math.max(0, Math.floor((Date.now() - ts) / 1000));
+                if (sec < 60) return 'Обновлено ' + sec + ' сек назад';
+                const min = Math.floor(sec / 60);
+                if (min < 60) return 'Обновлено ' + min + ' мин назад';
+                const hr = Math.floor(min / 60);
+                if (hr < 24) return 'Обновлено ' + hr + ' ч назад';
+                return 'Обновлено ' + Math.floor(hr / 24) + ' д назад';
               ]]]
             styles:
               card:
@@ -133,11 +125,12 @@ sections:
                 - color: |
                     [[[
                       const s = states['sensor.dh_pbs_agent_card']?.state;
+                      const upgrade = states['binary_sensor.dh_pbs_agent_update_available']?.state === 'on';
                       return s === 'error' ? 'var(--error-color)'
                         : s === 'running' ? 'var(--info-color, var(--primary-color))'
                         : s === 'success' ? 'var(--success-color, var(--primary-color))'
-                        : states['binary_sensor.dh_pbs_agent_update_available']?.state === 'on'
-                        ? 'var(--warning-color, orange)' : 'var(--success-color, var(--primary-color))';
+                        : upgrade ? 'var(--warning-color, orange)'
+                        : 'var(--success-color, var(--primary-color))';
                     ]]]
               name:
                 - justify-self: start
@@ -178,23 +171,16 @@ sections:
                   type: template
                   icon: mdi:package-down
                   icon_color: orange
-                  content: >-
-                    {% set installed = states('sensor.dh_pbs_agent_version') %}
-                    {% set latest = states('sensor.dh_pbs_agent_latest_version') %}
-                    {% if installed not in ['unknown','unavailable','none','']
-                          and latest not in ['unknown','unavailable','none','']
-                          and installed != latest %}
-                      Новая версия · v{{ installed }} → v{{ latest }}
-                    {% else %}
-                      Новая версия
-                    {% endif %}
+                  content: Новая версия
                   tap_action:
                     action: perform-action
                     perform_action: button.press
                     target:
                       entity_id: button.dh_pbs_agent_update
                     confirmation:
-                      text: Установить новый релиз PBS Agent? Мониторинг временно прервётся, сам PBS и резервные копии не перезапускаются.
+                      text: >-
+                        Установить новую версию PBS Agent? Мониторинг PBS
+                        временно прервётся. Сервер PBS и задания не перезапускаются.
               - type: template
                 icon: mdi:restart
                 content: Перезапуск
@@ -204,7 +190,9 @@ sections:
                   target:
                     entity_id: button.dh_pbs_agent_restart_agent
                   confirmation:
-                    text: Перезапустить только PBS Agent? Сам PBS и задания резервирования продолжат работу.
+                    text: >-
+                      Перезапустить PBS Agent? Мониторинг временно прервётся.
+                      Сам сервер PBS и задания резервного копирования продолжат работу.
         grid_options:
           columns: 12
       - type: entities
