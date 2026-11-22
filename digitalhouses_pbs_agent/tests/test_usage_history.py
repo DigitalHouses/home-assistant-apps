@@ -165,7 +165,8 @@ class PBSHistoryTests(unittest.TestCase):
         self.assertIn("card:\n          type: grid\n          columns: 1\n          square: false", chart)
         self.assertIn("card_param: cards", chart)
         self.assertNotIn("card_param: entities", chart)
-        self.assertIn("entity_id: sensor.dh_pbs_agent_datastore_*_used_gib", chart)
+        self.assertIn("domain: sensor", chart)
+        self.assertNotIn("entity_id: sensor.dh_pbs_agent_datastore_*_used_gib", chart)
         for marker in ("pbs_product: digitalhouses_pbs_agent",
                        "pbs_section: datastore", "pbs_metric: used_gib"):
             self.assertIn(marker, chart)
@@ -178,6 +179,7 @@ class PBSHistoryTests(unittest.TestCase):
         self.assertIn("stat_types:\n                  - max", chart)
         self.assertIn("- state: unknown", chart)
         self.assertIn("- state: unavailable", chart)
+        self.assertIn("- state: none", chart)
         self.assertIn("sort:\n          method: entity_id", chart)
         self.assertNotIn("{%", chart)
         self.assertNotIn("namespace(cards=", chart)
