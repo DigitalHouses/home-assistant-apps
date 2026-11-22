@@ -173,9 +173,10 @@ e.g. `sensor.dh_pbs_agent_datastore_pbs_serzhan_used_gib`:
   component or HACS graph dependency is added.
 
 **Dashboard revision 0.1.21.2:** per-datastore charts now use an
-`auto-entities` `entity_id` wildcard and standard filter `options`
+`auto-entities` metadata filters and standard filter `options`
 instead of a Jinja loop that constructed nested card dictionaries.
-The filter selects only PBS Agent `used_gib` sensors, skipping unknown and
+The filter selects PBS Agent `used_gib` sensors by their MQTT metadata,
+regardless of entity renaming, skipping unknown and
 unavailable readings; `this.entity_id` creates a separate complete
 `statistics-graph` for each matching datastore. This remains portable
 to any PBS host and multiple datastore names, without hardcoded site IDs,
