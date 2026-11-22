@@ -128,14 +128,19 @@ class UsageChartTests(unittest.TestCase):
         section = view.split("heading: Занято на диске PBS · 30 дней", 1)[1].split(
             "heading: Задания PBS", 1)[0]
         self.assertNotIn("column_span: 2", view)
-        import yaml
-        config = yaml.safe_load(view)
-        self.assertEqual(len(config["sections"]), 4)
-        sections = config["sections"]
-        self.assertEqual(sections[1]["cards"][-2]["heading"], "Занято на диске PBS · 30 дней")
-        self.assertEqual(sections[1]["cards"][-1]["entity"], "sensor.dh_pbs_agent_usage_chart")
-        self.assertEqual(sections[2]["cards"][0]["heading"], "Задания PBS")
-        self.assertEqual(sections[3]["cards"][0]["heading"], "Диагностика")
+        # Product CI installs only the Agent runtime requirements, no
+        # PyYAML. Check exact section boundaries without adding a dependency.
+        sections = view.split("\n  - type: grid\n")
+        self.assertEqual(len(sections), 5)  # header + original 4 sections
+        self.assertIn("heading: Proxmox Backup Server", sections[1])
+        second = sections[2]
+        self.assertLess(second.index("heading: Хранилища PBS"),
+                        second.index("heading: Резервные копии"))
+        self.assertLess(second.index("heading: Резервные копии"),
+                        second.index("heading: Занято на диске PBS · 30 дней"))
+        self.assertIn("entity: sensor.dh_pbs_agent_usage_chart", second)
+        self.assertIn("heading: Задания PBS", sections[3])
+        self.assertIn("heading: Диагностика", sections[4])
         self.assertIn("custom:button-card", section)
         self.assertIn("entity?.attributes?.html", section)
         self.assertNotIn("data_generator:", section)
