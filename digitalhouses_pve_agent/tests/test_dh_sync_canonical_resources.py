@@ -11,8 +11,8 @@ DASHBOARDS = PRODUCT / "dashboards" / "ru"
 HEADERS = {
     "10_pve_proxmox.yaml": (
         "# DH-View: dh_pve_agent\n"
-        "# DH-View-Version: 1.0.1\n"
-        "# DH-View-Date: 2026-11-17\n"
+        "# DH-View-Version: 1.0.2\n"
+        "# DH-View-Date: 2026-11-22\n"
         "\n"
     ),
     "11_pve_ups.yaml": (
@@ -62,6 +62,14 @@ class DhSyncCanonicalPveResourcesTests(unittest.TestCase):
                 self.assertTrue(resource.startswith(header))
                 body = resource[len(header):]
                 if filename == "10_pve_proxmox.yaml":
+                    # Undo the approved additive backup history card before
+                    # comparing the previously accepted CORE v3 dashboard.
+                    start = body.index("      - type: heading\n        heading: Резервное копирование PVE\n")
+                    end = body.index("      - type: markdown\n        title: PVE · События памяти", start)
+                    backup_fragment = body[start:end]
+                    self.assertIn("number.dh_pve_agent_backup_history_limit", backup_fragment)
+                    self.assertIn("<details", backup_fragment)
+                    body = body[:start] + body[end:]
                     # Preserve the exact v3 CORE baseline except for the
                     # intentional, narrowly scoped Diagnostics UI update.
                     self.assertEqual(body.count("        heading: Диагностика\n"), 1)

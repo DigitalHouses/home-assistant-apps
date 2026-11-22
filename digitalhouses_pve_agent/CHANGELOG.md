@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.5.97
+
+- Add read-only PVE `vzdump` execution history from native `pvesh` task/log APIs, explicitly including active and archived tasks (`source=all`). Each run exposes its verified start/result/duration, guest-level success/error/skipped states and known configured job ID/comment; unidentifiable runs remain `vzdump` instead of being guessed from schedule.
+- Parse local archive file sizes separately from source data processed for PBS; never present logical transfer as newly stored PBS bytes. No size is fabricated when task logs cannot verify it.
+- Confirmed the PVE 8.4.21 PBS `vzdump` log format against actual HOME task excerpts (2026-11-22). LXC `*.pxar: had to backup X of Y` now exposes the logical `Y` in GiB; VM `transferred X GiB` is likewise logical/processed, not new PBS disk usage. If Proxmox omits the job ID, the tree identifies `vzdump` plus the logged storage name instead of guessing a configured schedule.
+- Add `sensor.dh_pve_agent_backup_history`, persisted MQTT `number.dh_pve_agent_backup_history_limit` (1–50, default 10), and QoS1 non-retained `event.dh_pve_agent_backup` for newly completed/failed tasks. Terminal events use persistent UPID deduplication; historical runs are not replayed as new alerts on first scan.
+- Add the collapsible backup tree to canonical Russian Proxmox View 1.0.2: successful runs collapsed, failures/active/unknown expanded, and guest details on demand. Bound Home Assistant sensor attributes with failure-first detail retention. The independent observer runs at 60-second cadence; stable results do not trigger redundant UI redraws. Existing PVE/UPS monitoring and PBS Agent remain unchanged.
+- PVE 8.4.21 task-list and task-log schemas were verified read-only against actual HOME backups, including 9/10 successful guests and failure of VM 99100. Production verification still requires the Home Assistant Lovelace tree and PVE 9 task-log acceptance; no production deployment has been claimed.
+
 ## 0.5.96
 
 - Follow DH Sync 0.6.0 with identity-only retained MQTT `/sync`: remove the obsolete `dashboard` field, keeping the existing per-instance topic, QoS 1, retain and connect/reconnect publication.

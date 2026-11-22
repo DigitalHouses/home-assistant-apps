@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from typing import Any, Mapping
 
+from .backup_discovery import backup_components
 from .config import AppConfig, MqttConfig
 from .discovery_groups import route_pve_discovery_groups
 from .discovery_guest import build_guest_aware_discovery_payload
@@ -174,6 +175,7 @@ def build_shutdown_aware_pve_discovery_payload(
             components[key] = item
 
     payload = route_pve_discovery_groups(payload, topics, inventory=inventory)
+    payload["components"].update(backup_components(topics))
 
     return payload
 

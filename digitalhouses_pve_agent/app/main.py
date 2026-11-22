@@ -27,6 +27,7 @@ from .memory_diagnostics import MemoryDiagnostics
 from .nfs_monitor import NfsFailureMonitor, POLL_SECONDS as NFS_POLL_SECONDS
 from .mqtt_bridge import MqttBridge
 from .operation_status import operation_payload
+from .backup_history import BackupHistory, BackupReader, POLL_SECONDS as BACKUP_POLL_SECONDS
 from .agent_card import AgentCard
 from .agent_process_cpu import AgentProcessCpu
 from .production import _run
@@ -390,6 +391,24 @@ def run(config: AppConfig, *, state_dir: Path = DEFAULT_STATE_DIR) -> int:
     update_manager = UpdateManager(state_dir, _version())
     card = AgentCard(state_dir / "agent_card.json", bridge.publish_agent_card)
     runtime.collection_observer = card.collected
+    # Separate read-only backup observer; never blocks UPS/NUT or the PVE scheduler.
+    try:
+        backup_history = BackupHistory(
+            StateStore(state_dir / "backup_history.json"),
+            MachineEventOutbox(StateStore(state_dir / "backup_events.json")),
+        )
+        backup_reader = BackupReader(resolve_identity(config.general).hostname)
+    except Exception:
+        log.exception("PVE backup history initialization failed; other monitoring continues")
+        backup_history = None
+        backup_reader = None
+    backup_worker = ThreadPoolExecutor(max_workers=1, thread_name_prefix="dh-pve-backup")
+    backup_pending = None
+    backup_last_check: float | None = None
+    backup_publish_due = True
+    backup_last_published: dict | None = None
+    backup_event_flush_at = 0.0
+
 
     def observe_card_operation(operation: str, phase: str, error: str | None) -> None:
         if phase == "start":
@@ -608,6 +627,8 @@ def run(config: AppConfig, *, state_dir: Path = DEFAULT_STATE_DIR) -> int:
                 # startup collects locally regardless of publication success.
                 # Never repeat expensive full scans in a disconnected loop.
                 initialized = True
+                if backup_history is not None and bridge.connected.is_set():
+                    bridge.publish_backup_history_limit(backup_history.limit)
                 if published:
                     bridge.publish_ups_scan_operation(operation_payload("idle"))
                     update_manager.publish(bridge)
@@ -666,6 +687,52 @@ def run(config: AppConfig, *, state_dir: Path = DEFAULT_STATE_DIR) -> int:
                     )
                 elif memory_reconnected:
                     bridge.publish_memory_diagnostics(memory_monitor.payload())
+
+                if backup_history is not None and backup_reader is not None:
+                    while not bridge.backup_limit_updates.empty():
+                        requested_limit = bridge.backup_limit_updates.get_nowait()
+                        if backup_history.set_limit(requested_limit):
+                            bridge.publish_backup_history_limit(backup_history.limit)
+                            backup_last_check = None
+                    if backup_pending is not None and backup_pending.done():
+                        try:
+                            backup_history.process(backup_pending.result())
+                            backup_event_flush_at = 0.0
+                        except Exception:
+                            log.exception("Read-only Proxmox backup history scan failed")
+                            backup_history.snapshot = {
+                                **backup_history.snapshot, "coverage": "unavailable",
+                            }
+                        current_view = backup_history.view()
+                        current_content = {
+                            key: value for key, value in current_view.items()
+                            if key != "observed_at"
+                        }
+                        if current_content != backup_last_published:
+                            backup_publish_due = True
+                        backup_pending = None
+                    if memory_reconnected:
+                        backup_publish_due = True
+                        bridge.publish_backup_history_limit(backup_history.limit)
+                    if backup_publish_due and bridge.connected.is_set():
+                        current_view = backup_history.view()
+                        if bridge.publish_backup_history(current_view):
+                            backup_last_published = {
+                                key: value for key, value in current_view.items()
+                                if key != "observed_at"
+                            }
+                            backup_publish_due = False
+                    backup_now = time.monotonic()
+                    if (backup_pending is None and
+                            (backup_last_check is None or
+                             backup_now - backup_last_check >= BACKUP_POLL_SECONDS)):
+                        backup_last_check = backup_now
+                        backup_pending = backup_worker.submit(
+                            backup_reader.read, backup_history.limit
+                        )
+                    if bridge.connected.is_set() and backup_now >= backup_event_flush_at:
+                        backup_event_flush_at = backup_now + BACKUP_POLL_SECONDS
+                        backup_history.flush_events(bridge.publish_backup_event)
 
                 if bridge.ups_scan_requested.is_set():
                     bridge.ups_scan_requested.clear()
@@ -753,6 +820,9 @@ def run(config: AppConfig, *, state_dir: Path = DEFAULT_STATE_DIR) -> int:
             bridge.wake_requested.wait(1.0)
             bridge.wake_requested.clear()
     finally:
+        if backup_reader is not None:
+            backup_reader.cancel()
+        backup_worker.shutdown(wait=False, cancel_futures=True)
         memory_worker.shutdown(wait=False, cancel_futures=True)
         nfs_worker.shutdown(wait=False, cancel_futures=True)
         telemetry_runner.stop()
