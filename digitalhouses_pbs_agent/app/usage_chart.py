@@ -103,20 +103,20 @@ def _usage_panel(store: str, days: list[dict], timezone_name: str | None,
     svg = [
         '<div style="width:100%;overflow-x:auto">',
         '<svg role="img" aria-label="Занято на диске PBS за 30 дней" '
-        'viewBox="0 0 900 207" width="900" height="207" '
-        'style="width:100%;min-width:600px;height:auto;display:block" '
+        'viewBox="0 0 480 207" width="480" height="207" '
+        'style="width:100%;height:auto;display:block" '
         'xmlns="http://www.w3.org/2000/svg">',
     ]
     bottom, plot_h = 167.0, 150.0
     for y in (17, 67, 117, 167):
-        svg.append(f'<line x1="5" y1="{y}" x2="895" y2="{y}" '
+        svg.append(f'<line x1="4" y1="{y}" x2="476" y2="{y}" '
                    'stroke="var(--divider-color)" stroke-width="1" '
                    'stroke-dasharray="2 3"/>')
     for i, item in enumerate(days):
         date_label = datetime.strptime(item["date"], "%Y-%m-%d").strftime("%d.%m")
         used = item["used_gib"]
-        x = 10.0 + i * 29.4
-        center = x + 10.2
+        x = 5.0 + i * 15.65
+        center = x + 5.3
         if used is None:
             tooltip = f'{date_label}: нет измерений'
             rect = ''
@@ -127,13 +127,13 @@ def _usage_panel(store: str, days: list[dict], timezone_name: str | None,
             description = 'текущее значение' if item["source"] == "live" else 'RRD, усреднённое'
             tooltip = f'{date_label} · {used:.2f} GiB · {stamp:%H:%M} · {description}'
             rect = (f'<rect x="{x:.1f}" y="{bottom-height:.1f}" '
-                    f'width="20.4" height="{height:.1f}" rx="2" '
+                    f'width="10.6" height="{height:.1f}" rx="2" '
                     'fill="var(--primary-color)"/>')
         svg.append('<g><title>' + escape(tooltip) + '</title>' + rect + '</g>')
         if i == 0 or i == DAYS - 1 or i % 5 == 0:
             svg.append(
                 f'<text x="{center:.1f}" y="191" text-anchor="middle" '
-                'font-size="12" fill="var(--secondary-text-color)" '
+                'font-size="10" fill="var(--secondary-text-color)" '
                 'font-family="sans-serif">' + date_label + '</text>'
             )
     svg.append('</svg></div>')

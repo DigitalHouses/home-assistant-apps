@@ -1,4 +1,4 @@
-# DigitalHouses PBS Agent v0.1.17
+# DigitalHouses PBS Agent v0.1.18
 
 Standalone **read-only** Linux/systemd monitoring agent for a local Proxmox Backup
 Server 4.x. HOME pilot: Debian MediaServer/PBS VM; no dependency on Plex Agent,
@@ -25,6 +25,31 @@ status, snapshots, **push** sync, verify, prune and GC jobs, plus local
 read-only ZFS and filesystem status. It does not run or
 edit PBS jobs, backup snapshots, PVE jobs, Plex, ZFS or retention.
 A job appearing as OK is **not** proof of restore verification.
+
+## Dashboard layout and PVE-style operational control (v0.1.18)
+
+The dashboard retains four original sections: PBS operations/health,
+datastore usage and backup groups, scheduled jobs/task history, and
+diagnostics. The 30-day usage graph sits at the **bottom of the second
+section**, does not span multiple columns and fits without horizontal
+scrolling.
+
+The PBS Agent operation card mirrors PVE Agent's user-facing lifecycle:
+the upgrade path shows the installed vX and new vY both before and
+while installing. Checking a version reports whether it is current,
+running actions show a 0.1-second stopwatch, successful actions report
+duration, failures show the cause and idle status shows elapsed time
+since the last collection. A worker success does not count as an
+installed update unless the current agent version reaches the target.
+
+The PBS RRD endpoint must be queried from the running service, not from
+an independent direct-debug process. The native CLI without the
+PROXMOX_DEBUG_API_CODE variable uses the localhost PBS HTTPS proxy;
+the direct mode used previously reports RRD cache not initialized.
+Only history reads use the standard proxy mode; backup and manifest
+collection remains unchanged, read-only and tokenless. If the local
+proxy is unavailable, the graph shows the latest known usage and
+an explicit diagnostic; backup health is not downgraded.
 
 ## Datastore occupied space: 30 daily columns (v0.1.17)
 

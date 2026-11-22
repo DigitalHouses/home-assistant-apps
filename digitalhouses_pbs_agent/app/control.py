@@ -82,8 +82,15 @@ class Controller:
     def begin(self, operation: str) -> bool:
         if self.card["state"] == "running":
             return False
-        self.card = {**blank_operation(), "state": "running",
-                     "operation": operation, "started_at": stamp()}
+        # Freeze the version transition when install begins: automatic update
+        # clears update_available while the worker runs, but the UI must
+        # continue to show the exact from -> to versions.
+        self.card = {
+            **blank_operation(), "state": "running",
+            "operation": operation, "started_at": stamp(),
+            "from_version": _read_version() if operation == "install" else None,
+            "target_version": self.latest_version if operation == "install" else None,
+        }
         self._busy_start = time.monotonic()
         if operation == "refresh":
             self.refresh = {**blank_operation(), "state": "updating",
@@ -209,11 +216,29 @@ class Controller:
             record = self.worker.load()
             if record.get("request_id") == self.card.get("request_id"):
                 if record.get("state") in ("completed", "error"):
-                    if self.card["operation"] == "install" and record["state"] == "completed":
-                        self.available = False
-                    self.finish(self.card["operation"], record.get("error") or
-                                ("Операция не выполнена" if record["state"] == "error" else None),
-                                record.get("duration_seconds"))
+                    error = record.get("error") or (
+                        "Операция не выполнена" if record["state"] == "error" else None
+                    )
+                    if self.card["operation"] == "install" and not error:
+                        target = self.card.get("target_version")
+                        installed = _read_version()
+                        try:
+                            correct_version = (
+                                stable_version(installed) >= stable_version(target)
+                                if target and target != "unknown" else True
+                            )
+                        except (ValueError, TypeError):
+                            correct_version = False
+                        if not correct_version:
+                            error = (
+                                f"Установлена v{installed}, ожидалась v{target}"
+                            )
+                        else:
+                            self.available = False
+                    self.finish(
+                        self.card["operation"], error,
+                        record.get("duration_seconds"),
+                    )
             if self.card["state"] == "running" and self.card.get("started_at"):
                 # Queued workers which never started must not stay stuck forever.
                 age = (datetime.now(timezone.utc) -

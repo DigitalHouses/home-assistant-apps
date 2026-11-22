@@ -1,4 +1,4 @@
-# DH-View-Version: 0.1.17
+# DH-View-Version: 0.1.18
 # DH-View-Date: 2026-11-22
 title: PBS
 path: dh_pbs_agent
@@ -34,41 +34,88 @@ sections:
               ]]]
             name: |
               [[[
-                const version = states['sensor.dh_pbs_agent_version']?.state;
+                const installed = states['sensor.dh_pbs_agent_version']?.state;
                 const latest = states['sensor.dh_pbs_agent_latest_version']?.state;
-                const known = v => v && !['unknown','unavailable','none'].includes(v);
-                const newer = states['binary_sensor.dh_pbs_agent_update_available']?.state === 'on';
-                return 'PBS Agent' + (known(version)
-                  ? ' · v' + version + (newer && known(latest) ? ' → v' + latest : '')
+                const status = states['sensor.dh_pbs_agent_card'];
+                const a = status?.attributes || {};
+                const valid = (v) =>
+                  typeof v === 'string' && !['unknown','unavailable','none',''].includes(v);
+                const installing = a.operation === 'install' &&
+                  ['running','success','error'].includes(status?.state);
+                const source = installing && valid(a.from_version) ? a.from_version : installed;
+                const target = installing && valid(a.target_version) ? a.target_version : latest;
+                const verified = installing ||
+                  states['binary_sensor.dh_pbs_agent_update_available']?.state === 'on';
+                const upgrade = verified && valid(source) && valid(target) && source !== target;
+                return 'PBS Agent' + (valid(source)
+                  ? ' · v' + source + (upgrade ? ' → v' + target : '')
                   : '');
               ]]]
             label: |
               [[[
-                const s = states['sensor.dh_pbs_agent_card'];
-                if (!s || ['unknown','unavailable'].includes(s.state)) return 'Нет связи с PBS Agent';
-                const a = s.attributes || {};
-                const names = {refresh:'Сбор данных',check:'Проверка версии',
-                  install:'Установка версии',restart:'Перезапуск агента'};
-                if (s.state === 'running') {
-                  const start = Date.parse(a.started_at || '');
-                  const seconds = Number.isFinite(start) ? Math.max(0, Math.floor((Date.now()-start)/1000)) : 0;
-                  return (names[a.operation] || 'Операция') + '… '
-                    + String(Math.floor(seconds/60)).padStart(2,'0') + ':'
-                    + String(seconds%60).padStart(2,'0');
+                const item = states['sensor.dh_pbs_agent_card'];
+                if (!item || ['unknown','unavailable'].includes(item.state)) {
+                  return 'Нет связи с агентом';
                 }
-                if (s.state === 'error') return 'Ошибка: ' + (a.error || 'операция не выполнена');
-                if (s.state === 'success') return ({
-                    refresh:'Данные обновлены',check:'Версия проверена',
-                    install:'Агент обновлён',restart:'Агент перезапущен'
-                  }[a.operation] || 'Готово') +
-                  (typeof a.duration_seconds === 'number'
-                    ? ' · ' + a.duration_seconds.toFixed(1) + ' сек' : '');
-                if (states['binary_sensor.dh_pbs_agent_update_available']?.state === 'on')
-                  return 'Доступна новая версия';
-                const health = states['sensor.dh_pbs_agent_health']?.state;
-                if (!health || ['unknown','unavailable'].includes(health))
-                  return 'Ожидание данных PBS';
-                return 'PBS: ' + health;
+                const a = item.attributes || {};
+                const operation = a.operation;
+                const names = {
+                  refresh: 'Обновление данных',
+                  check: 'Проверка версии',
+                  install: 'Установка версии',
+                  restart: 'Перезапуск агента'
+                };
+                const duration = (value) =>
+                  typeof value === 'number'
+                    ? value.toFixed(1).replace('.', ',') + ' сек'
+                    : '—';
+                const valid = (v) =>
+                  typeof v === 'string' && !['unknown','unavailable','none',''].includes(v);
+                const versions = operation === 'install' &&
+                  valid(a.from_version) && valid(a.target_version)
+                  ? ' · v' + a.from_version + ' → v' + a.target_version : '';
+                if (item.state === 'running') {
+                  const start = Date.parse(a.started_at || '');
+                  if (!Number.isFinite(start)) return (names[operation] || 'Операция') + versions + '…';
+                  const tenths = Math.max(0, Math.floor((Date.now() - start) / 100));
+                  const mm = String(Math.floor(tenths / 600)).padStart(2, '0');
+                  const ss = String(Math.floor((tenths % 600) / 10)).padStart(2, '0');
+                  return (names[operation] || 'Операция') + versions +
+                    '… ' + mm + ':' + ss + ',' + (tenths % 10);
+                }
+                if (item.state === 'error') {
+                  return 'Ошибка' + versions + ': ' + (a.error || 'операция не выполнена');
+                }
+                if (item.state === 'success') {
+                  let message = {
+                    refresh: 'Обновлено',
+                    check: 'Версия проверена',
+                    install: 'Версия установлена',
+                    restart: 'Агент перезапущен'
+                  }[operation] || 'Готово';
+                  if (operation === 'check') {
+                    const available = states['binary_sensor.dh_pbs_agent_update_available']?.state;
+                    message = available === 'on' ? 'Доступна новая версия'
+                      : available === 'off' ? 'Версия актуальна' : 'Проверка завершена';
+                  }
+                  return message + versions + ' · ' + duration(a.duration_seconds);
+                }
+                if (states['binary_sensor.dh_pbs_agent_update_available']?.state === 'on') {
+                  const current = states['sensor.dh_pbs_agent_version']?.state;
+                  const latest = states['sensor.dh_pbs_agent_latest_version']?.state;
+                  const change = valid(current) && valid(latest) && current !== latest
+                    ? ' · v' + current + ' → v' + latest : '';
+                  return 'Доступна новая версия' + change;
+                }
+                const ts = Date.parse(a.last_collection_at || '');
+                if (!Number.isFinite(ts)) return 'Ожидание данных';
+                const seconds = Math.max(0, Math.floor((Date.now() - ts) / 1000));
+                if (seconds < 60) return 'Обновлено ' + seconds + ' сек назад';
+                const minutes = Math.floor(seconds / 60);
+                if (minutes < 60) return 'Обновлено ' + minutes + ' мин назад';
+                const hours = Math.floor(minutes / 60);
+                if (hours < 24) return 'Обновлено ' + hours + ' ч назад';
+                return 'Обновлено ' + Math.floor(hours / 24) + ' д назад';
               ]]]
             styles:
               card:
@@ -131,7 +178,16 @@ sections:
                   type: template
                   icon: mdi:package-down
                   icon_color: orange
-                  content: Новая версия
+                  content: >-
+                    {% set installed = states('sensor.dh_pbs_agent_version') %}
+                    {% set latest = states('sensor.dh_pbs_agent_latest_version') %}
+                    {% if installed not in ['unknown','unavailable','none','']
+                          and latest not in ['unknown','unavailable','none','']
+                          and installed != latest %}
+                      Новая версия · v{{ installed }} → v{{ latest }}
+                    {% else %}
+                      Новая версия
+                    {% endif %}
                   tap_action:
                     action: perform-action
                     perform_action: button.press
@@ -216,9 +272,6 @@ sections:
           <pre style="margin:0; padding:0; line-height:1.2; font-family:'Courier New',monospace; white-space:pre; overflow-x:auto;">{{ state_attr('sensor.dh_pbs_agent_backup_tree', 'text') or 'Ожидание данных PBS Agent…' }}</pre>
         grid_options:
           columns: 12
-  - type: grid
-    column_span: 2
-    cards:
       - type: heading
         heading: Занято на диске PBS · 30 дней
         heading_style: title

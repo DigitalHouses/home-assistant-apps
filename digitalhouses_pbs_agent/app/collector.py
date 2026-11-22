@@ -91,6 +91,49 @@ class PBSClient:
             raise SourceError(f"PBS local CLI failed: {type(exc).__name__}") from exc
         return completed.stdout
 
+    def get_rrd(self, store: str) -> list[dict]:
+        """Read month RRD from the *running* PBS HTTPS proxy on localhost.
+
+        Direct in-process PROXMOX_DEBUG_API_CODE=1 has no initialized RRD
+        cache. The standard debug CLI defaults to the local PBS proxy, which
+        owns the live cache; leave all other read-only API calls unchanged.
+        """
+        if (not isinstance(store, str) or not store
+                or len(store) > 128
+                or not re.fullmatch(r"[A-Za-z0-9_.-]+", store)
+                or store in (".", "..")):
+            raise SourceError("invalid PBS RRD datastore name")
+        argv = [
+            "proxmox-backup-debug", "api", "get",
+            "/admin/datastore/" + quote(store, safe="") + "/rrd",
+            "--timeframe", "month", "--cf", "AVERAGE",
+            "--output-format", "json",
+        ]
+        env = dict(os.environ)
+        env.pop("PROXMOX_DEBUG_API_CODE", None)
+        try:
+            response = subprocess.run(
+                argv, capture_output=True, text=True, check=True,
+                timeout=25, env=env,
+            ).stdout
+        except subprocess.CalledProcessError as exc:
+            detail = " ".join(str(exc.stderr or "").split())[:160]
+            raise SourceError("PBS RRD HTTPS proxy failed"
+                              + (": " + detail if detail else "")) from exc
+        except (OSError, subprocess.SubprocessError) as exc:
+            raise SourceError(
+                f"PBS RRD HTTPS proxy unavailable: {type(exc).__name__}"
+            ) from exc
+        try:
+            parsed = json.loads(response)
+        except (TypeError, ValueError) as exc:
+            raise SourceError("PBS RRD HTTPS proxy returned invalid JSON") from exc
+        if isinstance(parsed, dict) and set(parsed) == {"data"}:
+            parsed = parsed["data"]
+        if not isinstance(parsed, list):
+            raise SourceError("PBS RRD HTTPS proxy returned invalid series")
+        return parsed
+
     @staticmethod
     def snapshot_upload_bytes(
         store_path: str, ns: str, typ: str, ident: str, when: int,
@@ -633,10 +676,14 @@ def collect(config: Config, pbs: PBSClient | None = None, now: float | None = No
     result["usage_rrd"] = {}
     for store in config.datastores:
         try:
-            rows = pbs.get(
-                f"admin/datastore/{quote(store, safe='')}/rrd",
-                timeframe="month", cf="AVERAGE",
-            )
+            if callable(getattr(pbs, "get_rrd", None)):
+                rows = pbs.get_rrd(store)
+            else:
+                # FakePBS/test adapter: same PBS RRD API response contract.
+                rows = pbs.get(
+                    f"admin/datastore/{quote(store, safe='')}/rrd",
+                    timeframe="month", cf="AVERAGE",
+                )
             if not isinstance(rows, list):
                 raise SourceError("PBS RRD response is not a list")
             result["usage_rrd"][store] = {

@@ -1,5 +1,26 @@
 # DigitalHouses PBS Agent
 
+## 0.1.18
+
+- Restore the original four-section PBS Dashboard layout: move the new
+  30-day occupied-disk chart to the bottom of the second section, after
+  datastore cards and backup-group tree. Remove two-column spanning and
+  chart horizontal scrollbar.
+- Fix RRD cache not initialized on PBS 4.2: a direct in-process
+  debug CLI call does not own the server RRD cache. Query the monthly
+  RRD through the standard PBS localhost HTTPS proxy CLI mode instead,
+  which accesses the running service's initialized cache.
+  Only the optional RRD history call changes transport.
+- Align operational feedback with PVE Agent: installed vX -> target vY
+  before and during installation, persistent from/target attributes,
+  exact version-check result, tenths-of-a-second timer/duration,
+  error details and time since last successful collection.
+- Verify the actual running version reaches the target before marking
+  a completed updater worker as successful. Keep MQTT topic identity,
+  background checks, native worker, five-second result lifecycle
+  and auto-update semantics. No backup-job or DH Sync changes.
+
+
 ## 0.1.17
 
 - Add a 30-day daily bar graph for **physically used datastore filesystem
