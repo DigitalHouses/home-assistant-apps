@@ -1,6 +1,6 @@
 # DH-View: dh_pve_agent
-# DH-View-Version: 1.0.1
-# DH-View-Date: 2026-11-17
+# DH-View-Version: 1.0.2
+# DH-View-Date: 2026-11-22
 
 title: Proxmox
 path: dh_pve_agent
@@ -837,6 +837,121 @@ sections:
           New',monospace; white-space:pre;">{{ ns.lines | join('\n') }}</pre>
         grid_options:
           columns: 12
+      - type: heading
+        heading: Резервное копирование PVE
+        heading_style: subtitle
+        icon: mdi:backup-restore
+      - type: custom:button-card
+        entity: sensor.dh_pve_agent_backup_history
+        show_icon: false
+        show_name: false
+        show_state: false
+        tap_action:
+          action: none
+        styles:
+          card:
+            - padding: 12px
+            - text-align: left
+          grid:
+            - grid-template-areas: '"backup_tree"'
+            - grid-template-columns: 1fr
+          custom_fields:
+            backup_tree:
+              - display: block
+              - overflow: visible
+              - white-space: normal
+              - text-align: left
+              - width: 100%
+              - pointer-events: auto
+        custom_fields:
+          backup_tree: |
+            [[[
+              const a = states['sensor.dh_pve_agent_backup_history']?.attributes || {};
+              const items = Array.isArray(a.runs) ? a.runs : [];
+              const esc = (v) => String(v ?? '').replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;').replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+              const date = (s) => {
+                if (!s) return '—';
+                const d = new Date(s);
+                return isNaN(d.getTime()) ? '—'
+                  : new Intl.DateTimeFormat('ru-RU', {
+                      day: '2-digit', month: '2-digit',
+                      hour: '2-digit', minute: '2-digit'
+                    }).format(d);
+              };
+              const length = (s) => {
+                if (typeof s !== 'number') return '';
+                return s < 60 ? s + ' с'
+                  : s < 3600 ? Math.round(s / 60) + ' мин'
+                  : Math.floor(s / 3600) + ' ч ' + Math.round(s % 3600 / 60) + ' мин';
+              };
+              const size = (n, k) => {
+                if (typeof n !== 'number' || !Number.isFinite(n)) return '';
+                return (k === 'archive' ? 'архив ' : 'обработано ')
+                  + n.toFixed(2) + ' GiB';
+              };
+              const colors = {
+                success: '🟢', failed: '🔴', running: '🟡',
+                skipped: '⚪', unknown: '⚪'
+              };
+              const statesText = {
+                success: 'Успешно', failed: 'Ошибка',
+                running: 'Выполняется', skipped: 'Пропущено',
+                unknown: 'Неизвестно'
+              };
+              let result = '<div style="font-size:13px;line-height:1.65;">';
+              if (a.coverage !== 'available') {
+                result += '<div style="opacity:.75">⚠ История PVE недоступна или устарела</div>';
+              }
+              if (!items.length) {
+                result += '<div style="opacity:.75">Нет подтверждённых запусков vzdump</div>';
+              }
+              for (const r of items) {
+                const state = r.s || 'unknown';
+                const suffix = [statesText[state] || state, length(r.m), size(r.z, r.k)]
+                  .filter(Boolean).join(' · ');
+                const open = state !== 'success' ? ' open' : '';
+                result += '<details' + open + ' style="border-bottom:1px solid var(--divider-color);padding:5px 0;">'
+                  + '<summary style="cursor:pointer;white-space:normal;list-style:revert;">'
+                  + (colors[state] || '⚪') + ' <b>' + esc(date(r.d))
+                  + ' · ' + esc(r.n || 'vzdump') + '</b>'
+                  + '<span style="opacity:.75"> · ' + esc(suffix) + '</span></summary>';
+                const guests = Array.isArray(r.g) ? r.g : [];
+                result += '<div style="padding:4px 0 4px 23px;">';
+                if (!guests.length) {
+                  result += '<div style="opacity:.65">Детали гостей отсутствуют</div>';
+                }
+                for (const g of guests) {
+                  const detail = [statesText[g.s] || 'Неизвестно', size(g.z, g.t)]
+                    .filter(Boolean).join(' · ');
+                  result += '<div>' + (colors[g.s] || '⚪') + ' '
+                    + esc((g.k || 'VM/CT') + ' ' + g.id)
+                    + (g.n ? ' · ' + esc(g.n) : '')
+                    + '<span style="opacity:.75"> · ' + esc(detail) + '</span>'
+                    + (g.e ? '<div style="color:var(--error-color);padding-left:20px;white-space:normal;">'
+                        + esc(g.e) + '</div>' : '')
+                    + '</div>';
+                }
+                if (r.e && state === 'failed') {
+                  result += '<div style="opacity:.8">' + esc(r.e) + '</div>';
+                }
+                result += '</div></details>';
+              }
+              if (a.details_limited) {
+                result += '<div style="opacity:.7;padding-top:4px">Часть деталей скрыта из-за ограничения атрибутов Home Assistant</div>';
+              }
+              result += '</div>';
+              return result;
+            ]]]
+        grid_options:
+          columns: 12
+      - type: entities
+        entities:
+          - entity: number.dh_pve_agent_backup_history_limit
+            name: Запусков в истории
+        grid_options:
+          columns: 6
       - type: markdown
         title: PVE · События памяти
         content: |-
