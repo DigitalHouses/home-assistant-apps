@@ -151,20 +151,52 @@ class PBSHistoryTests(unittest.TestCase):
                           "sensor.dh_pbs_agent_datastore_pbs_serzhan_used_gib"):
             self.assertNotIn(forbidden, source)
 
-    def test_use_existing_backblaze_native_stat_graph_pattern(self):
-        example = REFERENCE.read_text()
-        config = VIEW.read_text()
-        for expected in ("type: statistics-graph", "chart_type: bar",
-                         "period: day", "days_to_show: 30", "stat_types:",
-                         "- max", "card_param: entities"):
-            self.assertIn(expected, config)
-            if expected != "card_param: entities":
-                self.assertIn(expected, example)
-        self.assertIn("pbs_metric') == 'used_gib'", config)
-        self.assertIn("states.sensor | sort(attribute='entity_id')", config)
-        self.assertIn("'entity': storage.entity_id", config)
-        self.assertNotIn("sensor.dh_pbs_agent_usage_chart", config)
-        self.assertNotIn("custom_fields:", config)
+    def test_native_statistics_graph_is_constructed_only_with_an_entity(self):
+        """Regression: avoid transient config error while auto-entities loads."""
+        example = REFERENCE.read_text(encoding="utf-8")
+        source = VIEW.read_text(encoding="utf-8")
+        chart = source.split("heading: Занято на диске PBS · 30 дней", 1)[1].split(
+            "heading: Задания PBS", 1,
+        )[0]
+
+        # A dynamically populated entities: [] could reach statistics-graph
+        # before Jinja finishes resolving all MQTT entities. Instead build
+        # complete statistics cards inside a grid, which accepts empty cards.
+        self.assertIn("type: custom:auto-entities", chart)
+        self.assertIn("show_empty: false", chart)
+        self.assertIn("else:\n          type: markdown\n          content: Ожидание данных графика PBS", chart)
+        self.assertIn("card:\n          type: grid\n          columns: 1\n          square: false", chart)
+        self.assertIn("card_param: cards", chart)
+        self.assertNotIn("card_param: entities", chart)
+        self.assertIn("{% set ns = namespace(cards=[]) %}", chart)
+        self.assertIn("{% set ns.cards = ns.cards + [{", chart)
+        self.assertIn("'type': 'statistics-graph'", chart)
+        self.assertIn("'entities': [{", chart)
+        self.assertIn("'entity': storage.entity_id", chart)
+        self.assertIn("'name': state_attr(storage.entity_id, 'pbs_display_name')", chart)
+        self.assertIn("{{- ns.cards -}}", chart)
+        self.assertNotIn("        sort:\n", chart)
+        self.assertNotIn("unique: true", chart)
+        self.assertIn("states.sensor | sort(attribute='entity_id')", chart)
+        self.assertIn("pbs_metric') == 'used_gib'", chart)
+        self.assertIn("and states(storage.entity_id) not in", chart)
+
+        # All native HA options remain the same as working Backblaze example.
+        for key, value in (
+            ("type", "statistics-graph"),
+            ("chart_type", "bar"), ("period", "day"),
+            ("days_to_show", "30"), ("stat_types", "['max']"),
+        ):
+            self.assertIn(f"'{key}': '{value}'" if key not in
+                          ("days_to_show", "stat_types") else
+                          (f"'{key}': {value}"), chart)
+        for snippet in (
+            "type: statistics-graph", "chart_type: bar", "period: day",
+            "days_to_show: 30", "stat_types:", "- max",
+        ):
+            self.assertIn(snippet, example)
+        self.assertNotIn("sensor.dh_pbs_agent_usage_chart", source)
+        self.assertNotIn("custom_fields:", source)
 
     def test_layout_remains_original_four_sections_and_graph_last_in_second(self):
         source = VIEW.read_text()
@@ -175,7 +207,7 @@ class PBSHistoryTests(unittest.TestCase):
                         second.index("heading: Резервные копии"))
         self.assertLess(second.index("heading: Резервные копии"),
                         second.index("heading: Занято на диске PBS · 30 дней"))
-        self.assertIn("title: Занято за день (максимум)", second)
+        self.assertIn("'title': 'Занято за день (максимум)'", second)
         self.assertIn("heading: Задания PBS", sections[3])
         self.assertIn("heading: Диагностика", sections[4])
 

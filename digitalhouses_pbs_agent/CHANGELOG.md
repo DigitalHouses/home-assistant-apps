@@ -1,5 +1,22 @@
 # DigitalHouses PBS Agent
 
+### Dashboard hotfix 0.1.21.1 (no Agent binary update)
+
+- Fix intermittent **«Ошибка конфигурации»** in the 30-day occupied GiB
+  chart on first Dashboard navigation (F5 previously cleared the error).
+  The native `statistics-graph` can be initialized with an empty entity
+  list while `custom:auto-entities` is still resolving HA state.
+- Build complete per-datastore `statistics-graph` cards inside an
+  `auto-entities` one-column grid instead of directly filling the
+  graph's `entities` array. The graph is only created after its numeric
+  `used_gib` sensor is known; show a simple waiting message if none
+  is available. Supports any number of PBS datastores.
+- Preserve the four-section Dashboard, 30-day daily max bars, value
+  tooltips, Recorder, all other PBS entities and PVE-style controls.
+  YAML-only: **PBS Agent remains at 0.1.21**; DH Sync can install the
+  updated View directly from GitHub `main`. No change to DH Sync or
+  other projects and no HA/PBS restart required.
+
 ## 0.1.21
 
 - Clicking a PBS datastore progress bar opens the Home Assistant native **more-info/history graph of that datastore's occupied percentage (%)**. Its dynamic `tap_action` explicitly targets the clicked `*_used_percent` sensor, including multi-datastore installations.
