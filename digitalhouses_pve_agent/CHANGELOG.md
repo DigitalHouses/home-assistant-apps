@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.98
+
+- Enrich existing QoS 1 `backup_job_failed` machine events with verified per-guest `name` and `error` plus task-level `error`. Preserve the UPID deduplication, no historical alert replay, successful event behavior, and the read-only backup observer.
+- Extend the DH Sync canonical Russian PVE notification package with one separate backup-failure automation. Deliver a portable Home Assistant persistent notification. Provide a separate opt-in site package using existing `script.write2admins` without embedding site-specific delivery in canonical DH Sync resources. Summarize failed VM/CT IDs, real error reasons, skipped/unknown outcomes and successful guest count. Do not modify the existing PVE/UPS handlers or the site-owned notification script.
+
 ## 0.5.97
 
 - Add read-only PVE `vzdump` execution history from native `pvesh` task/log APIs, explicitly including active and archived tasks (`source=all`). Each run exposes its verified start/result/duration, guest-level success/error/skipped states and known configured job ID/comment; unidentifiable runs remain `vzdump` instead of being guessed from schedule.
