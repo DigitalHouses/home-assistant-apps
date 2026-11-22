@@ -98,9 +98,15 @@ was online.
 **Size semantics:** `archive` is the actual local archive file size
 (from `archive file size`); `processed` is source data processed
 (from `transferred`). PBS stored/compressed/deduplicated bytes are **not**
-inferred from the PVE log; use PBS Agent for those. If size cannot be
-verified, the tree leaves it empty. Unavailable task API/log data does
-not become a false backup success.
+inferred from the PVE log; use PBS Agent for those. PVE 8.4.21's PBS
+LXC logs report `root.pxar: had to backup X of Y`: `Y` is the
+logical backup data size, while `X` and the compressed size describe
+the incremental transfer. In the same way, a VM `transferred 32 GiB`
+entry describes processed data even when 100% was reused. If size
+cannot be verified, the tree leaves it empty. Without a confirmed
+scheduler job ID, the branch says `vzdump · <storage>`, not the name
+of a potentially unrelated configured schedule. Unavailable task
+API/log data does not become a false backup success.
 
 The observer reads active and archived tasks (`--source all`) using read-only native `pvesh get` operations at most once
 per 60-second scan, with completed-log caching and one independent worker.

@@ -25,6 +25,16 @@ _JOB_ARG = re.compile(r"--job-id\s+(?:'([^']+)'|\"([^\"]+)\"|([^\s]+))")
 _NAME = re.compile(r"(?:VM|CT) Name:\s*(.+)", re.I)
 _ARCHIVE_SIZE = re.compile(r"archive file size:\s*([\d.]+)\s*(B|KB|MB|GB|TB|KiB|MiB|GiB|TiB)\b", re.I)
 _PROCESSED_SIZE = re.compile(r"transferred\s+([\d.]+)\s*(B|KB|MB|GB|TB|KiB|MiB|GiB|TiB)\b", re.I)
+# PBS LXC logs report how much was newly copied, the logical total and
+# compressed bytes separately. Only the second number is comparable to VM's
+# logical "transferred" value; it is NOT extra physical PBS usage.
+_PXAR_TOTAL = re.compile(
+    r"[^\s:]+\.pxar:\s*had to backup\s+[\d.]+\s+"
+    r"(?:B|KB|MB|GB|TB|KiB|MiB|GiB|TiB)\s+of\s+"
+    r"([\d.]+)\s*(B|KB|MB|GB|TB|KiB|MiB|GiB|TiB)\b", re.I
+)
+_STORAGE_ARG = re.compile(r"--storage\s+(?:'([^']+)'|\"([^\"]+)\"|([^\s]+))", re.I)
+
 _VALID_NODE = re.compile(r"^[A-Za-z0-9_.-]+$")
 _UNITS = {"b": 1, "kb": 1000, "mb": 1000**2, "gb": 1000**3, "tb": 1000**4,
           "kib": 1024, "mib": 1024**2, "gib": 1024**3, "tib": 1024**4}
@@ -51,7 +61,11 @@ def parse_log(lines: list[str], configured_jobs: dict[str, str]) -> dict:
     guests: dict[str, dict] = {}
     current: str | None = None
     job_id: str | None = None
+    storage: str | None = None
     for line in lines:
+        match = _STORAGE_ARG.search(line)
+        if match and storage is None:
+            storage = next((value for value in match.groups() if value), None)
         match = _JOB.search(line)
         if match:
             job_id = match.group(1)
@@ -103,7 +117,17 @@ def parse_log(lines: list[str], configured_jobs: dict[str, str]) -> dict:
                     if value is not None:
                         guests[current]["size_gib"] = value
                         guests[current]["size_kind"] = "processed"
-    label = configured_jobs.get(job_id, job_id) if job_id else "vzdump"
+                match = _PXAR_TOTAL.search(line)
+                if match and guests[current].get("size_kind") != "archive":
+                    value = _size(match)
+                    if value is not None:
+                        guests[current]["size_gib"] = round(
+                            guests[current].get("size_gib", 0) + value, 2
+                        )
+                        guests[current]["size_kind"] = "processed"
+    label = configured_jobs.get(job_id, job_id) if job_id else (
+        f"vzdump · {storage}" if storage else "vzdump"
+    )
     return {"job_id": job_id, "label": label, "guests": list(guests.values())}
 
 

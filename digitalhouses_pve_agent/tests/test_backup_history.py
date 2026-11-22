@@ -47,6 +47,48 @@ def _monitor(tmp_path):
     )
 
 
+def test_real_pve_84_pbs_vm_and_lxc_log_shape():
+    # Real PVE 8.4.21 log shape (2026-11-22); CT completion is a test fixture.
+    lines = [
+        "INFO: starting new backup job: vzdump 1237 10004 10001 1011 99100 99134 "
+        "777 1221 7000 2222 --node pve --quiet 1 --mode snapshot --storage pbs-serzhan",
+        "INFO: Starting Backup of VM 777 (qemu)",
+        "INFO: VM Name: digitalhouses.vip",
+        "INFO: backup was done incrementally, reused 32.00 GiB (100%)",
+        "INFO: transferred 32.00 GiB in 19 seconds (1.7 GiB/s)",
+        "INFO: Finished Backup of VM 777 (00:00:21)",
+        "INFO: Starting Backup of VM 1011 (lxc)",
+        "INFO: CT Name: digitalhouses.vip",
+        "INFO: root.pxar: had to backup 20.744 MiB of 2.452 GiB "
+        "(compressed 4.843 MiB) in 10.51 s (average 1.973 MiB/s)",
+        "INFO: root.pxar: backup was done incrementally, reused 2.432 GiB (99.2%)",
+        "INFO: Finished Backup of VM 1011 (00:00:15)",
+    ]
+    parsed = parse_log(lines, {"dh-backup-critical-daily": "Критический"})
+    assert parsed["job_id"] is None  # Proxmox log does not expose scheduler job ID.
+    assert parsed["label"] == "vzdump · pbs-serzhan"
+    vm, ct = parsed["guests"]
+    assert (vm["kind"], vm["size_kind"], vm["size_gib"]) == ("VM", "processed", 32.0)
+    assert (ct["kind"], ct["size_kind"], ct["size_gib"]) == ("CT", "processed", 2.45)
+    result = build_run(_task(), parsed)
+    assert result["size_kind"] == "processed"
+    assert result["size_gib"] == 34.45
+    # Reused GiB and compressed MiB are not used as newly stored PBS bytes.
+    assert "uploaded_gib" not in result
+
+
+def test_multiple_pbs_lxc_archive_streams_sum_logical_totals():
+    lines = [
+        "INFO: Starting Backup of VM 1011 (lxc)",
+        "INFO: root.pxar: had to backup 50 MiB of 2.0 GiB (compressed 5 MiB)",
+        "INFO: mp0.pxar: had to backup 10 MiB of 3.0 GiB (compressed 1 MiB)",
+        "INFO: Finished Backup of VM 1011 (00:00:12)",
+    ]
+    guest = parse_log(lines, {})["guests"][0]
+    assert guest["size_gib"] == 5.0
+    assert guest["size_kind"] == "processed"
+
+
 def test_parse_pve_log_and_size_semantics():
     parsed = parse_log(_lines(), {"home-nightly": "Ночное копирование"})
     assert parsed["job_id"] == "home-nightly"
@@ -120,6 +162,7 @@ def test_reader_is_strictly_read_only_uses_task_log_and_caches_completed():
             assert argv[argv.index("--source") + 1] == "all"
             return [{**task}, {"upid": "OTHER", "type": "vncshell", "starttime": 1}]
         if path.endswith("/log"):
+            assert argv[argv.index("--limit") + 1] == "5000"
             return [{"n": n, "t": line} for n, line in enumerate(_lines())]
         raise AssertionError(path)
     reader = BackupReader("pve", api)
