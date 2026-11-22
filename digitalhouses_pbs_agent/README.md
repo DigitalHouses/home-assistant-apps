@@ -1,4 +1,4 @@
-# DigitalHouses PBS Agent v0.1.16
+# DigitalHouses PBS Agent v0.1.17
 
 Standalone **read-only** Linux/systemd monitoring agent for a local Proxmox Backup
 Server 4.x. HOME pilot: Debian MediaServer/PBS VM; no dependency on Plex Agent,
@@ -25,6 +25,41 @@ status, snapshots, **push** sync, verify, prune and GC jobs, plus local
 read-only ZFS and filesystem status. It does not run or
 edit PBS jobs, backup snapshots, PVE jobs, Plex, ZFS or retention.
 A job appearing as OK is **not** proof of restore verification.
+
+## Datastore occupied space: 30 daily columns (v0.1.17)
+
+The canonical PBS dashboard includes a 30-day bar chart of **occupied bytes
+on the filesystem hosting each local PBS datastore**, reported in GiB. This
+is *not* the sum of logical VM/CT snapshot sizes and does not attribute
+deduplicated/shared blocks to individual backup runs; files unrelated to
+the datastore on the same filesystem also count toward occupied space.
+
+The Agent queries the built-in PBS read-only RRD endpoint once per regular
+poll: `admin/datastore/<store>/rrd`, `timeframe=month`, `cf=AVERAGE`.
+PBS's monthly history consists of aggregated samples (typically at
+30-minute resolution); for each of the last **30 Home Assistant-local
+calendar days** the Agent chooses the last usable sample. Today uses the
+latest live datastore status when available. Missing days are not
+interpolated or displayed as zero. Localized day grouping handles midnight,
+months and DST correctly.
+
+The Agent generates a compact inline SVG with all 30 bar positions,
+labels, values, accessible tooltips, scale (explicitly identified as
+*not starting at zero* when zoomed), and an exact-date delta. The Dashboard
+uses its already-installed `custom:button-card` to display the HTML
+from `sensor.dh_pbs_agent_usage_chart` without any data transformations.
+No ApexCharts dependency, extra database, historical SQL, schedule,
+credentials or other service is required. The 30-minute RRD raw samples
+remain **only in Agent RAM** and are never included in the large MQTT main
+state. The Agent publishes a small retained chart payload separately,
+then immediately rerenders it if HA timezone changes through retained MQTT.
+
+If the RRD endpoint has no historic data, only today's actual used space
+is shown, alongside a warning; the graph does not invent past values.
+A datastore RRD query failure does not downgrade PBS health, corrupt
+existing backup data, or affect backup-job execution. S3-backed datastores
+are excluded because their local disk usage is not equivalent to S3 object
+storage consumption.
 
 ## Correct incremental size collection (v0.1.16)
 

@@ -627,6 +627,26 @@ def collect(config: Config, pbs: PBSClient | None = None, now: float | None = No
             result["errors"].append(f"{store}: {exc}")
         result["datastores"].append(info)
 
+    # PBS stores 30-minute RRD averages for the month timeframe. Read the
+    # actual filesystem-used bytes, not sums of deduplicated snapshot sizes.
+    # This source is optional: failures must not downgrade backup health.
+    result["usage_rrd"] = {}
+    for store in config.datastores:
+        try:
+            rows = pbs.get(
+                f"admin/datastore/{quote(store, safe='')}/rrd",
+                timeframe="month", cf="AVERAGE",
+            )
+            if not isinstance(rows, list):
+                raise SourceError("PBS RRD response is not a list")
+            result["usage_rrd"][store] = {
+                "rows": [{"time": row["time"], "used": row["used"]}
+                         for row in rows
+                         if isinstance(row, dict) and "time" in row and "used" in row],
+            }
+        except SourceError as exc:
+            result["usage_rrd"][store] = {"rows": [], "error": str(exc)[:140]}
+
     snapshot_cache: dict[tuple[str, str], list[dict] | None] = {}
     for rule in config.backup_rules:
         key = (rule.datastore, rule.namespace)
