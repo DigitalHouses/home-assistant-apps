@@ -103,6 +103,64 @@ def test_parse_pve_log_and_size_semantics():
     assert build_run(_task(), parsed)["size_gib"] is None
 
 
+def test_real_pve_84_failed_group_99100_with_nine_successful_guests():
+    # Confirmed 2026-11-22 03:00 and 02:42 on PVE 8.4.21.
+    # Minimal task-log fixture retains all guest boundaries and exact failure.
+    log = [
+        "INFO: starting new backup job: vzdump 1237 10004 10001 1011 99100 "
+        "99134 777 1221 7000 2222 --mode snapshot --storage pbs-serzhan",
+        "INFO: Starting Backup of VM 777 (qemu)",
+        "INFO: VM Name: digitalhouses.vip",
+        "INFO: transferred 32.00 GiB in 19 seconds (1.7 GiB/s)",
+        "INFO: Finished Backup of VM 777 (00:00:21)",
+        "INFO: Starting Backup of VM 1011 (lxc)",
+        "INFO: root.pxar: had to backup 20.744 MiB of 2.452 GiB "
+        "(compressed 4.843 MiB) in 10.51 s",
+        "INFO: Finished Backup of VM 1011 (00:00:12)",
+        "INFO: Starting Backup of VM 1221 (lxc)",
+        "INFO: root.pxar: had to backup 0 B of 1.301 GiB (compressed 0 B)",
+        "INFO: Finished Backup of VM 1221 (00:00:15)",
+        "INFO: Starting Backup of VM 1237 (lxc)",
+        "INFO: root.pxar: had to backup 8.764 MiB of 1.945 GiB (compressed 2.85 MiB)",
+        "INFO: Finished Backup of VM 1237 (00:00:17)",
+        "INFO: Starting Backup of VM 2222 (qemu)",
+        "INFO: transferred 1.22 GiB in 4 seconds (312.0 MiB/s)",
+        "INFO: Finished Backup of VM 2222 (00:00:17)",
+        "INFO: Starting Backup of VM 7000 (lxc)",
+        "INFO: root.pxar: had to backup 0 B of 1.636 GiB (compressed 0 B)",
+        "INFO: Finished Backup of VM 7000 (00:00:07)",
+        "INFO: Starting Backup of VM 10001 (lxc)",
+        "INFO: root.pxar: had to backup 7.94 MiB of 3.274 GiB (compressed 2.325 MiB)",
+        "INFO: Finished Backup of VM 10001 (00:00:15)",
+        "INFO: Starting Backup of VM 10004 (lxc)",
+        "INFO: root.pxar: had to backup 0 B of 1.509 GiB (compressed 0 B)",
+        "INFO: Finished Backup of VM 10004 (00:00:09)",
+        "INFO: Starting Backup of VM 99100 (qemu)",
+        "ERROR: Backup of VM 99100 failed - no such logical volume pve/vm-100-disk-1",
+        "INFO: Failed at 2026-11-22 03:01:53",
+        "INFO: Starting Backup of VM 99134 (qemu)",
+        "INFO: transferred 32.00 GiB in 22 seconds (1.5 GiB/s)",
+        "INFO: Finished Backup of VM 99134 (00:00:24)",
+        "INFO: Backup job finished with errors",
+        "TASK ERROR: job errors",
+    ]
+    run = build_run(_task(status="job errors"), parse_log(log, {
+        "dh-backup-critical-daily": "Configured daily job",
+    }))
+    assert run["status"] == "failed"
+    assert run["label"] == "vzdump · pbs-serzhan"
+    assert run["job_id"] is None
+    guests = {guest["id"]: guest for guest in run["guests"]}
+    assert len(guests) == 10
+    assert sum(g["status"] == "success" for g in guests.values()) == 9
+    assert sum(g["status"] == "failed" for g in guests.values()) == 1
+    assert guests["99100"]["kind"] == "VM"
+    assert guests["99100"]["error"] == "no such logical volume pve/vm-100-disk-1"
+    assert guests["1221"]["size_gib"] == 1.3
+    assert guests["1221"]["size_kind"] == "processed"
+    assert run["size_gib"] is None  # Do not report a complete total for a failed job.
+
+
 def test_guest_failure_and_skips_are_separate_and_job_failed():
     log = [
         "INFO: skip external VMs: 700, 701",
