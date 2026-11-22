@@ -36,6 +36,8 @@ from .ups_trigger import SoftwareShutdownController, SoftwareShutdownTriggerResu
 
 
 SHUTDOWN_BUDGET_REFRESH_SECONDS = 60.0
+# Never reparse the boot journal indefinitely for a missing guest shutdown task.
+GUEST_SHUTDOWN_HISTORY_MAX_ATTEMPTS = 2
 _LOG = logging.getLogger(__name__)
 _PUBLIC_SHUTDOWN_REASON = {
     "charge_guard": "charge_threshold",
@@ -162,7 +164,9 @@ class ShutdownAwareProductionCollectors(GuestAwareProductionCollectors):
         super().__init__(*args, **kwargs)
         self.shutdown_history_tracker = shutdown_history_tracker
         self._guest_status_cache: dict[tuple[str, str], str] = {}
+        self._guest_status_initialized = False
         self._pending_guest_shutdowns: dict[tuple[str, str], str | None] = {}
+        self._pending_guest_history_attempts: dict[tuple[str, str], int] = {}
 
     @staticmethod
     def _latest_guest_record(
@@ -216,7 +220,7 @@ class ShutdownAwareProductionCollectors(GuestAwareProductionCollectors):
             _LOG.exception("Не удалось сохранить snapshot имён VM/LXC")
 
         history_before = self.shutdown_history_tracker.payload()
-        refresh_needed = not self._guest_status_cache
+        refresh_needed = not self._guest_status_initialized
         for key, status in current_statuses.items():
             previous_status = self._guest_status_cache.get(key)
             if previous_status in {"running", "paused"} and status == "stopped":
@@ -232,9 +236,14 @@ class ShutdownAwareProductionCollectors(GuestAwareProductionCollectors):
                     else None
                 )
                 self._pending_guest_shutdowns.setdefault(key, previous_finished)
+                self._pending_guest_history_attempts.setdefault(key, 0)
                 refresh_needed = True
 
-        if self._pending_guest_shutdowns:
+        if any(
+            self._pending_guest_history_attempts.get(key, 0)
+            < GUEST_SHUTDOWN_HISTORY_MAX_ATTEMPTS
+            for key in self._pending_guest_shutdowns
+        ):
             refresh_needed = True
 
         if refresh_needed:
@@ -242,6 +251,11 @@ class ShutdownAwareProductionCollectors(GuestAwareProductionCollectors):
                 self.shutdown_history_tracker.refresh_current_guest_shutdowns()
             except Exception:
                 _LOG.exception("Не удалось обновить историю shutdown VM/LXC")
+            finally:
+                for key in self._pending_guest_shutdowns:
+                    self._pending_guest_history_attempts[key] = (
+                        self._pending_guest_history_attempts.get(key, 0) + 1
+                    )
 
         try:
             self.shutdown_history_tracker.enrich_guest_last_shutdowns(guest_timeouts)
@@ -252,17 +266,23 @@ class ShutdownAwareProductionCollectors(GuestAwareProductionCollectors):
 
         for key, baseline_finished in list(self._pending_guest_shutdowns.items()):
             record = self._latest_guest_record(history_after, key[0], key[1])
-            if not isinstance(record, Mapping):
-                continue
-            finished = record.get("finished_at")
-            duration = record.get("duration_seconds")
-            if (
+            finished = record.get("finished_at") if isinstance(record, Mapping) else None
+            duration = record.get("duration_seconds") if isinstance(record, Mapping) else None
+            completed = (
                 isinstance(finished, str)
                 and isinstance(duration, int)
                 and not isinstance(duration, bool)
                 and finished != baseline_finished
+            )
+            if (
+                completed
+                or self._pending_guest_history_attempts.get(key, 0)
+                >= GUEST_SHUTDOWN_HISTORY_MAX_ATTEMPTS
             ):
+                # A missing event must not trigger a full journal scan forever.
+                # The journald event follower refreshes late completions directly.
                 self._pending_guest_shutdowns.pop(key, None)
+                self._pending_guest_history_attempts.pop(key, None)
 
         for plural, kind in (("vms", "vm"), ("lxcs", "lxc")):
             records = data.get(plural)
@@ -315,6 +335,7 @@ class ShutdownAwareProductionCollectors(GuestAwareProductionCollectors):
             data[plural] = enriched
 
         self._guest_status_cache = current_statuses
+        self._guest_status_initialized = True
         return CollectorSample(data=data, metrics=dict(sample.metrics))
 
     def host(self) -> CollectorSample:

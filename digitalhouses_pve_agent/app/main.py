@@ -689,6 +689,12 @@ def run(config: AppConfig, *, state_dir: Path = DEFAULT_STATE_DIR) -> int:
                     guest_reconcile_interval = target_interval
                 if guest_event_pending.is_set():
                     guest_event_pending.clear()
+                    # A late task completion must be reflected even after a
+                    # bounded retry gave up waiting for its shutdown record.
+                    try:
+                        shutdown_history_tracker.refresh_current_guest_shutdowns()
+                    except Exception:
+                        log.exception("Не удалось прочитать новое событие shutdown")
                     runtime.run_collection(("guests",))
                     # The PVE RRD state cache can lag the completed task event.
                     guest_event_followup_at = time.monotonic() + 5.0
