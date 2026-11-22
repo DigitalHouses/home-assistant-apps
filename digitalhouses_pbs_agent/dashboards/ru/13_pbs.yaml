@@ -1,4 +1,4 @@
-# DH-View-Version: 0.1.19
+# DH-View-Version: 0.1.20
 # DH-View-Date: 2026-11-22
 title: PBS
 path: dh_pbs_agent
@@ -264,34 +264,38 @@ sections:
         heading: Занято на диске PBS · 30 дней
         heading_style: title
         icon: mdi:chart-bar
-      - type: custom:button-card
-        entity: sensor.dh_pbs_agent_usage_chart
-        show_icon: false
-        show_name: false
-        show_state: false
-        show_label: false
-        show_entity_picture: false
-        tap_action:
-          action: none
-        custom_fields:
-          chart: |
-            [[[
-              return entity?.attributes?.html || 'Ожидание истории PBS Agent…';
-            ]]]
-        styles:
-          card:
-            - padding: 12px
-            - width: 100%
-          grid:
-            - grid-template-areas: '"chart"'
-            - grid-template-columns: minmax(0, 1fr)
-            - grid-template-rows: min-content
-          custom_fields:
-            chart:
-              - display: block
-              - overflow: hidden
-              - width: 100%
-              - text-align: left
+      # Identical native statistics-graph pattern as DigitalHouses Backblaze.
+      # Dynamic list of REAL local datastore capacity sensors; Recorder provides
+      # the daily history, while the card provides native hover values.
+      - type: custom:auto-entities
+        show_empty: false
+        card:
+          type: statistics-graph
+          title: Занято за день (максимум)
+          chart_type: bar
+          period: day
+          days_to_show: 30
+          stat_types:
+            - max
+          hide_legend: false
+        card_param: entities
+        filter:
+          template: |-
+            {% set ns = namespace(items=[]) %}
+            {% for storage in states.sensor | sort(attribute='entity_id') %}
+              {% if state_attr(storage.entity_id, 'pbs_product') == 'digitalhouses_pbs_agent'
+                  and state_attr(storage.entity_id, 'pbs_section') == 'datastore'
+                  and state_attr(storage.entity_id, 'pbs_metric') == 'used_gib'
+                  and states(storage.entity_id) not in ['unknown', 'unavailable', 'none', ''] %}
+                {% set ns.items = ns.items + [{
+                  'entity': storage.entity_id,
+                  'name': state_attr(storage.entity_id, 'pbs_display_name') or storage.name
+                }] %}
+              {% endif %}
+            {% endfor %}
+            {{- ns.items -}}
+        sort:
+          method: entity_id
         grid_options:
           columns: 12
   - type: grid

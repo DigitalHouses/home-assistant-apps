@@ -1,4 +1,4 @@
-# DigitalHouses PBS Agent v0.1.19
+# DigitalHouses PBS Agent v0.1.20
 
 **Required operational UI/CLI target:** reuse the actual maintained
 [PVE Agent CLI and UI](../digitalhouses_pve_agent/README.md), including
@@ -114,6 +114,40 @@ unchanged. Golden tests compare the rendered statuses, precise CLI
 messages and copied HA operation script against the live PVE source in
 this repository.
 
+## Occupied datastore capacity: native HA history graph (v0.1.20)
+
+The **second PBS Dashboard column** ends with a native Home Assistant
+`statistics-graph` card, matching DigitalHouses Backblaze App's proven
+history display. It shows **30 daily bars** for occupied capacity, with
+**date and occupied GiB visible on mouse hover**. The header explicitly
+says *Занято за день (максимум)* because native HA `max` long-term
+statistics represent the **daily peak**, not the final value at midnight.
+After Prune/GC the bar for the day can therefore still reflect earlier
+higher usage; the next day's bar reflects the lower level.
+
+The Agent publishes a numeric MQTT sensor for each local datastore,
+e.g. `sensor.dh_pbs_agent_datastore_pbs_serzhan_used_gib`:
+- Source: current real `used_bytes` from native PBS datastore status,
+  divided by 1,073,741,824 (GiB), rounded to two decimals
+- MQTT Discovery: `state_class: measurement`,
+  `unit_of_measurement: GiB`, `suggested_display_precision: 2`
+- Real datastore metadata (`pbs_product/pbs_section/pbs_metric`) lets the
+  existing `custom:auto-entities` supply one or several actual local
+  datastores to the native graph. Unknown/unavailable/S3 figures never
+  appear as fake zeroes.
+- HA Recorder maintains the measurements and long-term statistics.
+  The new sensor has **no historical HA statistics before its installation**:
+  the 30-day window fills naturally over time. Existing PBS-native RRD
+  data are not imported into Recorder, and no separate history database,
+  component or HACS graph dependency is added.
+
+The chart is not itself an SVG and includes Home Assistant's native
+interactive hover tooltips. Previous v0.1.17–0.1.19 RRD chart rendering
+and its unnecessary monthly RRD CLI polling are removed. PBS Agent only
+publishes the current measurement during its normal collection cycle.
+The chart is deliberately at the **bottom of the second existing
+section**, and all other UI/CLI operations retain PVE operational parity.
+
 ## Dashboard layout and PVE-style operational control (v0.1.18)
 
 The dashboard retains four original sections: PBS operations/health,
@@ -130,49 +164,21 @@ duration, failures show the cause and idle status shows elapsed time
 since the last collection. A worker success does not count as an
 installed update unless the current agent version reaches the target.
 
-The PBS RRD endpoint must be queried from the running service, not from
-an independent direct-debug process. The native CLI without the
-PROXMOX_DEBUG_API_CODE variable uses the localhost PBS HTTPS proxy;
-the direct mode used previously reports RRD cache not initialized.
-Only history reads use the standard proxy mode; backup and manifest
-collection remains unchanged, read-only and tokenless. If the local
-proxy is unavailable, the graph shows the latest known usage and
-an explicit diagnostic; backup health is not downgraded.
+Historical note: in 0.1.18–0.1.19 the old SVG graph queried the PBS
+RRD via the running local proxy to fix `RRD cache not initialized`.
+**That RRD chart and its polling were retired in 0.1.20** in favor of
+native HA Recorder statistics and hoverable columns.
 
-## Datastore occupied space: 30 daily columns (v0.1.17)
+## Historical custom capacity chart (v0.1.17–v0.1.19, superseded)
 
-The canonical PBS dashboard includes a 30-day bar chart of **occupied bytes
-on the filesystem hosting each local PBS datastore**, reported in GiB. This
-is *not* the sum of logical VM/CT snapshot sizes and does not attribute
-deduplicated/shared blocks to individual backup runs; files unrelated to
-the datastore on the same filesystem also count toward occupied space.
-
-The Agent queries the built-in PBS read-only RRD endpoint once per regular
-poll: `admin/datastore/<store>/rrd`, `timeframe=month`, `cf=AVERAGE`.
-PBS's monthly history consists of aggregated samples (typically at
-30-minute resolution); for each of the last **30 Home Assistant-local
-calendar days** the Agent chooses the last usable sample. Today uses the
-latest live datastore status when available. Missing days are not
-interpolated or displayed as zero. Localized day grouping handles midnight,
-months and DST correctly.
-
-The Agent generates a compact inline SVG with all 30 bar positions,
-labels, values, accessible tooltips, scale (explicitly identified as
-*not starting at zero* when zoomed), and an exact-date delta. The Dashboard
-uses its already-installed `custom:button-card` to display the HTML
-from `sensor.dh_pbs_agent_usage_chart` without any data transformations.
-No ApexCharts dependency, extra database, historical SQL, schedule,
-credentials or other service is required. The 30-minute RRD raw samples
-remain **only in Agent RAM** and are never included in the large MQTT main
-state. The Agent publishes a small retained chart payload separately,
-then immediately rerenders it if HA timezone changes through retained MQTT.
-
-If the RRD endpoint has no historic data, only today's actual used space
-is shown, alongside a warning; the graph does not invent past values.
-A datastore RRD query failure does not downgrade PBS health, corrupt
-existing backup data, or affect backup-job execution. S3-backed datastores
-are excluded because their local disk usage is not equivalent to S3 object
-storage consumption.
+Previous releases rendered a PBS RRD-derived 30-day SVG using the
+`sensor.dh_pbs_agent_usage_chart` HTML attribute. Its browser hover did
+not behave as a real chart, motivating the switch in v0.1.20 to the native
+HA Recorder `statistics-graph`. The old MQTT chart and RRD collector
+were removed. The observable quantity remains real occupied capacity
+on the datastore's filesystem, **not** the sum of logical backup sizes
+or compressed upload amounts; unrelated files on the same filesystem
+can also contribute.
 
 ## Correct incremental size collection (v0.1.16)
 

@@ -1,5 +1,32 @@
 # DigitalHouses PBS Agent
 
+## 0.1.20
+
+- Replace the static inline-SVG datastore chart with Home Assistant's
+  native **statistics-graph** bar card, exactly following the established
+  DigitalHouses Backblaze history pattern. The 30-day daily columns have
+  built-in hover tooltips showing the date and actual numeric GiB value.
+- Discover one real numeric MQTT sensor per configured datastore
+  (`sensor.dh_pbs_agent_datastore_<name>_used_gib`) from live PBS
+  `used_bytes`, with `unit_of_measurement: GiB`,
+  `state_class: measurement` and stable existing datastore provenance
+  metadata. HA Recorder owns the long-term statistics; no custom graphing
+  library, new HACS dependency or separate database is needed.
+- Use existing installed `custom:auto-entities` to pass dynamic datastore
+  sensors into the native `statistics-graph`, with `chart_type: bar`,
+  `period: day`, `days_to_show: 30`, `stat_types: [max]`.
+  Explicitly label the chart as the **daily maximum** occupied capacity,
+  not the last reading of a day or sum of uploaded VM/CT snapshot sizes.
+- The new numeric sensor's Recorder history begins after installation;
+  old PBS RRD readings are **not** automatically backfilled into HA.
+  Omit unavailable/S3 capacity rather than representing it as zero.
+- Delete the now-unneeded custom SVG renderer, retained HTML chart MQTT
+  sensor/topic publications and additional PBS RRD API polling path.
+  Retain the existing four-section dashboard layout with the graph at
+  the bottom of column 2, PVE-parity management card, backup trees and
+  all PBS/CORE backup jobs unchanged.
+
+
 ## 0.1.19
 
 - Align the **actual PBS Agent CLI** with current PVE Agent 0.5.96,
