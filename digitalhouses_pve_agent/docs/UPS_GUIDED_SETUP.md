@@ -96,3 +96,16 @@ shutdown entries are kept in their own expandable section. Changes are
 limited to the preview YAML; no NUT/Agent update is necessary.
 
 Preview file: `examples/dashboard-preview/11_pve_ups_preview_v10.yaml`.
+
+### UPS Dashboard Preview v11 — planned tree correction
+
+The original shutdown_sequence is a collection of *currently running*
+VM/LXC IDs grouped by the same configured startup.order, processed in
+reverse order. It is not a history or a sequence of synthetic numbered
+stages. Preview v11 renders actual per-guest kind, VMID, and display name
+from the existing shutdown entities, retaining that grouping and order.
+It does not claim those guests shut down concurrently. An absent running
+sequence is not replaced with the unrelated list of onboot guests.
+Historical shutdown events remain separately expandable, and all existing
+UPS controls and tables are unchanged. Preview:
+`examples/dashboard-preview/11_pve_ups_preview_v11.yaml`.

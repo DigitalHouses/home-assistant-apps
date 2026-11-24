@@ -435,3 +435,54 @@ def test_ups_preview_v10_renders_planned_tree_independently_of_shutdown_history(
     assert "Этап 1" in recovered
     assert "1254 · dev" in recovered
     assert "2243 · media" in recovered
+
+
+
+def test_ups_preview_v11_tree_matches_running_guest_sequence_without_fake_steps():
+    import yaml
+    from jinja2 import Environment
+
+    root = Path(__file__).resolve().parents[1] / "examples/dashboard-preview"
+    v10 = yaml.safe_load((root / "11_pve_ups_preview_v10.yaml").read_text())
+    v11 = yaml.safe_load((root / "11_pve_ups_preview_v11.yaml").read_text())
+    assert [len(s["cards"]) for s in v11["sections"]] == [8, 4, 8, 10]
+    assert v11["sections"][0] == v10["sections"][0]
+    assert v11["sections"][2:] == v10["sections"][2:]
+    assert v11["sections"][1]["cards"][2:] == v10["sections"][1]["cards"][2:]
+    card = v11["sections"][1]["cards"][1]
+    assert card["title"] == "Порядок выключения PVE"
+    template = Environment().from_string(card["content"])
+    guests = {
+        "sensor.dh_pve_agent_lxc_1254_shutdown": {"guest_id": "1254", "proxmox_display_name": "dev"},
+        "sensor.dh_pve_agent_lxc_1245_shutdown": {"guest_id": "1245", "proxmox_display_name": "dh-stats-CORE"},
+        "sensor.dh_pve_agent_lxc_1231_shutdown": {"guest_id": "1231", "proxmox_display_name": "ansible-serzhan-home"},
+        "sensor.dh_pve_agent_lxc_1241_shutdown": {"guest_id": "1241", "proxmox_display_name": "ansible-dh-core"},
+        "sensor.dh_pve_agent_vm_2242_shutdown": {"guest_id": "2242", "proxmox_display_name": "ha-core"},
+        "sensor.dh_pve_agent_vm_2243_shutdown": {"guest_id": "2243", "proxmox_display_name": "mediaserver-CORE"},
+    }
+    sequence = [["1254"], ["1245"], ["1199", "1231", "1241", "2242"], ["2243"]]
+    def attrs(entity, key):
+        if entity == "sensor.dh_pve_agent_shutdown_history" and key == "history":
+            return []
+        if entity == "sensor.dh_pve_agent_ups_guest_shutdown_budget" and key == "shutdown_sequence":
+            return sequence
+        return guests.get(entity, {}).get(key)
+
+    text = template.render(state_attr=attrs)
+    assert "PVE · работающие VM/LXC" in text
+    assert "LXC 1254 · dev" in text
+    assert "LXC 1245 · dh-stats-CORE" in text
+    assert "VM/LXC 1199" in text  # Unknown guest kind is not guessed
+    assert "VM 2242 · ha-core" in text
+    assert "VM 2243 · mediaserver-CORE" in text
+    assert "├─ Группа одного shutdown order" in text
+    assert "Фактических остановок пока не записано" in text
+    assert "Этап" not in text
+    assert text.index("1254") < text.index("1245") < text.index("1199") < text.index("2243")
+
+    def absent(entity, key):
+        return [] if key in {"history", "shutdown_sequence"} else None
+    unavailable = template.render(state_attr=absent)
+    assert "Нет подтверждённой последовательности" in unavailable
+    assert "Группа одного" not in unavailable
+    assert "Фактических остановок пока не записано" in unavailable
