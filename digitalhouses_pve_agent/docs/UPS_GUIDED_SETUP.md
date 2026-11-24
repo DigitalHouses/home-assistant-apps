@@ -25,7 +25,12 @@ Each action has a matching diagnostic binary sensor
 `binary_sensor.dh_pve_agent_ups_setup_can_<stage>` for built-in
 Lovelace conditional visibility. Only one stage can execute at a time.
 
-Preview: `examples/dashboard-preview/11_pve_ups_preview_v8.yaml`.
+Preview v8: `examples/dashboard-preview/11_pve_ups_preview_v8.yaml`.
+
+**Updated UI preview v9:** `examples/dashboard-preview/11_pve_ups_preview_v9.yaml`.
+Each diagnostic row has an inline compact Mushroom action chip. Dependent
+steps are shown with a locked, non-clickable action until prerequisites
+are met, instead of being hidden. Full-width button cards are removed.
 The green and repair cards are mutually exclusive. The current PVE shutdown
 history, VM/LXC table and shutdown-tree rendering are retained; if history is
 empty, the view shows the *planned* shutdown sequence instead.

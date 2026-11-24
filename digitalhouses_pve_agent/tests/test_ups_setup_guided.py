@@ -263,3 +263,41 @@ def test_ups_preview_keeps_four_columns_and_full_pve_history():
     assert "Последний shutdown" in text
     assert "Логика аварийного отключения" not in str(config)
     assert "select.dh_pve_agent_ups_driver" in str(first)
+
+
+
+def test_ups_preview_v9_uses_inline_per_step_controls_without_hiding_blocked_steps():
+    import yaml
+    root = Path(__file__).resolve().parents[1]
+    examples = root / "examples" / "dashboard-preview"
+    v8 = yaml.safe_load((examples / "11_pve_ups_preview_v8.yaml").read_text())
+    v9 = yaml.safe_load((examples / "11_pve_ups_preview_v9.yaml").read_text())
+    assert v9["path"] == "dh_pve_agent_ups_preview_v9"
+    assert v9["sections"][1:] == v8["sections"][1:]
+    assert [len(s["cards"]) for s in v9["sections"]] == [8, 4, 8, 10]
+    problem = v9["sections"][0]["cards"][3]
+    assert problem["conditions"][0]["state_not"] == "ready"
+    cards = problem["card"]["cards"]
+    assert cards[0]["primary"] == "Защита требует настройки"
+    assert not any(c["type"] == "button" for c in cards)
+    stages = ["install", "driver", "server", "primary", "monitor", "activate"]
+    rows = [c for c in cards if c["type"] == "horizontal-stack"]
+    assert len(rows) == len(stages)
+    for row, stage in zip(rows, stages):
+        assert len(row["cards"]) == 2
+        action_container = row["cards"][1]
+        assert action_container["type"] == "vertical-stack"
+        enabled, blocked = action_container["cards"]
+        assert enabled["conditions"][0]["state"] == "on"
+        assert blocked["conditions"][0]["state"] == "off"
+        assert enabled["conditions"][0]["entity"].endswith("_can_" + stage)
+        chip = enabled["card"]["chips"][0]
+        assert chip["tap_action"]["action"] == "perform-action"
+        assert chip["tap_action"]["target"]["entity_id"].endswith("_setup_" + stage)
+        blocked_chip = blocked["card"]["chips"][0]
+        assert blocked_chip["tap_action"]["action"] == "none"
+        assert "mdi:lock-outline" in blocked_chip["icon"]
+    assert "Подробная диагностика" in cards[-1]["content"]
+    assert "select.dh_pve_agent_ups_driver" in str(cards)
+    assert "История остановок PVE" in str(v9)
+    assert "PVE · планируемое выключение" in str(v9)
