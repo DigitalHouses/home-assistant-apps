@@ -9,6 +9,7 @@ from datetime import datetime, timezone
 from dataclasses import dataclass
 from typing import Any
 
+from .ups_setup import VALID_STAGES, driver_options
 from .config import MqttConfig
 from .runtime_settings import LEGACY_SETTING_KEYS, RuntimeSettingError, RuntimeSettings
 from .sync_discovery import build_sync_payload
@@ -79,6 +80,8 @@ class MqttEvents:
         self.backup_limit_updates: queue.SimpleQueue[int] = queue.SimpleQueue()
         self.refresh_in_progress = threading.Event()
         self.reconnect_requested = threading.Event()
+        self.ups_setup_requests: queue.SimpleQueue[str] = queue.SimpleQueue()
+        self.ups_setup_driver_updates: queue.SimpleQueue[str] = queue.SimpleQueue()
         self.ups_scan_requested = threading.Event()
         self.ups_scan_in_progress = threading.Event()
         self.fan_max_rpm_updates: queue.SimpleQueue[FanMaxRpmUpdate] = queue.SimpleQueue()
@@ -138,6 +141,18 @@ class MqttEvents:
                 return False
             self.auto_update_updates.put(text == "ON")
             return True
+        setup_prefix = f"{self.topics.base}/ups/setup"
+        if topic == f"{setup_prefix}/driver/set":
+            if text in driver_options():
+                self.ups_setup_driver_updates.put(text)
+                return True
+            return False
+        if topic.startswith(setup_prefix + "/"):
+            stage = topic[len(setup_prefix) + 1:]
+            if stage in VALID_STAGES and text.upper() == "PRESS":
+                self.ups_setup_requests.put(stage)
+                return True
+            return False
         if topic == self.topics.ups_scan:
             if text.upper() == "PRESS":
                 if self.ups_scan_in_progress.is_set() or self.ups_scan_requested.is_set():
@@ -341,6 +356,8 @@ class MqttBridge(MqttEvents):
         client.subscribe(self.topics.update_auto_set, qos=1)
         client.subscribe(f"{self.topics.base}/backup/history_limit/set", qos=1)
         client.subscribe(self.topics.ups_scan, qos=1)
+        client.subscribe(f"{self.topics.base}/ups/setup/+", qos=1)
+        client.subscribe(f"{self.topics.base}/ups/setup/driver/set", qos=1)
         client.subscribe(f"{self.topics.fan_max_rpm_prefix}/+/max_rpm/set", qos=1)
         client.subscribe(f"{self.topics.base}/ups/refresh", qos=1)
         client.subscribe(f"{self.topics.base}/ups/beeper/set", qos=1)
@@ -428,6 +445,9 @@ class MqttBridge(MqttEvents):
                 and message.topic == self.ups_topics.debug_set
                 and getattr(message, "retain", False)):
             self.log.warning("Rejected retained UPS debug command")
+            return
+        if message.topic.startswith(f"{self.topics.base}/ups/setup/") and getattr(message, "retain", False):
+            self.log.warning("Rejected retained UPS setup command")
             return
         if (message.topic.startswith(f"{self.topics.fan_max_rpm_prefix}/")
                 and message.topic.endswith("/max_rpm/set")
@@ -540,6 +560,14 @@ class MqttBridge(MqttEvents):
         return self._publish(
             self.topics.discovery,
             json.dumps(self.discovery_payload, ensure_ascii=False, separators=(",", ":")),
+            retain=True,
+        )
+
+    def publish_ups_setup_state(self, payload: dict[str, object]) -> bool:
+        """Retained setup status remains available before NUT/UPS selection."""
+        return self._publish(
+            f"{self.topics.base}/ups/setup/state",
+            json.dumps(payload, ensure_ascii=False, separators=(",", ":")),
             retain=True,
         )
 
