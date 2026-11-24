@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.101 — TEST prerelease (NUT PRIMARY restart readiness)
+
+- Fix USB UPS/NUT guided PRIMARY configuration failing immediately after a successful NUT Server restart while `upsc` still reconnects. After a service start/restart, wait up to 12 seconds for a fresh, verified `OL` UPS status; continue to reject an explicit `OB`, `LB`, `FSD`, overload or discharging status immediately.
+- Apply this bounded post-start readiness check only to NUT driver, Server and PRIMARY setup; preserve strict initial safety guards, shutdown activation conditions, backup and rollback.
+- Regression tests for transient missing responses, unsafe status and bounded timeout. USB commissioning still requires live physical acceptance. The GitHub release remains a prerelease excluded from stable auto-updates.
+
 ## 0.5.100 — TEST prerelease (USB UPS/NUT commissioning)
 
 - Add independent USB UPS discovery before NUT installation, including USB Bus/Device, VID:PID, product and serial; preserve existing SNMP/NUT monitoring in read-only mode.

@@ -16,6 +16,7 @@ import secrets
 import shutil
 import subprocess
 import tempfile
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable
@@ -58,6 +59,42 @@ def live_ol(name: str, *, runner: Callable = subprocess.run) -> bool:
     return result.returncode == 0 and "OL" in flags and not flags.intersection(
         {"OB", "LB", "FSD", "OVER", "DISCHRG", "RB"}
     )
+
+
+def await_live_ol(
+    name: str,
+    *,
+    runner: Callable = subprocess.run,
+    monotonic: Callable[[], float] = time.monotonic,
+    sleep: Callable[[float], None] = time.sleep,
+    timeout_seconds: float = 12.0,
+) -> bool:
+    """Wait for upsd to reattach to an already-online UPS after restart.
+
+    No missing/stale response is considered healthy. A *real* non-OL status
+    immediately aborts so we never activate anything on battery power.
+    The retry is limited to a freshly started/restarted service, not the
+    initial safety guard.
+    """
+    deadline = monotonic() + max(0.0, timeout_seconds)
+    while True:
+        try:
+            result = runner(
+                ["upsc", f"{name}@127.0.0.1:3493", "ups.status"],
+                capture_output=True, text=True, timeout=3.0, check=False,
+            )
+        except (OSError, subprocess.TimeoutExpired):
+            result = None
+        if result is not None and result.returncode == 0:
+            tokens = set((result.stdout or "").strip().split())
+            if tokens:
+                return "OL" in tokens and not tokens.intersection(
+                    {"OB", "LB", "FSD", "OVER", "DISCHRG", "RB"}
+                )
+        remaining = deadline - monotonic()
+        if remaining <= 0:
+            return False
+        sleep(min(0.5, remaining))
 
 
 def _read(path: Path) -> str:
@@ -184,7 +221,7 @@ def execute(
         if service_status(f"nut-driver@{name}.service", runner=runner) != "active":
             raise UpsSetupError("Сначала запустите NUT driver")
         run_checked(["systemctl", "start", "nut-server.service"], runner=runner)
-        if not live_ol(name, runner=runner):
+        if not await_live_ol(name, runner=runner):
             raise UpsSetupError("NUT Server не подтвердил питание от сети")
         return "NUT Server работает"
 
@@ -215,7 +252,7 @@ def execute(
             run_checked(["systemctl", "daemon-reload"], runner=runner)
             run_checked(["systemctl", "start", f"nut-driver@{name}.service"], runner=runner)
             run_checked(["systemctl", "start", "nut-server.service"], runner=runner)
-            if not live_ol(name, runner=runner):
+            if not await_live_ol(name, runner=runner):
                 raise UpsSetupError("Драйвер не подтвердил безопасное питание OL; проверьте USB и драйвер")
         except Exception:
             _restore_changes(restore)
@@ -265,8 +302,8 @@ def execute(
         restore = _backup_and_write(backups, state_dir=state_dir)
         try:
             run_checked(["systemctl", "restart", "nut-server.service"], runner=runner)
-            if not live_ol(name, runner=runner):
-                raise UpsSetupError("После настройки PRIMARY UPS перестал отвечать")
+            if not await_live_ol(name, runner=runner):
+                raise UpsSetupError("После перезапуска NUT Server UPS не подтвердил OL")
             # Existing CLI atomic edit preserves all unrelated App settings.
             set_config(app_conf, [
                 "ups_enabled=true", "ups_host=127.0.0.1", "ups_port=3493",

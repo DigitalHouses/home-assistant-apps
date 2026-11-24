@@ -79,3 +79,10 @@ No arbitrary existing multi-UPS, SNMP or custom remote setup is overwritten.
   commissioning path and rollback.
 - Existing UPS telemetry, trigger policy, PVE shutdown history and shutdown
   ordering remain unchanged. HA and MQTT are not on the safety shutdown path.
+
+### v0.5.101 prerelease follow-up
+
+After `nut-server.service` starts or restarts, the setup oneshot accepts
+only a *fresh* verified `OL` status. It retries transient empty/failed
+`upsc` responses for at most 12 seconds, but aborts immediately for an
+explicit unsafe status. No automatic retry is performed on battery power.

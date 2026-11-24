@@ -301,3 +301,83 @@ def test_ups_preview_v9_uses_inline_per_step_controls_without_hiding_blocked_ste
     assert "select.dh_pve_agent_ups_driver" in str(cards)
     assert "История остановок PVE" in str(v9)
     assert "PVE · планируемое выключение" in str(v9)
+
+
+
+def test_upsd_restart_waits_for_fresh_ol_without_false_failure():
+    from app.ups_setup_apply import await_live_ol
+
+    class Clock:
+        value = 0.0
+        def now(self):
+            return self.value
+        def sleep(self, seconds):
+            self.value += seconds
+
+    clock = Clock()
+    observed = []
+    values = [(1, ""), (1, ""), (0, "OL CHRG")]
+
+    def runner(args, **kwargs):
+        observed.append(args)
+        code, status = values.pop(0)
+        return SimpleNamespace(returncode=code, stdout=status, stderr="")
+
+    assert await_live_ol("ups", runner=runner,
+                         monotonic=clock.now, sleep=clock.sleep,
+                         timeout_seconds=5) is True
+    assert len(observed) == 3
+    assert clock.value == 1.0
+    assert all(command == ["upsc", "ups@127.0.0.1:3493", "ups.status"]
+               for command in observed)
+
+
+@pytest.mark.parametrize("status", ["OB", "OL OB", "OL FSD", "LB", "OL DISCHRG", "OL RB"])
+def test_upsd_restart_aborts_immediately_on_any_explicit_unsafe_status(status):
+    from app.ups_setup_apply import await_live_ol
+
+    observed = []
+    def runner(args, **kwargs):
+        observed.append(args)
+        return SimpleNamespace(returncode=0, stdout=status, stderr="")
+
+    def no_sleep(_):
+        raise AssertionError("Must not retry an unsafe UPS status")
+
+    assert not await_live_ol("ups", runner=runner,
+                            monotonic=lambda: 0.0, sleep=no_sleep)
+    assert len(observed) == 1
+
+
+def test_upsd_restart_readiness_is_bounded_when_unavailable():
+    from app.ups_setup_apply import await_live_ol
+
+    class Clock:
+        value = 0.0
+        def now(self):
+            return self.value
+        def sleep(self, seconds):
+            assert 0 < seconds <= 0.5
+            self.value += seconds
+
+    clock = Clock()
+    attempts = []
+    def runner(args, **kwargs):
+        attempts.append(args)
+        return SimpleNamespace(returncode=1, stdout="", stderr="Connection refused")
+
+    assert not await_live_ol("ups", runner=runner,
+                             monotonic=clock.now, sleep=clock.sleep,
+                             timeout_seconds=1.1)
+    assert clock.value <= 1.11
+    assert len(attempts) >= 3
+
+
+def test_upsd_restart_timeout_can_be_zero_for_immediate_check():
+    from app.ups_setup_apply import await_live_ol
+    observed = []
+    def runner(args, **kwargs):
+        observed.append(args)
+        return SimpleNamespace(returncode=1, stdout="", stderr="")
+    assert not await_live_ol("ups", runner=runner, timeout_seconds=0)
+    assert len(observed) == 1
