@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.5.102 — TEST prerelease (UPS shutdown history reconciliation)
+
+- Fix prolonged host reboot history being recorded as many days: v6 journal parser recognizes systemd reboot start and PVE guest-service shutdown boundaries, excluding unrelated manual VM/LXC stops from earlier in the same boot.
+- On agent restart, automatically reconcile the most recent previous-boot history from journal when saved data uses parser v5 or earlier. The existing shutdown-history state is preserved and corrected in place; no new host shutdown is required.
+- Sort historical VM and LXC records together by numeric ID; sort the onboot shutdown table by numeric ID instead of shutdown order, keeping the separate chained shutdown order intact.
+- Split the table footer into real shutdown duration and configured shutdown budget. Mark the table as listing onboot guests, distinct from guest records in history.
+- Includes UPS Dashboard Preview v13 and canonical view updates within the PVE Agent project only. Existing NUT configuration, UPS safety policy, FSD flow and guest shutdown order unchanged.
+- Field test of v6 replay and UI pending. This GitHub prerelease is not a stable auto-update candidate.
+
 ## 0.5.101 — TEST prerelease (NUT PRIMARY restart readiness)
 
 - Fix USB UPS/NUT guided PRIMARY configuration failing immediately after a successful NUT Server restart while `upsc` still reconnects. After a service start/restart, wait up to 12 seconds for a fresh, verified `OL` UPS status; continue to reject an explicit `OB`, `LB`, `FSD`, overload or discharging status immediately.

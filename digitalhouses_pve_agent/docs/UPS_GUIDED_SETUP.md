@@ -128,3 +128,20 @@ planned-tree entries or move historical records between HOME and CORE.
 No change to PVE Agent, NUT, the canonical dashboard or shutdown mechanics.
 
 Preview: `examples/dashboard-preview/11_pve_ups_preview_v12.yaml`.
+
+### UPS Dashboard Preview v13 and history parser v6
+
+- Numeric ID sorting across VM/LXC in historical shutdown tree and within
+  the onboot-only guest shutdown table.
+- The summary row explicitly distinguishes previous shutdown **actual**
+  guest/PVE/total times from **planned** guest/PVE/total budgets.
+- A scheduled/manual reboot is now a recognized beginning of the host shutdown
+  journal scope. This excludes unrelated manual guest-stop tasks earlier in a
+  long-running boot, preventing impossible historical runtimes.
+- Saved v5 previous-boot history is re-parsed from the previous boot journal
+  when v0.5.102 first starts, and persisted with parser v6. No data is
+  deleted or reinitialized.
+- On CORE 2026-11-24, read-only validation against its 68 MB previous-boot
+  journal yields 58 seconds of guest shutdown and 15 seconds of host tail,
+  versus the erroneous 21-day interval from v5.
+- Preview file: examples/dashboard-preview/11_pve_ups_preview_v13.yaml.

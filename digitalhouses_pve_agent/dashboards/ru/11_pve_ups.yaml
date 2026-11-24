@@ -1,6 +1,6 @@
 # DH-View: dh_pve_agent
-# DH-View-Version: 1.0.0
-# DH-View-Date: 2026-11-14
+# DH-View-Version: 1.0.1
+# DH-View-Date: 2026-11-24
 
 title: Электропитание
 path: dh_pve_agent_ups
@@ -1041,7 +1041,7 @@ sections:
 
                 {%- set children.items =
                   children.items
-                  + [[kind, gid, g]]
+                  + [[gid | int, kind, gid, g]]
                 -%}
 
               {%- endfor -%}
@@ -1163,7 +1163,7 @@ sections:
 
             {# ---------- VM / LXC ---------- #}
 
-            {%- for item in children.items -%}
+            {%- for item in children.items | sort(attribute=0) -%}
 
               {%- set child_last =
                 loop.last
@@ -1174,15 +1174,15 @@ sections:
               -%}
 
               {%- set kind =
-                item[0]
-              -%}
-
-              {%- set gid =
                 item[1]
               -%}
 
-              {%- set g =
+              {%- set gid =
                 item[2]
+              -%}
+
+              {%- set g =
+                item[3]
               -%}
 
 
@@ -1283,6 +1283,15 @@ sections:
           states('sensor.dh_pve_agent_ups_shutdown_budget') | int(0) -%}
 
           {%- set pve_budget = shutdown_budget - guest_budget -%}
+          {%- set last = 'sensor.dh_pve_agent_previous_shutdown' -%}
+          {%- set actual_guest = state_attr(last, 'actual_guest_shutdown_seconds') -%}
+          {%- set actual_pve = state_attr(last, 'all_guests_stopped_to_shutdown_seconds') -%}
+          {%- set actual_total = state_attr(last, 'actual_shutdown_seconds') -%}
+          {%- set actual_label = (
+              'Гости: ' ~ ('%d:%02d' | format(actual_guest // 60, actual_guest % 60))
+              ~ (' · PVE: ' ~ ('%d:%02d' | format(actual_pve // 60, actual_pve % 60)) if actual_pve is number else '')
+              ~ (' · ВСЕГО: ' ~ ('%d:%02d' | format(actual_total // 60, actual_total % 60)) if actual_total is number else '')
+            ) if actual_guest is number else 'Нет достоверных данных' -%}
 
 
           {%- set ns = namespace(items=[], rows='') -%}
@@ -1307,7 +1316,7 @@ sections:
               {%- set next_ratio = state_attr(s.entity_id, 'next_shutdown_timeout_ratio') -%}
               {%- set next_assessment = state_attr(s.entity_id, 'next_shutdown_assessment') -%}
 
-              {%- set order = state_attr(s.entity_id, 'shutdown_order') | int(0) -%}
+              {%- set id_num = id | int(0) -%}
 
               {%- if last_assessment == 'ok' -%}
                 {%- set last_icon = '🟢' -%}
@@ -1357,7 +1366,7 @@ sections:
               {%- endif -%}
 
               {%- set ns.items = ns.items + [{
-                'order': order,
+                'id_num': id_num,
                 'guest': kind ~ ' ' ~ id ~ ' · ' ~ name,
                 'last': last_text,
                 'next': next_text
@@ -1366,7 +1375,7 @@ sections:
           {%- endfor -%}
 
 
-          {%- for item in ns.items | sort(attribute='order', reverse=true) -%}
+          {%- for item in ns.items | sort(attribute='id_num') -%}
             {%- set ns.rows = ns.rows
               ~ '\n| ' ~ item.guest
               ~ ' | ' ~ item.last
@@ -1383,14 +1392,17 @@ sections:
              ~ '|:--|:--|:--|'
              ~ ns.rows
              ~ '\n'
-             ~ '| **ИТОГО** | **Гости: '
+             ~ '| **ИТОГО** | **Факт · ' ~ actual_label
+             ~ '** | **План · Гости: '
              ~ ('%d:%02d' | format(guest_budget // 60, guest_budget % 60))
-             ~ '** | **PVE: '
+             ~ ' · PVE: '
              ~ ('%d:%02d' | format(pve_budget // 60, pve_budget % 60))
              ~ ' · ВСЕГО: '
              ~ ('%d:%02d' | format(shutdown_budget // 60, shutdown_budget % 60))
              ~ '** |'
           }}
+
+          *В таблице показаны VM/LXC с включённым onboot; историческое дерево содержит гостей, реально участвовавших в выключении.*
         grid_options:
           columns: 12
           rows: auto

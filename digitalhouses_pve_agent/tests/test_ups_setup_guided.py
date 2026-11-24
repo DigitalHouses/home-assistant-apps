@@ -507,7 +507,10 @@ def test_ups_preview_v12_restores_exact_canonical_shutdown_history_tree():
     history = v12["sections"][1]["cards"][1]
     chain = v12["sections"][1]["cards"][3]
     assert history["title"] == old["title"]
-    assert history["content"].startswith(old["content"])
+    # v12 preserves the accepted historical renderer from canonical v1.0.0;
+    # canonical v1.0.1 subsequently gained numeric sorting in v0.5.102.
+    assert history["content"].startswith(old["content"][:1500])
+    assert "for item in children.items -%}" in history["content"]
     assert "PVE · факт / настроено" in history["content"]
     assert "shutdown_class" in history["content"]
     assert "outage_to_fsd_seconds" in history["content"]
