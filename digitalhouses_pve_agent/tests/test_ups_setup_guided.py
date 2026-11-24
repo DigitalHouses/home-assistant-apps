@@ -486,3 +486,47 @@ def test_ups_preview_v11_tree_matches_running_guest_sequence_without_fake_steps(
     assert "Нет подтверждённой последовательности" in unavailable
     assert "Группа одного" not in unavailable
     assert "Фактических остановок пока не записано" in unavailable
+
+
+
+def test_ups_preview_v12_restores_exact_canonical_shutdown_history_tree():
+    import yaml
+    from jinja2 import Environment
+
+    root = Path(__file__).resolve().parents[1]
+    canonical = yaml.safe_load((root / "dashboards/ru/11_pve_ups.yaml").read_text())
+    v11 = yaml.safe_load((root / "examples/dashboard-preview/11_pve_ups_preview_v11.yaml").read_text())
+    v12 = yaml.safe_load((root / "examples/dashboard-preview/11_pve_ups_preview_v12.yaml").read_text())
+    assert [len(s["cards"]) for s in v12["sections"]] == [8, 4, 8, 10]
+    assert v12["sections"][0] == v11["sections"][0]
+    assert v12["sections"][2:] == v11["sections"][2:]
+    assert v12["sections"][1]["cards"][0] == v11["sections"][1]["cards"][0]
+    assert v12["sections"][1]["cards"][2] == v11["sections"][1]["cards"][2]
+    old = next(card for card in canonical["sections"][1]["cards"]
+               if card.get("title") == "История остановок PVE")
+    history = v12["sections"][1]["cards"][1]
+    chain = v12["sections"][1]["cards"][3]
+    assert history["title"] == old["title"]
+    assert history["content"].startswith(old["content"])
+    assert "PVE · факт / настроено" in history["content"]
+    assert "shutdown_class" in history["content"]
+    assert "outage_to_fsd_seconds" in history["content"]
+    assert "actual_shutdown_seconds" in history["content"]
+    assert "Планируемое выключение" not in history["content"]
+    assert "Группа одного shutdown order" not in history["content"]
+    assert "🔌 **Цепочка выключения**" in chain["content"]
+    assert "shutdown_sequence" in chain["content"]
+
+    env = Environment()
+    empty_tree = env.from_string(history["content"]).render(state_attr=lambda *args: [])
+    assert "PVE · факт / настроено" in empty_tree
+    assert "История остановок пока пуста" in empty_tree
+
+    sequence = [["1224", "1237"], ["200", "1011", "2222", "10001", "10004"],
+                ["1221"], ["2223"]]
+    chain_rendered = env.from_string(chain["content"]).render(
+        state_attr=lambda entity, attr: sequence if attr == "shutdown_sequence" else []
+    )
+    assert "[1224, 1237]" in chain_rendered
+    assert "[200, 1011, 2222, 10001, 10004]" in chain_rendered
+    assert "→ 1221 → 2223" in chain_rendered

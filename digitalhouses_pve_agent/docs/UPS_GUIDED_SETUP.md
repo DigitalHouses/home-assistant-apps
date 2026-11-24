@@ -109,3 +109,22 @@ sequence is not replaced with the unrelated list of onboot guests.
 Historical shutdown events remain separately expandable, and all existing
 UPS controls and tables are unchanged. Preview:
 `examples/dashboard-preview/11_pve_ups_preview_v11.yaml`.
+
+### UPS Dashboard Preview v12 — restored canonical history tree
+
+Previous preview versions confused two distinct UI elements:
+
+- **Цепочка выключения**: current VM/LXC order from the UPS guest shutdown
+  budget `shutdown_sequence`, with parallel order groups in brackets.
+- **История остановок PVE**: the original historical `PVE · факт / настроено`
+  tree from `dashboards/ru/11_pve_ups.yaml`, showing real shutdown dates,
+  causes (including UPS), per-guest assessments and actual/configured times.
+
+Preview v12 restores the original history Markdown template *verbatim* and
+adds only a small empty-history note for installations where no shutdown
+has been recorded. It preserves the existing chain as a separate card,
+renamed `🔌 Цепочка выключения` to match the old UI. It does not invent
+planned-tree entries or move historical records between HOME and CORE.
+No change to PVE Agent, NUT, the canonical dashboard or shutdown mechanics.
+
+Preview: `examples/dashboard-preview/11_pve_ups_preview_v12.yaml`.
