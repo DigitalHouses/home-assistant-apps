@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.5.100 — TEST prerelease (USB UPS/NUT commissioning)
+
+- Add independent USB UPS discovery before NUT installation, including USB Bus/Device, VID:PID, product and serial; preserve existing SNMP/NUT monitoring in read-only mode.
+- Add guided Home Assistant MQTT setup status, driver select and separate conditional actions: install NUT, configure driver, repair NUT Server, PRIMARY and Monitor, and activate PVE host shutdown. No combined setup-all action.
+- Apply configuration in a root-only systemd oneshot with explicit OL safety checks, local config backups and rollback; do not initiate FSD, guest shutdown or live UPS shutdown during provisioning.
+- Provide 4-column UPS Dashboard Preview v8 with mutually exclusive ready/repair cards and original PVE shutdown history, VM/LXC table and shutdown tree (planned fallback if history is empty).
+- This is a GitHub **prerelease** for supervised USB UPS testing; not a stable auto-update candidate. Field acceptance for driver, NUT services and rollback is pending.
+
 ## 0.5.99
 
 - Add the existing `sensor.dh_pve_agent_process_cpu_usage` and `binary_sensor.dh_pve_agent_cpu_overload` to the canonical DH Sync PVE Recorder include list. This retains agent process load and overload transitions for comparison with native `vzdump` history; no new collectors, polling, alerts, or changes to other products.

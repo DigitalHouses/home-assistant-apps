@@ -166,7 +166,7 @@ def execute(
         raise UpsSetupError("Нужен ровно один однозначно обнаруженный USB UPS")
     config = load_config(app_conf)
     name = _single_ups(config, state_dir, nut_dir)
-    guard_restart(config, state_dir=state_dir, allow_nut_unavailable=(stage in {"install","driver"}))
+    guard_restart(config, state_dir=state_dir, allow_nut_unavailable=(stage in {"install", "driver", "server"}))
     if stage == "install":
         from .ups_setup import _has_nut
         if _has_nut():
@@ -229,6 +229,13 @@ def execute(
             except Exception:
                 pass
             raise
+        # Save the confirmed UPS before later steps invoke the normal UPS
+        # restart/power safety guard. Otherwise an unselected new UPS blocks
+        # the following Server and PRIMARY operations.
+        selection = StateStore(state_dir / "ups_selection.json")
+        previous = selection.load()
+        if previous.get("selected_name") != name:
+            selection.save({**previous, "selected_name": name})
         return f"NUT driver {driver} подключён"
 
     if not live_ol(name, runner=runner):
