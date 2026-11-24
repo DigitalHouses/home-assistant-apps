@@ -381,3 +381,57 @@ def test_upsd_restart_timeout_can_be_zero_for_immediate_check():
         return SimpleNamespace(returncode=1, stdout="", stderr="")
     assert not await_live_ol("ups", runner=runner, timeout_seconds=0)
     assert len(observed) == 1
+
+
+
+def test_ups_preview_v10_renders_planned_tree_independently_of_shutdown_history():
+    import yaml
+    from jinja2 import Environment
+    from types import SimpleNamespace
+
+    root = Path(__file__).resolve().parents[1] / "examples/dashboard-preview"
+    prior = yaml.safe_load((root / "11_pve_ups_preview_v9.yaml").read_text())
+    current = yaml.safe_load((root / "11_pve_ups_preview_v10.yaml").read_text())
+    assert current["sections"][0] == prior["sections"][0]
+    assert current["sections"][2:] == prior["sections"][2:]
+    assert current["sections"][1]["cards"][2:] == prior["sections"][1]["cards"][2:]
+    card = current["sections"][1]["cards"][1]
+    template = Environment().from_string(card["content"])
+    assert card["title"] == "Дерево выключения PVE"
+
+    def attr(entity, key):
+        if entity == "sensor.dh_pve_agent_shutdown_history" and key == "history":
+            return []
+        if entity == "sensor.dh_pve_agent_ups_guest_shutdown_budget" and key == "shutdown_sequence":
+            return [["1254"], ["1245"], ["1199", "1231", "1241", "2242"], ["2243"]]
+        return None
+
+    output = template.render(state_attr=attr, states=SimpleNamespace(sensor=[]))
+    assert "PVE · планируемое выключение" in output
+    assert "Этап 4" in output
+    assert "2243" in output
+    assert "Фактических остановок пока не записано" in output
+
+    # If runtime budget sequence is not available, reconstruct a tree from
+    # the same onboot shutdown entities that feed the existing status table.
+    sensors = [
+        SimpleNamespace(entity_id="sensor.dh_pve_agent_lxc_1254_shutdown"),
+        SimpleNamespace(entity_id="sensor.dh_pve_agent_vm_2243_shutdown"),
+    ]
+    attributes = {
+        sensors[0].entity_id: {"onboot": True, "shutdown_order": 10,
+                               "guest_id": 1254, "guest_kind": "lxc",
+                               "proxmox_display_name": "dev"},
+        sensors[1].entity_id: {"onboot": True, "shutdown_order": 1,
+                               "guest_id": 2243, "guest_kind": "vm",
+                               "proxmox_display_name": "media"},
+    }
+    def attr_fallback(entity, key):
+        if entity in attributes:
+            return attributes[entity].get(key)
+        return [] if key in {"history", "shutdown_sequence"} else None
+    recovered = template.render(state_attr=attr_fallback,
+                                states=SimpleNamespace(sensor=sensors))
+    assert "Этап 1" in recovered
+    assert "1254 · dev" in recovered
+    assert "2243 · media" in recovered

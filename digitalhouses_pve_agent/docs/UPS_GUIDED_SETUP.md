@@ -86,3 +86,13 @@ After `nut-server.service` starts or restarts, the setup oneshot accepts
 only a *fresh* verified `OL` status. It retries transient empty/failed
 `upsc` responses for at most 12 seconds, but aborts immediately for an
 explicit unsafe status. No automatic retry is performed on battery power.
+
+### UPS Dashboard Preview v10
+
+The VM/LXC planned shutdown tree now renders independently of shutdown
+history. If the budget sequence is temporarily absent, the view can
+reconstruct the ordered tree from per-guest shutdown sensors. Historical
+shutdown entries are kept in their own expandable section. Changes are
+limited to the preview YAML; no NUT/Agent update is necessary.
+
+Preview file: `examples/dashboard-preview/11_pve_ups_preview_v10.yaml`.
