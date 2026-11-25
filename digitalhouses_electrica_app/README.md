@@ -7,7 +7,7 @@ See [DigitalHouses Electrica App — target architecture v0.3.0](docs/ELECTRICA_
 ## 0.2.x — Ingress configuration
 
 Electrica App consumes events from supported logical keys across MQTT
-Zigbee2MQTT instances and dispatches explicitly configured light/switch actions.
+Zigbee2MQTT instances and dispatches explicitly configured light/switch/cover actions.
 It is independent of any Home Assistant dashboard.
 
 - **Ingress:** list of discovered devices with compact action-to-target summaries;
@@ -34,6 +34,15 @@ It is independent of any Home Assistant dashboard.
   Protected Aqara input relays are excluded from switch assignments.
   Grouped light toggles retain the shared ON/OFF decision; switch toggles
   are grouped separately. Offline/unverified targets are skipped.
+- **Cover:** select Toggle, Open, Close, Stop or Position according to the HA
+  capability flags. Toggle resolves from a known settled state; moving or
+  unknown state does not imply a direction. Optional window/door/opening
+  binary sensors protect every assignment of the same cover (union of saved
+  guards, including disabled or missing input keys). Read HA state before
+  dispatch; missing, open or unavailable guard blocks movement, never Stop.
+  Guard metadata is not sent to HA services. No automatic replay on closure.
+  Position is confirmed in LOG only by a newer settled matching position;
+  Stop is service acceptance only. This is supplemental to hardware safety.
 - **Mode Keeper:** preserve existing explicit decoupled/ON policies and
   maintenance semantics. Per-key policies in Ingress:
   physical (`control_relay`; no Actions or forced relay state) or logical

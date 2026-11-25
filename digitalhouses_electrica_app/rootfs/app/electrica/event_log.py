@@ -93,6 +93,55 @@ class EventLog:
             self.pending[route]=(rid,eid,now)
             self._touch(row)
 
+    def sent_cover(self,rid,eid,state,desired,sent_at):
+        """A cover position is confirmed only at a settled observed position."""
+        with self.lock:
+            row=self.rows.get(rid)
+            if not row or eid not in row["targets"]:
+                return
+            route=("ha",eid)
+            old=self.pending.pop(route,None)
+            if old and old[0] in self.rows:
+                prev=self.rows[old[0]]
+                prev["targets"][old[1]]["status"]="superseded"
+                self._touch(prev)
+            row["targets"][eid].update(status="sent" if desired else "accepted",
+                before=state.get("state"),desired=desired or "stop",sent_at=sent_at)
+            if desired:
+                self.pending[route]=(rid,eid,monotonic())
+            self._touch(row)
+
+    def observe_cover(self,state):
+        eid=state.get("entity_id")
+        with self.lock:
+            self._prune(monotonic())
+            pending=self.pending.get(("ha",eid))
+            if not pending:
+                return
+            rid,_,_=pending
+            row=self.rows[rid]
+            target=row["targets"][eid]
+            desired=target.get("desired","")
+            actual=state.get("state")
+            if actual not in ("open","closed"):
+                return
+            if desired.startswith("position:"):
+                pos=state.get("attributes",{}).get("current_position")
+                if type(pos) is not int or desired!="position:"+str(pos):
+                    return
+                actual=desired
+            if actual!=desired:
+                return
+            try:
+                observed=datetime.fromisoformat(state["last_updated"].replace("Z","+00:00"))
+                if observed<=datetime.fromisoformat(target["sent_at"]):
+                    return
+            except (KeyError,ValueError,TypeError,AttributeError):
+                return
+            target.update(status="confirmed",observed=actual)
+            self.pending.pop(("ha",eid),None)
+            self._touch(row)
+
     def skip(self,rid,eid,reason):
         with self.lock:
             row=self.rows.get(rid)
@@ -135,7 +184,9 @@ class EventLog:
             self._prune(monotonic())
         for s in states:
             eid=s.get("entity_id")
-            if eid:
+            if isinstance(eid,str) and eid.startswith("cover."):
+                self.observe_cover(s)
+            elif eid:
                 self.observe(("ha",eid),s.get("state"),s.get("last_changed"))
 
     def invalidate(self, route):

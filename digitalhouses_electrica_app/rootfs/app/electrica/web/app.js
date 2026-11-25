@@ -4,6 +4,8 @@ const main=document.querySelector("#main"), notice=document.querySelector("#noti
 function el(tag,text,cls){const n=document.createElement(tag);if(text!==undefined)n.textContent=text;if(cls)n.className=cls;return n}
 function button(text,fn,cls){const n=el("button",text,cls);n.onclick=fn;return n}
 function icon(t,id){
+  if(id.startsWith("cover."))return ["cover","plain","Шторы"];
+  if(id.startsWith("binary_sensor."))return ["window","plain","Датчик окна"];
   if(id.startsWith("switch."))return ["switch","plain","Реле"];
   if(t?.group)return ["group","cct","Группа Zigbee2MQTT"];
   if(t?.rgb)return ["rgb","rgb",t.cct?"RGB + CCT":"RGB"];
@@ -18,7 +20,9 @@ function targetIcon(t,id){
   svg.setAttribute("viewBox","0 0 24 24");svg.setAttribute("aria-hidden","true");
   const path=d=>{const p=document.createElementNS(ns,"path");p.setAttribute("d",d);svg.append(p)};
   const circle=(cx,cy,r,fill)=>{const c=document.createElementNS(ns,"circle");c.setAttribute("cx",cx);c.setAttribute("cy",cy);c.setAttribute("r",r);if(fill){c.setAttribute("fill",fill);c.setAttribute("stroke","none")}svg.append(c)};
-  if(kind==="switch"){path("M7 7h10a5 5 0 0 1 0 10H7A5 5 0 0 1 7 7Z");circle(7,12,2.5)}
+  if(kind==="cover"){path("M3 3h18M5 4v16h14V4M9 4v16M15 4v16")}
+  else if(kind==="window"){path("M4 3h16v18H4ZM12 3v18M4 12h16")}
+  else if(kind==="switch"){path("M7 7h10a5 5 0 0 1 0 10H7A5 5 0 0 1 7 7Z");circle(7,12,2.5)}
   else if(kind==="group"){path("M4 11a4 4 0 1 1 8 0c0 2-2 3-2 5H6c0-2-2-3-2-5ZM6 19h4M12 5a4 4 0 0 1 8 0c0 2-2 3-2 5h-4m0 3h4")}
   else if(kind==="dimmer"){circle(12,12,4);path("M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.5 1.5m11 11L19 19M5 19l1.5-1.5m11-11L19 5")}
   else{path("M9 18h6m-5 3h4M9 15c0-2-4-4-4-8a7 7 0 0 1 14 0c0 4-4 6-4 8Z");
@@ -28,7 +32,8 @@ function targetIcon(t,id){
   n.append(svg);return n;
 }
 function stat(d){return {same:["●",""],disabled:["Ⅱ","muted"],missing:["✖","danger"],offline:["⚠","problem"],unknown:["?","muted"]}[d.status]||["⚠","problem"]}
-function targetNode(id){const t=model.targets.find(x=>x.entity_id===id);const n=el("span",undefined,"target");n.dataset.entity=id;n.append(targetIcon(t,id),el("span",id.split(".")[1]||id));if(!t||!["on","off"].includes(t.state)){const w=el("span","⚠","problem");w.title=t?"Сущность недоступна":"Сущность не найдена";n.append(w)}return n}
+function knownState(state){return typeof state==="string"&&!["unknown","unavailable",""].includes(state)}
+function targetNode(id){const t=model.targets.find(x=>x.entity_id===id);const n=el("span",undefined,"target");n.dataset.entity=id;n.append(targetIcon(t,id),el("span",id.split(".")[1]||id));if(!t||!knownState(t.state)){const w=el("span","⚠","problem");w.title=t?"Сущность недоступна":"Сущность не найдена";n.append(w)}return n}
 async function api(path,data,raw=false){const r=await fetch("api/"+path,data===undefined?{}:{method:"POST",headers:{"Content-Type":"application/json"},body:raw?data:JSON.stringify(data)});const v=await r.json();if(!r.ok)throw Error(v.error||"Ошибка");return v}
 async function load(){try{model=await api("state");document.querySelector("#app-version").textContent="v"+model.version;document.querySelector("#summary").textContent="Клавиши · устройства ("+model.devices.length+") · Сети Z2M ("+new Set(model.devices.map(d=>d.network).filter(n=>n!=="—")).size+")";notice.classList.toggle("error",!!model.scan.error);scan.disabled=model.scan.state==="updating"||busy;scan.textContent=model.scan.state==="updating"?"Сканирование…":"⟳ Сканировать";if(!editing)renderList();if(!editing&&!busy){if(model.scan.error)notice.textContent=model.scan.error;else if(model.scan.state==="updating")notice.textContent="Сканирование…";else if(model.report){const p=model.report.problems||[];notice.textContent="Последний Scan: "+(model.report.scanned??0)+" устройств · "+p.length+" проблем";notice.title=p.map(x=>x.name+": "+x.reason).join("\n")}}}catch(e){notice.textContent=e.message}}
 const keyNames={main:"Основная",left:"Левая",right:"Правая",center:"Центральная"};
@@ -128,7 +133,32 @@ async function requestLightTest(id){
   }catch(e){testRequests.delete(id);testErrors.set(id,e.message)}
   applyLiveState();
 }
-function assignedRow(action,a,container){const t=model.targets.find(t=>t.entity_id===a.entity_id),row=el("div",undefined,"assigned");row.append(targetIcon(t,a.entity_id),el("strong",(t?.name||a.entity_id)+" · "+a.entity_id));const op=el("select");for(const [v,n] of [["toggle","Toggle"],["on","ON"],["off","OFF"]]){const o=el("option",n);o.value=v;op.append(o)}op.value=a.operation;op.onchange=()=>{a.operation=op.value;if(op.value==="off")for(const k of Object.keys(a.data))if(k!=="transition")delete a.data[k];update();renderEdit(action)};const test=lightTestControl(t,a.entity_id);if(test)row.append(test);row.append(op,button("Удалить",()=>{draft.bindings[action]=draft.bindings[action].filter(x=>x.entity_id!==a.entity_id);if(!draft.bindings[action].length){delete draft.bindings[action];draft.disabled_actions=draft.disabled_actions.filter(x=>x!==action)}update();renderEdit(action)}));if(!t){row.append(el("span","⚠ Сущность отсутствует","problem"));container.append(row);return}if(a.entity_id.startsWith("light.")){const p=el("div",undefined,"params");if(a.operation!=="off"){if(t.brightness)addParam(p,t,a,"brightness_pct","Яркость %",0,100,1);if(t.cct&&Number.isInteger(t.min_kelvin)&&Number.isInteger(t.max_kelvin)&&!Object.hasOwn(a.data,"rgb_color"))addParam(p,t,a,"color_temp_kelvin","Kelvin",t.min_kelvin,t.max_kelvin,1);if(t.rgb&&!Object.hasOwn(a.data,"color_temp_kelvin")){const l=el("label"),c=el("input"),picker=el("input");c.type="checkbox";c.checked=Object.hasOwn(a.data,"rgb_color");picker.type="color";picker.value="#"+(a.data.rgb_color||[255,255,255]).map(v=>v.toString(16).padStart(2,"0")).join("");picker.disabled=!c.checked;c.onchange=()=>{if(c.checked)a.data.rgb_color=[1,3,5].map(i=>parseInt(picker.value.slice(i,i+2),16));else delete a.data.rgb_color;update();renderEdit(action)};picker.oninput=()=>{a.data.rgb_color=[1,3,5].map(i=>parseInt(picker.value.slice(i,i+2),16));update()};l.append(c,document.createTextNode("RGB"),picker);p.append(l)}}if(t.transition)addParam(p,t,a,"transition","Transition, сек",0,60,.1);row.append(p)}container.append(row)}
+const coverLabels={toggle:"Toggle",open:"Открыть",close:"Закрыть",stop:"Стоп",position:"Положение"};
+function coverControls(action,a,t,row){
+  const p=el("div",undefined,"params");
+  const state=liveStates[a.entity_id]??t?.state;
+  p.append(el("span","Состояние: "+(state||"—"),"muted"));
+  if(a.operation==="position"){
+    const n=el("input");n.type="number";n.min=0;n.max=100;n.step=1;n.value=a.data.position;
+    n.onchange=()=>{a.data.position=Number(n.value);update()};
+    const l=el("label","Положение %");l.append(n);p.append(l);
+  }
+  const sensors=a.data.window_sensors||[];
+  p.append(button(sensors.length?"Окна ("+sensors.length+")":"+ Защита окна",()=>{
+    DHElectricaEntityPicker.open({items:model.targets,values:sensors,domains:["binary_sensor"],
+      areaId:draft.area_id,areaHint:draft.room,renderIcon:targetIcon,
+      onConfirm:ids=>{
+        if(ids.length)a.data.window_sensors=ids;else delete a.data.window_sensors;
+        update();renderEdit(action);
+      }});
+  }));
+  for(const id of sensors)p.append(el("span",(model.targets.find(x=>x.entity_id===id)?.name||id),"muted"));
+  if(sensors.length)p.append(el("span","Защита действует на все назначения этой шторы","muted"));
+  row.append(p);
+}
+function assignedRow(action,a,container){const t=model.targets.find(t=>t.entity_id===a.entity_id),row=el("div",undefined,"assigned");row.append(targetIcon(t,a.entity_id),el("strong",(t?.name||a.entity_id)+" · "+a.entity_id));const op=el("select");for(const [v,n] of (a.entity_id.startsWith("cover.")?[...new Set([...(t?.operations||[]),a.operation])].map(v=>[v,coverLabels[v]||v]):[["toggle","Toggle"],["on","ON"],["off","OFF"]])){const o=el("option",n);o.value=v;op.append(o)}op.value=a.operation;op.onchange=()=>{a.operation=op.value;
+if(a.entity_id.startsWith("cover.")){if(op.value==="position")a.data.position=50;else delete a.data.position}
+if(op.value==="off")for(const k of Object.keys(a.data))if(k!=="transition")delete a.data[k];update();renderEdit(action)};const test=lightTestControl(t,a.entity_id);if(test)row.append(test);row.append(op,button("Удалить",()=>{draft.bindings[action]=draft.bindings[action].filter(x=>x.entity_id!==a.entity_id);if(!draft.bindings[action].length){delete draft.bindings[action];draft.disabled_actions=draft.disabled_actions.filter(x=>x!==action)}update();renderEdit(action)}));if(!t){row.append(el("span","⚠ Сущность отсутствует","problem"));container.append(row);return}if(a.entity_id.startsWith("cover."))coverControls(action,a,t,row);if(a.entity_id.startsWith("light.")){const p=el("div",undefined,"params");if(a.operation!=="off"){if(t.brightness)addParam(p,t,a,"brightness_pct","Яркость %",0,100,1);if(t.cct&&Number.isInteger(t.min_kelvin)&&Number.isInteger(t.max_kelvin)&&!Object.hasOwn(a.data,"rgb_color"))addParam(p,t,a,"color_temp_kelvin","Kelvin",t.min_kelvin,t.max_kelvin,1);if(t.rgb&&!Object.hasOwn(a.data,"color_temp_kelvin")){const l=el("label"),c=el("input"),picker=el("input");c.type="checkbox";c.checked=Object.hasOwn(a.data,"rgb_color");picker.type="color";picker.value="#"+(a.data.rgb_color||[255,255,255]).map(v=>v.toString(16).padStart(2,"0")).join("");picker.disabled=!c.checked;c.onchange=()=>{if(c.checked)a.data.rgb_color=[1,3,5].map(i=>parseInt(picker.value.slice(i,i+2),16));else delete a.data.rgb_color;update();renderEdit(action)};picker.oninput=()=>{a.data.rgb_color=[1,3,5].map(i=>parseInt(picker.value.slice(i,i+2),16));update()};l.append(c,document.createTextNode("RGB"),picker);p.append(l)}}if(t.transition)addParam(p,t,a,"transition","Transition, сек",0,60,.1);row.append(p)}container.append(row)}
 function actionGroup(action){const p=action.match(/_(left|right|center|plus|minus|both|[0-9]+)$/)||action.match(/^(button_[0-9]+)_/);return p?p[1]:"Нажатия"}
 function renderEdit(expand){main.replaceChildren();const h=el("div",undefined,"head");h.append(button("← Клавиши",goBack),el("h2",deviceTitle(draft)+" · "+draft.room),button("Сохранить",save,"save"));main.append(h);const enabled=el("input");enabled.type="checkbox";enabled.checked=draft.enabled;enabled.onchange=()=>{draft.enabled=enabled.checked;update()};const l=el("label");l.append(enabled,document.createTextNode("Включено"));const controls=el("div",undefined,"editor-controls");controls.append(l);main.append(controls);
 if(Object.keys(draft.key_modes||{}).length)main.append(modeControls());
@@ -149,7 +179,7 @@ const allowed=actionAllowed(draft,action),detail=el("details",undefined,"action"
       areaId:draft.area_id,areaHint:draft.room,usage,renderIcon:targetIcon,renderTest:lightTestControl,
       onConfirm:ids=>{
         if(JSON.stringify(ids)===JSON.stringify(existing.map(a=>a.entity_id)))return;
-        if(ids.length){draft.bindings[action]=DHElectricaEntityPicker.mergeAssignments(existing,ids);draft.enabled=true}
+        if(ids.length){draft.bindings[action]=DHElectricaEntityPicker.mergeAssignments(existing,ids,model.targets);draft.enabled=true}
         else{delete draft.bindings[action];draft.disabled_actions=draft.disabled_actions.filter(a=>a!==action)}
         update();renderEdit(action);
       }});
@@ -175,8 +205,8 @@ function stamp(at){
 }
 function markIcon(node,state){
   if(!node)return;
-  node.classList.toggle("is-on",state==="on");node.classList.toggle("is-off",state==="off");
-  node.classList.toggle("is-unknown",!["on","off"].includes(state));
+  node.classList.toggle("is-on",["on","open","opening"].includes(state));node.classList.toggle("is-off",["off","closed","closing"].includes(state));
+  node.classList.toggle("is-unknown",!knownState(state));
 }
 function applyLiveState(){
   for(const n of main.querySelectorAll(".binding")){
@@ -187,8 +217,8 @@ function applyLiveState(){
     const state=liveStates[n.dataset.entity]??model?.targets.find(t=>t.entity_id===n.dataset.entity)?.state;
     markIcon(n.querySelector(".target-icon"),state);
     const warning=n.querySelector(".problem");
-    if(warning)warning.hidden=["on","off"].includes(state);
-    else if(!["on","off"].includes(state)){const w=el("span","⚠","problem");w.title="Сущность недоступна";n.append(w)}
+    if(warning)warning.hidden=knownState(state);
+    else if(!knownState(state)){const w=el("span","⚠","problem");w.title="Сущность недоступна";n.append(w)}
   }
   for(const wrap of document.querySelectorAll(".light-test"))updateTestControl(wrap);
   for(const [k,v] of recent)if(v<=Date.now())recent.delete(k);
@@ -200,11 +230,11 @@ function renderLogRow(row){
     const item=el("span",undefined,"log-target"),target=model?.targets.find(x=>x.entity_id===eid);
     const ico=targetIcon(target,eid);markIcon(ico,t.observed||t.before);
     const before=(t.before||"?").toUpperCase(),desired=(t.desired||"?").toUpperCase();
-    const confirmed=t.status==="confirmed",sent=["sent","confirmed","timeout","superseded"].includes(t.status);
+    const confirmed=t.status==="confirmed",sent=["sent","confirmed","timeout","superseded","accepted"].includes(t.status);
     const change=confirmed?before+" → "+desired:sent?before+" ⇢ "+desired:t.status==="queued"?"…":"пропущено";
     const mark=confirmed?"✓✓":sent?"✓"+(["timeout","superseded"].includes(t.status)?" ⚠":""):t.status==="queued"?"…":"⚠";
     const check=el("span",mark,"log-check "+(confirmed?"":t.status==="sent"?"sent":"problem"));
-    check.title={confirmed:"Получено наблюдаемое состояние; не физический ACK",sent:"Команда отправлена, ожидается состояние",timeout:"Нет подтверждения за 90 сек.",superseded:"Заменена более новой командой",queued:"В очереди",skipped:"Пропущено"}[t.status]||"";
+    check.title={confirmed:"Получено наблюдаемое состояние; не физический ACK",sent:"Команда отправлена, ожидается состояние",accepted:"Команда принята; завершение не подтверждено",timeout:"Нет подтверждения за 90 сек.",superseded:"Заменена более новой командой",queued:"В очереди",skipped:"Пропущено"}[t.status]||"";
     if(target?.group&&confirmed)check.title="Состояние группы Z2M получено; не подтверждение каждого участника (возможен optimistic state)";
     item.title=t.reason||check.title;item.append(ico,el("span",eid.split(".")[1]||eid),el("span",change),check);n.append(item);
   }

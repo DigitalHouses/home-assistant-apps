@@ -3,6 +3,7 @@ from .ha_registry import _matched_devices
 from .mode_keeper import validate_action_policy
 from .catalog import CatalogError
 from .light_rules import parse_rule
+from . import cover_rules
 
 def safe_switch_targets(registries, config):
     devices, _, entities = registries
@@ -24,9 +25,13 @@ def target_catalog(registries, states, config):
     registry = {e["entity_id"]:e for e in entities if e.get("disabled_by") is None}
     switches = safe_switch_targets(registries, config)
     output = {}
+    from collections import Counter
+    counts = Counter(e.get("entity_id") for e in entities)
     for state in states:
         eid = state.get("entity_id", "")
-        if eid not in registry or not (eid.startswith("light.") or eid in switches):
+        if eid not in registry or counts[eid]!=1 or not (
+                eid.startswith(("light.","cover.")) or eid in switches or
+                (eid.startswith("binary_sensor.") and cover_rules.window_sensor(state))):
             continue
         e = registry[eid]
         a = state.get("attributes", {})
@@ -53,6 +58,9 @@ def target_catalog(registries, states, config):
                        "device_name":device.get("name_by_user") or device.get("name"),
                        "integration":e.get("platform"),"domain":eid.split(".",1)[0],
                        "state":state.get("state"),
+                       "operations":cover_rules.operations(a) if eid.startswith("cover.") else [],
+                       "device_class":a.get("device_class"),
+                       "position":a.get("current_position") if eid.startswith("cover.") else None,
                        "brightness":brightness,"rgb":rgb,"cct":cct,"group":is_group,
                        "min_kelvin":a.get("min_color_temp_kelvin"),
                        "max_kelvin":a.get("max_color_temp_kelvin"),

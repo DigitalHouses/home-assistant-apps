@@ -41,9 +41,13 @@
       outside: new Set(selected.filter(t=>!ids.has(t.entity_id)).map(t=>t.entity_id)),
       truncated:remaining.length>PAGE};
   }
-  function mergeAssignments(old, ids) {
+  function mergeAssignments(old, ids, items=[]) {
     const byId=new Map(old.map(a=>[a.entity_id,a]));
-    return ids.map(id=>byId.get(id)||{entity_id:id,operation:"toggle",data:{}});
+    return ids.map(id=>{
+      if(byId.has(id))return byId.get(id);
+      const operation=id.startsWith("cover.")?(items.find(t=>t.entity_id===id)?.operations?.[0]||"toggle"):"toggle";
+      return {entity_id:id,operation,data:operation==="position"?{position:50}:{}};
+    });
   }
   function close() {
     if (!dialog) return;
@@ -57,10 +61,10 @@
     }
     node.value=initial;return node;
   }
-  function open({items,values=[],domains=["light","switch"],areaId,areaHint,usage={},onConfirm,renderIcon,renderTest}) {
+  function open({items,values=[],domains=["light","switch","cover"],areaId,areaHint,usage={},onConfirm,renderIcon,renderTest}) {
     close();
     const chosen=new Set(values), original=new Set(values);
-    const eligible=items.filter(t=>domains.includes(domainOf(t)));
+    const eligible=items.filter(t=>domains.includes(domainOf(t))&&(!t.entity_id.startsWith("cover.")||t.operations?.length));
     const filters={domains,domain:ALL,area:resolveArea(eligible,areaId,areaHint),
       integration:ALL,availability:ALL,query:""};
     const d=el("dialog",undefined,"entity-picker");dialog=d;

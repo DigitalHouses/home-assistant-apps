@@ -16,6 +16,7 @@ import re
 import threading
 import time
 
+from . import cover_rules
 from .catalog import (CatalogError, candidate_from_mqtt, decode_bridge_devices,
                       resolve_hardware, has_event_actions, has_device_power)
 from .actions import ActionError
@@ -365,7 +366,7 @@ class Application:
                                                  for n in networks if n["base_topic"]==ident[0]),None)
                                 state = reported.lower() if reported in ("ON","OFF") else "unknown"
                         observed_targets[eid] = state
-                        if state not in ("on","off"):
+                        if state in (None,"unknown","unavailable",""):
                             problems.append({"object_name":eid,"category":"target_unavailable",
                                              "reason":"Target not found" if not target and not route else state})
                 if result["status"] not in ("same", "disabled"):
@@ -777,6 +778,58 @@ class Application:
                 raise CatalogError("Очередь заполнена") from exc
             return rid
 
+    def _cover_commands(self, commands, base, coordinator, name, action, all_commands, rid):
+        """Same serialized worker; HA API only for explicit cover operations."""
+        from collections import Counter
+        sent, skipped = [], []
+        try:
+            entities = self.registry.fetch_entities()
+            counts = Counter(e.get("entity_id") for e in entities)
+            approved = {e["entity_id"] for e in entities if e.get("disabled_by") is None
+                        and counts[e.get("entity_id")]==1}
+        except Exception:
+            approved = set()
+        if self._ha_client is None:
+            self._ha_client = HAClient(os.environ.get("SUPERVISOR_TOKEN", ""))
+        for call in commands:
+            for eid in call["target"]["entity_id"]:
+                try:
+                    if eid not in approved:
+                        raise ActionError("Cover not verified in HA registry")
+                    operation = next(op for op,service in cover_rules.SERVICES.items()
+                                     if service==call["service"])
+                    with self._mutex:
+                        guard_ids = cover_rules.guard_ids(self.config,eid)
+                    state = self._ha_client.read_cover_or_window(eid)
+                    guards = {}
+                    if operation!="stop":
+                        for sensor in guard_ids:
+                            if sensor not in approved:
+                                raise ActionError("Window guard missing: "+sensor)
+                            guards[sensor] = self._ha_client.read_cover_or_window(sensor)
+                    op,data,desired = cover_rules.plan(operation,call.get("data",{}),state,guards)
+                    with self._mutex:
+                        sw = next((x for room in self.config["rooms"] for x in room["switches"]
+                                   if x["logical_name"]==name and x["base_topic"]==base
+                                   and x["coordinator_ieee"]==coordinator),None)
+                        net=self._networks.get(base,{})
+                        device=next((d for d in decode_bridge_devices(net["devices"])
+                                     if d.get("friendly_name")==name),None)
+                        if (not sw or not device or not sw.get("enabled",False)
+                                or maintained_switch(sw,self.globals)
+                                or light_commands(sw,action)!=all_commands
+                                or not verified_adopted_switch(sw,device,coordinator,base)
+                                or not self._input_mode_allowed(sw,action,net,device,False)
+                                or cover_rules.guard_ids(self.config,eid)!=guard_ids):
+                            raise ActionError("Input, binding or guard changed")
+                    dispatched_at=_iso_now()
+                    self._ha_client.execute_cover(eid,op,data)
+                    self.event_log.sent_cover(rid,eid,state,desired,dispatched_at)
+                    sent.append(eid)
+                except Exception as exc:
+                    skipped.append({"light":eid,"reason":str(exc)[:160]})
+        return sent, skipped
+
     def _run_actions(self):
         """Dispatch verified Z2M lights via MQTT and HA-native lights via REST."""
         while not self._stop.is_set():
@@ -791,12 +844,13 @@ class Application:
                 all_commands = commands
                 is_test = base is None and action == "TEST"
                 switch_commands = [c for c in commands if c["service"].startswith("switch.")]
+                cover_commands = [c for c in commands if c["service"].startswith("cover.")]
                 commands = [c for c in commands if c["service"].startswith("light.")]
                 # A missing route is NOT permission for HA fallback.
                 # HA registry platform must positively identify a native light.
                 with self._mutex:
                     routes = dict(self.config.get("light_routes", {}))
-                candidates = set(targets) - set(routes) - LAB_LIGHTS
+                candidates = {eid for eid in targets if eid.startswith("light.")} - set(routes) - LAB_LIGHTS
                 if is_test:
                     self._ha_registry_checked_at = -1e9
                 ha_approved = self._ha_native_targets(candidates)
@@ -1012,6 +1066,11 @@ class Application:
                             sent.append(eid)
                         except Exception as exc:
                             skipped.append({"light":eid,"reason":str(exc)[:120]})
+                if cover_commands:
+                    cover_sent, cover_skipped = self._cover_commands(
+                        cover_commands,base,coordinator,name,action,all_commands,rid)
+                    sent.extend(cover_sent)
+                    skipped.extend(cover_skipped)
                 for item in skipped:
                     self.event_log.skip(rid,item["light"],item["reason"])
                 self.event_log.finish(rid)

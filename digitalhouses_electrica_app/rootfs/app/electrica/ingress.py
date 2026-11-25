@@ -70,6 +70,13 @@ def validate_assignment(assignment, targets):
     if not target:
         raise CatalogError("Целевая сущность отсутствует: " + eid)
     data = rule["target_data"][eid]
+    if eid.startswith("cover."):
+        if rule["target_operations"][eid] not in target.get("operations",[]):
+            raise CatalogError("Операция шторы не поддерживается: "+eid)
+        for sensor in data.get("window_sensors",[]):
+            if targets.get(sensor,{}).get("device_class") not in ("window","door","opening"):
+                raise CatalogError("Датчик окна не подтверждён: "+sensor)
+        return
     for field, cap in (("brightness_pct","brightness"),("brightness_step_pct","brightness"),
                        ("rgb_color","rgb"),("color_temp_kelvin","cct"),("transition","transition")):
         if field in data and not target[cap]:
@@ -191,7 +198,13 @@ def import_bindings(app, payload):
                 for rule in row["actions"].values():
                     for assignment in normalize(rule):
                         if assignment["entity_id"] in app.target_catalog:
-                            validate_assignment(assignment,app.target_catalog)
+                            if assignment["entity_id"].startswith("cover."):
+                                # Keep missing window IDs on import; never drop their protection.
+                                check=deepcopy(assignment)
+                                check["data"]["window_sensors"]=[eid for eid in check["data"].get("window_sensors",[]) if eid in app.target_catalog]
+                                validate_assignment(check,app.target_catalog)
+                            else:
+                                validate_assignment(assignment,app.target_catalog)
             app.options.write(options)
             app.config=projected
         app._publish_details()

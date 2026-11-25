@@ -8,6 +8,7 @@ from collections.abc import Mapping
 import re
 
 from .catalog import CatalogError
+from . import cover_rules
 
 LIGHT_ID = re.compile(r"^light\.[a-z0-9_]+$")
 SERVICES = {"light.toggle": "toggle", "light.turn_on": "on",
@@ -80,12 +81,16 @@ def parse_rule(value: object) -> dict:
             if not isinstance(entry, Mapping) or set(entry) - {"entity_id", "operation", "data"}:
                 raise CatalogError("Invalid target assignment")
             eid, operation = entry.get("entity_id"), entry.get("operation")
-            if not isinstance(eid, str) or not re.fullmatch(r"(light|switch)\.[a-z0-9_]+", eid):
-                raise CatalogError("Expected light.* or switch.*")
-            if eid in targets or operation not in ("toggle", "on", "off"):
+            if not isinstance(eid, str) or not re.fullmatch(r"(light|switch|cover)\.[a-z0-9_]+", eid):
+                raise CatalogError("Expected light.*, switch.* or cover.*")
+            if eid in targets or not isinstance(operation,str):
                 raise CatalogError("Invalid or duplicate target operation")
             data = entry.get("data", {})
-            if eid.startswith("light."):
+            if eid.startswith("cover."):
+                data = cover_rules.validate_data(operation,data)
+            elif operation not in ("toggle","on","off"):
+                raise CatalogError("Unsupported light/switch operation")
+            elif eid.startswith("light."):
                 data = validate_data({"toggle":"light.toggle","on":"light.turn_on",
                                       "off":"light.turn_off"}[operation], data)
             elif not isinstance(data, Mapping) or data:

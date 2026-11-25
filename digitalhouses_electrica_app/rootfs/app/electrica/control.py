@@ -14,6 +14,7 @@ import urllib.request
 from .actions import ActionError, plan_action
 from .catalog import CatalogError, candidate_from_mqtt
 from .light_rules import validate_data
+from . import cover_rules
 
 LOG = logging.getLogger(__name__)
 
@@ -78,7 +79,8 @@ def light_commands(saved: Mapping, reported_action: object) -> list[dict] | None
         for eid in verified["targets"]:
             domain = eid.split(".")[0]
             operation = verified["target_operations"][eid]
-            service = domain + "." + {"toggle":"toggle","on":"turn_on","off":"turn_off"}[operation]
+            service = (cover_rules.SERVICES[operation] if domain=="cover" else
+                       domain + "." + {"toggle":"toggle","on":"turn_on","off":"turn_off"}[operation])
             data = verified["target_data"][eid]
             key = (service, json.dumps(data, sort_keys=True))
             if key not in groups:
@@ -223,3 +225,29 @@ class HAClient:
         with urllib.request.urlopen(req, timeout=self.timeout) as response:
             if response.status != 200:
                 raise RuntimeError("HA switch service was not accepted")
+
+    def read_cover_or_window(self, entity_id: str) -> dict:
+        if not isinstance(entity_id,str) or not re.fullmatch(r"(cover|binary_sensor)\.[a-z0-9_]+",entity_id):
+            raise ValueError("Expected cover or window sensor")
+        req = urllib.request.Request(self.url + "/states/" + entity_id,
+                                     headers={"Authorization":"Bearer "+self.token})
+        with urllib.request.urlopen(req,timeout=self.timeout) as response:
+            state = json.load(response)
+        if not isinstance(state,dict) or state.get("entity_id") != entity_id:
+            raise ValueError("HA state identity mismatch")
+        return state
+
+    def execute_cover(self, entity_id, operation, data):
+        if not isinstance(entity_id,str) or not re.fullmatch(r"cover\.[a-z0-9_]+",entity_id) or operation not in ("open","close","stop","position"):
+            raise ValueError("Invalid explicit cover command")
+        data = cover_rules.validate_data(operation,data)
+        if "window_sensors" in data:
+            raise ValueError("Guard metadata is not service data")
+        endpoint = cover_rules.SERVICES[operation].replace(".","/")
+        req = urllib.request.Request(self.url+"/services/"+endpoint,
+                   data=json.dumps({"entity_id":entity_id,**data}).encode(),
+                   headers={"Authorization":"Bearer "+self.token,"Content-Type":"application/json"},
+                   method="POST")
+        with urllib.request.urlopen(req,timeout=self.timeout) as response:
+            if response.status != 200:
+                raise RuntimeError("HA cover command not accepted")
