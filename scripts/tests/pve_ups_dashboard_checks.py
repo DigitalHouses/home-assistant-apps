@@ -6,7 +6,7 @@ from types import SimpleNamespace
 import yaml
 from jinja2 import Environment
 
-APP = Path(__file__).resolve().parents[1]
+APP = Path(__file__).resolve().parents[2] / "digitalhouses_pve_agent"
 
 
 def _views():

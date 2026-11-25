@@ -246,6 +246,7 @@ def test_activate_cannot_run_before_monitor(monkeypatch,tmp_path):
 
 
 def test_ups_preview_keeps_four_columns_and_full_pve_history():
+    pytest.importorskip("yaml")
     import yaml
     view = Path(__file__).resolve().parents[1] / "examples/dashboard-preview/11_pve_ups_preview_v8.yaml"
     config = yaml.safe_load(view.read_text(encoding="utf-8"))
@@ -267,6 +268,7 @@ def test_ups_preview_keeps_four_columns_and_full_pve_history():
 
 
 def test_ups_preview_v9_uses_inline_per_step_controls_without_hiding_blocked_steps():
+    pytest.importorskip("yaml")
     import yaml
     root = Path(__file__).resolve().parents[1]
     examples = root / "examples" / "dashboard-preview"
@@ -385,7 +387,9 @@ def test_upsd_restart_timeout_can_be_zero_for_immediate_check():
 
 
 def test_ups_preview_v10_renders_planned_tree_independently_of_shutdown_history():
+    pytest.importorskip("yaml")
     import yaml
+    pytest.importorskip("jinja2")
     from jinja2 import Environment
     from types import SimpleNamespace
 
@@ -439,7 +443,9 @@ def test_ups_preview_v10_renders_planned_tree_independently_of_shutdown_history(
 
 
 def test_ups_preview_v11_tree_matches_running_guest_sequence_without_fake_steps():
+    pytest.importorskip("yaml")
     import yaml
+    pytest.importorskip("jinja2")
     from jinja2 import Environment
 
     root = Path(__file__).resolve().parents[1] / "examples/dashboard-preview"
@@ -490,7 +496,9 @@ def test_ups_preview_v11_tree_matches_running_guest_sequence_without_fake_steps(
 
 
 def test_ups_preview_v12_restores_exact_canonical_shutdown_history_tree():
+    pytest.importorskip("yaml")
     import yaml
+    pytest.importorskip("jinja2")
     from jinja2 import Environment
 
     root = Path(__file__).resolve().parents[1]
