@@ -60,9 +60,12 @@ class CatalogTest(unittest.TestCase):
         self.assertEqual(obj["settings"], {"operation_mode": "decoupled"})
         self.assertEqual(obj["fingerprint"]["relay_channels"], ["state_left"])
 
-    def test_reject_other_vendors_and_sensors(self):
+    def test_other_vendor_event_only_and_reject_outputs_and_sensors(self):
         foreign = device()
         foreign["definition"]["vendor"] = "SONOFF"
+        self.assertEqual(candidate(foreign)["fingerprint"]["vendor"], "SONOFF")
+        foreign["definition"]["exposes"].append({"type":"switch","features":[
+            {"type":"binary","property":"state","access":7}]})
         self.assertIsNone(candidate(foreign))
         sensor = device()
         sensor["definition"]["exposes"] = [{"type": "numeric", "property": "temperature"}]

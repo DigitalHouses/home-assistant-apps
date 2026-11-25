@@ -55,9 +55,9 @@ def target_catalog(registries, states, config):
                        "transition":bool(a.get("supported_features",0) & 32) if eid.startswith("light.") else False}
     return output
 
-def supported_actions(sw):
+def supported_actions(sw, policy=None):
     result = []
-    keep = {**sw.get("mode_default",{}), **sw.get("keep_mode",{})}
+    keep = {**sw.get("mode_default",{}), **sw.get("keep_mode",{})} if policy is None else policy
     for action in sw["fingerprint"].get("actions", []):
         try:
             validate_action_policy(sw["fingerprint"], keep, action)

@@ -10,7 +10,7 @@ import logging
 import time
 from .catalog import CatalogError, _exposes, decode_bridge_devices
 from .control import verified_adopted_switch
-from .mode_keeper import capabilities, maintained_switch, next_repair
+from .mode_keeper import capabilities, maintained_switch, next_repair, KEEP_VALUE
 
 LOG = logging.getLogger(__name__)
 RETRY_SECONDS = 60
@@ -25,6 +25,8 @@ def tick(app, now: float) -> None:
                 continue
             base, name = sw["base_topic"], sw["logical_name"]
             net = app._networks.get(base, {})
+            if net.get("bridge_state") == "offline" or getattr(app, "_input_availability", {}).get((base,name)) == "offline":
+                continue
             if not isinstance(net.get("devices"), bytes) or not isinstance(net.get("info"), bytes):
                 continue
             try:
@@ -48,7 +50,7 @@ def tick(app, now: float) -> None:
                 needed = {}
                 for key in sw["keep_mode"]:
                     mode, relay = features[key]
-                    for field in ((mode,) if maintenance else (mode, relay)):
+                    for field in ((mode, relay) if not maintenance and sw["keep_mode"][key] == KEEP_VALUE else (mode,)):
                         if (base, name, field) not in app._fresh_fields:
                             needed[field] = ""
                 if needed:

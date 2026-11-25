@@ -8,6 +8,7 @@ from copy import deepcopy
 from datetime import datetime, timezone
 import json
 import logging
+import math
 import os
 from pathlib import Path
 import queue
@@ -16,7 +17,7 @@ import threading
 import time
 
 from .catalog import (CatalogError, candidate_from_mqtt, decode_bridge_devices,
-                      resolve_hardware)
+                      resolve_hardware, has_event_actions, has_device_power)
 from .actions import ActionError
 from .event_log import EventLog
 from .control import HAClient, light_commands, verified_adopted_switch
@@ -26,7 +27,7 @@ from .lab_lights import (LAB_LIGHTS, authorized_ha_light_ids,
 from .light_routes import current_route, group_observed_state
 from .keeper_runtime import run_keeper
 from .mode_keeper import (capabilities, global_policy, maintained_switch,
-                          mode_action_allowed)
+                          mode_action_allowed, desired_mode, KEEP_VALUE, action_channels)
 from .configuration import parse_configuration
 from .ha_registry import HARegistryClient
 from .mqtt_ui import (
@@ -270,6 +271,7 @@ class Application:
             for switch in room["switches"]:
                 peers = []
                 unverified = []
+                verified_power = False
                 for network in networks:
                     if network["coordinator_ieee"] != switch["coordinator_ieee"]:
                         continue
@@ -288,6 +290,10 @@ class Application:
                             if candidate is None:
                                 raise CatalogError("Unsupported Aqara input profile")
                             peers.append(candidate)
+                            if (candidate["ieee"] == switch["ieee"] and
+                                    candidate["base_topic"] == switch["base_topic"] and
+                                    has_device_power(device)):
+                                verified_power = True
                         except (CatalogError, KeyError) as exc:
                             unverified.append(str(exc))
                 if not switch.get("enabled", True):
@@ -308,8 +314,9 @@ class Application:
                         from .mode_keeper import MODE_TO_RELAY
                         mismatches = [key for key in switch["keep_mode"]
                                       if current.get(MODE_TO_RELAY[key][0]) not in
-                                         (None, "decoupled") or
-                                         current.get(MODE_TO_RELAY[key][1]) == "OFF"]
+                                         (None, desired_mode(switch["keep_mode"][key])) or
+                                         (switch["keep_mode"][key] == KEEP_VALUE and
+                                          current.get(MODE_TO_RELAY[key][1]) == "OFF")]
                         if mismatches:
                             result = {"status":"keep_mode_mismatch",
                                       "reason":"Protected keys drifted: " + ", ".join(mismatches)}
@@ -321,6 +328,17 @@ class Application:
                         n["coordinator_ieee"] == switch["coordinator_ieee"] for n in networks):
                     result = {"status":"offline" if bridge_status == "offline" else "unknown",
                               "reason":"No current inventory for this coordinator"}
+                if switch.get("power_meter"):
+                    ident = (switch["base_topic"], switch["logical_name"])
+                    reading = next((n["states"].get(ident[1],{}).get("power")
+                                    for n in networks
+                                    if n["base_topic"] == ident[0]
+                                    and n["coordinator_ieee"] == switch["coordinator_ieee"]), None)
+                    verified = resolve_hardware(switch, peers)["status"] == "same"
+                    switch["power_w"] = (reading if verified and verified_power and
+                        bridge_status == "online" and input_status != "offline" and
+                        (*ident, "power") in fresh and type(reading) in (int,float) and
+                        math.isfinite(reading) else None)
                 result["availability"] = input_status
                 switch["runtime"] = result
                 # The public tree shows the saved choices, including disabled
@@ -456,12 +474,15 @@ class Application:
                     try:
                         inventory = decode_bridge_devices(net["devices"])
                         if not any(d.get("friendly_name")==name and
-                                   (d.get("definition") or {}).get("vendor","").casefold()=="aqara"
+                                   has_event_actions(d)
                                    for d in inventory):
                             continue
                         raw = bytes(message.payload).decode().strip()
                         value = json.loads(raw).get("state","unknown") if raw.startswith("{") else raw
                         self._input_availability[(base,name)] = value if value in ("online","offline") else "unknown"
+                        if value != "online":
+                            self._fresh_fields.difference_update(
+                                {field for field in self._fresh_fields if field[:2] == (base,name)})
                     except (KeyError,CatalogError,ValueError,TypeError,UnicodeError):
                         self._input_availability[(base,name)] = "unknown"
                 for route in self.config.get("light_routes", {}).values():
@@ -498,6 +519,8 @@ class Application:
                     except (TypeError, ValueError):
                         node["bridge_state"] = "unknown"
                     if node["bridge_state"] != "online":
+                        self._fresh_fields.difference_update(
+                            {field for field in self._fresh_fields if field[0] == base})
                         for route in self.config.get("light_routes", {}).values():
                             if route["base_topic"] == base:
                                 ident = (base, route["friendly_name"])
@@ -531,7 +554,7 @@ class Application:
                         name = device.get("friendly_name")
                         if isinstance(name, str) and name and device.get("type") != "Coordinator":
                             self._subscribe(base + "/" + name)
-                            if (device.get("definition") or {}).get("vendor","").casefold()=="aqara":
+                            if has_event_actions(device):
                                 self._subscribe(base + "/" + name + "/availability")
                     self._sync_light_topics()
             self._publish_details()
@@ -583,6 +606,21 @@ class Application:
                     LOG.warning("Invalid Z2M state %s: %s", message.topic, exc)
                 break
 
+    def _input_mode_allowed(self, sw, action, net, device, maintenance):
+        """Use the same observed-mode gate before queueing and dispatch."""
+        base, name = sw["base_topic"], sw["logical_name"]
+        if (net.get("bridge_state") == "offline" or
+                self._input_availability.get((base,name)) == "offline"):
+            return False
+        features = capabilities(device)
+        if not mode_action_allowed(sw, action, net.get("states", {}).get(name, {}),
+                                   features, maintenance):
+            return False
+        return all((base, name, field) in self._fresh_fields
+                   for key in action_channels(action, features) if key in features
+                   for field in (features[key] if sw.get("keep_mode",{}).get(key) == KEEP_VALUE
+                                 else (features[key][0],)))
+
     def _process_adopted_event(self, base, net, device, data):
         """Requires exact logical identity and observed compatible hardware."""
         raw_info = net.get("info")
@@ -614,24 +652,11 @@ class Application:
                         self.event_log.finish(rid,"Устройство отключено")
                     continue
                 maintenance = maintained_switch(saved, self.globals)
-                state = net.get("states", {}).get(name, {})
-                features = capabilities(device)
-                if not mode_action_allowed(saved, action, state, features, maintenance):
+                if not self._input_mode_allowed(saved, action, net, device, maintenance):
                     if action in saved.get("fingerprint", {}).get("actions", []):
                         rid = self.event_log.press(base,name,action)
-                        self.event_log.finish(rid,"Maintenance / режим клавиши не разрешён")
+                        self.event_log.finish(rid,"Maintenance / режим клавиши не подтверждён или не разрешён")
                     continue
-                # Wired key mode must be freshly confirmed after reconnect.
-                if features:
-                    keys = (("left", "right") if action.endswith("_both")
-                            else (action.rsplit("_", 1)[-1],)
-                            if action.rsplit("_", 1)[-1] in features
-                            else tuple(features))
-                    if any((base, name, features[k][0]) not in self._fresh_fields
-                           for k in keys if k in features):
-                        rid = self.event_log.press(base,name,action)
-                        self.event_log.finish(rid,"Режим клавиши не подтверждён")
-                        continue
                 dedupe_key = (coordinator, name, action)
                 if now - self._last_action_at.get(dedupe_key, -1e9) < 0.35:
                     LOG.debug("Ignored duplicate action from %s: %s", name, action)
@@ -779,10 +804,9 @@ class Application:
                     device = next((d for d in decode_bridge_devices(raw)
                                    if d.get("friendly_name") == name), None)
                     if (device is None or not verified_adopted_switch(
-                            sw, device, coordinator, base) or not mode_action_allowed(
-                            sw, action, net.get("states", {}).get(name, {}),
-                            capabilities(device), False)):
-                        raise ActionError("Aqara key not verified in decoupled/ON operating mode")
+                            sw, device, coordinator, base) or not self._input_mode_allowed(
+                            sw, action, net, device, False)):
+                        raise ActionError("Aqara key not verified in decoupled operating mode")
                     # Repartition after a possible Scan; no guessed light routes.
                     z2m_commands, lab_commands = partition_commands(
                         commands, self.config.get("light_routes", {}),
@@ -862,10 +886,8 @@ class Application:
                                 and not maintained_switch(current_sw, self.globals)
                                 and verified_adopted_switch(
                                     current_sw, device, coordinator, base)
-                                and mode_action_allowed(
-                                    current_sw, action,
-                                    net.get("states", {}).get(name, {}),
-                                    capabilities(device), False))
+                                and self._input_mode_allowed(
+                                    current_sw, action, net, device, False))
                         if not authorized:
                             skipped.extend({"light":eid,
                                             "reason":"Aqara key or Maintenance changed"}
@@ -922,8 +944,7 @@ class Application:
                                     or maintained_switch(sw, self.globals)
                                     or light_commands(sw, action) != all_commands
                                     or not verified_adopted_switch(sw, device, coordinator, base)
-                                    or not mode_action_allowed(sw, action, net.get("states", {}).get(name, {}),
-                                                               capabilities(device), False)):
+                                    or not self._input_mode_allowed(sw, action, net, device, False)):
                                     raise ActionError("Input or binding changed")
                             desired = switch_toggle if service == "switch.toggle" else service.rsplit("_", 1)[-1]
                             dispatched_at = _iso_now()

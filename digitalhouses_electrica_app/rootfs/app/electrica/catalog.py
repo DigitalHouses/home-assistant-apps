@@ -43,11 +43,32 @@ def _exposes(raw: object):
             yield from _exposes(nested)
 
 
+def has_event_actions(device):
+    definition = device.get("definition")
+    if not isinstance(definition, Mapping):
+        return False
+    try:
+        return any(f.get("property", f.get("name")) == "action" and
+                   isinstance(f.get("values"), list) and bool(f["values"])
+                   for f in _exposes(definition.get("exposes", [])))
+    except CatalogError:
+        return False
+
+
+def has_device_power(device):
+    """Only an explicitly exposed aggregate measurement in watts."""
+    definition = device.get("definition") or {}
+    return any(f.get("type") == "numeric" and
+               f.get("property", f.get("name")) == "power" and
+               f.get("unit") == "W" and not f.get("endpoint")
+               for f in _exposes(definition.get("exposes", [])))
+
+
 def candidate_from_mqtt(
     device: Mapping, *, coordinator_ieee: str, base_topic: str,
     reported_state: Mapping | None,
 ) -> dict | None:
-    """Return confirmed Aqara button/switch candidate, or None for other devices.
+    """Return confirmed Aqara or relay-free event-only input candidate.
 
     Raises on unconfirmed physical settings. The caller reports this as a scan
     problem instead of importing an unsafe, fabricated Mode Keeper baseline.
@@ -67,8 +88,9 @@ def candidate_from_mqtt(
     if not isinstance(definition, Mapping):
         raise CatalogError("definition must be an object")
     vendor = definition.get("vendor")
-    if not isinstance(vendor, str) or vendor.casefold() != "aqara":
+    if not isinstance(vendor, str) or not vendor:
         return None
+    aqara = vendor.casefold() == "aqara"
     name = device.get("friendly_name")
     if not isinstance(name, str) or not name or any(
         x in ("", ".", "..", "+", "#", "bridge") for x in name.split("/")
@@ -101,6 +123,13 @@ def candidate_from_mqtt(
                 relay_channels.add(key)
     if not actions:
         return None
+    # Other vendors: only event-only hardware, never infer a writable
+    # decoupling adapter or treat an integrated output as a remote.
+    if not aqara and (relay_channels or settings or any(
+            f.get("type") in ("switch", "light", "cover", "climate") or
+            str(f.get("property", "")).startswith("operation_mode")
+            for f in _exposes(definition.get("exposes")))):
+        return None
     state = reported_state if reported_state is not None else {}
     if not isinstance(state, Mapping):
         raise CatalogError("Device MQTT state must be a JSON object")
@@ -113,7 +142,7 @@ def candidate_from_mqtt(
     if any(value is None for value in captured.values()):
         raise CatalogError(f"{name}: physical setting value is null")
     fingerprint = {
-        "vendor": "Aqara",
+        "vendor": "Aqara" if aqara else vendor,
         "model": model,
         "model_id": device.get("model_id"),
         "device_type": device.get("type"),

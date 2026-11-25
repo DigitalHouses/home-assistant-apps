@@ -98,3 +98,7 @@ label{display:inline-flex;align-items:center;gap:7px;flex-wrap:wrap;color:#ccd8e
 #json-dialog textarea{width:100%;height:min(55vh,500px);resize:vertical;white-space:pre;overflow:auto;color:#e9f0f7;background:#0d1e31;border:1px solid #526d86;border-radius:8px;padding:12px;font:13px ui-monospace,monospace}
 #json-dialog .toolbar{margin-top:12px}
 @media(max-width:750px){.header-tools{margin-left:0}.header-tools button{padding:7px 9px}.workspace.log-open>main{flex:0 0 50%;padding:8px}.log-header{padding:8px}.log-legend{padding:5px}.log-row{font-size:11px}}
+
+.key-summary{display:inline-block;margin:3px 10px 0 0;font-size:.85rem}
+.key-modes{display:flex;flex-wrap:wrap;gap:8px 16px;margin:8px 0 14px}
+.key-mode{display:flex;align-items:center;gap:8px}

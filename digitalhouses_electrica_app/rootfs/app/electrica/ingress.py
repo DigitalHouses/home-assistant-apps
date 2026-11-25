@@ -12,6 +12,7 @@ from .entity_options import parse_rows, render_rows, project
 from .ingress_catalog import normalize, supported_actions, required_keep
 from .light_rules import parse_rule
 from .light_routes import group_observed_state
+from .mode_keeper import action_channels, validate_keep_mode, PHYSICAL
 
 WEB = Path(__file__).with_name("web")
 
@@ -35,14 +36,24 @@ def snapshot(app):
         for sw in room["switches"]:
             key = sw["entity_id"]
             row = indexed.pop(key, {"entity_id":key,"enabled":False,"actions":{}})
-            if not supported_actions(sw) and not row["actions"]:
+            channels = sw.get("mode_channels", [])
+            if not supported_actions(sw) and not row["actions"] and not channels:
                 continue
+            keep = row.get("keep_mode", {})
+            key_actions = {action: list(action_channels(action, channels))
+                           for action in sw["fingerprint"].get("actions", [])} if channels else {}
+            key_modes = {channel: keep.get(channel, "") for channel in channels}
+
             devices.append({"id":key,"name":sw["logical_name"],"model":sw["fingerprint"]["model"],
                             "room":room["name"],"network":sw["base_topic"],
                             "status":sw.get("runtime",{}).get("status","unknown"),
                             "reason":sw.get("runtime",{}).get("reason"),
                             "enabled":row["enabled"],"disabled_actions":row.get("disabled_actions",[]),
-                            "actions":supported_actions(sw),
+                            "actions":supported_actions(sw, keep) if channels else supported_actions(sw),
+                            "key_modes":key_modes,"key_actions":key_actions,
+                            "keep_mode":keep,
+                            "power_meter":sw.get("power_meter",False),
+                            "power_w":sw.get("power_w"),
                             "bindings":{k:normalize(v) for k,v in row["actions"].items()}})
     for key,row in indexed.items():
         devices.append({"id":key,"name":key,"model":"—","room":"—","network":"—",
@@ -89,19 +100,39 @@ def save_device(app, payload):
         with app._mutex:
             sw = next((s for room in app.config["rooms"] for s in room["switches"]
                        if s["entity_id"] == key),None)
-            allowed = set(supported_actions(sw)) if sw else set()
+            explicit = "keep_mode" in payload
+            keep = dict(row.get("keep_mode",{}))
+            if explicit:
+                requested = payload["keep_mode"]
+                if not isinstance(requested,dict):
+                    raise CatalogError("Некорректные режимы клавиш")
+                if requested != keep:
+                    if not sw:
+                        raise CatalogError("Устройство не обнаружено")
+                    if set(requested) - set(sw.get("mode_channels",[])):
+                        raise CatalogError("Режим клавиши не подтверждён Scan")
+                    keep = validate_keep_mode(requested, sw["fingerprint"])
+            allowed = set(supported_actions(sw, keep if explicit else None)) if sw else set()
             targets = deepcopy(app.target_catalog)
             current = {k:normalize(v) for k,v in row["actions"].items()}
             updated = {}
-            keep = dict(row.get("keep_mode",{}))
             disabled = payload.get("disabled_actions",[])
             if not isinstance(disabled,list) or any(not isinstance(a,str) or a not in bindings for a in disabled):
                 raise CatalogError("Некорректный список отключённых нажатий")
             for action, assignments in bindings.items():
+                # An explicitly physical key cannot retain an action, even
+                # a disabled one. Require the operator to remove it first.
+                channels = sw.get("mode_channels",[]) if sw else []
+                if any(keep.get(k) == PHYSICAL for k in action_channels(action, channels)):
+                    raise CatalogError("Удалите назначения физической клавиши: " + action)
+                if explicit and action not in allowed and any(
+                        keep.get(k) != row.get("keep_mode",{}).get(k)
+                        for k in action_channels(action, channels)):
+                    raise CatalogError("Удалите назначения клавиши перед сменой режима: " + action)
                 # Preserve existing unavailable/obsolete bindings unchanged.
                 if current.get(action) == assignments:
                     updated[action] = row["actions"][action]
-                    if sw and action in allowed and action not in disabled:
+                    if not explicit and sw and action in allowed and action not in disabled:
                         keep = required_keep(sw,action,keep)
                     continue
                 if action not in allowed:
@@ -111,12 +142,12 @@ def save_device(app, payload):
                 for assignment in assignments:
                     if assignment not in current.get(action,[]):
                         validate_assignment(assignment,targets)
-                if action not in disabled:
+                if not explicit and action not in disabled:
                     keep = required_keep(sw,action,keep)
                 updated[action] = rule
             row["actions"] = updated
             row["disabled_actions"] = disabled
-            if keep:
+            if keep or "keep_mode" in row:
                 row["keep_mode"] = keep
             row["enabled"] = payload["enabled"]
             options["switches"] = render_rows(rows)

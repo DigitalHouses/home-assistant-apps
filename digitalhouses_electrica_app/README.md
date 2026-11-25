@@ -6,7 +6,7 @@ See [DigitalHouses Electrica App — target architecture v0.3.0](docs/ELECTRICA_
 
 ## 0.2.x — Ingress configuration
 
-Electrica App consumes events from supported Aqara logical keys across MQTT
+Electrica App consumes events from supported logical keys across MQTT
 Zigbee2MQTT instances and dispatches explicitly configured light/switch actions.
 It is independent of any Home Assistant dashboard.
 
@@ -24,8 +24,16 @@ It is independent of any Home Assistant dashboard.
   Grouped light toggles retain the shared ON/OFF decision; switch toggles
   are grouped separately. Offline/unverified targets are skipped.
 - **Mode Keeper:** preserve existing explicit decoupled/ON policies and
-  maintenance semantics. New observed decoupled keys become eligible for
-  assignment; saving the assignment explicitly enables the needed policy.
+  maintenance semantics. Per-key policies in Ingress:
+  `control_relay` (physical; no Actions and no forced relay ON),
+  `decoupled` (logical; no forced relay state) and
+  `decoupled/ON` (logical with explicitly maintained relay power).
+  Unmanaged channels are untouched. A key cannot be made physical while
+  retaining assignments, including disabled assignments. Only verified
+  Aqara mode capabilities are currently managed; other vendors may be
+  adopted as relay-free event-only inputs with declared Z2M actions.
+  An aggregate exposed power measurement in W is displayed at device level;
+  unknown/unavailable values are shown as a dash, never as per-key power.
 - **Storage:** `/data/bindings.json` is the single user-binding source;
   `/data/adopted_switches.json` holds hardware metadata and verified routes.
   First startup creates an empty binding store; old Supervisor YAML is ignored.

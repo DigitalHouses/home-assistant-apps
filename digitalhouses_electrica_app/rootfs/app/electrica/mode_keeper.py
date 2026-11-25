@@ -17,6 +17,27 @@ MODE_TO_RELAY = {
     "center": ("operation_mode_center", "state_center"),
 }
 KEEP_VALUE = "decoupled/ON"
+PHYSICAL = "control_relay"
+LOGICAL = "decoupled"
+POLICIES = (PHYSICAL, LOGICAL, KEEP_VALUE)
+
+
+def logical_policy(value):
+    return value in (LOGICAL, KEEP_VALUE)
+
+
+def action_channels(action, channels):
+    """Resolve only known key suffixes or a single unambiguous channel."""
+    if action.endswith("_both"):
+        return ("left", "right")
+    suffix = action.rsplit("_", 1)[-1]
+    if suffix in MODE_TO_RELAY:
+        return (suffix,)
+    return tuple(channels) if len(channels) == 1 else ()
+
+
+def desired_mode(policy, maintenance=False):
+    return PHYSICAL if maintenance or policy == PHYSICAL else LOGICAL
 
 
 def global_policy(options: Mapping) -> dict:
@@ -36,7 +57,8 @@ def capabilities(device: Mapping) -> dict:
     not inferred from the device model, name or an HA entity.
     """
     definition = device.get("definition")
-    if not isinstance(definition, Mapping):
+    if (not isinstance(definition, Mapping) or
+            str(definition.get("vendor", "")).casefold() != "aqara"):
         return {}
     features = {}
     for feature in _exposes(definition.get("exposes", [])):
@@ -88,8 +110,8 @@ def validate_keep_mode(keep: object, fingerprint: Mapping) -> dict:
     if set(keep) - allowed:
         raise CatalogError("keep_mode contains unsupported or battery-only channels")
     for key, value in keep.items():
-        if value != KEEP_VALUE:
-            raise CatalogError("Only confirmed decoupled/ON keep_mode is supported")
+        if value not in POLICIES:
+            raise CatalogError("Unsupported key policy")
     return dict(keep)
 
 
@@ -109,19 +131,16 @@ def mode_action_allowed(sw: Mapping, action: str, state: Mapping,
         return not ((modes & set(sw.get("fingerprint", {}).get("setting_keys", [])))
                     or sw.get("fingerprint", {}).get("relay_channels"))
     keep = sw.get("keep_mode", {})
-    if action.endswith("_both"):
-        required = ("left", "right")
-    elif action.rsplit("_", 1)[-1] in MODE_TO_RELAY:
-        required = (action.rsplit("_", 1)[-1],)
-    elif len(features) == 1:
-        required = tuple(features)
-    else:
-        return False  # Ambiguous event on multikey physical switch.
+    required = action_channels(action, features)
+    if not required:
+        return False
     for key in required:
-        if key not in features or keep.get(key) != KEEP_VALUE:
+        if key not in features or not logical_policy(keep.get(key)):
             return False
         mode, relay = features[key]
-        if state.get(mode) != "decoupled" or state.get(relay) != "ON":
+        if state.get(mode) != LOGICAL:
+            return False
+        if keep[key] == KEEP_VALUE and state.get(relay) != "ON":
             return False
     return True
 
@@ -139,13 +158,13 @@ def next_repair(keep: Mapping, features: Mapping, state: Mapping,
         if fields is None:
             continue
         mode, relay = fields
-        target_mode = "control_relay" if maintenance else "decoupled"
+        target_mode = desired_mode(keep[key], maintenance)
         seen = state.get(mode)
         if seen not in ("control_relay", "decoupled"):
             continue
         if seen != target_mode:
             return mode, target_mode
-        if not maintenance and state.get(relay) == "OFF":
+        if not maintenance and keep[key] == KEEP_VALUE and state.get(relay) == "OFF":
             return relay, "ON"
     return None
 
@@ -158,18 +177,13 @@ def validate_action_policy(fingerprint: Mapping, keep: Mapping, action: str) -> 
     hardware = {key for key, (mode, _) in MODE_TO_RELAY.items()
                 if mode in fingerprint.get("setting_keys", [])}
     if not hardware:
+        if fingerprint.get("relay_channels"):
+            raise CatalogError("Input relay has no supported mode adapter")
         return
-    if action.endswith("_both"):
-        required = {"left", "right"}
-    else:
-        suffix = action.rsplit("_", 1)[-1]
-        if suffix in MODE_TO_RELAY:
-            required = {suffix}
-        elif len(hardware) == 1:
-            required = set(hardware)
-        else:
-            raise CatalogError("Ambiguous physical-key action " + action)
-    if not required <= hardware or not required <= set(keep):
+    required = set(action_channels(action, hardware))
+    if not required:
+        raise CatalogError("Ambiguous physical-key action " + action)
+    if not required <= hardware or not all(logical_policy(keep.get(k)) for k in required):
         raise CatalogError(
-            "Aqara action " + action + " requires decoupled/ON on " +
+            "Aqara action " + action + " requires decoupled/ON or decoupled on " +
             ", ".join(sorted(required)))

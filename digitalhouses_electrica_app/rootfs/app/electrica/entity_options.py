@@ -12,7 +12,7 @@ import yaml
 
 from .catalog import CatalogError, validate_config
 from .light_rules import parse_rule
-from .mode_keeper import global_policy, validate_keep_mode, validate_action_policy
+from .mode_keeper import global_policy, validate_keep_mode, validate_action_policy, POLICIES, PHYSICAL, action_channels, MODE_TO_RELAY
 from .structured_options import _read_profiles, _save_profiles
 
 STORE_PATH = Path("/data/adopted_switches.json")
@@ -71,14 +71,20 @@ def validate_rows(rows: object) -> list[dict]:
         if not isinstance(keep, Mapping):
             raise CatalogError("keep_mode must be a mapping")
         for key, desired in keep.items():
-            if key not in ("left", "right", "center", "main") or desired != "decoupled/ON":
-                raise CatalogError("keep_mode supports only decoupled/ON for known channels")
+            if key not in ("left", "right", "center", "main") or desired not in POLICIES:
+                raise CatalogError("keep_mode requires a supported key policy and channel")
         if not isinstance(value["enabled"], bool) or not isinstance(value["actions"], Mapping):
             raise CatalogError("enabled must be boolean, actions must be mapping")
         actions = {}
         for press, rule in value["actions"].items():
             if not isinstance(press, str) or not press:
                 raise CatalogError("Invalid action name")
+            # A declared physical channel must never retain an assignment.
+            # Ambiguous unsuffixed events are checked against hardware in project.
+            explicit_channels = action_channels(press, ())
+            if any(keep.get(k) == PHYSICAL for k in explicit_channels) or (
+                    not explicit_channels and set(keep) == {"main"} and keep["main"] == PHYSICAL):
+                raise CatalogError("Physical key cannot have Actions: " + press)
             parse_rule(rule)  # fail closed before persisting user configuration
             actions[press] = deepcopy(rule)
         item = {"entity_id": entity_id, "enabled": value["enabled"], "actions": actions}
@@ -145,7 +151,17 @@ def project(profiles: Mapping, options: Mapping) -> dict:
             continue
         item["maintenance_mode"] = row.get("maintenance_mode", False)
         supported = item.get("fingerprint", {}).get("actions", [])
+        hardware = {key for key, (mode, _) in MODE_TO_RELAY.items()
+                    if mode in item.get("fingerprint", {}).get("setting_keys", [])}
         for press, rule in row["actions"].items():
+            if any(item["keep_mode"].get(k) == PHYSICAL
+                   for k in action_channels(press, hardware)):
+                reason = "Physical key cannot have Actions: " + press
+                if not tolerant:
+                    raise CatalogError(reason)
+                issues.append({"object_name": row["entity_id"], "category": "invalid_binding",
+                               "reason": reason})
+                continue
             if press in row.get("disabled_actions", []):
                 continue
             try:

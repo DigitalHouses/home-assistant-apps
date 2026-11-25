@@ -18,7 +18,8 @@ from .entity_options import STORE_PATH, parse_rows, store_scan
 from .ha_registry import areas_from_registries, switch_entities
 from .light_routes import discover_routes
 from .structured_options import _save_profiles
-from .mode_keeper import capture_keep_mode
+from .mode_keeper import capture_keep_mode, capabilities
+from .catalog import has_device_power
 
 
 def _slug(value: str) -> str:
@@ -210,6 +211,17 @@ def scan_once(snapshots: list[dict], options_client, ha_registry) -> tuple[dict,
                 observed = observed_devices.get((sw["coordinator_ieee"],sw["ieee"]))
                 if not observed:
                     continue
+                candidate = key_by_hardware.get((sw["coordinator_ieee"], sw["ieee"]))
+                if candidate is None or candidate["fingerprint"] != sw["fingerprint"]:
+                    continue
+                channels = sorted(capabilities(observed[0]))
+                if sw.get("mode_channels") != channels:
+                    sw["mode_channels"] = channels
+                    metadata_changed = True
+                power_meter = has_device_power(observed[0])
+                if sw.get("power_meter") != power_meter:
+                    sw["power_meter"] = power_meter
+                    metadata_changed = True
                 keep,_ = capture_keep_mode(*observed)
                 if sw.get("mode_default") != keep:
                     sw["mode_default"] = keep
