@@ -45,6 +45,7 @@
     if(operation==="position")return {position:Number.isInteger(t?.position)?t.position:50};
     if(operation==="hvac_mode")return {hvac_mode:t?.hvac_modes?.includes(t.state)?t.state:""};
     if(operation==="temperature")return {temperature:Number.isFinite(t?.temperature)?t.temperature:null,temperature_unit:t?.temperature_unit};
+    if(operation==="volume")return {volume_pct:t?.volume_pct??null};
     return {};
   }
   function mergeAssignments(old, ids, items=[]) {
@@ -52,7 +53,7 @@
     return ids.map(id=>{
       if(byId.has(id))return byId.get(id);
       const t=items.find(t=>t.entity_id===id);
-      const operation=/^(cover|climate)\./.test(id)?(t?.operations?.[0]||"toggle"):"toggle";
+      const operation=/^(cover|climate|media_player)\./.test(id)?(t?.operations?.[0]||"toggle"):"toggle";
       return {entity_id:id,operation,data:initialData(operation,t)};
     });
   }
@@ -68,10 +69,10 @@
     }
     node.value=initial;return node;
   }
-  function open({items,values=[],domains=["light","switch","cover","climate"],areaId,areaHint,usage={},onConfirm,renderIcon,renderTest}) {
+  function open({items,values=[],domains=["light","switch","cover","climate","media_player"],areaId,areaHint,usage={},onConfirm,renderIcon,renderTest}) {
     close();
     const chosen=new Set(values), original=new Set(values);
-    const eligible=items.filter(t=>domains.includes(domainOf(t))&&(!["cover","climate"].includes(domainOf(t))||t.operations?.length));
+    const eligible=items.filter(t=>domains.includes(domainOf(t))&&(!["cover","climate","media_player"].includes(domainOf(t))||t.operations?.length));
     const filters={domains,domain:ALL,area:resolveArea(eligible,areaId,areaHint),
       integration:ALL,availability:ALL,query:""};
     const d=el("dialog",undefined,"entity-picker");dialog=d;

@@ -16,7 +16,7 @@ import re
 import threading
 import time
 
-from . import cover_rules, climate_rules
+from . import cover_rules, climate_rules, media_rules
 from .catalog import (CatalogError, candidate_from_mqtt, decode_bridge_devices,
                       resolve_hardware, has_event_actions, has_device_power)
 from .actions import ActionError
@@ -780,7 +780,7 @@ class Application:
             return rid
 
     def _ha_domain_commands(self, commands, base, coordinator, name, action, all_commands, rid):
-        """Shared serialized HA dispatch for cover and climate."""
+        """Shared serialized HA dispatch for cover, climate and media players."""
         from collections import Counter
         sent, skipped = [], []
         try:
@@ -798,7 +798,7 @@ class Application:
                     if eid not in approved:
                         raise ActionError("Target not verified in HA registry")
                     is_cover = eid.startswith("cover.")
-                    rules = cover_rules if is_cover else climate_rules
+                    rules = cover_rules if is_cover else media_rules if eid.startswith("media_player.") else climate_rules
                     operation = next(op for op,service in rules.SERVICES.items()
                                      if service==call["service"])
                     if is_cover:
@@ -812,6 +812,9 @@ class Application:
                                     raise ActionError("Window guard missing: "+sensor)
                                 guards[sensor] = self._ha_client.read_cover_or_window(sensor)
                         op,data,desired = rules.plan(operation,call.get("data",{}),state,guards)
+                    elif rules is media_rules:
+                        state = self._ha_client.read_domain_state(eid)
+                        op,data,desired = rules.plan(operation,call.get("data",{}),state)
                     else:
                         unit = self.registry.fetch_temperature_unit() if operation=="temperature" else None
                         state = self._ha_client.read_domain_state(eid)
@@ -833,9 +836,11 @@ class Application:
                     dispatched_at=_iso_now()
                     if is_cover:
                         self._ha_client.execute_cover(eid,op,data)
+                    elif rules is media_rules:
+                        self._ha_client.execute_media(eid,op,data)
                     else:
                         self._ha_client.execute_climate(eid,op,data)
-                    self.event_log.sent_ha_domain(rid,eid,state,desired,dispatched_at)
+                    self.event_log.sent_ha_domain(rid,eid,state,desired,dispatched_at,operation=op)
                     sent.append(eid)
                 except Exception as exc:
                     skipped.append({"light":eid,"reason":str(exc)[:160]})
@@ -855,7 +860,7 @@ class Application:
                 all_commands = commands
                 is_test = base is None and action == "TEST"
                 switch_commands = [c for c in commands if c["service"].startswith("switch.")]
-                domain_commands = [c for c in commands if c["service"].startswith(("cover.","climate."))]
+                domain_commands = [c for c in commands if c["service"].startswith(("cover.","climate.","media_player."))]
                 commands = [c for c in commands if c["service"].startswith("light.")]
                 # A missing route is NOT permission for HA fallback.
                 # HA registry platform must positively identify a native light.

@@ -61,7 +61,7 @@ class IngressStyleTests(TestCase):
     def test_climate_editor_uses_advertised_operations_and_temperature(self):
         js=(WEB/"app.js").read_text()
         picker=(WEB/"entity_picker.js").read_text()
-        self.assertIn('domains=["light","switch","cover","climate"]',picker)
+        self.assertIn('domains=["light","switch","cover","climate","media_player"]',picker)
         self.assertIn('function climateControls(a,t,row)',js)
         self.assertIn('t.hvac_modes||[]',js)
         self.assertIn('n.min=t.min_temp',js)
@@ -86,3 +86,12 @@ for(const domain of ['light','switch','cover','climate','media_player','future_d
     assert.equal(targetLabel(id,undefined),id);
 }
 """],check=True)
+
+    def test_media_picker_and_volume_editor(self):
+        js=(WEB/"app.js").read_text()
+        picker=(WEB/"entity_picker.js").read_text()
+        self.assertIn('function chooseMedia(a,action)',js)
+        self.assertIn('api("browse-media",{entity_id:a.entity_id',js)
+        self.assertIn('if(item.can_play)line.append(button("Выбрать"',js)
+        self.assertIn('n.min=0;n.max=100;n.step=1;n.value=a.data.volume_pct',js)
+        self.assertIn('domains=["light","switch","cover","climate","media_player"]',picker)

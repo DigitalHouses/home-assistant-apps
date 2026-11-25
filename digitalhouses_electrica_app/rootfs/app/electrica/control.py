@@ -14,7 +14,7 @@ import urllib.request
 from .actions import ActionError, plan_action
 from .catalog import CatalogError, candidate_from_mqtt
 from .light_rules import validate_data
-from . import cover_rules, climate_rules
+from . import cover_rules, climate_rules, media_rules
 
 LOG = logging.getLogger(__name__)
 
@@ -79,7 +79,8 @@ def light_commands(saved: Mapping, reported_action: object) -> list[dict] | None
         for eid in verified["targets"]:
             domain = eid.split(".")[0]
             operation = verified["target_operations"][eid]
-            service = (climate_rules.SERVICES[operation] if domain=="climate" else
+            service = (media_rules.SERVICES[operation] if domain=="media_player" else
+                       climate_rules.SERVICES[operation] if domain=="climate" else
                        cover_rules.SERVICES[operation] if domain=="cover" else
                        domain + "." + {"toggle":"toggle","on":"turn_on","off":"turn_off"}[operation])
             data = verified["target_data"][eid]
@@ -231,7 +232,7 @@ class HAClient:
         return self.read_domain_state(entity_id)
 
     def read_domain_state(self, entity_id: str) -> dict:
-        if not isinstance(entity_id,str) or not re.fullmatch(r"(cover|binary_sensor|climate)\.[a-z0-9_]+",entity_id):
+        if not isinstance(entity_id,str) or not re.fullmatch(r"(cover|binary_sensor|climate|media_player)\.[a-z0-9_]+",entity_id):
             raise ValueError("Expected cover, climate or window sensor")
         req = urllib.request.Request(self.url + "/states/" + entity_id,
                                      headers={"Authorization":"Bearer "+self.token})
@@ -272,3 +273,23 @@ class HAClient:
         with urllib.request.urlopen(req,timeout=self.timeout) as response:
             if response.status!=200:
                 raise RuntimeError("HA climate command not accepted")
+
+    def execute_media(self, entity_id, operation, data):
+        if not isinstance(entity_id,str) or not re.fullmatch(r"media_player\.[a-z0-9_]+",entity_id) or operation not in media_rules.SERVICES or operation=="play_pause":
+            raise ValueError("Invalid explicit media command")
+        if operation=="volume":
+            if set(data)!={"volume_level"} or not media_rules.number(data["volume_level"]) or not 0<=data["volume_level"]<=1:
+                raise ValueError("Invalid volume")
+        elif operation=="play_media":
+            if set(data)!={"media_content_type","media_content_id"}:
+                raise ValueError("Invalid media service parameters")
+            data=media_rules.media_ref(data)
+        elif data:
+            raise ValueError("Unexpected media service data")
+        endpoint=media_rules.SERVICES[operation].replace(".","/")
+        req=urllib.request.Request(self.url+"/services/"+endpoint,
+                   data=json.dumps({"entity_id":entity_id,**data}).encode(),
+                   headers={"Authorization":"Bearer "+self.token,"Content-Type":"application/json"},method="POST")
+        with urllib.request.urlopen(req,timeout=self.timeout) as response:
+            if response.status!=200:
+                raise RuntimeError("HA media command not accepted")

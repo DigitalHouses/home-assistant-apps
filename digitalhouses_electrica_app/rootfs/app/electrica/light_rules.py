@@ -8,7 +8,7 @@ from collections.abc import Mapping
 import re
 
 from .catalog import CatalogError
-from . import cover_rules, climate_rules
+from . import cover_rules, climate_rules, media_rules
 
 LIGHT_ID = re.compile(r"^light\.[a-z0-9_]+$")
 SERVICES = {"light.toggle": "toggle", "light.turn_on": "on",
@@ -81,12 +81,14 @@ def parse_rule(value: object) -> dict:
             if not isinstance(entry, Mapping) or set(entry) - {"entity_id", "operation", "data"}:
                 raise CatalogError("Invalid target assignment")
             eid, operation = entry.get("entity_id"), entry.get("operation")
-            if not isinstance(eid, str) or not re.fullmatch(r"(light|switch|cover|climate)\.[a-z0-9_]+", eid):
-                raise CatalogError("Expected light.*, switch.*, cover.* or climate.*")
+            if not isinstance(eid, str) or not re.fullmatch(r"(light|switch|cover|climate|media_player)\.[a-z0-9_]+", eid):
+                raise CatalogError("Expected supported target domain")
             if eid in targets or not isinstance(operation,str):
                 raise CatalogError("Invalid or duplicate target operation")
             data = entry.get("data", {})
-            if eid.startswith("climate."):
+            if eid.startswith("media_player."):
+                data = media_rules.validate_data(operation,data)
+            elif eid.startswith("climate."):
                 data = climate_rules.validate_data(operation,data)
             elif eid.startswith("cover."):
                 data = cover_rules.validate_data(operation,data)

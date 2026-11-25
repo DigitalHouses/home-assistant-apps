@@ -4,6 +4,7 @@ const main=document.querySelector("#main"), notice=document.querySelector("#noti
 function el(tag,text,cls){const n=document.createElement(tag);if(text!==undefined)n.textContent=text;if(cls)n.className=cls;return n}
 function button(text,fn,cls){const n=el("button",text,cls);n.onclick=fn;return n}
 function icon(t,id){
+  if(id.startsWith("media_player."))return ["media","plain","Медиаплеер"];
   if(id.startsWith("climate."))return ["climate","plain","Климат"];
   if(id.startsWith("cover."))return ["cover","plain","Шторы"];
   if(id.startsWith("binary_sensor."))return ["window","plain","Датчик окна"];
@@ -21,7 +22,8 @@ function targetIcon(t,id){
   svg.setAttribute("viewBox","0 0 24 24");svg.setAttribute("aria-hidden","true");
   const path=d=>{const p=document.createElementNS(ns,"path");p.setAttribute("d",d);svg.append(p)};
   const circle=(cx,cy,r,fill)=>{const c=document.createElementNS(ns,"circle");c.setAttribute("cx",cx);c.setAttribute("cy",cy);c.setAttribute("r",r);if(fill){c.setAttribute("fill",fill);c.setAttribute("stroke","none")}svg.append(c)};
-  if(kind==="climate"){path("M10 14V5a2 2 0 0 1 4 0v9a4 4 0 1 1-4 0ZM12 9v8");circle(12,18,1.5)}
+  if(kind==="media"){path("M6 3h12v18H6Z");circle(12,8,1.5);circle(12,15,3)}
+  else if(kind==="climate"){path("M10 14V5a2 2 0 0 1 4 0v9a4 4 0 1 1-4 0ZM12 9v8");circle(12,18,1.5)}
   else if(kind==="cover"){path("M3 3h18M5 4v16h14V4M9 4v16M15 4v16")}
   else if(kind==="window"){path("M4 3h16v18H4ZM12 3v18M4 12h16")}
   else if(kind==="switch"){path("M7 7h10a5 5 0 0 1 0 10H7A5 5 0 0 1 7 7Z");circle(7,12,2.5)}
@@ -166,8 +168,8 @@ function coverControls(action,a,t,row){
 const climateLabels={toggle:"Toggle",on:"ON",off:"OFF",hvac_mode:"Режим HVAC",temperature:"Температура"};
 const hvacLabels={off:"OFF",heat:"Отопление",cool:"Охлаждение",heat_cool:"Отопление / охлаждение",auto:"Авто",dry:"Осушение",fan_only:"Вентиляция"};
 function assignmentOperations(a,t){
-  if(a.entity_id.startsWith("climate.")||a.entity_id.startsWith("cover.")){
-    const labels=a.entity_id.startsWith("climate.")?climateLabels:coverLabels;
+  if(/^(climate|cover|media_player)\./.test(a.entity_id)){
+    const labels=a.entity_id.startsWith("media_player.")?mediaLabels:a.entity_id.startsWith("climate.")?climateLabels:coverLabels;
     return [...new Set([...(t?.operations||[]),a.operation])].map(v=>[v,labels[v]||v]);
   }
   return [["toggle","Toggle"],["on","ON"],["off","OFF"]];
@@ -190,10 +192,54 @@ function climateControls(a,t,row){
   }
   row.append(p);
 }
+const mediaLabels={play_pause:"Play / Pause",play:"Play",pause:"Pause",stop:"Stop",next:"Следующий трек",previous:"Предыдущий трек",volume:"Громкость",play_media:"Воспроизвести медиа"};
+function chooseMedia(a,action){
+  const dialog=el("dialog",undefined,"entity-picker");
+  const head=el("div",undefined,"head"),list=el("div",undefined,"picker-results"),trail=[];
+  const close=()=>{dialog.close();dialog.remove()};
+  const back=button("← Назад",()=>{trail.pop();loadMedia(trail.at(-1))});
+  head.append(el("h2","Выбор медиа"),back,button("Закрыть",close));dialog.append(head,list);
+  dialog.addEventListener("cancel",e=>{e.preventDefault();close()});
+  let request=0;
+  async function loadMedia(ref){
+    const seq=++request;back.disabled=!trail.length;list.replaceChildren(el("span","Загрузка…","muted"));
+    try{
+      const result=await api("browse-media",{entity_id:a.entity_id,...(ref?{ref}:{})});
+      if(seq!==request||!dialog.isConnected)return;
+      list.replaceChildren();
+      for(const item of result.children){
+        const line=el("div",undefined,"picker-line");
+        line.append(el("span",item.title,"picker-info"));
+        if(item.can_expand)line.append(button("Открыть",()=>{trail.push({media_content_id:item.media_content_id,media_content_type:item.media_content_type});loadMedia(trail.at(-1))}));
+        if(item.can_play)line.append(button("Выбрать",()=>{
+          a.data={media_content_id:item.media_content_id,media_content_type:item.media_content_type,title:item.title};
+          close();update();renderEdit(action);
+        }));
+        list.append(line);
+      }
+      if(!result.children.length)list.append(el("span","Нет доступных медиа","muted"));
+      if(result.truncated)list.append(el("span","Показаны первые 500 элементов","muted"));
+    }catch(e){if(seq===request&&dialog.isConnected)list.replaceChildren(el("span",e.message,"problem"))}
+  }
+  document.body.append(dialog);dialog.showModal();loadMedia();
+}
+function mediaControls(a,t,row,action){
+  const p=el("div",undefined,"params");
+  p.append(el("span","Состояние: "+(liveStates[a.entity_id]??t.state??"—"),"muted"));
+  if(a.operation==="volume"){
+    const n=el("input");n.type="number";n.min=0;n.max=100;n.step=1;n.value=a.data.volume_pct??"";
+    n.onchange=()=>{a.data.volume_pct=n.value===""?null:Number(n.value);update()};
+    const label=el("label","Громкость %");label.append(n);p.append(label);
+  }else if(a.operation==="play_media"){
+    p.append(button(a.data.title?"Изменить медиа":"Выбрать медиа",()=>chooseMedia(a,action)));
+    if(a.data.title)p.append(el("span",a.data.title,"muted"));
+  }
+  row.append(p);
+}
 function assignedRow(action,a,container){const t=model.targets.find(t=>t.entity_id===a.entity_id),row=el("div",undefined,"assigned");row.append(targetIcon(t,a.entity_id),el("strong",(t?.name||a.entity_id)+" · "+a.entity_id));const op=el("select");for(const [v,n] of assignmentOperations(a,t)){const o=el("option",n);o.value=v;op.append(o)}op.value=a.operation;op.onchange=()=>{a.operation=op.value;
 if(a.entity_id.startsWith("cover.")){if(op.value==="position")a.data.position=50;else delete a.data.position}
-else if(a.entity_id.startsWith("climate."))a.data=DHElectricaEntityPicker.initialData(op.value,t);
-if(op.value==="off")for(const k of Object.keys(a.data))if(k!=="transition")delete a.data[k];update();renderEdit(action)};const test=lightTestControl(t,a.entity_id);if(test)row.append(test);row.append(op,button("Удалить",()=>{draft.bindings[action]=draft.bindings[action].filter(x=>x.entity_id!==a.entity_id);if(!draft.bindings[action].length){delete draft.bindings[action];draft.disabled_actions=draft.disabled_actions.filter(x=>x!==action)}update();renderEdit(action)}));if(!t){row.append(el("span","⚠ Сущность отсутствует","problem"));container.append(row);return}if(a.entity_id.startsWith("cover."))coverControls(action,a,t,row);if(a.entity_id.startsWith("climate."))climateControls(a,t,row);if(a.entity_id.startsWith("light.")){const p=el("div",undefined,"params");if(a.operation!=="off"){if(t.brightness)addParam(p,t,a,"brightness_pct","Яркость %",0,100,1);if(t.cct&&Number.isInteger(t.min_kelvin)&&Number.isInteger(t.max_kelvin)&&!Object.hasOwn(a.data,"rgb_color"))addParam(p,t,a,"color_temp_kelvin","Kelvin",t.min_kelvin,t.max_kelvin,1);if(t.rgb&&!Object.hasOwn(a.data,"color_temp_kelvin")){const l=el("label"),c=el("input"),picker=el("input");c.type="checkbox";c.checked=Object.hasOwn(a.data,"rgb_color");picker.type="color";picker.value="#"+(a.data.rgb_color||[255,255,255]).map(v=>v.toString(16).padStart(2,"0")).join("");picker.disabled=!c.checked;c.onchange=()=>{if(c.checked)a.data.rgb_color=[1,3,5].map(i=>parseInt(picker.value.slice(i,i+2),16));else delete a.data.rgb_color;update();renderEdit(action)};picker.oninput=()=>{a.data.rgb_color=[1,3,5].map(i=>parseInt(picker.value.slice(i,i+2),16));update()};l.append(c,document.createTextNode("RGB"),picker);p.append(l)}}if(t.transition)addParam(p,t,a,"transition","Transition, сек",0,60,.1);row.append(p)}container.append(row)}
+else if(/^(climate|media_player)\./.test(a.entity_id))a.data=DHElectricaEntityPicker.initialData(op.value,t);
+if(op.value==="off")for(const k of Object.keys(a.data))if(k!=="transition")delete a.data[k];update();renderEdit(action)};const test=lightTestControl(t,a.entity_id);if(test)row.append(test);row.append(op,button("Удалить",()=>{draft.bindings[action]=draft.bindings[action].filter(x=>x.entity_id!==a.entity_id);if(!draft.bindings[action].length){delete draft.bindings[action];draft.disabled_actions=draft.disabled_actions.filter(x=>x!==action)}update();renderEdit(action)}));if(!t){row.append(el("span","⚠ Сущность отсутствует","problem"));container.append(row);return}if(a.entity_id.startsWith("cover."))coverControls(action,a,t,row);if(a.entity_id.startsWith("climate."))climateControls(a,t,row);if(a.entity_id.startsWith("media_player."))mediaControls(a,t,row,action);if(a.entity_id.startsWith("light.")){const p=el("div",undefined,"params");if(a.operation!=="off"){if(t.brightness)addParam(p,t,a,"brightness_pct","Яркость %",0,100,1);if(t.cct&&Number.isInteger(t.min_kelvin)&&Number.isInteger(t.max_kelvin)&&!Object.hasOwn(a.data,"rgb_color"))addParam(p,t,a,"color_temp_kelvin","Kelvin",t.min_kelvin,t.max_kelvin,1);if(t.rgb&&!Object.hasOwn(a.data,"color_temp_kelvin")){const l=el("label"),c=el("input"),picker=el("input");c.type="checkbox";c.checked=Object.hasOwn(a.data,"rgb_color");picker.type="color";picker.value="#"+(a.data.rgb_color||[255,255,255]).map(v=>v.toString(16).padStart(2,"0")).join("");picker.disabled=!c.checked;c.onchange=()=>{if(c.checked)a.data.rgb_color=[1,3,5].map(i=>parseInt(picker.value.slice(i,i+2),16));else delete a.data.rgb_color;update();renderEdit(action)};picker.oninput=()=>{a.data.rgb_color=[1,3,5].map(i=>parseInt(picker.value.slice(i,i+2),16));update()};l.append(c,document.createTextNode("RGB"),picker);p.append(l)}}if(t.transition)addParam(p,t,a,"transition","Transition, сек",0,60,.1);row.append(p)}container.append(row)}
 function actionGroup(action){const p=action.match(/_(left|right|center|plus|minus|both|[0-9]+)$/)||action.match(/^(button_[0-9]+)_/);return p?p[1]:"Нажатия"}
 function renderEdit(expand){main.replaceChildren();const h=el("div",undefined,"head");h.append(button("← Клавиши",goBack),el("h2",deviceTitle(draft)+" · "+draft.room),button("Сохранить",save,"save"));main.append(h);const enabled=el("input");enabled.type="checkbox";enabled.checked=draft.enabled;enabled.onchange=()=>{draft.enabled=enabled.checked;update()};const l=el("label");l.append(enabled,document.createTextNode("Включено"));const controls=el("div",undefined,"editor-controls");controls.append(l);main.append(controls);
 if(Object.keys(draft.key_modes||{}).length)main.append(modeControls());
@@ -240,7 +286,7 @@ function stamp(at){
 }
 function markIcon(node,state){
   if(!node)return;
-  node.classList.toggle("is-on",["on","open","opening"].includes(state));node.classList.toggle("is-off",["off","closed","closing"].includes(state));
+  node.classList.toggle("is-on",["on","open","opening","playing","buffering"].includes(state));node.classList.toggle("is-off",["off","closed","closing","idle","paused","standby"].includes(state));
   node.classList.toggle("is-unknown",!knownState(state));
 }
 function applyLiveState(){

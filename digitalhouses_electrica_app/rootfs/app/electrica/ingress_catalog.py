@@ -3,7 +3,7 @@ from .ha_registry import _matched_devices
 from .mode_keeper import validate_action_policy
 from .catalog import CatalogError
 from .light_rules import parse_rule
-from . import cover_rules, climate_rules
+from . import cover_rules, climate_rules, media_rules
 
 def safe_switch_targets(registries, config):
     devices, _, entities = registries
@@ -30,7 +30,7 @@ def target_catalog(registries, states, config, temperature_unit=None):
     for state in states:
         eid = state.get("entity_id", "")
         if eid not in registry or counts[eid]!=1 or not (
-                eid.startswith(("light.","cover.","climate.")) or eid in switches or
+                eid.startswith(("light.","cover.","climate.","media_player.")) or eid in switches or
                 (eid.startswith("binary_sensor.") and cover_rules.window_sensor(state))):
             continue
         e = registry[eid]
@@ -67,6 +67,8 @@ def target_catalog(registries, states, config, temperature_unit=None):
                        "transition":bool(a.get("supported_features",0) & 32) if eid.startswith("light.") else False}
         if eid.startswith("climate."):
             output[eid].update(climate_rules.capabilities(a,temperature_unit))
+        if eid.startswith("media_player."):
+            output[eid].update(media_rules.capabilities(a))
     return output
 
 def supported_actions(sw, policy=None):

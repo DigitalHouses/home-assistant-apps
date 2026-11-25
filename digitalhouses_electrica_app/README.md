@@ -7,7 +7,7 @@ See [DigitalHouses Electrica App — target architecture v0.3.0](docs/ELECTRICA_
 ## 0.2.x — Ingress configuration
 
 Electrica App consumes events from supported logical keys across MQTT
-Zigbee2MQTT instances and dispatches explicitly configured light/switch/cover/climate actions.
+Zigbee2MQTT instances and dispatches explicitly configured light/switch/cover/climate/media_player actions.
 It is independent of any Home Assistant dashboard.
 
 - **Ingress:** list of discovered devices with compact action-to-target summaries;
@@ -54,6 +54,14 @@ It is independent of any Home Assistant dashboard.
   algorithm or DH Climate changes. Target ranges and presets are not exposed
   in this stage; the temperature request never includes a mode change.
   LOG confirms only a newer matching mode/setpoint, not physical heating.
+- **Media player:** Play/Pause, Play, Pause, Stop, Next/Previous, volume
+  0–100% and media selection from the HA Media Browser, subject to advertised
+  capabilities. Play/Pause resolves from the observed playback state. Volume
+  does not issue a play or power-on command and skips off/standby. Selection
+  uses the read-only HA browser; only the configured Action starts playback.
+  Media references and titles remain in the existing JSON assignments.
+  LOG verifies newer playing/paused states or volume reports; Stop, track
+  changes and play_media are service acceptance only (no false confirmation).
 - **Mode Keeper:** preserve existing explicit decoupled/ON policies and
   maintenance semantics. Per-key policies in Ingress:
   physical (`control_relay`; no Actions or forced relay state) or logical

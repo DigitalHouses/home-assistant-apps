@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from threading import RLock
 from time import monotonic
 from uuid import uuid4
-from . import climate_rules
+from . import climate_rules, media_rules
 
 class EventLog:
     LIMIT = 500
@@ -97,7 +97,7 @@ class EventLog:
     def sent_cover(self,rid,eid,state,desired,sent_at):
         self.sent_ha_domain(rid,eid,state,desired,sent_at)
 
-    def sent_ha_domain(self,rid,eid,state,desired,sent_at):
+    def sent_ha_domain(self,rid,eid,state,desired,sent_at,operation=None):
         """Track a requested domain-specific state, not a service ACK."""
         with self.lock:
             row=self.rows.get(rid)
@@ -113,8 +113,11 @@ class EventLog:
             if eid.startswith("climate.") and desired and desired.startswith("temperature:"):
                 value=state.get("attributes",{}).get("temperature")
                 before="temperature:"+str(value) if climate_rules.number(value) else None
+            if eid.startswith("media_player.") and desired and desired.startswith("volume:"):
+                v=state.get("attributes",{}).get("volume_level")
+                before="volume:"+str(round(v*100)) if media_rules.number(v) else None
             row["targets"][eid].update(status="sent" if desired else "accepted",
-                before=before,desired=desired or "stop",sent_at=sent_at)
+                before=before,desired=desired or operation or "stop",sent_at=sent_at)
             if desired:
                 self.pending[route]=(rid,eid,monotonic())
             self._touch(row)
@@ -135,6 +138,8 @@ class EventLog:
             desired=target.get("desired","")
             if eid.startswith("climate."):
                 actual=climate_rules.observed_value(state,desired)
+            elif eid.startswith("media_player."):
+                actual=media_rules.observed_value(state,desired)
             else:
                 actual=state.get("state")
                 if actual not in ("open","closed"):
@@ -198,7 +203,7 @@ class EventLog:
             self._prune(monotonic())
         for s in states:
             eid=s.get("entity_id")
-            if isinstance(eid,str) and eid.startswith(("cover.","climate.")):
+            if isinstance(eid,str) and eid.startswith(("cover.","climate.","media_player.")):
                 self.observe_ha_domain(s)
             elif eid:
                 self.observe(("ha",eid),s.get("state"),s.get("last_changed"))

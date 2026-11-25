@@ -110,7 +110,7 @@ class HARegistryClient:
             raise CatalogError("SUPERVISOR_TOKEN is missing")
         self.token, self.url, self.timeout = token, url, timeout
 
-    def _fetch(self, commands: tuple[str, ...]) -> list[list]:
+    def _fetch(self, commands: tuple) -> list:
         """Authenticate each read-only HA registry session; never perform writes."""
         import websocket
         ws = websocket.create_connection(self.url, timeout=self.timeout,
@@ -125,12 +125,13 @@ class HARegistryClient:
                 raise CatalogError("HA WebSocket authorization failed")
             result = []
             for ident, command in enumerate(commands, 1):
-                ws.send(json.dumps({"id": ident, "type": command}))
+                request={"type":command} if isinstance(command,str) else command
+                ws.send(json.dumps({**request,"id":ident}))
                 answer = json.loads(ws.recv())
                 if (answer.get("id") != ident or answer.get("type") != "result"
                         or answer.get("success") is not True
-                        or not isinstance(answer.get("result"), list)):
-                    raise CatalogError("HA Registry call failed: " + command)
+                        or not isinstance(answer.get("result"), list if isinstance(command,str) else dict)):
+                    raise CatalogError("HA Registry call failed: " + request["type"])
                 result.append(answer["result"])
             return result
         finally:
@@ -163,3 +164,13 @@ class HARegistryClient:
                                    headers={"Authorization":"Bearer "+self.token})
         with urllib.request.urlopen(req,timeout=self.timeout) as response:
             return json.load(response)["unit_system"]["temperature"]
+
+    def browse_media(self, entity_id, ref=None):
+        from .media_rules import media_ref, browse_result
+        import re
+        if not isinstance(entity_id,str) or not re.fullmatch(r"media_player\.[a-z0-9_]+",entity_id):
+            raise CatalogError("Invalid media player")
+        request={"type":"media_player/browse_media","entity_id":entity_id}
+        if ref is not None:
+            request.update(media_ref(ref))
+        return browse_result(self._fetch((request,))[0])

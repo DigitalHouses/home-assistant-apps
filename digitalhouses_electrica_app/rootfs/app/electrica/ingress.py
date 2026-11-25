@@ -7,7 +7,7 @@ from pathlib import Path
 from urllib.parse import urlsplit, parse_qs
 
 from .catalog import CatalogError
-from . import climate_rules
+from . import climate_rules, media_rules
 from .binding_store import binding_document, validate_document, decode_json
 from .entity_options import parse_rows, render_rows, project
 from .ingress_catalog import normalize, supported_actions, required_keep
@@ -71,6 +71,9 @@ def validate_assignment(assignment, targets):
     if not target:
         raise CatalogError("Целевая сущность отсутствует: " + eid)
     data = rule["target_data"][eid]
+    if eid.startswith("media_player."):
+        media_rules.validate_capability(rule["target_operations"][eid],data,target)
+        return
     if eid.startswith("climate."):
         climate_rules.validate_capability(rule["target_operations"][eid],data,target)
         return
@@ -228,6 +231,18 @@ def live_log(app, cursor, generation):
         states = {eid:app.observed_target_state(eid) for eid in ids}
     return {**app.event_log.snapshot(cursor,generation),"states":states}
 
+def browse_media(app,payload):
+    if not isinstance(payload,dict) or set(payload) not in ({"entity_id"},{"entity_id","ref"}):
+        raise CatalogError("Invalid media browser request")
+    eid=payload["entity_id"]
+    if not isinstance(eid,str) or not eid.startswith("media_player."):
+        raise CatalogError("Expected media player")
+    with app._mutex:
+        target=app.target_catalog.get(eid,{})
+        if "play_media" not in target.get("operations",[]):
+            raise CatalogError("Media browsing not supported")
+    return app.registry.browse_media(eid,payload.get("ref"))
+
 def start_ingress(app, port=8099):
     class Handler(BaseHTTPRequestHandler):
         def log_message(self,*args):
@@ -289,6 +304,9 @@ def start_ingress(app, port=8099):
                         raise CatalogError("Тест требует один entity_id")
                     rid = app.request_light_test(payload["entity_id"])
                     self.reply(200,{"ok":True,"id":rid})
+                    return
+                elif path == "/api/browse-media":
+                    self.reply(200,browse_media(app,payload))
                     return
                 elif path == "/api/save":
                     save_device(app,payload)
