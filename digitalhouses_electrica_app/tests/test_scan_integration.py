@@ -236,3 +236,43 @@ class ScanTests(unittest.TestCase):
 
 if __name__=="__main__":
     unittest.main()
+
+class DeviceNameTests(unittest.TestCase):
+    def test_prefer_user_name_and_update_without_binding_write(self):
+        from electrica.binding_store import BindingStore
+        from unittest.mock import Mock
+        class NamedRegistry(Registry):
+            name = "Выключатель зал"
+            def fetch(self):
+                devices, areas, entities = super().fetch()
+                devices[0].update(name="aqara_livingroom", name_by_user=self.name)
+                return devices, areas, entities
+        with TemporaryDirectory() as td, patch("electrica.scan.STORE_PATH",Path(td)/"store.json"):
+            supervisor=Mock()
+            supervisor.read.return_value={}
+            opts=BindingStore(supervisor,Path(td)/"bindings.json")
+            reg=NamedRegistry(entities=[
+                {"device_id":"ha-1","entity_id":"switch.left"},
+                {"device_id":"ha-1","entity_id":"switch.right"}])
+            data,_=scan_once([snap()],opts,reg)
+            sw=data["rooms"][0]["switches"][0]
+            self.assertEqual(sw["ha_name"],"Выключатель зал")
+            key=sw["entity_id"]
+            raw=opts.path.read_bytes()
+            reg.name="Новый выключатель"
+            data,_=scan_once([snap()],opts,reg)
+            sw=data["rooms"][0]["switches"][0]
+            self.assertEqual(sw["ha_name"],"Новый выключатель")
+            self.assertEqual(sw["entity_id"],key)
+            self.assertEqual(opts.path.read_bytes(),raw)
+            reg.name=None
+            data,_=scan_once([snap()],opts,reg)
+            self.assertEqual(data["rooms"][0]["switches"][0]["ha_name"],"aqara_livingroom")
+
+    def test_missing_or_ambiguous_ha_identity_does_not_guess_name(self):
+        from electrica.ha_registry import device_names
+        devices,_,_=Registry().fetch()
+        devices[0]["name"]="Device"
+        self.assertEqual(device_names(devices,{IEEE}),{IEEE:"Device"})
+        self.assertEqual(device_names(devices+devices,{IEEE}),{})
+        self.assertEqual(device_names([],{IEEE}),{})

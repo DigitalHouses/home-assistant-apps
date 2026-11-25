@@ -15,7 +15,7 @@ import re
 from .catalog import CatalogError, candidate_from_mqtt, decode_bridge_devices, import_new
 from .configuration import parse_configuration
 from .entity_options import STORE_PATH, parse_rows, store_scan
-from .ha_registry import areas_from_registries, switch_entities
+from .ha_registry import areas_from_registries, switch_entities, device_names
 from .light_routes import discover_routes
 from .structured_options import _save_profiles
 from .mode_keeper import capture_keep_mode, capabilities
@@ -93,6 +93,7 @@ def scan_once(snapshots: list[dict], options_client, ha_registry) -> tuple[dict,
     ha_devices, ha_areas, ha_entities = ha_registry.fetch()
     ieees = {item["ieee"] for item in candidates}
     areas = areas_from_registries(ha_devices, ha_areas, ieees)
+    names = device_names(ha_devices, ieees)
     ha_switches, _ = switch_entities(ha_devices, ha_entities, ieees)
 
     options = options_client.read()
@@ -180,6 +181,16 @@ def scan_once(snapshots: list[dict], options_client, ha_registry) -> tuple[dict,
                     raise CatalogError("Adopted device lacks logical switch key")
                 sw["entity_id"] = item["entity_id"]
                 sw["entity_source"] = item["entity_source"]
+            item = key_by_hardware.get((sw["coordinator_ieee"], sw["ieee"]))
+            if item and all(sw.get(k) == item.get(k) for k in
+                            ("entity_id", "logical_name", "base_topic", "fingerprint")):
+                name = names.get(sw["ieee"])
+                if sw.get("ha_name") != name:
+                    if name:
+                        sw["ha_name"] = name
+                    else:
+                        sw.pop("ha_name", None)
+                    metadata_changed = True
     # Exact HA light.* -> Zigbee2MQTT routes are frozen only at explicit Scan.
     # This permits MQTT-only operation during Home Assistant Core restarts.
     routes = discover_routes(snapshots, ha_devices, ha_entities)

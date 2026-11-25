@@ -44,7 +44,7 @@ def snapshot(app):
                            for action in sw["fingerprint"].get("actions", [])} if channels else {}
             key_modes = {channel: keep.get(channel, "") for channel in channels}
 
-            devices.append({"id":key,"name":sw["logical_name"],"model":sw["fingerprint"]["model"],
+            devices.append({"id":key,"name":sw["logical_name"],"ha_name":sw.get("ha_name"),"model":sw["fingerprint"]["model"],
                             "room":room["name"],"area_id":room.get("area_id"),"network":sw["base_topic"],
                             "status":sw.get("runtime",{}).get("status","unknown"),
                             "reason":sw.get("runtime",{}).get("reason"),

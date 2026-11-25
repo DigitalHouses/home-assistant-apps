@@ -32,6 +32,20 @@ def _matched_devices(devices: object, ieees: set[str]) -> dict:
     return found
 
 
+def device_names(devices: object, ieees: set[str]) -> dict:
+    """Human-readable HA device names; never infer from individual relays."""
+    result = {}
+    for ieee, owners in _matched_devices(devices, ieees).items():
+        if len(owners) != 1:
+            continue
+        for key in ("name_by_user", "name"):
+            value = owners[0].get(key)
+            if isinstance(value, str) and value.strip():
+                result[ieee] = value.strip()
+                break
+    return result
+
+
 def areas_from_registries(devices: object, areas: object, ieees: set[str]) -> dict:
     if not isinstance(areas, list):
         raise CatalogError("Invalid HA Area Registry")

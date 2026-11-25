@@ -43,3 +43,12 @@ class IngressStyleTests(TestCase):
         self.assertIn("renderTest:lightTestControl",js)
         self.assertIn("if(test)line.append(test)",picker)
         self.assertIn("if(test)row.append(test)",js)
+
+    def test_entire_device_card_is_clickable_and_shows_ha_name(self):
+        js=(WEB/"app.js").read_text()
+        self.assertIn('a.onclick=()=>open(d)',js)
+        self.assertIn('a.tabIndex=0',js)
+        self.assertIn('e.key==="Enter"||e.key===" "',js)
+        self.assertIn('d.ha_name&&d.ha_name!==d.name',js)
+        self.assertIn('deviceTitle(draft)',js)
+        self.assertNotIn('button("⚙"',js)

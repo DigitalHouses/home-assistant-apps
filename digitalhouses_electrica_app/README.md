@@ -11,7 +11,9 @@ Zigbee2MQTT instances and dispatches explicitly configured light/switch actions.
 It is independent of any Home Assistant dashboard.
 
 - **Ingress:** list of discovered devices with compact action-to-target summaries;
-  open an individual device to edit its actual actions and per-target operations.
+  the entire device row opens the editor. Display Z2M friendly name followed
+  by the distinct HA device name (user-assigned name first), refreshed on Scan.
+  Names are display metadata, never binding keys.
   The reusable Entity Picker provides room, domain, integration and availability
   filters, search by entity/device name or ID, usage hints and multi-selection.
   Existing selections remain visible outside filters or when missing. Their

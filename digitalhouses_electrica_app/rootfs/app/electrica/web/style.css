@@ -131,3 +131,10 @@ label{display:inline-flex;align-items:center;gap:7px;flex-wrap:wrap;color:#ccd8e
 .picker-line>.picker-result{flex:1;min-width:0}
 .picker-line>.light-test{flex:0 0 auto;max-width:170px}
 @media(max-width:600px){.picker-line{flex-wrap:wrap}.picker-line>.picker-result{flex-basis:100%}}
+
+.device-card{cursor:pointer}
+.device-card:focus-visible{outline:2px solid #82efc7;outline-offset:-2px}
+.device-card .settings{color:#aebed1}
+.device-name{display:block}
+.device-name .status{display:inline-block;margin-right:4px}
+.ha-device-name{font-weight:400;color:#ccd8e4}
