@@ -43,26 +43,26 @@ jobs:
         with:
           python-version: "3.13"
 
-      - name: Compile Aqara Switch App
-        run: python -m compileall -q digitalhouses_aqara_switch_app/rootfs/app digitalhouses_aqara_switch_app/tests
+      - name: Compile Electrica App
+        run: python -m compileall -q digitalhouses_electrica_app/rootfs/app digitalhouses_electrica_app/tests
 
       - name: Install test dependencies
         run: python -m pip install --disable-pip-version-check PyYAML
 
-      - name: Run Aqara Switch App tests
+      - name: Run Electrica App tests
         env:
-          PYTHONPATH: digitalhouses_aqara_switch_app/rootfs/app
-        run: python -m unittest discover -s digitalhouses_aqara_switch_app/tests -v
+          PYTHONPATH: digitalhouses_electrica_app/rootfs/app
+        run: python -m unittest discover -s digitalhouses_electrica_app/tests -v
 
       - name: Check launcher
-        run: bash -n digitalhouses_aqara_switch_app/rootfs/run.sh
+        run: bash -n digitalhouses_electrica_app/rootfs/run.sh
 
-      - name: Build installable Aqara Switch App image
+      - name: Build installable Electrica App image
         run: |
-          APP_VERSION="$(awk '$1 == "version:" {print $2; exit}' digitalhouses_aqara_switch_app/config.yaml)"
+          APP_VERSION="$(awk '$1 == "version:" {print $2; exit}' digitalhouses_electrica_app/config.yaml)"
           test -n "$APP_VERSION"
-          docker build --build-arg BUILD_VERSION="$APP_VERSION" --build-arg BUILD_ARCH=amd64 --tag digitalhouses-aqara-switch-ci:"$APP_VERSION" digitalhouses_aqara_switch_app
-          docker run --rm --entrypoint python3 digitalhouses-aqara-switch-ci:"$APP_VERSION" -c 'import sys; sys.path.insert(0, "/app"); from aqara_switch.runtime import Application; import paho.mqtt.client; print("Aqara App MQTT runtime OK")'
+          docker build --build-arg BUILD_VERSION="$APP_VERSION" --build-arg BUILD_ARCH=amd64 --tag digitalhouses-electrica-ci:"$APP_VERSION" digitalhouses_electrica_app
+          docker run --rm --entrypoint python3 digitalhouses-electrica-ci:"$APP_VERSION" -c 'import sys; sys.path.insert(0, "/app"); from electrica.runtime import Application; import paho.mqtt.client; print("Electrica App MQTT runtime OK")'
 
   zigbee-monitor-app:
     name: Zigbee Monitor App
