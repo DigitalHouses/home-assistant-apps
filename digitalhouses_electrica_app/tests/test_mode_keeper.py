@@ -68,7 +68,7 @@ def options_for(keep=True,maintenance=False):
 class SimpleApp:
     def __init__(self):
         self.config=profiles()
-        self.globals={"maintenance_mode":False,"restore_delay":0.6}
+        self.globals={"maintenance_mode":False,"restore_delay":0.6,"auto_day_night":False}
         self._networks={BASE:{
             "info":json.dumps({"coordinator":{"ieee_address":COORD}}).encode(),
             "devices":json.dumps([{"type":"Coordinator","ieee_address":COORD},
@@ -149,8 +149,8 @@ class KeeperTests(unittest.TestCase):
             # Without keep_mode, the wired single_left binding is unsafe.
             with self.assertRaisesRegex(CatalogError, "requires decoupled/ON"):
                 current(options_for(keep=False),path)
-        self.assertEqual(global_policy({}),{"maintenance_mode":False,"restore_delay":0.6})
-        self.assertEqual(global_policy({"maintenance_mode":True,"restore_delay":0.6})
+        self.assertEqual(global_policy({}),{"maintenance_mode":False,"restore_delay":0.6,"auto_day_night":False})
+        self.assertEqual(global_policy({"maintenance_mode":True,"restore_delay":0.6,"auto_day_night":False})
                          ["maintenance_mode"],True)
         for options in ({"maintenance_mode":"true"},
                         {"restore_delay":0},{"restore_delay":31},

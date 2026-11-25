@@ -44,8 +44,12 @@ It is independent of any Home Assistant dashboard.
   DigitalHouses/Global/day_night/state. The future global module owns all
   profile values. Missing/invalid snapshots block profile ON/volume, not
   OFF or independent assignments. No global settings are persisted here.
-  Automatic adaptation of already active targets is a separate pending
-  stage, not a per-assignment option.
+  The external module will own night_mode on/off; the final transport contract
+  is pending. App option auto_day_night (default false) enables adaptation
+  on a real mode transition for active dynamic-only targets. Skip ambiguous
+  fixed/dynamic overlaps, offline targets and groups without all members
+  confirmed ON. No retained startup replay or playback start. HA light
+  state-check and parameter call are not atomic; live hardware tests remain.
 - **Cover:** select Toggle, Open, Close, Stop or Position according to the HA
   capability flags. Toggle resolves from a known settled state; moving or
   unknown state does not imply a direction. Optional window/door/opening

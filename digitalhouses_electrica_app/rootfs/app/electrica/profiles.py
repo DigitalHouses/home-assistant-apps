@@ -2,6 +2,8 @@
 from collections.abc import Mapping
 from .catalog import CatalogError
 
+# Temporary development adapter only. The future producer owns night_mode
+# (on/off); its final MQTT topics and profile payloads are not agreed yet.
 TOPIC = "DigitalHouses/Global/day_night/state"
 SOURCES = {"day","night","current"}
 FIELDS = {"brightness_pct","color_temp_kelvin","rgb_color","volume_pct","color_mode"}
@@ -79,3 +81,43 @@ def resolve_commands(commands,catalog,snapshot):
                 else:
                     skipped.append({"light":eid,"reason":str(exc)})
     return output,skipped,unresolved_toggles
+
+
+def adaptation_targets(config):
+    """Enabled dynamic assignments only; ambiguous mixed policies fail closed.
+
+    OFF is not a parameter owner. Do not infer the active profile from ON.
+    Return candidates and conflicts, including overlapping Z2M groups.
+    """
+    kinds={}
+    for room in config["rooms"]:
+        for sw in room["switches"]:
+            if not sw.get("enabled",False) or sw.get("maintenance_mode",False):continue
+            for action,rule in sw.get("bindings",{}).items():
+                if action in sw.get("disabled_actions",[]):continue
+                for eid in rule.get("targets",[]):
+                    op=rule.get("target_operations",{}).get(eid,rule.get("action"))
+                    if ((eid.startswith("light.") and op in ("on","toggle")) or
+                            (eid.startswith("media_player.") and op=="volume")):
+                        data=rule.get("target_data",{}).get(eid,rule.get("data",{}))
+                        kinds.setdefault(eid,set()).add(data.get("profile")=="current")
+    routes=config.get("light_routes",{})
+    def physical_ids(eid):
+        route=routes.get(eid)
+        if not route:return {("ha",eid)}
+        base=route["base_topic"]
+        if route.get("kind")=="group":
+            return {(base,m["ieee"]) for m in route["members"]}
+        return {(base,route.get("ieee",route["friendly_name"]))}
+    fixed=set().union(*(physical_ids(eid) for eid,v in kinds.items() if False in v))
+    candidates={eid for eid,v in kinds.items() if True in v}
+    conflicts={eid for eid in candidates if physical_ids(eid)&fixed}
+    return sorted(candidates-conflicts),sorted(conflicts)
+
+def group_already_on(route,net,availability,fresh_fields,shadows):
+    base=route["base_topic"]
+    return all((base,m["friendly_name"],"state") in fresh_fields
+               and availability.get((base,m["friendly_name"]))=="online"
+               and (base,m["friendly_name"]) not in shadows
+               and net.get("states",{}).get(m["friendly_name"],{}).get("state")=="ON"
+               for m in route["members"]) and bool(route["members"])

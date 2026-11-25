@@ -31,6 +31,7 @@ def snapshot(app):
         report = deepcopy(app._previous)
         maintenance = getattr(app,"globals",{}).get("maintenance_mode",False)
         global_mode = getattr(app,"_home_profile",None)
+        auto_day_night = getattr(app,"globals",{}).get("auto_day_night",False)
     rows = parse_rows(app.options.read())
     indexed = {r["entity_id"]:r for r in rows}
     devices = []
@@ -63,7 +64,7 @@ def snapshot(app):
                         "enabled":row["enabled"],"disabled_actions":row.get("disabled_actions",[]),"actions":[],
                         "bindings":{k:normalize(v) for k,v in row["actions"].items()}})
     return {"devices":devices,"targets":list(targets.values()),"scan":scan,
-            "report":report,"revision":revision(rows),"version":app.version,"maintenance_mode":maintenance,"home_mode":global_mode["mode"] if global_mode else None}
+            "report":report,"revision":revision(rows),"version":app.version,"maintenance_mode":maintenance,"home_mode":global_mode["mode"] if global_mode else None,"auto_day_night":auto_day_night}
 
 def validate_assignment(assignment, targets):
     rule = parse_rule({"assignments":[assignment]})

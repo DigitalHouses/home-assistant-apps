@@ -52,7 +52,10 @@ def global_policy(options: Mapping) -> dict:
         raise CatalogError("maintenance_mode must be boolean")
     if type(delay) not in (int, float) or not math.isfinite(delay) or not 0.1 <= delay <= 30:
         raise CatalogError("restore_delay must be between 0.1 and 30 seconds")
-    return {"maintenance_mode": mode, "restore_delay": float(delay)}
+    auto=options.get("auto_day_night",False)
+    if type(auto) is not bool:
+        raise CatalogError("auto_day_night must be boolean")
+    return {"maintenance_mode": mode, "restore_delay": float(delay), "auto_day_night":auto}
 
 
 def capabilities(device: Mapping) -> dict:

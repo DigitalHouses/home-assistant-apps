@@ -27,11 +27,13 @@ options:
   telemetry_enabled: false
   log_level: info
   maintenance_mode: false
+  auto_day_night: false
   auto_scan_interval: 60
   restore_delay: 0.6
 schema:
   telemetry_enabled: bool
   log_level: list(debug|info|warning|error)
   maintenance_mode: bool
+  auto_day_night: bool
   auto_scan_interval: int(0,1440)
   restore_delay: float(0.1,30)

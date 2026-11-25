@@ -24,7 +24,7 @@ from .event_log import EventLog
 from .control import HAClient, light_commands, verified_adopted_switch
 from .mqtt_lights import plan_batch
 from .lab_lights import (LAB_LIGHTS, authorized_ha_light_ids,
-                         partition_commands, plan_lab)
+                         partition_commands, plan_lab, SHADOW_SECONDS as HA_SHADOW_SECONDS)
 from .light_routes import current_route, group_observed_state
 from .keeper_runtime import run_keeper
 from .mode_keeper import (capabilities, global_policy, maintained_switch,
@@ -460,7 +460,7 @@ class Application:
             except (CatalogError,ValueError,TypeError,KeyError):
                 snapshot=None
             with self._mutex:
-                self._home_profile=snapshot
+                self._accept_home_profile(snapshot, retained=message.retain)
             return
         if message.topic == ROOT + "/command/delete_telemetry":
             if (self.telemetry is not None and not message.retain
@@ -794,6 +794,107 @@ class Application:
                 raise CatalogError("Очередь заполнена") from exc
             return rid
 
+    def _accept_home_profile(self,snapshot,*,retained=False):
+        """Transport-independent normalized input, called under _mutex.
+        First/replayed snapshot initializes only. Never schedule home mode here.
+        """
+        previous=self._home_profile
+        if previous==snapshot:return
+        self._home_profile=snapshot
+        if (retained or not previous or not snapshot or previous["mode"]==snapshot["mode"]
+                or not self.globals.get("auto_day_night") or self.globals["maintenance_mode"]):
+            return
+        try:
+            self._jobs.put_nowait((None,None,"Режим дома","AUTO_PROFILE",[],None,snapshot))
+        except queue.Full:
+            LOG.warning("Day/Night transition skipped: queue full")
+
+    def _adapt_home_profile(self,snapshot):
+        """Same serialized worker, same verified transports. No synthetic key."""
+        def eligible(eid):
+            return (self._home_profile is snapshot and self.globals.get("auto_day_night")
+                    and not self.globals["maintenance_mode"]
+                    and eid in profiles.adaptation_targets(self.config)[0]
+                    and not self.event_log.active_target(eid,exclude=rid))
+        with self._mutex:
+            if self._home_profile is not snapshot or not self.globals.get("auto_day_night") or self.globals["maintenance_mode"]:return
+            candidates,conflicts=profiles.adaptation_targets(self.config)
+            # Groups first; successful group command covers its member routes.
+            candidates.sort(key=lambda eid:(self.config.get("light_routes",{}).get(eid,{}).get("kind")!="group",eid))
+        handled=set()
+        for eid in candidates+conflicts:
+            rid=self.event_log.press("global","Режим дома","День/Ночь: "+snapshot["mode"],[eid])
+            try:
+                if eid in conflicts:raise ActionError("Conflicting fixed and dynamic assignments")
+                with self._mutex:
+                    if not eligible(eid):raise ActionError("Profile, assignment or pending command changed")
+                    route=deepcopy(self.config.get("light_routes",{}).get(eid))
+                    target=self.target_catalog.get(eid,{})
+                    data=profiles.resolve({"profile":"current"},target,snapshot,eid.split(".")[0])
+                    if eid.startswith("light.") and route:
+                        base,name=route["base_topic"],route["friendly_name"]
+                        ident=(base,name)
+                        net=self._networks.get(base,{})
+                        if ident in self._light_shadows or self.observed_target_state(eid,verify_route=True)!="on":
+                            raise ActionError("Light off, unavailable or unconfirmed")
+                        group=route.get("kind")=="group"
+                        members={(base,m["friendly_name"]) for m in route["members"]} if group else {ident}
+                        if members & handled:raise ActionError("Already covered by profile command")
+                        if group and not profiles.group_already_on(route,net,self._light_availability,self._fresh_fields,self._light_shadows):
+                            raise ActionError("Not all group members confirmed ON")
+                        plans,skipped=plan_batch([{"service":"light.turn_on","target":{"entity_id":[eid]},"data":data}],
+                            self.config["light_routes"],self._networks,self._light_availability,
+                            self._fresh_fields,self._light_shadows,self._light_observed_at,time.monotonic())
+                        if not plans:raise ActionError(skipped[0]["reason"] if skipped else "No verified route")
+                        plan=plans[0]
+                        # Do not send a separate ON command during adaptation.
+                        payload={k:v for k,v in plan["payload"].items() if k!="state"}
+                        if not payload or not self._publish(plan["topic"],payload,retain=False):
+                            raise ActionError("MQTT profile command rejected")
+                        handled.update(members)
+                        self.event_log.sent(rid,eid,("z2m",*ident),"on","on",accepted_only=True)
+                        continue
+                if self._ha_client is None:self._ha_client=HAClient(os.environ.get("SUPERVISOR_TOKEN",""))
+                if eid.startswith("light."):
+                    # Positive registry verification; unknown HA groups are
+                    # not adapted because their ON may mean only one member ON.
+                    entities=self.registry.fetch_entities()
+                    if eid not in LAB_LIGHTS and eid not in authorized_ha_light_ids(entities,{eid}):
+                        raise ActionError("HA-native route not verified")
+                    state=self._ha_client.read_domain_state(eid)
+                    attrs=state.get("attributes",{})
+                    if state.get("state")!="on" or attrs.get("entity_id") or any(e.get("entity_id")==eid and e.get("platform")=="group" for e in entities):
+                        raise ActionError("Light off/unavailable or HA group membership not verified")
+                    # Check fresh HA capability, not only cached UI metadata.
+                    from .ingress_catalog import target_catalog
+                    with self._mutex:
+                        regs=self._target_registries
+                    if regs is None:raise ActionError("HA catalog unavailable")
+                    live=target_catalog(regs,[state],self.config).get(eid,{})
+                    data=profiles.resolve({"profile":"current"},live,snapshot,"light")
+                    with self._mutex:
+                        shadow=self._ha_shadows.get(eid)
+                        if (not eligible(eid) or eid in self.config.get("light_routes",{})
+                                or (shadow and time.monotonic()-shadow["at"]<=HA_SHADOW_SECONDS)):
+                            raise ActionError("Light route or profile changed")
+                    self._ha_client.execute({"service":"light.turn_on","target":{"entity_id":[eid]},"data":data})
+                    self.event_log.sent(rid,eid,("ha",eid),"on","on",sent_at=_iso_now(),accepted_only=True)
+                else:
+                    entities=self.registry.fetch_entities()
+                    matches=[e for e in entities if e.get("entity_id")==eid]
+                    if len(matches)!=1 or matches[0].get("disabled_by") is not None:
+                        raise ActionError("Media player registry unverified")
+                    state=self._ha_client.read_domain_state(eid)
+                    op,data,desired=media_rules.plan("volume",data,state)
+                    with self._mutex:
+                        if not eligible(eid):raise ActionError("Media profile changed")
+                    at=_iso_now()
+                    self._ha_client.execute_media(eid,op,data)
+                    self.event_log.sent_ha_domain(rid,eid,state,desired,at,operation=op)
+            except Exception as exc:
+                self.event_log.skip(rid,eid,str(exc))
+            finally:self.event_log.finish(rid)
+
     def _ha_domain_commands(self, commands, base, coordinator, name, action, all_commands, rid):
         """Shared serialized HA dispatch for cover, climate and media players."""
         from collections import Counter
@@ -872,6 +973,9 @@ class Application:
                 continue
             targets = [eid for cmd in commands for eid in cmd["target"]["entity_id"]]
             try:
+                if base is None and action=="AUTO_PROFILE":
+                    self._adapt_home_profile(job[6])
+                    continue
                 all_commands = commands
                 with self._mutex:
                     commands,profile_skipped,unresolved_toggles=profiles.resolve_commands(commands,self.target_catalog,self._home_profile)
