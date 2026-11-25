@@ -29,12 +29,15 @@ YAML = """
 """
 
 class StoreTests(unittest.TestCase):
-    def test_migrate_once_and_keep_orphan(self):
+    def test_first_start_ignores_legacy_yaml_and_preserves_saved_assignments(self):
         with tempfile.TemporaryDirectory() as td:
             path = Path(td) / "bindings.json"
             supervisor = Mock()
             supervisor.read.return_value = {"switches": YAML}
             store = BindingStore(supervisor, path)
+            self.assertEqual(parse_rows(store.read()), [])
+            supervisor.read_raw.assert_not_called()
+            store.write({"switches": YAML})
             self.assertEqual(parse_rows(store.read()), parse_rows({"switches": YAML}))
             self.assertEqual(json.loads(path.read_text())["schema"], 1)
             supervisor.read.return_value = {"switches": "[]"}
@@ -51,13 +54,14 @@ class StoreTests(unittest.TestCase):
             self.assertEqual(active["binding_problems"][0]["object_name"], "switch.th_livingroom_temperature")
             supervisor.write.assert_not_called()
 
-    def test_removed_schema_uses_raw_options(self):
+    def test_removed_schema_never_reads_raw_options(self):
         with tempfile.TemporaryDirectory() as td:
             supervisor = Mock()
             supervisor.read.return_value = {"auto_scan_interval":60}
             supervisor.read_raw.return_value = {"switches": YAML}
             store = BindingStore(supervisor, Path(td)/"bindings.json")
-            self.assertEqual(parse_rows(store.read()),parse_rows({"switches":YAML}))
+            self.assertEqual(parse_rows(store.read()),[])
+            supervisor.read_raw.assert_not_called()
 
     def test_corrupt_store_is_not_replaced(self):
         with tempfile.TemporaryDirectory() as td:

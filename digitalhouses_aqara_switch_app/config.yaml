@@ -14,7 +14,7 @@ stage: experimental
 backup: cold
 hassio_api: true
 hassio_role: default
-# Required only by operator-triggered Scan (HA Device/Area Registry WebSocket).
+# HA entity metadata, device registry and explicitly assigned HA-native targets.
 homeassistant_api: true
 ingress: true
 ingress_port: 8099

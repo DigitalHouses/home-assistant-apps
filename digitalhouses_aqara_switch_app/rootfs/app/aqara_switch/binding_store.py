@@ -1,7 +1,7 @@
-"""One-time import of Supervisor YAML into the app-owned JSON store.
+"""App-owned persistent JSON bindings; start empty on first use.
 
 The existing Scan/Adopt engine receives an in-memory options projection.
-No writes to Supervisor options and no YAML configuration after migration.
+No import of old Supervisor bindings and no writes to Supervisor options.
 """
 from __future__ import annotations
 
@@ -20,13 +20,7 @@ class BindingStore:
         self.lock = RLock()
         with self.lock:
             if not self.path.exists():
-                options = supervisor.read()
-                raw = supervisor.read_raw() if "switches" not in options else options
-                if "switches" not in raw:
-                    # New installs have no previous binding option.
-                    raw = {**raw, "switches": "[]"}
-                rows = parse_rows({**options, "switches": raw["switches"]})
-                self._save(rows)
+                self._save([])
             self._read()
 
     def _read(self):

@@ -76,6 +76,7 @@ class IngressTests(unittest.TestCase):
             supervisor=Mock()
             supervisor.read.return_value={"switches":"- "+KEY+": {enabled: true, actions: {single: [light.bra]}}"}
             store=BindingStore(supervisor,Path(td)/"bindings.json")
+            store.write({"switches":"- "+KEY+": {enabled: true, actions: {single: [light.bra]}}"})
             app=SimpleNamespace(options=store,_scan_lock=threading.Lock(),_mutex=threading.RLock(),
                  config=project(PROFILE,store.read()),target_catalog=target_catalog(REGISTRIES,STATES,PROFILE),
                  _publish_details=Mock())

@@ -24,7 +24,8 @@ It is independent of any Home Assistant dashboard.
   assignment; saving the assignment explicitly enables the needed policy.
 - **Storage:** `/data/bindings.json` is the single user-binding source;
   `/data/adopted_switches.json` holds hardware metadata and verified routes.
-  First startup imports legacy Supervisor options, then ignores obsolete YAML.
+  First startup creates an empty binding store; old Supervisor YAML is ignored.
+  Enter assignments manually in Ingress. Existing JSON bindings are preserved.
   Atomic writes; no destructive repair of an invalid existing file.
 - **Dashboard:** standard DigitalHouses product card, problems, last action,
   compact device tree. No Scan button or binding controls. State and assignments
@@ -38,9 +39,10 @@ It is independent of any Home Assistant dashboard.
 
 Install via the DigitalHouses Home Assistant Apps repository. Use the App's
 **Open Web UI** / DH Aqara Switch Ingress sidebar to configure bindings.
-Backup existing App data before upgrading from 0.1.19. The migration reads
-legacy options from the own Supervisor options/info API before creating the
-JSON file. The original legacy option is not an editable field in 0.2.0.
+When upgrading from 0.1.19, old YAML assignments are not imported. Configure
+new assignments manually in Ingress; until then, the App sends no button-based
+commands and does not enable new Mode Keeper policies. Only system parameters
+remain in Supervisor options. Keep a backup if you need the old configuration.
 
 The existing telemetry opt-in remains unchanged. HA Core is required to read
 entity metadata and execute HA-native targets; verified direct Z2M routes can

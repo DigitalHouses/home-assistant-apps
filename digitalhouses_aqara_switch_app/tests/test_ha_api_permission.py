@@ -19,7 +19,7 @@ class HAPermissionsTest(unittest.TestCase):
     def test_manifest_grants_minimum_ha_api_and_mqtt(self):
         conf = yaml.safe_load((ROOT / "config.yaml").read_text(encoding="utf-8"))
         self.assertTrue(conf["homeassistant_api"], "Supervisor must permit Core WebSocket at explicit Scan")
-        self.assertTrue(conf["hassio_api"], "Migration reads own legacy App Options")
+        self.assertTrue(conf["hassio_api"], "Read own App system options")
         self.assertEqual(conf["hassio_role"], "default", "Do not escalate Supervisor privileges")
         self.assertIn("mqtt:need", conf["services"])
         self.assertEqual(conf["boot"], "manual")

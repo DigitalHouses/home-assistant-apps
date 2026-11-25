@@ -3,11 +3,11 @@
 ## 0.2.0
 
 - Add app-owned Ingress with a full-width device list, actual actions, per-target light/switch assignments, optional brightness, RGB, Kelvin and transition.
-- Migrate old Supervisor YAML bindings once into atomic /data/bindings.json; preserve orphaned/disabled assignments and use the internal file exclusively.
+- Start with empty atomic /data/bindings.json; no import of legacy YAML. Configure assignments in Ingress, preserve existing JSON bindings, including orphaned/disabled assignments. Supervisor configuration contains system parameters only.
 - Add startup and scheduled Scan (auto_scan_interval in minutes, default 60; zero disables periodic scan), manual Scan in Ingress, stable hardware keys across rename and read-only diagnostics.
 - Preserve verified direct Z2M light transport, Mode Keeper, grouped light toggles, telemetry and DH Sync retained contract. HA switch targets exclude relays of adopted Aqara inputs. Newly detected devices require explicit enabling before relay control.
 - Adopt the unified App status card with real Refresh and release Check, Supervisor installation/restart; Dashboard only renders application-published data and no longer exposes Scan or binding editing.
-- Live HAOS upgrade, Supervisor Ingress and physical E2E acceptance are required before production publication.
+- Live HAOS Ingress and physical E2E tests remain deployment acceptance checks.
 
 ## 0.1.19
 
