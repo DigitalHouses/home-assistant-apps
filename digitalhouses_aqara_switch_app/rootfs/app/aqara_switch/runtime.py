@@ -18,6 +18,7 @@ import time
 from .catalog import (CatalogError, candidate_from_mqtt, decode_bridge_devices,
                       resolve_hardware)
 from .actions import ActionError
+from .event_log import EventLog
 from .control import HAClient, light_commands, verified_adopted_switch
 from .mqtt_lights import plan_batch
 from .lab_lights import (LAB_LIGHTS, authorized_ha_light_ids,
@@ -152,6 +153,7 @@ class Application:
         self._stop = threading.Event()
         self._ha_client = ha_client
         self._jobs = queue.Queue(maxsize=64)
+        self.event_log = EventLog()
         self._last_action = {"state": "idle", "at": None, "switch": None,
                              "action": None, "target": None, "error": None}
         self._last_action_at = {}
@@ -402,6 +404,7 @@ class Application:
         self._publish_all()
 
     def _on_disconnect(self, client, userdata, rc):
+        self.event_log.disconnect()
         del client, userdata
         if rc:
             LOG.warning("MQTT disconnected: %s", rc)
@@ -544,6 +547,8 @@ class Application:
                         if data.get("state") in ("ON", "OFF"):
                             ident = (base, name)
                             self._light_observed_at[ident] = time.monotonic()
+                            if not getattr(message, "dup", False):
+                                self.event_log.observe(("z2m", *ident), data["state"])
                             shadow = self._light_shadows.get(ident)
                             if shadow and shadow["value"] == data["state"]:
                                 self._light_shadows.pop(ident, None)
@@ -569,8 +574,6 @@ class Application:
             return
         for room in self.config["rooms"]:
             for saved in room["switches"]:
-                if not saved.get("enabled", True):
-                    continue
                 if not verified_adopted_switch(saved, device, coordinator, base):
                     continue
                 name = saved["logical_name"]
@@ -580,10 +583,18 @@ class Application:
                 action = data.get("action")
                 if not isinstance(action, str) or not action:
                     continue
+                if not saved.get("enabled", True):
+                    if action in saved.get("fingerprint", {}).get("actions", []):
+                        rid = self.event_log.press(base,name,action)
+                        self.event_log.finish(rid,"Устройство отключено")
+                    continue
                 maintenance = maintained_switch(saved, self.globals)
                 state = net.get("states", {}).get(name, {})
                 features = capabilities(device)
                 if not mode_action_allowed(saved, action, state, features, maintenance):
+                    if action in saved.get("fingerprint", {}).get("actions", []):
+                        rid = self.event_log.press(base,name,action)
+                        self.event_log.finish(rid,"Maintenance / режим клавиши не разрешён")
                     continue
                 # Wired key mode must be freshly confirmed after reconnect.
                 if features:
@@ -593,6 +604,8 @@ class Application:
                             else tuple(features))
                     if any((base, name, features[k][0]) not in self._fresh_fields
                            for k in keys if k in features):
+                        rid = self.event_log.press(base,name,action)
+                        self.event_log.finish(rid,"Режим клавиши не подтверждён")
                         continue
                 dedupe_key = (coordinator, name, action)
                 if now - self._last_action_at.get(dedupe_key, -1e9) < 0.35:
@@ -607,14 +620,19 @@ class Application:
                                          target=None, error=str(exc))
                     continue
                 if commands is None:
+                    if action in saved.get("fingerprint", {}).get("actions", []):
+                        rid = self.event_log.press(base,name,action)
+                        self.event_log.finish(rid,"Нет активной привязки")
                     continue
                 targets = [eid for command in commands for eid in command["target"]["entity_id"]]
                 target_label = ", ".join(targets)
+                rid = self.event_log.press(base,name,action,targets)
                 try:
-                    self._jobs.put_nowait((base, coordinator, name, action, commands))
+                    self._jobs.put_nowait((base, coordinator, name, action, commands, rid))
                     self._publish_action(state="queued", switch=name, action=action,
                                          target=target_label)
                 except queue.Full:
+                    self.event_log.finish(rid,"Очередь заполнена",targets)
                     self._publish_action(state="error", switch=name, action=action,
                                          target=target_label, error="Action queue is full")
 
@@ -671,7 +689,9 @@ class Application:
         """Dispatch verified Z2M lights via MQTT and HA-native lights via REST."""
         while not self._stop.is_set():
             try:
-                base, coordinator, name, action, commands = self._jobs.get(timeout=1)
+                job = self._jobs.get(timeout=1)
+                base, coordinator, name, action, commands = job[:5]
+                rid = job[5] if len(job)>5 else None
             except queue.Empty:
                 continue
             targets = [eid for cmd in commands for eid in cmd["target"]["entity_id"]]
@@ -773,6 +793,8 @@ class Application:
                         if self._publish(plan["topic"], plan["payload"],
                                          retain=False):
                             ident = plan["ident"]
+                            previous = self._networks.get(ident[0],{}).get("states",{}).get(ident[1],{}).get("state")
+                            self.event_log.sent(rid,plan["light"],("z2m",*ident),previous,plan["state"])
                             self._light_shadows[ident] = {
                                 "value": plan["state"], "at": time.monotonic()}
                             sent.append(plan["light"])
@@ -821,6 +843,7 @@ class Application:
                                             "reason":"Aqara key or Maintenance changed"}
                                            for eid in ids)
                             continue
+                        dispatched_at = _iso_now()
                         try:
                             self._ha_client.execute(call)
                         except Exception as exc:
@@ -832,6 +855,7 @@ class Application:
                         value = "on" if call["service"] == "light.turn_on" else "off"
                         with self._mutex:
                             for eid in ids:
+                                self.event_log.sent(rid,eid,("ha",eid),lab_state_cache.get(eid,(False,None))[1] if lab_state_cache.get(eid,(False,None))[0] else None,value, sent_at=dispatched_at)
                                 self._ha_shadows[eid] = {
                                     "state":value, "at": time.monotonic()}
                         sent.extend(ids)
@@ -874,10 +898,15 @@ class Application:
                                                                capabilities(device), False)):
                                     raise ActionError("Input or binding changed")
                             desired = switch_toggle if service == "switch.toggle" else service.rsplit("_", 1)[-1]
+                            dispatched_at = _iso_now()
                             self._ha_client.execute_switch(eid, desired)
+                            self.event_log.sent(rid,eid,("ha",eid),state,desired,sent_at=dispatched_at)
                             sent.append(eid)
                         except Exception as exc:
                             skipped.append({"light":eid,"reason":str(exc)[:120]})
+                for item in skipped:
+                    self.event_log.skip(rid,item["light"],item["reason"])
+                self.event_log.finish(rid)
                 if skipped:
                     LOG.warning("Aqara action %s %s skipped: %s", name, action, skipped)
                 note = "; ".join(x["light"]+": "+x["reason"] for x in skipped)
@@ -890,6 +919,7 @@ class Application:
                          "(Z2M physical + authorized HA lights)",
                          name, action, len(sent), len(skipped))
             except Exception as exc:
+                self.event_log.finish(rid,str(exc),targets)
                 LOG.exception("Aqara MQTT light action failed")
                 self._publish_action(state="error", switch=name, action=action,
                                      target=", ".join(targets), error=str(exc)[:300])
@@ -1008,6 +1038,12 @@ class Application:
         if refresh_registry or registry is None:
             registry = self.registry.fetch()
         states = self.registry.fetch_states()
+        self.event_log.ha_observations(states)
+        if self.event_log.timezone is None and hasattr(self.registry,"fetch_timezone"):
+            try:
+                self.event_log.set_timezone(self.registry.fetch_timezone())
+            except Exception:
+                pass  # HA unavailable: keep UTC explicitly labelled in UI.
         with self._mutex:
             self._target_registries = registry
             self.target_catalog = target_catalog(registry, states, self.config)

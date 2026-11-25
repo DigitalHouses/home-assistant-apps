@@ -1,5 +1,13 @@
 # Changelog — DigitalHouses Aqara Switch App
 
+## 0.2.2
+
+- Ingress: export, import and view/copy the app-owned JSON bindings, validated before atomic replacement; no restart.
+- Add toggleable right-half LOG panel, one non-wrapping row per key press, per-target send and observed-state confirmation, HA timezone, and 2-second action highlights.
+- Bounded RAM journal: 500 presses or 24 hours, 90-second confirmation deadline, latest in-flight target only. No persistence, Recorder or additional MQTT writes.
+- Physical Z2M confirmation is a fresh reported state (not physical delivery proof); HA confirmation requires a state change newer than dispatch. Unverified routes, including unsupported direct Z2M groups, remain fail-closed.
+- Existing action routing and Mode Keeper policies unchanged.
+
 ## 0.2.1
 
 - Align both Ingress screens with the actual DH Network App 0.1.32 dark-blue visual design (header, typography, buttons, controls and status colors).
