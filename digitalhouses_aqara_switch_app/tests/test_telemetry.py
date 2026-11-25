@@ -46,7 +46,7 @@ class TelemetryTests(unittest.TestCase):
         self.assertFalse(config["options"]["telemetry_enabled"])
         self.assertEqual(config["schema"]["telemetry_enabled"], "bool")
         self.assertEqual(config["boot"], "manual")
-        self.assertEqual(config["version"], "0.2.0")
+        self.assertEqual(config["version"], "0.2.1")
 
     def test_disabled_legacy_lighting_creates_no_telemetry_identity(self):
         for value in (False, None):

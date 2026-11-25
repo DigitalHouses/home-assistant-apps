@@ -1,6 +1,6 @@
 # DigitalHouses Aqara Switch App
 
-## 0.2.0 — Ingress configuration
+## 0.2.x — Ingress configuration
 
 Aqara Switch App consumes events from supported Aqara logical keys across MQTT
 Zigbee2MQTT instances and dispatches explicitly configured light/switch actions.
