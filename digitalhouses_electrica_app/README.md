@@ -56,10 +56,10 @@ No additional service, database, broker or HA Automation is introduced.
 ## Verification
 
 ```sh
-PYTHONPATH=digitalhouses_aqara_switch_app/rootfs/app \
-python -m unittest discover -s digitalhouses_aqara_switch_app/tests -v
-python -m compileall -q digitalhouses_aqara_switch_app/rootfs/app
-node --check digitalhouses_aqara_switch_app/rootfs/app/aqara_switch/web/app.js
+PYTHONPATH=digitalhouses_electrica_app/rootfs/app \
+python -m unittest discover -s digitalhouses_electrica_app/tests -v
+python -m compileall -q digitalhouses_electrica_app/rootfs/app
+node --check digitalhouses_electrica_app/rootfs/app/aqara_switch/web/app.js
 python scripts/validate_repository.py
 ```
 

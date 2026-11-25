@@ -20,7 +20,7 @@ the MQTT service. Do not elevate permissions merely for this diagnostic.
 
 Install (copy into VS Code terminal):
 
-    curl -fLsS https://raw.githubusercontent.com/DigitalHouses/home-assistant-apps/main/digitalhouses_aqara_switch_app/examples/tests/passive_group_observer.py -o /config/dh_aqara_passive_group_observer.py
+    curl -fLsS https://raw.githubusercontent.com/DigitalHouses/home-assistant-apps/main/digitalhouses_electrica_app/examples/tests/passive_group_observer.py -o /config/dh_aqara_passive_group_observer.py
     python3 -m py_compile /config/dh_aqara_passive_group_observer.py
     python3 -u /config/dh_aqara_passive_group_observer.py --hours 18
 
