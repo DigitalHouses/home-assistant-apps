@@ -31,11 +31,31 @@ def parse_rows(options: Mapping) -> list[dict]:
         raise CatalogError("Invalid switches YAML") from exc
     if not isinstance(rows, list):
         raise CatalogError("switches YAML must be a list")
-    result, unique = [], set()
+    flat = []
     for row in rows:
         if not isinstance(row, Mapping) or len(row) != 1:
             raise CatalogError("Each switch row must have exactly one entity_id key")
         entity_id, value = next(iter(row.items()))
+        if not isinstance(value, Mapping) or "entity_id" in value:
+            raise CatalogError("Invalid switch row")
+        flat.append(dict(value, entity_id=entity_id))
+    return validate_rows(flat)
+
+
+def validate_rows(rows: object) -> list[dict]:
+    """Validate the authoritative JSON rows without YAML conversion.
+
+    Keep the original action representation and every supported field, so an
+    Aqara v0.2.3 export can be imported and exported without losing settings.
+    """
+    if not isinstance(rows, list):
+        raise CatalogError("Binding rows must be a list")
+    result, unique = [], set()
+    for row in rows:
+        if not isinstance(row, Mapping) or "entity_id" not in row:
+            raise CatalogError("Binding row requires entity_id")
+        entity_id = row["entity_id"]
+        value = {key: val for key, val in row.items() if key != "entity_id"}
         if not isinstance(entity_id, str) or not _ENTITY.fullmatch(entity_id):
             raise CatalogError("Switch key must be switch.* (HA entity or logical config key)")
         if entity_id in unique:
@@ -60,7 +80,7 @@ def parse_rows(options: Mapping) -> list[dict]:
             if not isinstance(press, str) or not press:
                 raise CatalogError("Invalid action name")
             parse_rule(rule)  # fail closed before persisting user configuration
-            actions[press] = list(rule) if isinstance(rule, list) else dict(rule)
+            actions[press] = deepcopy(rule)
         item = {"entity_id": entity_id, "enabled": value["enabled"], "actions": actions}
         if "maintenance_mode" in value:
             item["maintenance_mode"] = value["maintenance_mode"]
@@ -71,7 +91,7 @@ def parse_rows(options: Mapping) -> list[dict]:
             if (not isinstance(disabled, list) or any(not isinstance(a,str) or a not in actions for a in disabled)
                     or len(disabled) != len(set(disabled))):
                 raise CatalogError("Invalid disabled_actions")
-            item["disabled_actions"] = disabled
+            item["disabled_actions"] = list(disabled)
         result.append(item)
     return result
 

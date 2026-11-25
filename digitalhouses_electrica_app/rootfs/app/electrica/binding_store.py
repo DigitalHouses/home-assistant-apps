@@ -11,7 +11,45 @@ from pathlib import Path
 from threading import RLock
 
 from .catalog import CatalogError
-from .entity_options import parse_rows, render_rows
+from .entity_options import parse_rows, render_rows, validate_rows
+
+SCHEMA = 1
+MAX_DOCUMENT_BYTES = 1_048_576
+
+
+def binding_document(rows):
+    """One versioned contract for disk, import and export."""
+    document = {"schema": SCHEMA, "rows": validate_rows(rows)}
+    try:
+        encoded = json.dumps(document, ensure_ascii=False, allow_nan=False,
+                             separators=(",", ":")).encode("utf-8")
+    except (TypeError, ValueError, UnicodeError) as exc:
+        raise CatalogError("Bindings must be valid JSON") from exc
+    if len(encoded) > MAX_DOCUMENT_BYTES:
+        raise CatalogError("Binding store exceeds 1 MiB")
+    return document, encoded
+
+
+def validate_document(doc):
+    if (not isinstance(doc, dict) or set(doc) != {"schema", "rows"}
+            or type(doc["schema"]) is not int or doc["schema"] != SCHEMA):
+        raise CatalogError("Unsupported binding document schema")
+    return binding_document(doc["rows"])[0]
+
+
+def _unique_object(pairs):
+    result = {}
+    for key, value in pairs:
+        if key in result:
+            raise CatalogError("Duplicate JSON key: " + key)
+        result[key] = value
+    return result
+
+
+def decode_json(raw):
+    """Reject duplicate object keys rather than silently dropping settings."""
+    return json.loads(raw, object_pairs_hook=_unique_object)
+
 
 class BindingStore:
     def __init__(self, supervisor, path=Path("/data/bindings.json")):
@@ -26,20 +64,14 @@ class BindingStore:
     def _read(self):
         try:
             raw = self.path.read_bytes()
-            if len(raw) > 1_048_576:
+            if len(raw) > MAX_DOCUMENT_BYTES:
                 raise CatalogError("Binding store exceeds 1 MiB")
-            doc = json.loads(raw)
-            if not isinstance(doc, dict) or doc.get("schema") != 1:
-                raise CatalogError("Unsupported binding store schema")
-            return parse_rows({"switches": render_rows(doc["rows"])})
+            return validate_document(decode_json(raw))["rows"]
         except (OSError, ValueError, TypeError, KeyError) as exc:
             raise CatalogError("Binding store invalid; never overwrite it") from exc
 
     def _save(self, rows):
-        encoded = json.dumps({"schema": 1, "rows": rows}, ensure_ascii=False,
-                             separators=(",", ":")).encode()
-        if len(encoded) > 1_048_576:
-            raise CatalogError("Binding store exceeds 1 MiB")
+        _, encoded = binding_document(rows)
         self.path.parent.mkdir(parents=True, exist_ok=True)
         tmp = self.path.with_suffix(".tmp")
         fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)

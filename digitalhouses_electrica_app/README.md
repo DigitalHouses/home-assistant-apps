@@ -2,7 +2,7 @@
 
 ## Target architecture (planned)
 
-See [DigitalHouses Electrica App — target architecture v0.3.0](docs/ELECTRICA_TARGET_ARCHITECTURE.md). The previously published Aqara 0.2.3 release remains unchanged. This branch is a staged rename, not a published Electrica release.
+See [DigitalHouses Electrica App — target architecture v0.3.0](docs/ELECTRICA_TARGET_ARCHITECTURE.md). The previously published Aqara 0.2.3 release remains unchanged. This branch is development toward Electrica v0.3.0, not a published Electrica release.
 
 ## 0.2.x — Ingress configuration
 
@@ -31,6 +31,12 @@ It is independent of any Home Assistant dashboard.
   First startup creates an empty binding store; old Supervisor YAML is ignored.
   Enter assignments manually in Ingress. Existing JSON bindings are preserved.
   Atomic writes; no destructive repair of an invalid existing file.
+- **JSON compatibility:** the public export/import and local binding document
+  use the same `{"schema": 1, "rows": [...]}` contract as Aqara v0.2.3.
+  All supported action formats and optional per-device settings are retained.
+  Missing devices/targets stay configured for recovery; unknown fields,
+  unsupported schema versions and duplicate JSON keys are rejected rather
+  than silently discarded. No installation or Supervisor-option migration.
 - **Dashboard:** standard DigitalHouses product card, problems, last action,
   compact device tree. No Scan button or binding controls. State and assignments
   are published by the App. Reported state is not physical confirmation.
@@ -47,6 +53,12 @@ When upgrading from 0.1.19, old YAML assignments are not imported. Configure
 new assignments manually in Ingress; until then, the App sends no button-based
 commands and does not enable new Mode Keeper policies. Only system parameters
 remain in Supervisor options. Keep a backup if you need the old configuration.
+
+For the planned transition from Aqara v0.2.3 to Electrica v0.3.0:
+export JSON from Aqara, stop Aqara and disable its autostart, install Electrica,
+import the JSON, verify the bindings and only then remove Aqara. Do not run
+both controllers against the same devices. No automatic migration is provided.
+This development branch is not yet suitable for production cutover.
 
 The existing telemetry opt-in remains unchanged. HA Core is required to read
 entity metadata and execute HA-native targets; verified direct Z2M routes can

@@ -25,3 +25,10 @@ class IngressStyleTests(TestCase):
         self.assertIn('api("scan",{})',js)
         self.assertIn('api("save",',js)
         self.assertIn('draft.disabled_actions',js)
+
+    def test_import_preserves_raw_document_for_strict_server_validation(self):
+        js=(WEB/"app.js").read_text()
+        self.assertIn("const documentText=await file.text()",js)
+        self.assertIn('JSON.parse(documentText)',js)
+        self.assertIn("+documentText+",js)
+        self.assertIn("body:raw?data:JSON.stringify(data)",js)

@@ -29,7 +29,7 @@ function targetIcon(t,id){
 }
 function stat(d){return {same:["●",""],disabled:["Ⅱ","muted"],missing:["✖","danger"],offline:["⚠","problem"],unknown:["?","muted"]}[d.status]||["⚠","problem"]}
 function targetNode(id){const t=model.targets.find(x=>x.entity_id===id);const n=el("span",undefined,"target");n.dataset.entity=id;n.append(targetIcon(t,id),el("span",id.split(".")[1]||id));if(!t||!["on","off"].includes(t.state)){const w=el("span","⚠","problem");w.title=t?"Сущность недоступна":"Сущность не найдена";n.append(w)}return n}
-async function api(path,data){const r=await fetch("api/"+path,data===undefined?{}:{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(data)});const v=await r.json();if(!r.ok)throw Error(v.error||"Ошибка");return v}
+async function api(path,data,raw=false){const r=await fetch("api/"+path,data===undefined?{}:{method:"POST",headers:{"Content-Type":"application/json"},body:raw?data:JSON.stringify(data)});const v=await r.json();if(!r.ok)throw Error(v.error||"Ошибка");return v}
 async function load(){try{model=await api("state");document.querySelector("#app-version").textContent="v"+model.version;document.querySelector("#summary").textContent="Устройства ("+model.devices.length+") · Сети Z2M ("+new Set(model.devices.map(d=>d.network).filter(n=>n!=="—")).size+")";notice.classList.toggle("error",!!model.scan.error);scan.disabled=model.scan.state==="updating"||busy;scan.textContent=model.scan.state==="updating"?"Сканирование…":"⟳ Сканировать";if(!editing)renderList();if(!editing&&!busy){if(model.scan.error)notice.textContent=model.scan.error;else if(model.scan.state==="updating")notice.textContent="Сканирование…";else if(model.report){const p=model.report.problems||[];notice.textContent="Последний Scan: "+(model.report.scanned??0)+" устройств · "+p.length+" проблем";notice.title=p.map(x=>x.name+": "+x.reason).join("\n")}}}catch(e){notice.textContent=e.message}}
 function renderList(){main.replaceChildren();for(const d of model.devices){const a=el("article"),h=el("div",undefined,"head"),info=el("div",undefined,"device-info"),[sym,cls]=stat(d),status=el("span",sym+" ", "status "+cls);status.title=d.reason||d.status;const name=el("strong",undefined,"device-name");name.append(status,document.createTextNode(d.name));info.append(name,el("div",d.model+" · "+d.room+" · "+d.network,"muted"));const gear=button("⚙",()=>open(d),"settings");gear.title="Настроить "+d.name;gear.setAttribute("aria-label",gear.title);h.append(info,gear);a.append(h);const b=el("div",undefined,"bindings");for(const [action,targets] of Object.entries(d.bindings)){const x=el("span",undefined,"binding");x.dataset.device=d.name;x.dataset.network=d.network;x.dataset.action=action;x.append(el("span",action+" →"));for(const t of targets)x.append(targetNode(t.entity_id));if(d.disabled_actions?.includes(action))x.append(el("span","Ⅱ","muted"));if(!d.actions.includes(action))x.append(el("span","⚠","problem"));b.append(x)}if(!b.children.length)b.append(el("span","Нет привязок","muted"));a.append(b);main.append(a)}applyLiveState()}
 function open(d){editing=d;draft=structuredClone(d);draft.disabled_actions??=[];draft.revision=model.revision;dirty=false;showSwitch=false;renderEdit()}
@@ -156,9 +156,10 @@ fileInput.onchange=async()=>{
   const file=fileInput.files[0];fileInput.value="";if(!file)return;
   try{
     if(file.size>1048576)throw Error("JSON превышает 1 MiB");
-    const doc=JSON.parse(await file.text());
+    const documentText=await file.text();
+    JSON.parse(documentText); // Local syntax check; preserve original keys for server validation.
     if(!confirm("Заменить текущие привязки содержимым "+file.name+"?"))return;
-    await api("import",{revision:model.revision,document:doc});
+    await api("import",'{"revision":'+JSON.stringify(model.revision)+',"document":'+documentText+'}',true);
     editing=null;draft=null;dirty=false;await load();notice.textContent="Привязки загружены.";
   }catch(e){notice.textContent=e.message;notice.classList.add("error")}
 };

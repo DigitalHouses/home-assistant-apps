@@ -7,6 +7,7 @@ from pathlib import Path
 from urllib.parse import urlsplit, parse_qs
 
 from .catalog import CatalogError
+from .binding_store import binding_document, validate_document, decode_json
 from .entity_options import parse_rows, render_rows, project
 from .ingress_catalog import normalize, supported_actions, required_keep
 from .light_rules import parse_rule
@@ -128,28 +129,19 @@ def save_device(app, payload):
 
 def export_bindings(app):
     rows = parse_rows(app.options.read())
-    return {"schema":1,"rows":rows}
+    return binding_document(rows)[0]
 
 def import_bindings(app, payload):
     if not isinstance(payload,dict) or set(payload)!={"revision","document"}:
         raise CatalogError("Некорректный импорт")
-    doc=payload["document"]
-    if (not isinstance(doc,dict) or set(doc)!={"schema","rows"}
-            or type(doc["schema"]) is not int or doc["schema"]!=1
-            or not isinstance(doc["rows"],list)):
-        raise CatalogError("Неподдерживаемый формат JSON")
-    fields={"entity_id","enabled","actions","maintenance_mode","keep_mode","disabled_actions"}
-    for row in doc["rows"]:
-        if (not isinstance(row,dict) or not {"entity_id","enabled","actions"}<=set(row)
-                or set(row)-fields):
-            raise CatalogError("Некорректная строка привязок")
+    doc=validate_document(payload["document"])
     if not app._scan_lock.acquire(blocking=False):
         raise CatalogError("Идёт сканирование — повторите импорт")
     try:
         options=app.options.read()
         if payload["revision"]!=revision(parse_rows(options)):
             raise CatalogError("Настройки изменились — обновите страницу")
-        rows=parse_rows({**options,"switches":render_rows(doc["rows"])})
+        rows=doc["rows"]
         with app._mutex:
             # Reset omitted adopted devices to disabled; retain orphan imports.
             known={r["entity_id"] for r in rows}
@@ -251,7 +243,7 @@ def start_ingress(app, port=8099):
                 path=urlsplit(self.path).path
                 if not 0 < size <= (1_060_000 if path == "/api/import" else 262144):
                     raise CatalogError("Invalid body size")
-                payload=json.loads(self.rfile.read(size))
+                payload=decode_json(self.rfile.read(size))
                 path=urlsplit(self.path).path
                 if path == "/api/scan":
                     if not app.request_scan(foreground=False):
