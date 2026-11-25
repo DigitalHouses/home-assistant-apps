@@ -1,5 +1,11 @@
 # Changelog — DigitalHouses Aqara Switch App
 
+## 0.2.1
+
+- Align both Ingress screens with the actual DH Network App 0.1.32 dark-blue visual design (header, typography, buttons, controls and status colors).
+- Retain full-width device rows, horizontal wrapping action summaries and header Scan. Use consistent light-type and relay icons.
+- UI-only release: no changes to binding storage, supported device filtering, action engine, Mode Keeper, MQTT or DH Sync.
+
 ## 0.2.0
 
 - Add app-owned Ingress with a full-width device list, actual actions, per-target light/switch assignments, optional brightness, RGB, Kelvin and transition.
