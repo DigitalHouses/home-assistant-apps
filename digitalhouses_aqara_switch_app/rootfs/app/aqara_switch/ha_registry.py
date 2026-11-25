@@ -134,3 +134,11 @@ class HARegistryClient:
 
     def fetch_states(self) -> list:
         return self._fetch(("get_states",))[0]
+
+    def fetch_timezone(self) -> str:
+        """Read authoritative HA timezone from the Core config endpoint."""
+        import urllib.request
+        req = urllib.request.Request("http://supervisor/core/api/config",
+                                     headers={"Authorization":"Bearer "+self.token})
+        with urllib.request.urlopen(req, timeout=self.timeout) as response:
+            return json.load(response)["time_zone"]

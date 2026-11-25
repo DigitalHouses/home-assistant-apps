@@ -4,7 +4,7 @@ from hashlib import sha256
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 from pathlib import Path
-from urllib.parse import urlsplit
+from urllib.parse import urlsplit, parse_qs
 
 from .catalog import CatalogError
 from .entity_options import parse_rows, render_rows, project
@@ -125,6 +125,78 @@ def save_device(app, payload):
     finally:
         app._scan_lock.release()
 
+def export_bindings(app):
+    rows = parse_rows(app.options.read())
+    return {"schema":1,"rows":rows}
+
+def import_bindings(app, payload):
+    if not isinstance(payload,dict) or set(payload)!={"revision","document"}:
+        raise CatalogError("Некорректный импорт")
+    doc=payload["document"]
+    if (not isinstance(doc,dict) or set(doc)!={"schema","rows"}
+            or type(doc["schema"]) is not int or doc["schema"]!=1
+            or not isinstance(doc["rows"],list)):
+        raise CatalogError("Неподдерживаемый формат JSON")
+    fields={"entity_id","enabled","actions","maintenance_mode","keep_mode","disabled_actions"}
+    for row in doc["rows"]:
+        if (not isinstance(row,dict) or not {"entity_id","enabled","actions"}<=set(row)
+                or set(row)-fields):
+            raise CatalogError("Некорректная строка привязок")
+    if not app._scan_lock.acquire(blocking=False):
+        raise CatalogError("Идёт сканирование — повторите импорт")
+    try:
+        options=app.options.read()
+        if payload["revision"]!=revision(parse_rows(options)):
+            raise CatalogError("Настройки изменились — обновите страницу")
+        rows=parse_rows({**options,"switches":render_rows(doc["rows"])})
+        with app._mutex:
+            # Reset omitted adopted devices to disabled; retain orphan imports.
+            known={r["entity_id"] for r in rows}
+            for room in app.config["rooms"]:
+                for sw in room["switches"]:
+                    if sw["entity_id"] not in known:
+                        rows.append({"entity_id":sw["entity_id"],"enabled":False,"actions":{}})
+            options["switches"]=render_rows(rows)
+            projected=project(app.config,options)
+            # Preserve missing/orphan assignments for recovery, but refuse
+            # invalid active policies on currently adopted devices.
+            for issue in projected.get("binding_problems",[]):
+                if issue.get("category") in ("invalid_binding","invalid_keep_mode"):
+                    raise CatalogError(issue["object_name"]+": "+issue["reason"])
+            for row in rows:
+                for rule in row["actions"].values():
+                    for assignment in normalize(rule):
+                        if assignment["entity_id"] in app.target_catalog:
+                            validate_assignment(assignment,app.target_catalog)
+            app.options.write(options)
+            app.config=projected
+        app._publish_details()
+    finally:
+        app._scan_lock.release()
+
+def live_log(app, cursor, generation):
+    # Snapshot observed states only; no MQTT/HA requests per UI poll.
+    with app._mutex:
+        states={}
+        for room in app.config["rooms"]:
+            for sw in room["switches"]:
+                for rule in sw.get("configured_bindings",sw.get("bindings",{})).values():
+                    for eid in rule.get("targets",[]):
+                        route=app.config.get("light_routes",{}).get(eid)
+                        value=app.target_catalog.get(eid,{}).get("state","unknown")
+                        if route:
+                            base,name=route["base_topic"],route["friendly_name"]
+                            net=app._networks.get(base,{})
+                            if net.get("bridge_state")!="online" or app._light_availability.get((base,name))!="online":
+                                value="unavailable"
+                            elif (base,name,"state") in app._fresh_fields:
+                                reported=net.get("states",{}).get(name,{}).get("state")
+                                value=reported.lower() if reported in ("ON","OFF") else "unknown"
+                            else:
+                                value="unknown"
+                        states[eid]=value
+    return {**app.event_log.snapshot(cursor,generation),"states":states}
+
 def start_ingress(app, port=8099):
     class Handler(BaseHTTPRequestHandler):
         def log_message(self,*args):
@@ -153,6 +225,12 @@ def start_ingress(app, port=8099):
             try:
                 if path == "/api/state":
                     self.reply(200,snapshot(app))
+                elif path == "/api/bindings":
+                    self.reply(200,export_bindings(app))
+                elif path == "/api/log":
+                    query=parse_qs(urlsplit(self.path).query)
+                    cursor=max(0,int(query.get("cursor",["0"])[0]))
+                    self.reply(200,live_log(app,cursor,query.get("generation",[None])[0]))
                 elif path in files:
                     name,mime=files[path]
                     self.reply(200,(WEB/name).read_bytes(),mime+"; charset=utf-8")
@@ -166,7 +244,8 @@ def start_ingress(app, port=8099):
                 if self.headers.get_content_type() != "application/json":
                     raise CatalogError("Expected JSON")
                 size=int(self.headers.get("Content-Length","0"))
-                if not 0 < size <= 262144:
+                path=urlsplit(self.path).path
+                if not 0 < size <= (1_060_000 if path == "/api/import" else 262144):
                     raise CatalogError("Invalid body size")
                 payload=json.loads(self.rfile.read(size))
                 path=urlsplit(self.path).path
@@ -175,6 +254,8 @@ def start_ingress(app, port=8099):
                         raise CatalogError("Сканирование уже выполняется")
                 elif path == "/api/save":
                     save_device(app,payload)
+                elif path == "/api/import":
+                    import_bindings(app,payload)
                 else:
                     self.reply(404,{"error":"Not found"})
                     return
