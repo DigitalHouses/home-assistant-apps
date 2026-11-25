@@ -33,6 +33,8 @@ class Session:
         self.client.on_disconnect = self.on_disconnect
         self.client.on_subscribe = self.on_subscribe
         self.client.on_message = self.on_message
+        self.client.on_publish = self.on_publish
+        self.publish_results = {}
         self.pending = set()
         self.messages = deque()
         self.connected = False
@@ -59,6 +61,9 @@ class Session:
         if any(r.is_failure for r in reasons):
             self.failed = True
         self.pending.discard(mid)
+
+    def on_publish(self, client, userdata, mid, reason, properties):
+        self.publish_results[mid] = reason
 
     def on_message(self, client, userdata, message):
         if len(self.messages) >= 256:
@@ -91,7 +96,9 @@ class Session:
             if info.rc != mqtt.MQTT_ERR_SUCCESS:
                 raise TransportError("MQTT publish failed")
             # State PUBACK precedes publishing its transient event.
-            self.await_condition(info.is_published)
+            self.await_condition(lambda: info.mid in self.publish_results)
+            if self.publish_results.pop(info.mid).is_failure:
+                raise TransportError("Broker rejected publication")
 
     def close(self):
         self.client.disconnect()
