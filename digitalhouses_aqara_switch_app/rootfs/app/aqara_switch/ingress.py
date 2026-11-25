@@ -10,6 +10,7 @@ from .catalog import CatalogError
 from .entity_options import parse_rows, render_rows, project
 from .ingress_catalog import normalize, supported_actions, required_keep
 from .light_rules import parse_rule
+from .light_routes import group_observed_state
 
 WEB = Path(__file__).with_name("web")
 
@@ -189,6 +190,9 @@ def live_log(app, cursor, generation):
                             net=app._networks.get(base,{})
                             if net.get("bridge_state")!="online" or app._light_availability.get((base,name))!="online":
                                 value="unavailable"
+                            elif route.get("kind")=="group":
+                                reported=group_observed_state(route,net,app._fresh_fields)
+                                value=reported.lower() if reported else "unknown"
                             elif (base,name,"state") in app._fresh_fields:
                                 reported=net.get("states",{}).get(name,{}).get("state")
                                 value=reported.lower() if reported in ("ON","OFF") else "unknown"

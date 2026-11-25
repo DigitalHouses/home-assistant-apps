@@ -34,10 +34,22 @@ def target_catalog(registries, states, config):
         rgb = bool(modes & {"hs", "xy", "rgb", "rgbw", "rgbww"})
         cct = "color_temp" in modes
         brightness = bool(modes - {"onoff", "unknown"})
+        route=config.get("light_routes",{}).get(eid,{})
+        is_group=route.get("kind")=="group"
+        if is_group:
+            features=route["features"]
+            rgb=bool({"color_xy","color_hs"} & features.keys())
+            cct="color_temp" in features
+            brightness="brightness" in features
+            bounds=features.get("color_temp",{})
+            if cct and bounds.get("value_min",0)>0 and bounds.get("value_max",0)>0:
+                from math import ceil,floor
+                a={**a,"min_color_temp_kelvin":ceil(1_000_000/bounds["value_max"]),
+                   "max_color_temp_kelvin":floor(1_000_000/bounds["value_min"])}
         area = e.get("area_id") or devs.get(e.get("device_id"), {}).get("area_id")
         output[eid] = {"entity_id":eid,"name":a.get("friendly_name") or e.get("name") or eid,
                        "area":rooms.get(area, "Без комнаты"),"state":state.get("state"),
-                       "brightness":brightness,"rgb":rgb,"cct":cct,
+                       "brightness":brightness,"rgb":rgb,"cct":cct,"group":is_group,
                        "min_kelvin":a.get("min_color_temp_kelvin"),
                        "max_kelvin":a.get("max_color_temp_kelvin"),
                        "transition":bool(a.get("supported_features",0) & 32) if eid.startswith("light.") else False}

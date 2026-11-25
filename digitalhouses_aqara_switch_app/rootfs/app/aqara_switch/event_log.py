@@ -130,6 +130,16 @@ class EventLog:
             if eid:
                 self.observe(("ha",eid),s.get("state"),s.get("last_changed"))
 
+    def invalidate(self, route):
+        with self.lock:
+            pending=self.pending.pop(route,None)
+            if pending:
+                rid,eid,_=pending
+                row=self.rows.get(rid)
+                if row:
+                    row["targets"][eid]["status"]="timeout"
+                    self._touch(row)
+
     def disconnect(self):
         with self.lock:
             for route,(rid,eid,_) in list(self.pending.items()):
