@@ -52,3 +52,8 @@ class IngressStyleTests(TestCase):
         self.assertIn('d.ha_name&&d.ha_name!==d.name',js)
         self.assertIn('deviceTitle(draft)',js)
         self.assertNotIn('button("⚙"',js)
+
+    def test_window_guard_shows_friendly_name_and_entity_id(self):
+        js=(WEB/"app.js").read_text()
+        self.assertIn('sensor?.name&&sensor.name!==id?sensor.name+" · "+id:id',js)
+        self.assertIn('label,"window-guard-name"+(sensor?" muted":" problem")',js)

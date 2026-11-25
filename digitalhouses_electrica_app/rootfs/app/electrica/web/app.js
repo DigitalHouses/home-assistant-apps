@@ -152,7 +152,11 @@ function coverControls(action,a,t,row){
         update();renderEdit(action);
       }});
   }));
-  for(const id of sensors)p.append(el("span",(model.targets.find(x=>x.entity_id===id)?.name||id),"muted"));
+  for(const id of sensors){
+    const sensor=model.targets.find(x=>x.entity_id===id);
+    const label=sensor?.name&&sensor.name!==id?sensor.name+" · "+id:id;
+    p.append(el("span",label,"window-guard-name"+(sensor?" muted":" problem")));
+  }
   if(sensors.length)p.append(el("span","Защита действует на все назначения этой шторы","muted"));
   row.append(p);
 }

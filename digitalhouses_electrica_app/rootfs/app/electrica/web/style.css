@@ -138,3 +138,5 @@ label{display:inline-flex;align-items:center;gap:7px;flex-wrap:wrap;color:#ccd8e
 .device-name{display:block}
 .device-name .status{display:inline-block;margin-right:4px}
 .ha-device-name{font-weight:400;color:#ccd8e4}
+
+.window-guard-name{overflow-wrap:anywhere;max-width:100%}
