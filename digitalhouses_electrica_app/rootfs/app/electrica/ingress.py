@@ -45,7 +45,7 @@ def snapshot(app):
             key_modes = {channel: keep.get(channel, "") for channel in channels}
 
             devices.append({"id":key,"name":sw["logical_name"],"model":sw["fingerprint"]["model"],
-                            "room":room["name"],"network":sw["base_topic"],
+                            "room":room["name"],"area_id":room.get("area_id"),"network":sw["base_topic"],
                             "status":sw.get("runtime",{}).get("status","unknown"),
                             "reason":sw.get("runtime",{}).get("reason"),
                             "enabled":row["enabled"],"disabled_actions":row.get("disabled_actions",[]),
@@ -248,7 +248,8 @@ def start_ingress(app, port=8099):
             if not self.allowed(): return
             path=urlsplit(self.path).path
             files={"/":("index.html","text/html"),"/app.js":("app.js","text/javascript"),
-                   "/style.css":("style.css","text/css")}
+                   "/style.css":("style.css","text/css"),
+                   "/entity_picker.js":("entity_picker.js","text/javascript")}
             try:
                 if path == "/api/state":
                     self.reply(200,snapshot(app))

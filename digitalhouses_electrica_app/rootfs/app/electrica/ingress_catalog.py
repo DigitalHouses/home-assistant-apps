@@ -46,9 +46,13 @@ def target_catalog(registries, states, config):
                 from math import ceil,floor
                 a={**a,"min_color_temp_kelvin":ceil(1_000_000/bounds["value_max"]),
                    "max_color_temp_kelvin":floor(1_000_000/bounds["value_min"])}
-        area = e.get("area_id") or devs.get(e.get("device_id"), {}).get("area_id")
+        device = devs.get(e.get("device_id"), {})
+        area = e.get("area_id") or device.get("area_id")
         output[eid] = {"entity_id":eid,"name":a.get("friendly_name") or e.get("name") or eid,
-                       "area":rooms.get(area, "Без комнаты"),"state":state.get("state"),
+                       "area":rooms.get(area, "Без комнаты"),"area_id":area,
+                       "device_name":device.get("name_by_user") or device.get("name"),
+                       "integration":e.get("platform"),"domain":eid.split(".",1)[0],
+                       "state":state.get("state"),
                        "brightness":brightness,"rgb":rgb,"cct":cct,"group":is_group,
                        "min_kelvin":a.get("min_color_temp_kelvin"),
                        "max_kelvin":a.get("max_color_temp_kelvin"),

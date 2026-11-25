@@ -12,7 +12,11 @@ It is independent of any Home Assistant dashboard.
 
 - **Ingress:** list of discovered devices with compact action-to-target summaries;
   open an individual device to edit its actual actions and per-target operations.
-  Light capabilities come from HA; switch targets are optional. Save applies
+  The reusable Entity Picker provides room, domain, integration and availability
+  filters, search by entity/device name or ID, usage hints and multi-selection.
+  Existing selections remain visible outside filters or when missing. Their
+  operation and parameters are preserved. Selection changes the editor draft,
+  not HA; Save applies
   without restarting. Disabled and missing assignments remain stored.
 - **Scan:** startup after a verified Z2M inventory, periodic via
   `auto_scan_interval` (minutes, default 60, zero disables periodic scans),
