@@ -44,3 +44,9 @@ views:
     title: Internet
     icon: mdi:web
     show_icon_and_title: true
+
+  - product: digitalhouses_aqara_switch_app
+    path: aqara
+    title: Aqara
+    icon: mdi:light-switch
+    show_icon_and_title: true
