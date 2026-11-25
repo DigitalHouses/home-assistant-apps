@@ -23,7 +23,7 @@ from .control import HAClient, light_commands, verified_adopted_switch
 from .mqtt_lights import plan_batch
 from .lab_lights import (LAB_LIGHTS, authorized_ha_light_ids,
                          partition_commands, plan_lab)
-from .light_routes import current_route
+from .light_routes import current_route, group_observed_state
 from .keeper_runtime import run_keeper
 from .mode_keeper import (capabilities, global_policy, maintained_switch,
                           mode_action_allowed)
@@ -43,13 +43,13 @@ _IEEE = re.compile(r"^0x[0-9a-f]{16}$")
 _BASE_FORBIDDEN = {"homeassistant", "DigitalHouses", "$SYS"}
 _FILTERS = tuple(
     "/".join(["+"] * levels) + "/bridge/" + suffix
-    for levels in (1, 2, 3) for suffix in ("info", "devices", "state")
+    for levels in (1, 2, 3) for suffix in ("info", "devices", "state", "groups")
 )
 
 
 def bridge_path(topic: str) -> tuple[str, str] | None:
     base, sep, suffix = topic.rpartition("/bridge/")
-    if not sep or suffix not in ("info", "devices", "state"):
+    if not sep or suffix not in ("info", "devices", "state", "groups"):
         return None
     parts = base.split("/")
     if not 1 <= len(parts) <= 3 or parts[0] in _BASE_FORBIDDEN or any(
@@ -84,6 +84,7 @@ def verified_snapshots(networks: Mapping) -> list[dict]:
             "base_topic": base,
             "coordinator_ieee": coord.lower(),
             "devices": raw_devices,
+            "groups": info.get("groups"),
             "states": deepcopy(info.get("states", {})),
         })
     return ready
@@ -336,6 +337,10 @@ class Application:
                             ident = (route["base_topic"],route["friendly_name"])
                             if bridge_states.get(ident[0]) != "online" or light_availability.get(ident) != "online":
                                 state = "unavailable" if bridge_states.get(ident[0]) == "offline" or light_availability.get(ident) == "offline" else "unknown"
+                            elif route.get("kind")=="group":
+                                live=next((n for n in networks if n["base_topic"]==ident[0]),{})
+                                reported=group_observed_state(route,live,fresh)
+                                state=reported.lower() if reported else "unknown"
                             elif (*ident,"state") in fresh:
                                 reported = next((n["states"].get(ident[1],{}).get("state")
                                                  for n in networks if n["base_topic"]==ident[0]),None)
@@ -500,7 +505,22 @@ class Application:
                                 self._light_shadows.pop(ident, None)
                                 self._fresh_fields.discard((base, ident[1], "state"))
                     return
-                node[suffix] = bytes(message.payload)
+                if suffix=="groups":
+                    if node.get("groups")!=bytes(message.payload):
+                        updated={**node,"groups":bytes(message.payload)}
+                        for route in self.config.get("light_routes",{}).values():
+                            if (route.get("kind")=="group" and route["base_topic"]==base
+                                    and not current_route(route,updated)):
+                                ident=(base,route["friendly_name"])
+                                self._fresh_fields.discard((*ident,"state"))
+                                self._light_shadows.pop(ident,None)
+                                self._light_observed_at.pop(ident,None)
+                                node["states"].pop(ident[1],None)
+                                self.event_log.invalidate(("z2m",*ident))
+                    node[suffix]=bytes(message.payload)
+                    self._sync_light_topics()
+                else:
+                    node[suffix] = bytes(message.payload)
                 if suffix == "devices":
                     try:
                         devices = decode_bridge_devices(node["devices"])
@@ -528,7 +548,12 @@ class Application:
                     device = next((d for d in devices if d.get("friendly_name") == name
                                    and d.get("type") != "Coordinator"), None)
                     if device is None:
-                        continue
+                        # Never interpret group data as an input action.
+                        group=next((r for r in self.config.get("light_routes",{}).values()
+                                    if r.get("kind")=="group" and r["base_topic"]==base
+                                    and r["friendly_name"]==name and current_route(r,net)),None)
+                        if group is None:
+                            continue
                     data = json.loads(bytes(message.payload))
                     if not isinstance(data, dict):
                         continue
@@ -552,7 +577,7 @@ class Application:
                             shadow = self._light_shadows.get(ident)
                             if shadow and shadow["value"] == data["state"]:
                                 self._light_shadows.pop(ident, None)
-                    if not getattr(message, "retain", False) and not getattr(message, "dup", False):
+                    if device is not None and not getattr(message, "retain", False) and not getattr(message, "dup", False):
                         self._process_adopted_event(base, net, device, data)
                 except (KeyError, CatalogError, ValueError, UnicodeDecodeError, TypeError) as exc:
                     LOG.warning("Invalid Z2M state %s: %s", message.topic, exc)
@@ -793,7 +818,10 @@ class Application:
                         if self._publish(plan["topic"], plan["payload"],
                                          retain=False):
                             ident = plan["ident"]
-                            previous = self._networks.get(ident[0],{}).get("states",{}).get(ident[1],{}).get("state")
+                            route=self.config.get("light_routes",{}).get(plan["light"],{})
+                            net=self._networks.get(ident[0],{})
+                            previous = (group_observed_state(route,net,self._fresh_fields)
+                                        if route.get("kind")=="group" else net.get("states",{}).get(ident[1],{}).get("state"))
                             self.event_log.sent(rid,plan["light"],("z2m",*ident),previous,plan["state"])
                             self._light_shadows[ident] = {
                                 "value": plan["state"], "at": time.monotonic()}

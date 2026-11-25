@@ -1,5 +1,12 @@
 # Changelog — DigitalHouses Aqara Switch App
 
+## 0.2.3
+
+- Discover Zigbee2MQTT groups from bridge/groups, exact HA MQTT unique ID and verified member endpoints; support one direct group MQTT command with no HA fallback.
+- Limit configurable brightness/CCT/RGB to the intersection of member light capabilities. Observe group state or derive the initial toggle state from fresh member states; never issue group GET.
+- Group availability and live identity are checked before dispatch. Invalidate stale state/confirmation on membership changes; display a group icon and group-level observed-state confirmation.
+- Existing binding JSON and individual-light transport remain unchanged.
+
 ## 0.2.2
 
 - Ingress: export, import and view/copy the app-owned JSON bindings, validated before atomic replacement; no restart.

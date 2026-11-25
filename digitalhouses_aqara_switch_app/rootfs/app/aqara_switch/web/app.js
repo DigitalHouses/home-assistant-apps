@@ -5,6 +5,7 @@ function el(tag,text,cls){const n=document.createElement(tag);if(text!==undefine
 function button(text,fn,cls){const n=el("button",text,cls);n.onclick=fn;return n}
 function icon(t,id){
   if(id.startsWith("switch."))return ["switch","plain","Реле"];
+  if(t?.group)return ["group","cct","Группа Zigbee2MQTT"];
   if(t?.rgb)return ["rgb","rgb",t.cct?"RGB + CCT":"RGB"];
   if(t?.cct)return ["cct","cct","CCT"];
   if(t?.brightness)return ["dimmer","cct","Диммируемый"];
@@ -18,6 +19,7 @@ function targetIcon(t,id){
   const path=d=>{const p=document.createElementNS(ns,"path");p.setAttribute("d",d);svg.append(p)};
   const circle=(cx,cy,r,fill)=>{const c=document.createElementNS(ns,"circle");c.setAttribute("cx",cx);c.setAttribute("cy",cy);c.setAttribute("r",r);if(fill){c.setAttribute("fill",fill);c.setAttribute("stroke","none")}svg.append(c)};
   if(kind==="switch"){path("M7 7h10a5 5 0 0 1 0 10H7A5 5 0 0 1 7 7Z");circle(7,12,2.5)}
+  else if(kind==="group"){path("M4 11a4 4 0 1 1 8 0c0 2-2 3-2 5H6c0-2-2-3-2-5ZM6 19h4M12 5a4 4 0 0 1 8 0c0 2-2 3-2 5h-4m0 3h4")}
   else if(kind==="dimmer"){circle(12,12,4);path("M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.5 1.5m11 11L19 19M5 19l1.5-1.5m11-11L19 5")}
   else{path("M9 18h6m-5 3h4M9 15c0-2-4-4-4-8a7 7 0 0 1 14 0c0 4-4 6-4 8Z");
     if(kind==="rgb"){circle(9,7,2,"#ef7474");circle(15,7,2,"#82efc7");circle(12,11,2,"#8baaff")}
@@ -82,6 +84,7 @@ function renderLogRow(row){
     const mark=confirmed?"✓✓":sent?"✓"+(["timeout","superseded"].includes(t.status)?" ⚠":""):t.status==="queued"?"…":"⚠";
     const check=el("span",mark,"log-check "+(confirmed?"":t.status==="sent"?"sent":"problem"));
     check.title={confirmed:"Получено наблюдаемое состояние; не физический ACK",sent:"Команда отправлена, ожидается состояние",timeout:"Нет подтверждения за 90 сек.",superseded:"Заменена более новой командой",queued:"В очереди",skipped:"Пропущено"}[t.status]||"";
+    if(target?.group&&confirmed)check.title="Состояние группы Z2M получено; не подтверждение каждого участника (возможен optimistic state)";
     item.title=t.reason||check.title;item.append(ico,el("span",eid.split(".")[1]||eid),el("span",change),check);n.append(item);
   }
   if(row.reason)n.append(el("span",row.reason,"muted"));
