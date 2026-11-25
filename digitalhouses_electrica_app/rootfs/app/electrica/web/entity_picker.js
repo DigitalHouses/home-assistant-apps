@@ -41,12 +41,19 @@
       outside: new Set(selected.filter(t=>!ids.has(t.entity_id)).map(t=>t.entity_id)),
       truncated:remaining.length>PAGE};
   }
+  function initialData(operation,t) {
+    if(operation==="position")return {position:Number.isInteger(t?.position)?t.position:50};
+    if(operation==="hvac_mode")return {hvac_mode:t?.hvac_modes?.includes(t.state)?t.state:""};
+    if(operation==="temperature")return {temperature:Number.isFinite(t?.temperature)?t.temperature:null,temperature_unit:t?.temperature_unit};
+    return {};
+  }
   function mergeAssignments(old, ids, items=[]) {
     const byId=new Map(old.map(a=>[a.entity_id,a]));
     return ids.map(id=>{
       if(byId.has(id))return byId.get(id);
-      const operation=id.startsWith("cover.")?(items.find(t=>t.entity_id===id)?.operations?.[0]||"toggle"):"toggle";
-      return {entity_id:id,operation,data:operation==="position"?{position:50}:{}};
+      const t=items.find(t=>t.entity_id===id);
+      const operation=/^(cover|climate)\./.test(id)?(t?.operations?.[0]||"toggle"):"toggle";
+      return {entity_id:id,operation,data:initialData(operation,t)};
     });
   }
   function close() {
@@ -61,10 +68,10 @@
     }
     node.value=initial;return node;
   }
-  function open({items,values=[],domains=["light","switch","cover"],areaId,areaHint,usage={},onConfirm,renderIcon,renderTest}) {
+  function open({items,values=[],domains=["light","switch","cover","climate"],areaId,areaHint,usage={},onConfirm,renderIcon,renderTest}) {
     close();
     const chosen=new Set(values), original=new Set(values);
-    const eligible=items.filter(t=>domains.includes(domainOf(t))&&(!t.entity_id.startsWith("cover.")||t.operations?.length));
+    const eligible=items.filter(t=>domains.includes(domainOf(t))&&(!["cover","climate"].includes(domainOf(t))||t.operations?.length));
     const filters={domains,domain:ALL,area:resolveArea(eligible,areaId,areaHint),
       integration:ALL,availability:ALL,query:""};
     const d=el("dialog",undefined,"entity-picker");dialog=d;
@@ -130,5 +137,5 @@
       node.onchange=()=>{filters[key]=node.value;refresh()};
     document.body.append(d);d.showModal();refresh();search.focus();
   }
-  globalThis.DHElectricaEntityPicker={open,close,matches,resolveArea,displayed,mergeAssignments,ALL,NONE};
+  globalThis.DHElectricaEntityPicker={open,close,matches,resolveArea,displayed,mergeAssignments,initialData,ALL,NONE};
 })();

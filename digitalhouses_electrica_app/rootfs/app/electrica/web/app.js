@@ -4,6 +4,7 @@ const main=document.querySelector("#main"), notice=document.querySelector("#noti
 function el(tag,text,cls){const n=document.createElement(tag);if(text!==undefined)n.textContent=text;if(cls)n.className=cls;return n}
 function button(text,fn,cls){const n=el("button",text,cls);n.onclick=fn;return n}
 function icon(t,id){
+  if(id.startsWith("climate."))return ["climate","plain","Климат"];
   if(id.startsWith("cover."))return ["cover","plain","Шторы"];
   if(id.startsWith("binary_sensor."))return ["window","plain","Датчик окна"];
   if(id.startsWith("switch."))return ["switch","plain","Реле"];
@@ -20,7 +21,8 @@ function targetIcon(t,id){
   svg.setAttribute("viewBox","0 0 24 24");svg.setAttribute("aria-hidden","true");
   const path=d=>{const p=document.createElementNS(ns,"path");p.setAttribute("d",d);svg.append(p)};
   const circle=(cx,cy,r,fill)=>{const c=document.createElementNS(ns,"circle");c.setAttribute("cx",cx);c.setAttribute("cy",cy);c.setAttribute("r",r);if(fill){c.setAttribute("fill",fill);c.setAttribute("stroke","none")}svg.append(c)};
-  if(kind==="cover"){path("M3 3h18M5 4v16h14V4M9 4v16M15 4v16")}
+  if(kind==="climate"){path("M10 14V5a2 2 0 0 1 4 0v9a4 4 0 1 1-4 0ZM12 9v8");circle(12,18,1.5)}
+  else if(kind==="cover"){path("M3 3h18M5 4v16h14V4M9 4v16M15 4v16")}
   else if(kind==="window"){path("M4 3h16v18H4ZM12 3v18M4 12h16")}
   else if(kind==="switch"){path("M7 7h10a5 5 0 0 1 0 10H7A5 5 0 0 1 7 7Z");circle(7,12,2.5)}
   else if(kind==="group"){path("M4 11a4 4 0 1 1 8 0c0 2-2 3-2 5H6c0-2-2-3-2-5ZM6 19h4M12 5a4 4 0 0 1 8 0c0 2-2 3-2 5h-4m0 3h4")}
@@ -160,9 +162,37 @@ function coverControls(action,a,t,row){
   if(sensors.length)p.append(el("span","Защита действует на все назначения этой шторы","muted"));
   row.append(p);
 }
-function assignedRow(action,a,container){const t=model.targets.find(t=>t.entity_id===a.entity_id),row=el("div",undefined,"assigned");row.append(targetIcon(t,a.entity_id),el("strong",(t?.name||a.entity_id)+" · "+a.entity_id));const op=el("select");for(const [v,n] of (a.entity_id.startsWith("cover.")?[...new Set([...(t?.operations||[]),a.operation])].map(v=>[v,coverLabels[v]||v]):[["toggle","Toggle"],["on","ON"],["off","OFF"]])){const o=el("option",n);o.value=v;op.append(o)}op.value=a.operation;op.onchange=()=>{a.operation=op.value;
+const climateLabels={toggle:"Toggle",on:"ON",off:"OFF",hvac_mode:"Режим HVAC",temperature:"Температура"};
+const hvacLabels={off:"OFF",heat:"Отопление",cool:"Охлаждение",heat_cool:"Отопление / охлаждение",auto:"Авто",dry:"Осушение",fan_only:"Вентиляция"};
+function assignmentOperations(a,t){
+  if(a.entity_id.startsWith("climate.")||a.entity_id.startsWith("cover.")){
+    const labels=a.entity_id.startsWith("climate.")?climateLabels:coverLabels;
+    return [...new Set([...(t?.operations||[]),a.operation])].map(v=>[v,labels[v]||v]);
+  }
+  return [["toggle","Toggle"],["on","ON"],["off","OFF"]];
+}
+function climateControls(a,t,row){
+  const p=el("div",undefined,"params");
+  const state=liveStates[a.entity_id]??t.state;
+  p.append(el("span","Режим: "+(hvacLabels[state]||state||"—"),"muted"));
+  if(Number.isFinite(t.temperature))p.append(el("span","Задано: "+t.temperature+" "+(t.temperature_unit||""),"muted"));
+  if(a.operation==="hvac_mode"){
+    const select=selectOptions([["","Выберите режим"],...[...new Set([...(t.hvac_modes||[]),a.data.hvac_mode].filter(Boolean))].map(v=>[v,hvacLabels[v]||v])],a.data.hvac_mode||"","Режим HVAC");
+    select.onchange=()=>{a.data.hvac_mode=select.value;update()};
+    const label=el("label","Режим HVAC");label.append(select);p.append(label);
+  }else if(a.operation==="temperature"){
+    const n=el("input");n.type="number";n.min=t.min_temp??"";n.max=t.max_temp??"";n.step=t.target_temp_step??"any";
+    n.value=a.data.temperature??"";n.onchange=()=>{a.data.temperature=n.value===""?null:Number(n.value);update()};
+    const label=el("label","Температура "+(a.data.temperature_unit||""));label.append(n);p.append(label);
+    if(a.data.temperature_unit!==t.temperature_unit)p.append(el("span","Единица температуры HA изменилась — выберите операцию заново","problem"));
+    else if(Number.isFinite(t.min_temp)&&Number.isFinite(t.max_temp))p.append(el("span",t.min_temp+"–"+t.max_temp+" "+t.temperature_unit+(t.target_temp_step?" · шаг "+t.target_temp_step:""),"muted"));
+  }
+  row.append(p);
+}
+function assignedRow(action,a,container){const t=model.targets.find(t=>t.entity_id===a.entity_id),row=el("div",undefined,"assigned");row.append(targetIcon(t,a.entity_id),el("strong",(t?.name||a.entity_id)+" · "+a.entity_id));const op=el("select");for(const [v,n] of assignmentOperations(a,t)){const o=el("option",n);o.value=v;op.append(o)}op.value=a.operation;op.onchange=()=>{a.operation=op.value;
 if(a.entity_id.startsWith("cover.")){if(op.value==="position")a.data.position=50;else delete a.data.position}
-if(op.value==="off")for(const k of Object.keys(a.data))if(k!=="transition")delete a.data[k];update();renderEdit(action)};const test=lightTestControl(t,a.entity_id);if(test)row.append(test);row.append(op,button("Удалить",()=>{draft.bindings[action]=draft.bindings[action].filter(x=>x.entity_id!==a.entity_id);if(!draft.bindings[action].length){delete draft.bindings[action];draft.disabled_actions=draft.disabled_actions.filter(x=>x!==action)}update();renderEdit(action)}));if(!t){row.append(el("span","⚠ Сущность отсутствует","problem"));container.append(row);return}if(a.entity_id.startsWith("cover."))coverControls(action,a,t,row);if(a.entity_id.startsWith("light.")){const p=el("div",undefined,"params");if(a.operation!=="off"){if(t.brightness)addParam(p,t,a,"brightness_pct","Яркость %",0,100,1);if(t.cct&&Number.isInteger(t.min_kelvin)&&Number.isInteger(t.max_kelvin)&&!Object.hasOwn(a.data,"rgb_color"))addParam(p,t,a,"color_temp_kelvin","Kelvin",t.min_kelvin,t.max_kelvin,1);if(t.rgb&&!Object.hasOwn(a.data,"color_temp_kelvin")){const l=el("label"),c=el("input"),picker=el("input");c.type="checkbox";c.checked=Object.hasOwn(a.data,"rgb_color");picker.type="color";picker.value="#"+(a.data.rgb_color||[255,255,255]).map(v=>v.toString(16).padStart(2,"0")).join("");picker.disabled=!c.checked;c.onchange=()=>{if(c.checked)a.data.rgb_color=[1,3,5].map(i=>parseInt(picker.value.slice(i,i+2),16));else delete a.data.rgb_color;update();renderEdit(action)};picker.oninput=()=>{a.data.rgb_color=[1,3,5].map(i=>parseInt(picker.value.slice(i,i+2),16));update()};l.append(c,document.createTextNode("RGB"),picker);p.append(l)}}if(t.transition)addParam(p,t,a,"transition","Transition, сек",0,60,.1);row.append(p)}container.append(row)}
+else if(a.entity_id.startsWith("climate."))a.data=DHElectricaEntityPicker.initialData(op.value,t);
+if(op.value==="off")for(const k of Object.keys(a.data))if(k!=="transition")delete a.data[k];update();renderEdit(action)};const test=lightTestControl(t,a.entity_id);if(test)row.append(test);row.append(op,button("Удалить",()=>{draft.bindings[action]=draft.bindings[action].filter(x=>x.entity_id!==a.entity_id);if(!draft.bindings[action].length){delete draft.bindings[action];draft.disabled_actions=draft.disabled_actions.filter(x=>x!==action)}update();renderEdit(action)}));if(!t){row.append(el("span","⚠ Сущность отсутствует","problem"));container.append(row);return}if(a.entity_id.startsWith("cover."))coverControls(action,a,t,row);if(a.entity_id.startsWith("climate."))climateControls(a,t,row);if(a.entity_id.startsWith("light.")){const p=el("div",undefined,"params");if(a.operation!=="off"){if(t.brightness)addParam(p,t,a,"brightness_pct","Яркость %",0,100,1);if(t.cct&&Number.isInteger(t.min_kelvin)&&Number.isInteger(t.max_kelvin)&&!Object.hasOwn(a.data,"rgb_color"))addParam(p,t,a,"color_temp_kelvin","Kelvin",t.min_kelvin,t.max_kelvin,1);if(t.rgb&&!Object.hasOwn(a.data,"color_temp_kelvin")){const l=el("label"),c=el("input"),picker=el("input");c.type="checkbox";c.checked=Object.hasOwn(a.data,"rgb_color");picker.type="color";picker.value="#"+(a.data.rgb_color||[255,255,255]).map(v=>v.toString(16).padStart(2,"0")).join("");picker.disabled=!c.checked;c.onchange=()=>{if(c.checked)a.data.rgb_color=[1,3,5].map(i=>parseInt(picker.value.slice(i,i+2),16));else delete a.data.rgb_color;update();renderEdit(action)};picker.oninput=()=>{a.data.rgb_color=[1,3,5].map(i=>parseInt(picker.value.slice(i,i+2),16));update()};l.append(c,document.createTextNode("RGB"),picker);p.append(l)}}if(t.transition)addParam(p,t,a,"transition","Transition, сек",0,60,.1);row.append(p)}container.append(row)}
 function actionGroup(action){const p=action.match(/_(left|right|center|plus|minus|both|[0-9]+)$/)||action.match(/^(button_[0-9]+)_/);return p?p[1]:"Нажатия"}
 function renderEdit(expand){main.replaceChildren();const h=el("div",undefined,"head");h.append(button("← Клавиши",goBack),el("h2",deviceTitle(draft)+" · "+draft.room),button("Сохранить",save,"save"));main.append(h);const enabled=el("input");enabled.type="checkbox";enabled.checked=draft.enabled;enabled.onchange=()=>{draft.enabled=enabled.checked;update()};const l=el("label");l.append(enabled,document.createTextNode("Включено"));const controls=el("div",undefined,"editor-controls");controls.append(l);main.append(controls);
 if(Object.keys(draft.key_modes||{}).length)main.append(modeControls());

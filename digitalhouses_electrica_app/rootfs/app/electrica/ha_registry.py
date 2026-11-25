@@ -156,3 +156,10 @@ class HARegistryClient:
                                      headers={"Authorization":"Bearer "+self.token})
         with urllib.request.urlopen(req, timeout=self.timeout) as response:
             return json.load(response)["time_zone"]
+
+    def fetch_temperature_unit(self) -> str:
+        import urllib.request
+        req=urllib.request.Request("http://supervisor/core/api/config",
+                                   headers={"Authorization":"Bearer "+self.token})
+        with urllib.request.urlopen(req,timeout=self.timeout) as response:
+            return json.load(response)["unit_system"]["temperature"]

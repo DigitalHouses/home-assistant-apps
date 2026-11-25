@@ -16,7 +16,7 @@ import re
 import threading
 import time
 
-from . import cover_rules
+from . import cover_rules, climate_rules
 from .catalog import (CatalogError, candidate_from_mqtt, decode_bridge_devices,
                       resolve_hardware, has_event_actions, has_device_power)
 from .actions import ActionError
@@ -169,6 +169,7 @@ class Application:
         self._last_details_payload = None
         self._last_problems_payload = None
         self._target_registries = None
+        self._temperature_unit = None
         self._last_refresh = None
         self._light_shadows = {}
         self._ha_shadows = {}
@@ -778,8 +779,8 @@ class Application:
                 raise CatalogError("Очередь заполнена") from exc
             return rid
 
-    def _cover_commands(self, commands, base, coordinator, name, action, all_commands, rid):
-        """Same serialized worker; HA API only for explicit cover operations."""
+    def _ha_domain_commands(self, commands, base, coordinator, name, action, all_commands, rid):
+        """Shared serialized HA dispatch for cover and climate."""
         from collections import Counter
         sent, skipped = [], []
         try:
@@ -795,19 +796,26 @@ class Application:
             for eid in call["target"]["entity_id"]:
                 try:
                     if eid not in approved:
-                        raise ActionError("Cover not verified in HA registry")
-                    operation = next(op for op,service in cover_rules.SERVICES.items()
+                        raise ActionError("Target not verified in HA registry")
+                    is_cover = eid.startswith("cover.")
+                    rules = cover_rules if is_cover else climate_rules
+                    operation = next(op for op,service in rules.SERVICES.items()
                                      if service==call["service"])
-                    with self._mutex:
-                        guard_ids = cover_rules.guard_ids(self.config,eid)
-                    state = self._ha_client.read_cover_or_window(eid)
-                    guards = {}
-                    if operation!="stop":
-                        for sensor in guard_ids:
-                            if sensor not in approved:
-                                raise ActionError("Window guard missing: "+sensor)
-                            guards[sensor] = self._ha_client.read_cover_or_window(sensor)
-                    op,data,desired = cover_rules.plan(operation,call.get("data",{}),state,guards)
+                    if is_cover:
+                        with self._mutex:
+                            guard_ids = cover_rules.guard_ids(self.config,eid)
+                        state = self._ha_client.read_cover_or_window(eid)
+                        guards = {}
+                        if operation!="stop":
+                            for sensor in guard_ids:
+                                if sensor not in approved:
+                                    raise ActionError("Window guard missing: "+sensor)
+                                guards[sensor] = self._ha_client.read_cover_or_window(sensor)
+                        op,data,desired = rules.plan(operation,call.get("data",{}),state,guards)
+                    else:
+                        unit = self.registry.fetch_temperature_unit() if operation=="temperature" else None
+                        state = self._ha_client.read_domain_state(eid)
+                        op,data,desired = rules.plan(operation,call.get("data",{}),state,unit)
                     with self._mutex:
                         sw = next((x for room in self.config["rooms"] for x in room["switches"]
                                    if x["logical_name"]==name and x["base_topic"]==base
@@ -820,11 +828,14 @@ class Application:
                                 or light_commands(sw,action)!=all_commands
                                 or not verified_adopted_switch(sw,device,coordinator,base)
                                 or not self._input_mode_allowed(sw,action,net,device,False)
-                                or cover_rules.guard_ids(self.config,eid)!=guard_ids):
+                                or (is_cover and cover_rules.guard_ids(self.config,eid)!=guard_ids)):
                             raise ActionError("Input, binding or guard changed")
                     dispatched_at=_iso_now()
-                    self._ha_client.execute_cover(eid,op,data)
-                    self.event_log.sent_cover(rid,eid,state,desired,dispatched_at)
+                    if is_cover:
+                        self._ha_client.execute_cover(eid,op,data)
+                    else:
+                        self._ha_client.execute_climate(eid,op,data)
+                    self.event_log.sent_ha_domain(rid,eid,state,desired,dispatched_at)
                     sent.append(eid)
                 except Exception as exc:
                     skipped.append({"light":eid,"reason":str(exc)[:160]})
@@ -844,7 +855,7 @@ class Application:
                 all_commands = commands
                 is_test = base is None and action == "TEST"
                 switch_commands = [c for c in commands if c["service"].startswith("switch.")]
-                cover_commands = [c for c in commands if c["service"].startswith("cover.")]
+                domain_commands = [c for c in commands if c["service"].startswith(("cover.","climate."))]
                 commands = [c for c in commands if c["service"].startswith("light.")]
                 # A missing route is NOT permission for HA fallback.
                 # HA registry platform must positively identify a native light.
@@ -1066,11 +1077,11 @@ class Application:
                             sent.append(eid)
                         except Exception as exc:
                             skipped.append({"light":eid,"reason":str(exc)[:120]})
-                if cover_commands:
-                    cover_sent, cover_skipped = self._cover_commands(
-                        cover_commands,base,coordinator,name,action,all_commands,rid)
-                    sent.extend(cover_sent)
-                    skipped.extend(cover_skipped)
+                if domain_commands:
+                    domain_sent, domain_skipped = self._ha_domain_commands(
+                        domain_commands,base,coordinator,name,action,all_commands,rid)
+                    sent.extend(domain_sent)
+                    skipped.extend(domain_skipped)
                 for item in skipped:
                     self.event_log.skip(rid,item["light"],item["reason"])
                 self.event_log.finish(rid)
@@ -1204,6 +1215,10 @@ class Application:
             registry = self._target_registries
         if refresh_registry or registry is None:
             registry = self.registry.fetch()
+            try:
+                self._temperature_unit = self.registry.fetch_temperature_unit()
+            except Exception:
+                self._temperature_unit = None
         states = self.registry.fetch_states()
         self.event_log.ha_observations(states)
         if self.event_log.timezone is None and hasattr(self.registry,"fetch_timezone"):
@@ -1213,7 +1228,7 @@ class Application:
                 pass  # HA unavailable: keep UTC explicitly labelled in UI.
         with self._mutex:
             self._target_registries = registry
-            self.target_catalog = target_catalog(registry, states, self.config)
+            self.target_catalog = target_catalog(registry, states, self.config, self._temperature_unit)
         self._publish_details()
 
     def _observe_targets(self):

@@ -14,7 +14,7 @@ import urllib.request
 from .actions import ActionError, plan_action
 from .catalog import CatalogError, candidate_from_mqtt
 from .light_rules import validate_data
-from . import cover_rules
+from . import cover_rules, climate_rules
 
 LOG = logging.getLogger(__name__)
 
@@ -79,7 +79,8 @@ def light_commands(saved: Mapping, reported_action: object) -> list[dict] | None
         for eid in verified["targets"]:
             domain = eid.split(".")[0]
             operation = verified["target_operations"][eid]
-            service = (cover_rules.SERVICES[operation] if domain=="cover" else
+            service = (climate_rules.SERVICES[operation] if domain=="climate" else
+                       cover_rules.SERVICES[operation] if domain=="cover" else
                        domain + "." + {"toggle":"toggle","on":"turn_on","off":"turn_off"}[operation])
             data = verified["target_data"][eid]
             key = (service, json.dumps(data, sort_keys=True))
@@ -227,8 +228,11 @@ class HAClient:
                 raise RuntimeError("HA switch service was not accepted")
 
     def read_cover_or_window(self, entity_id: str) -> dict:
-        if not isinstance(entity_id,str) or not re.fullmatch(r"(cover|binary_sensor)\.[a-z0-9_]+",entity_id):
-            raise ValueError("Expected cover or window sensor")
+        return self.read_domain_state(entity_id)
+
+    def read_domain_state(self, entity_id: str) -> dict:
+        if not isinstance(entity_id,str) or not re.fullmatch(r"(cover|binary_sensor|climate)\.[a-z0-9_]+",entity_id):
+            raise ValueError("Expected cover, climate or window sensor")
         req = urllib.request.Request(self.url + "/states/" + entity_id,
                                      headers={"Authorization":"Bearer "+self.token})
         with urllib.request.urlopen(req,timeout=self.timeout) as response:
@@ -251,3 +255,20 @@ class HAClient:
         with urllib.request.urlopen(req,timeout=self.timeout) as response:
             if response.status != 200:
                 raise RuntimeError("HA cover command not accepted")
+
+    def execute_climate(self, entity_id, operation, data):
+        if not isinstance(entity_id,str) or not re.fullmatch(r"climate\.[a-z0-9_]+",entity_id) or operation not in ("on","off","hvac_mode","temperature"):
+            raise ValueError("Invalid explicit climate command")
+        if operation=="temperature":
+            from .climate_rules import number
+            if set(data)!={"temperature"} or not number(data["temperature"]):
+                raise ValueError("Invalid temperature service data")
+        else:
+            data=climate_rules.validate_data(operation,data)
+        endpoint=climate_rules.SERVICES[operation].replace(".","/")
+        req=urllib.request.Request(self.url+"/services/"+endpoint,
+                    data=json.dumps({"entity_id":entity_id,**data}).encode(),
+                    headers={"Authorization":"Bearer "+self.token,"Content-Type":"application/json"},method="POST")
+        with urllib.request.urlopen(req,timeout=self.timeout) as response:
+            if response.status!=200:
+                raise RuntimeError("HA climate command not accepted")

@@ -7,7 +7,7 @@ See [DigitalHouses Electrica App — target architecture v0.3.0](docs/ELECTRICA_
 ## 0.2.x — Ingress configuration
 
 Electrica App consumes events from supported logical keys across MQTT
-Zigbee2MQTT instances and dispatches explicitly configured light/switch/cover actions.
+Zigbee2MQTT instances and dispatches explicitly configured light/switch/cover/climate actions.
 It is independent of any Home Assistant dashboard.
 
 - **Ingress:** list of discovered devices with compact action-to-target summaries;
@@ -43,6 +43,14 @@ It is independent of any Home Assistant dashboard.
   Guard metadata is not sent to HA services. No automatic replay on closure.
   Position is confirmed in LOG only by a newer settled matching position;
   Stop is service acceptance only. This is supplemental to hardware safety.
+- **Climate:** Toggle/ON/OFF require the advertised HA feature flags, HVAC mode
+  comes from the device's hvac_modes list, and single target temperature uses
+  HA's configured unit, supported bounds and step. Revalidate the live state,
+  registry and temperature unit before dispatch. Unknown or unavailable
+  targets are skipped. No automatic mode selection by Electrica and no HVAC
+  algorithm or DH Climate changes. Target ranges and presets are not exposed
+  in this stage; the temperature request never includes a mode change.
+  LOG confirms only a newer matching mode/setpoint, not physical heating.
 - **Mode Keeper:** preserve existing explicit decoupled/ON policies and
   maintenance semantics. Per-key policies in Ingress:
   physical (`control_relay`; no Actions or forced relay state) or logical

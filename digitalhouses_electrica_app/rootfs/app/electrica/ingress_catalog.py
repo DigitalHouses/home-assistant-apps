@@ -3,7 +3,7 @@ from .ha_registry import _matched_devices
 from .mode_keeper import validate_action_policy
 from .catalog import CatalogError
 from .light_rules import parse_rule
-from . import cover_rules
+from . import cover_rules, climate_rules
 
 def safe_switch_targets(registries, config):
     devices, _, entities = registries
@@ -18,7 +18,7 @@ def safe_switch_targets(registries, config):
             and e.get("disabled_by") is None and e.get("device_id") not in protected
             and e["entity_id"] not in keys}
 
-def target_catalog(registries, states, config):
+def target_catalog(registries, states, config, temperature_unit=None):
     devices, areas, entities = registries
     devs = {d["id"]:d for d in devices}
     rooms = {a["area_id"]:a["name"] for a in areas}
@@ -30,7 +30,7 @@ def target_catalog(registries, states, config):
     for state in states:
         eid = state.get("entity_id", "")
         if eid not in registry or counts[eid]!=1 or not (
-                eid.startswith(("light.","cover.")) or eid in switches or
+                eid.startswith(("light.","cover.","climate.")) or eid in switches or
                 (eid.startswith("binary_sensor.") and cover_rules.window_sensor(state))):
             continue
         e = registry[eid]
@@ -65,6 +65,8 @@ def target_catalog(registries, states, config):
                        "min_kelvin":a.get("min_color_temp_kelvin"),
                        "max_kelvin":a.get("max_color_temp_kelvin"),
                        "transition":bool(a.get("supported_features",0) & 32) if eid.startswith("light.") else False}
+        if eid.startswith("climate."):
+            output[eid].update(climate_rules.capabilities(a,temperature_unit))
     return output
 
 def supported_actions(sw, policy=None):

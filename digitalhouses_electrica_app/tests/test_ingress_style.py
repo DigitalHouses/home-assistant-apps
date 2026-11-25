@@ -57,3 +57,13 @@ class IngressStyleTests(TestCase):
         js=(WEB/"app.js").read_text()
         self.assertIn('sensor?.name&&sensor.name!==id?sensor.name+" · "+id:id',js)
         self.assertIn('label,"window-guard-name"+(sensor?" muted":" problem")',js)
+
+    def test_climate_editor_uses_advertised_operations_and_temperature(self):
+        js=(WEB/"app.js").read_text()
+        picker=(WEB/"entity_picker.js").read_text()
+        self.assertIn('domains=["light","switch","cover","climate"]',picker)
+        self.assertIn('function climateControls(a,t,row)',js)
+        self.assertIn('t.hvac_modes||[]',js)
+        self.assertIn('n.min=t.min_temp',js)
+        self.assertIn('n.max=t.max_temp',js)
+        self.assertIn('n.step=t.target_temp_step',js)

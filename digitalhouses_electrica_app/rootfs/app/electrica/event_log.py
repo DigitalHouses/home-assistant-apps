@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from threading import RLock
 from time import monotonic
 from uuid import uuid4
+from . import climate_rules
 
 class EventLog:
     LIMIT = 500
@@ -94,7 +95,10 @@ class EventLog:
             self._touch(row)
 
     def sent_cover(self,rid,eid,state,desired,sent_at):
-        """A cover position is confirmed only at a settled observed position."""
+        self.sent_ha_domain(rid,eid,state,desired,sent_at)
+
+    def sent_ha_domain(self,rid,eid,state,desired,sent_at):
+        """Track a requested domain-specific state, not a service ACK."""
         with self.lock:
             row=self.rows.get(rid)
             if not row or eid not in row["targets"]:
@@ -105,13 +109,20 @@ class EventLog:
                 prev=self.rows[old[0]]
                 prev["targets"][old[1]]["status"]="superseded"
                 self._touch(prev)
+            before=state.get("state")
+            if eid.startswith("climate.") and desired and desired.startswith("temperature:"):
+                value=state.get("attributes",{}).get("temperature")
+                before="temperature:"+str(value) if climate_rules.number(value) else None
             row["targets"][eid].update(status="sent" if desired else "accepted",
-                before=state.get("state"),desired=desired or "stop",sent_at=sent_at)
+                before=before,desired=desired or "stop",sent_at=sent_at)
             if desired:
                 self.pending[route]=(rid,eid,monotonic())
             self._touch(row)
 
     def observe_cover(self,state):
+        self.observe_ha_domain(state)
+
+    def observe_ha_domain(self,state):
         eid=state.get("entity_id")
         with self.lock:
             self._prune(monotonic())
@@ -122,14 +133,17 @@ class EventLog:
             row=self.rows[rid]
             target=row["targets"][eid]
             desired=target.get("desired","")
-            actual=state.get("state")
-            if actual not in ("open","closed"):
-                return
-            if desired.startswith("position:"):
-                pos=state.get("attributes",{}).get("current_position")
-                if type(pos) is not int or desired!="position:"+str(pos):
+            if eid.startswith("climate."):
+                actual=climate_rules.observed_value(state,desired)
+            else:
+                actual=state.get("state")
+                if actual not in ("open","closed"):
                     return
-                actual=desired
+                if desired.startswith("position:"):
+                    pos=state.get("attributes",{}).get("current_position")
+                    if type(pos) is not int or desired!="position:"+str(pos):
+                        return
+                    actual=desired
             if actual!=desired:
                 return
             try:
@@ -184,8 +198,8 @@ class EventLog:
             self._prune(monotonic())
         for s in states:
             eid=s.get("entity_id")
-            if isinstance(eid,str) and eid.startswith("cover."):
-                self.observe_cover(s)
+            if isinstance(eid,str) and eid.startswith(("cover.","climate.")):
+                self.observe_ha_domain(s)
             elif eid:
                 self.observe(("ha",eid),s.get("state"),s.get("last_changed"))
 

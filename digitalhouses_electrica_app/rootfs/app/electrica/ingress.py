@@ -7,6 +7,7 @@ from pathlib import Path
 from urllib.parse import urlsplit, parse_qs
 
 from .catalog import CatalogError
+from . import climate_rules
 from .binding_store import binding_document, validate_document, decode_json
 from .entity_options import parse_rows, render_rows, project
 from .ingress_catalog import normalize, supported_actions, required_keep
@@ -70,6 +71,9 @@ def validate_assignment(assignment, targets):
     if not target:
         raise CatalogError("Целевая сущность отсутствует: " + eid)
     data = rule["target_data"][eid]
+    if eid.startswith("climate."):
+        climate_rules.validate_capability(rule["target_operations"][eid],data,target)
+        return
     if eid.startswith("cover."):
         if rule["target_operations"][eid] not in target.get("operations",[]):
             raise CatalogError("Операция шторы не поддерживается: "+eid)
