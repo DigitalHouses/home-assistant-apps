@@ -67,14 +67,32 @@ def configuration(version: str) -> dict:
             "state_topic": ROOT + "/version",
             "entity_category": "diagnostic",
         },
-        "scan": {
-            "platform": "button", "name": "Сканировать",
-            "unique_id": PREFIX + "_scan",
-            "default_entity_id": "button." + PREFIX + "_scan",
-            "command_topic": SCAN_REQUEST, "payload_press": "SCAN",
-            "entity_category": "config",
+        "latest_version": {
+            "platform":"sensor","name":"Последняя версия",
+            "unique_id":PREFIX+"_latest_version","default_entity_id":"sensor."+PREFIX+"_latest_version",
+            "state_topic":ROOT+"/latest_version","entity_category":"diagnostic",
+        },
+        "update_available": {
+            "platform":"binary_sensor","name":"Доступна новая версия",
+            "unique_id":PREFIX+"_update_available","default_entity_id":"binary_sensor."+PREFIX+"_update_available",
+            "state_topic":ROOT+"/update_available","payload_on":"ON","payload_off":"OFF",
+            "entity_category":"diagnostic",
+        },
+        "refresh_state": sensor("refresh_state","Обновление данных","refresh_state",True),
+        "last_refresh": {
+            "platform":"sensor","name":"Последнее обновление",
+            "unique_id":PREFIX+"_last_refresh","default_entity_id":"sensor."+PREFIX+"_last_refresh",
+            "state_topic":ROOT+"/last_refresh","entity_category":"diagnostic",
         },
     }
+    for key, name, command, payload in (
+        ("refresh","Обновить","refresh","REFRESH"),
+        ("check_updates","Версия","check_updates","CHECK"),
+    ):
+        components[key] = {"platform":"button","name":name,
+            "unique_id":PREFIX+"_"+key,"default_entity_id":"button."+PREFIX+"_"+key,
+            "command_topic":ROOT+"/command/"+command,"payload_press":payload,
+            "entity_category":"config"}
     return {
         "device": device,
         "origin": origin,

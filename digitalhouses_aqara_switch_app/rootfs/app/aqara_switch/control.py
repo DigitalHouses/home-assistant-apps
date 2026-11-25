@@ -62,6 +62,31 @@ def light_commands(saved: Mapping, reported_action: object) -> list[dict] | None
     A multi-light action may need separate calls for lights with distinct
     brightness/color settings. One MQTT press becomes one queued batch.
     """
+    binding = saved.get("bindings", {}).get(reported_action, {})
+    if "target_operations" in binding:
+        if reported_action not in saved.get("fingerprint", {}).get("actions", []):
+            return None
+        from .light_rules import parse_rule
+        try:
+            verified = parse_rule({"assignments": [
+                {"entity_id": eid, "operation": binding["target_operations"][eid],
+                 "data": binding["target_data"].get(eid, {})}
+                for eid in binding["targets"]]})
+        except (CatalogError, KeyError, TypeError) as exc:
+            raise ActionError("Invalid per-target assignment") from exc
+        groups = {}
+        for eid in verified["targets"]:
+            domain = eid.split(".")[0]
+            operation = verified["target_operations"][eid]
+            service = domain + "." + {"toggle":"toggle","on":"turn_on","off":"turn_off"}[operation]
+            data = verified["target_data"][eid]
+            key = (service, json.dumps(data, sort_keys=True))
+            if key not in groups:
+                groups[key] = {"service": service, "target": {"entity_id": []}}
+                if data:
+                    groups[key]["data"] = data
+            groups[key]["target"]["entity_id"].append(eid)
+        return list(groups.values())
     base = light_action(saved, reported_action)
     if base is None:
         return None
@@ -178,3 +203,23 @@ class HAClient:
             if response.status != 200:
                 raise RuntimeError("Home Assistant light command was not accepted")
 
+
+    def read_switch_state(self, entity_id: str) -> str:
+        if not isinstance(entity_id, str) or not re.fullmatch(r"switch\.[a-z0-9_]+", entity_id):
+            raise ValueError("Expected switch.* entity")
+        req = urllib.request.Request(self.url + "/states/" + entity_id,
+                                     headers={"Authorization": "Bearer " + self.token})
+        with urllib.request.urlopen(req, timeout=self.timeout) as response:
+            state = json.load(response).get("state")
+        return state if state in ("on", "off") else "unavailable"
+
+    def execute_switch(self, entity_id: str, state: str) -> None:
+        if not re.fullmatch(r"switch\.[a-z0-9_]+", entity_id) or state not in ("on", "off"):
+            raise ValueError("Invalid explicit switch command")
+        req = urllib.request.Request(self.url + "/services/switch/turn_" + state,
+                  data=json.dumps({"entity_id": entity_id}).encode(),
+                  headers={"Authorization": "Bearer " + self.token,
+                           "Content-Type": "application/json"}, method="POST")
+        with urllib.request.urlopen(req, timeout=self.timeout) as response:
+            if response.status != 200:
+                raise RuntimeError("HA switch service was not accepted")
