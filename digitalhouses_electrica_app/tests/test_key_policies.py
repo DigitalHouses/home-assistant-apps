@@ -169,3 +169,28 @@ class KeyPolicyTests(unittest.TestCase):
             app._run_actions()
             app._ha_client.execute.assert_not_called()
             self.assertEqual(failures[0]["state"],"error")
+
+    def test_explicit_off_hold_and_fresh_relay(self):
+        sw=saved()
+        sw["keep_mode"]={"left":"decoupled/OFF"}
+        features=capabilities(wired())
+        self.assertFalse(mode_action_allowed(sw,"single_left",state(),features,False))
+        self.assertTrue(mode_action_allowed(sw,"single_left",state(left_relay="OFF"),features,False))
+        self.assertEqual(next_repair(sw["keep_mode"],features,state(),False),("state_left","OFF"))
+        self.assertEqual(next_repair(sw["keep_mode"],features,state(left="control_relay"),False),("operation_mode_left","decoupled"))
+        self.assertEqual(next_repair(sw["keep_mode"],features,state(),True),("operation_mode_left","control_relay"))
+        app=SimpleApp()
+        app.config["rooms"][0]["switches"][0]["keep_mode"]=sw["keep_mode"]
+        app._fresh_fields.discard((BASE,NAME,"state_left"))
+        tick(app,1);tick(app,2)
+        self.assertEqual(app.sent,[(BASE+"/"+NAME+"/get",{"state_left":""},False)])
+        app._fresh_fields.add((BASE,NAME,"state_left"))
+        tick(app,3);tick(app,3.61)
+        self.assertEqual(app.sent[-1],(BASE+"/"+NAME+"/set",{"state_left":"OFF"},False))
+
+    def test_off_policy_roundtrip_without_migration(self):
+        rows=[{"entity_id":ENTITY,"enabled":True,"keep_mode":{"left":"decoupled/OFF"},
+               "actions":{"single_left":["light.bra"]}}]
+        options={"switches":render_rows(rows)}
+        self.assertEqual(parse_rows(options),rows)
+        self.assertEqual(project(profiles(),options)["rooms"][0]["switches"][0]["keep_mode"],rows[0]["keep_mode"])

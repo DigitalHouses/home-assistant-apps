@@ -15,7 +15,12 @@ It is independent of any Home Assistant dashboard.
   The reusable Entity Picker provides room, domain, integration and availability
   filters, search by entity/device name or ID, usage hints and multi-selection.
   Existing selections remain visible outside filters or when missing. Their
-  operation and parameters are preserved. Selection changes the editor draft,
+  operation and parameters are preserved. The engineer's explicit **Тест**
+  button in the picker and assigned light row queues a single light toggle
+  through the existing verified output engine, with observed state and a
+  TEST log entry. No configuration write or input-key emulation; global
+  Maintenance, unknown/offline targets and pending commands block the test.
+  Selection changes the editor draft,
   not HA; Save applies
   without restarting. Disabled and missing assignments remain stored.
 - **Scan:** startup after a verified Z2M inventory, periodic via
@@ -29,11 +34,13 @@ It is independent of any Home Assistant dashboard.
   are grouped separately. Offline/unverified targets are skipped.
 - **Mode Keeper:** preserve existing explicit decoupled/ON policies and
   maintenance semantics. Per-key policies in Ingress:
-  `control_relay` (physical; no Actions and no forced relay ON),
-  `decoupled` (logical; no forced relay state) and
-  `decoupled/ON` (logical with explicitly maintained relay power).
-  Unmanaged channels are untouched. A key cannot be made physical while
-  retaining assignments, including disabled assignments. Only verified
+  physical (`control_relay`; no Actions or forced relay state) or logical
+  (`decoupled`; separately choose **Удерживать ON/OFF**).
+  Persist `decoupled/ON` or `decoupled/OFF` for the explicit hold policy.
+  Legacy `decoupled` without hold and unconfigured channels remain unchanged
+  until explicitly configured. No automatic relay-state migration. A key
+  cannot be made physical while retaining assignments, including disabled
+  assignments. Only verified
   Aqara mode capabilities are currently managed; other vendors may be
   adopted as relay-free event-only inputs with declared Z2M actions.
   An aggregate exposed power measurement in W is displayed at device level;

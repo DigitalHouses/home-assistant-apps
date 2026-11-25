@@ -57,7 +57,7 @@
     }
     node.value=initial;return node;
   }
-  function open({items,values=[],domains=["light","switch"],areaId,areaHint,usage={},onConfirm,renderIcon}) {
+  function open({items,values=[],domains=["light","switch"],areaId,areaHint,usage={},onConfirm,renderIcon,renderTest}) {
     close();
     const chosen=new Set(values), original=new Set(values);
     const eligible=items.filter(t=>domains.includes(domainOf(t)));
@@ -106,10 +106,16 @@
           el("span",[t.area,t.device_name,t.integration].filter(Boolean).join(" · "),"muted"));
         if(usage[id]?.length)info.append(el("span","Назначено: "+usage[id].join(", "),"muted"));
         if(view.outside.has(id)&&!t.missing)info.append(el("span","Вне фильтра","muted"));
-        row.append(info,el("span",t.missing?"Не найдено":available(t)?t.state:"Недоступно",
+        row.append(info);
+        const test=renderTest?renderTest(t,id):null;
+        if(!test)row.append(el("span",t.missing?"Не найдено":available(t)?t.state:"Недоступно",
           "picker-state"+(available(t)?"":" problem")));
         row.onclick=()=>{if(chosen.has(id))chosen.delete(id);else if(chosen.size<LIMIT)chosen.add(id);refresh()};
-        list.append(row);
+        // Separate sibling button: testing must never change selection.
+        const line=el("div",undefined,"picker-line");
+        line.append(row);
+        if(test)line.append(test);
+        list.append(line);
       }
       if(!view.rows.length)list.append(el("p","Нет подходящих сущностей","muted"));
       summary.textContent="Выбрано: "+chosen.size+" / "+LIMIT;

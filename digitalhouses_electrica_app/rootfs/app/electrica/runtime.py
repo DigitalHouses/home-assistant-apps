@@ -27,7 +27,7 @@ from .lab_lights import (LAB_LIGHTS, authorized_ha_light_ids,
 from .light_routes import current_route, group_observed_state
 from .keeper_runtime import run_keeper
 from .mode_keeper import (capabilities, global_policy, maintained_switch,
-                          mode_action_allowed, desired_mode, KEEP_VALUE, action_channels)
+                          mode_action_allowed, desired_mode, held_relay, action_channels)
 from .configuration import parse_configuration
 from .ha_registry import HARegistryClient
 from .mqtt_ui import (
@@ -315,8 +315,9 @@ class Application:
                         mismatches = [key for key in switch["keep_mode"]
                                       if current.get(MODE_TO_RELAY[key][0]) not in
                                          (None, desired_mode(switch["keep_mode"][key])) or
-                                         (switch["keep_mode"][key] == KEEP_VALUE and
-                                          current.get(MODE_TO_RELAY[key][1]) == "OFF")]
+                                         (held_relay(switch["keep_mode"][key]) and
+                                          current.get(MODE_TO_RELAY[key][1]) not in
+                                          (None, held_relay(switch["keep_mode"][key])))]
                         if mismatches:
                             result = {"status":"keep_mode_mismatch",
                                       "reason":"Protected keys drifted: " + ", ".join(mismatches)}
@@ -618,7 +619,7 @@ class Application:
             return False
         return all((base, name, field) in self._fresh_fields
                    for key in action_channels(action, features) if key in features
-                   for field in (features[key] if sw.get("keep_mode",{}).get(key) == KEEP_VALUE
+                   for field in (features[key] if held_relay(sw.get("keep_mode",{}).get(key))
                                  else (features[key][0],)))
 
     def _process_adopted_event(self, base, net, device, data):
@@ -735,6 +736,47 @@ class Application:
             self._ha_registry_checked_at = now
         return authorized_ha_light_ids(self._ha_registry_snapshot, requested)
 
+    def observed_target_state(self, eid, *, verify_route=False):
+        """Read cached observed state under _mutex; no new HA/Z2M I/O."""
+        route = self.config.get("light_routes", {}).get(eid)
+        if not route:
+            return self.target_catalog.get(eid, {}).get("state", "unknown")
+        base, name = route["base_topic"], route["friendly_name"]
+        net = self._networks.get(base, {})
+        if (net.get("bridge_state") != "online" or
+                self._light_availability.get((base,name)) != "online" or
+                (verify_route and not current_route(route, net))):
+            return "unavailable"
+        if route.get("kind") == "group":
+            value = group_observed_state(route, net, self._fresh_fields)
+        elif (base,name,"state") in self._fresh_fields:
+            value = net.get("states", {}).get(name, {}).get("state")
+        else:
+            value = None
+        return value.lower() if value in ("ON","OFF") else "unknown"
+
+    def _test_light_allowed(self, eid):
+        return (not self._stop.is_set() and not self.globals["maintenance_mode"]
+                and isinstance(eid, str) and re.fullmatch(r"light\.[a-z0-9_]+", eid)
+                and eid in self.target_catalog
+                and self.observed_target_state(eid, verify_route=True) in ("on","off"))
+
+    def request_light_test(self, eid):
+        """Queue exactly one engineer-requested light toggle, not a fake press."""
+        with self._mutex:
+            if not self._test_light_allowed(eid):
+                raise CatalogError("Светильник недоступен или Maintenance активен")
+            if self.event_log.active_target(eid):
+                raise CatalogError("Ожидается результат предыдущей команды")
+            rid = self.event_log.press("ingress", "Инженер", "TEST", [eid])
+            try:
+                self._jobs.put_nowait((None, None, "Инженер", "TEST",
+                    [{"service":"light.toggle","target":{"entity_id":[eid]}}], rid))
+            except queue.Full as exc:
+                self.event_log.finish(rid, "Очередь заполнена", [eid])
+                raise CatalogError("Очередь заполнена") from exc
+            return rid
+
     def _run_actions(self):
         """Dispatch verified Z2M lights via MQTT and HA-native lights via REST."""
         while not self._stop.is_set():
@@ -747,6 +789,7 @@ class Application:
             targets = [eid for cmd in commands for eid in cmd["target"]["entity_id"]]
             try:
                 all_commands = commands
+                is_test = base is None and action == "TEST"
                 switch_commands = [c for c in commands if c["service"].startswith("switch.")]
                 commands = [c for c in commands if c["service"].startswith("light.")]
                 # A missing route is NOT permission for HA fallback.
@@ -754,6 +797,8 @@ class Application:
                 with self._mutex:
                     routes = dict(self.config.get("light_routes", {}))
                 candidates = set(targets) - set(routes) - LAB_LIGHTS
+                if is_test:
+                    self._ha_registry_checked_at = -1e9
                 ha_approved = self._ha_native_targets(candidates)
                 # Read HA states outside the MQTT lock, before ANY Z2M publish.
                 z2m_commands, lab_commands = partition_commands(
@@ -787,26 +832,31 @@ class Application:
                         time.monotonic(), allowed_lights=ha_approved)
 
                 with self._mutex:
-                    sw = next((x for room in self.config["rooms"]
-                               for x in room["switches"]
-                               if (x["logical_name"] == name and
-                                   x["base_topic"] == base and
-                                   x["coordinator_ieee"] == coordinator)), None)
-                    if (sw is None or not sw.get("enabled", False) or
-                            maintained_switch(sw, self.globals)):
-                        raise ActionError("Disabled switch or Maintenance active")
-                    if light_commands(sw, action) != all_commands:
-                        raise ActionError("Binding changed while command was queued")
-                    net = self._networks.get(base, {})
-                    raw = net.get("devices")
-                    if not isinstance(raw, bytes):
-                        raise ActionError("Zigbee2MQTT input inventory unavailable")
-                    device = next((d for d in decode_bridge_devices(raw)
-                                   if d.get("friendly_name") == name), None)
-                    if (device is None or not verified_adopted_switch(
-                            sw, device, coordinator, base) or not self._input_mode_allowed(
-                            sw, action, net, device, False)):
-                        raise ActionError("Aqara key not verified in decoupled operating mode")
+                    if is_test:
+                        if (len(targets) != 1 or not self._test_light_allowed(targets[0])
+                                or self.event_log.active_target(targets[0], exclude=rid)):
+                            raise ActionError("Test target unavailable or command pending")
+                    else:
+                        sw = next((x for room in self.config["rooms"]
+                                   for x in room["switches"]
+                                   if (x["logical_name"] == name and
+                                       x["base_topic"] == base and
+                                       x["coordinator_ieee"] == coordinator)), None)
+                        if (sw is None or not sw.get("enabled", False) or
+                                maintained_switch(sw, self.globals)):
+                            raise ActionError("Disabled switch or Maintenance active")
+                        if light_commands(sw, action) != all_commands:
+                            raise ActionError("Binding changed while command was queued")
+                        net = self._networks.get(base, {})
+                        raw = net.get("devices")
+                        if not isinstance(raw, bytes):
+                            raise ActionError("Zigbee2MQTT input inventory unavailable")
+                        device = next((d for d in decode_bridge_devices(raw)
+                                       if d.get("friendly_name") == name), None)
+                        if (device is None or not verified_adopted_switch(
+                                sw, device, coordinator, base) or not self._input_mode_allowed(
+                                sw, action, net, device, False)):
+                            raise ActionError("Aqara key not verified in decoupled operating mode")
                     # Repartition after a possible Scan; no guessed light routes.
                     z2m_commands, lab_commands = partition_commands(
                         commands, self.config.get("light_routes", {}),
@@ -831,6 +881,10 @@ class Application:
                                     or any(p["service"] == "light.turn_on"
                                            for p in lab_preview)
                                 ) else "OFF")
+                    if is_test:
+                        test_route = self.config.get("light_routes", {}).get(targets[0])
+                        if test_route and (test_route["base_topic"],test_route["friendly_name"]) in self._light_shadows:
+                            raise ActionError("Previous Zigbee command not yet observed")
                     plans, skipped = plan_batch(
                         z2m_commands, self.config.get("light_routes", {}),
                         self._networks, self._light_availability,
@@ -860,37 +914,42 @@ class Application:
                         self._ha_client = HAClient(os.environ.get("SUPERVISOR_TOKEN", ""))
                     lab_plans, lab_skipped = plan_lab(
                         lab_commands,
-                        read_lab_once, self._ha_shadows, time.monotonic(),
+                        read_lab_once, {} if is_test else self._ha_shadows, time.monotonic(),
                         toggle_state_override=toggle_override,
                         allowed_lights=ha_approved)
                     skipped.extend(lab_skipped)
                     for call in lab_plans:
                         ids = call["target"]["entity_id"]
                         with self._mutex:
-                            current_sw = next(
-                                (x for room in self.config["rooms"]
-                                 for x in room["switches"]
-                                 if x["logical_name"] == name and
-                                 x["base_topic"] == base and
-                                 x["coordinator_ieee"] == coordinator), None)
-                            net = self._networks.get(base, {})
-                            device = None
-                            if isinstance(net.get("devices"), bytes):
-                                device = next(
-                                    (d for d in decode_bridge_devices(net["devices"])
-                                     if d.get("friendly_name") == name), None)
-                            authorized = (
-                                current_sw is not None and device is not None
-                                and current_sw.get("enabled", False)
-                                and light_commands(current_sw, action) == all_commands
-                                and not maintained_switch(current_sw, self.globals)
-                                and verified_adopted_switch(
-                                    current_sw, device, coordinator, base)
-                                and self._input_mode_allowed(
-                                    current_sw, action, net, device, False))
+                            if is_test:
+                                authorized = (len(ids) == 1 and self._test_light_allowed(ids[0])
+                                              and ids[0] not in self.config.get("light_routes", {})
+                                              and not self.event_log.active_target(ids[0], exclude=rid))
+                            else:
+                                current_sw = next(
+                                    (x for room in self.config["rooms"]
+                                     for x in room["switches"]
+                                     if x["logical_name"] == name and
+                                     x["base_topic"] == base and
+                                     x["coordinator_ieee"] == coordinator), None)
+                                net = self._networks.get(base, {})
+                                device = None
+                                if isinstance(net.get("devices"), bytes):
+                                    device = next(
+                                        (d for d in decode_bridge_devices(net["devices"])
+                                         if d.get("friendly_name") == name), None)
+                                authorized = (
+                                    current_sw is not None and device is not None
+                                    and current_sw.get("enabled", False)
+                                    and light_commands(current_sw, action) == all_commands
+                                    and not maintained_switch(current_sw, self.globals)
+                                    and verified_adopted_switch(
+                                        current_sw, device, coordinator, base)
+                                    and self._input_mode_allowed(
+                                        current_sw, action, net, device, False))
                         if not authorized:
                             skipped.extend({"light":eid,
-                                            "reason":"Aqara key or Maintenance changed"}
+                                            "reason":"Test target changed or unavailable" if is_test else "Aqara key or Maintenance changed"}
                                            for eid in ids)
                             continue
                         dispatched_at = _iso_now()

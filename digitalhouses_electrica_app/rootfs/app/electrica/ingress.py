@@ -11,7 +11,6 @@ from .binding_store import binding_document, validate_document, decode_json
 from .entity_options import parse_rows, render_rows, project
 from .ingress_catalog import normalize, supported_actions, required_keep
 from .light_rules import parse_rule
-from .light_routes import group_observed_state
 from .mode_keeper import action_channels, validate_keep_mode, PHYSICAL
 
 WEB = Path(__file__).with_name("web")
@@ -29,6 +28,7 @@ def snapshot(app):
         details = deepcopy(app.device_details)
         scan = dict(app._scan)
         report = deepcopy(app._previous)
+        maintenance = getattr(app,"globals",{}).get("maintenance_mode",False)
     rows = parse_rows(app.options.read())
     indexed = {r["entity_id"]:r for r in rows}
     devices = []
@@ -61,7 +61,7 @@ def snapshot(app):
                         "enabled":row["enabled"],"disabled_actions":row.get("disabled_actions",[]),"actions":[],
                         "bindings":{k:normalize(v) for k,v in row["actions"].items()}})
     return {"devices":devices,"targets":list(targets.values()),"scan":scan,
-            "report":report,"revision":revision(rows),"version":app.version}
+            "report":report,"revision":revision(rows),"version":app.version,"maintenance_mode":maintenance}
 
 def validate_assignment(assignment, targets):
     rule = parse_rule({"assignments":[assignment]})
@@ -201,27 +201,14 @@ def import_bindings(app, payload):
 def live_log(app, cursor, generation):
     # Snapshot observed states only; no MQTT/HA requests per UI poll.
     with app._mutex:
-        states={}
+        # Include unassigned lights so engineering tests in the picker receive
+        # the same observed feedback as previously configured targets.
+        ids = set(app.target_catalog)
         for room in app.config["rooms"]:
             for sw in room["switches"]:
                 for rule in sw.get("configured_bindings",sw.get("bindings",{})).values():
-                    for eid in rule.get("targets",[]):
-                        route=app.config.get("light_routes",{}).get(eid)
-                        value=app.target_catalog.get(eid,{}).get("state","unknown")
-                        if route:
-                            base,name=route["base_topic"],route["friendly_name"]
-                            net=app._networks.get(base,{})
-                            if net.get("bridge_state")!="online" or app._light_availability.get((base,name))!="online":
-                                value="unavailable"
-                            elif route.get("kind")=="group":
-                                reported=group_observed_state(route,net,app._fresh_fields)
-                                value=reported.lower() if reported else "unknown"
-                            elif (base,name,"state") in app._fresh_fields:
-                                reported=net.get("states",{}).get(name,{}).get("state")
-                                value=reported.lower() if reported in ("ON","OFF") else "unknown"
-                            else:
-                                value="unknown"
-                        states[eid]=value
+                    ids.update(rule.get("targets",[]))
+        states = {eid:app.observed_target_state(eid) for eid in ids}
     return {**app.event_log.snapshot(cursor,generation),"states":states}
 
 def start_ingress(app, port=8099):
@@ -280,6 +267,12 @@ def start_ingress(app, port=8099):
                 if path == "/api/scan":
                     if not app.request_scan(foreground=False):
                         raise CatalogError("Сканирование уже выполняется")
+                elif path == "/api/test-light":
+                    if not isinstance(payload,dict) or set(payload) != {"entity_id"}:
+                        raise CatalogError("Тест требует один entity_id")
+                    rid = app.request_light_test(payload["entity_id"])
+                    self.reply(200,{"ok":True,"id":rid})
+                    return
                 elif path == "/api/save":
                     save_device(app,payload)
                 elif path == "/api/import":

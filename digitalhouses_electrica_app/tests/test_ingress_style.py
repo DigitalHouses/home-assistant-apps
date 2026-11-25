@@ -32,3 +32,14 @@ class IngressStyleTests(TestCase):
         self.assertIn('JSON.parse(documentText)',js)
         self.assertIn("+documentText+",js)
         self.assertIn("body:raw?data:JSON.stringify(data)",js)
+
+    def test_key_type_and_hold_controls_and_test_callback(self):
+        js=(WEB/"app.js").read_text()
+        picker=(WEB/"entity_picker.js").read_text()
+        self.assertIn('["control_relay","Физическая"],["decoupled","Логическая"]',js)
+        self.assertIn('if(logicalPolicy(policy))',js)
+        self.assertIn('["ON","ON"],["OFF","OFF"]',js)
+        self.assertIn('api("test-light",{entity_id:id})',js)
+        self.assertIn("renderTest:lightTestControl",js)
+        self.assertIn("if(test)line.append(test)",picker)
+        self.assertIn("if(test)row.append(test)",js)

@@ -38,6 +38,14 @@ class EventLog:
                 if p[0] == rid:
                     del self.pending[key]
 
+    def active_target(self, eid, *, exclude=None):
+        """Use the existing journal as the authority for in-flight commands."""
+        with self.lock:
+            self._prune(monotonic())
+            return any(rid != exclude and
+                       row["targets"].get(eid, {}).get("status") in ("queued", "sent")
+                       for rid, row in self.rows.items())
+
     def press(self, network, device, action, targets=()):
         with self.lock:
             self._prune(monotonic())

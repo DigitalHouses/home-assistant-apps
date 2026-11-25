@@ -32,31 +32,42 @@ function targetNode(id){const t=model.targets.find(x=>x.entity_id===id);const n=
 async function api(path,data,raw=false){const r=await fetch("api/"+path,data===undefined?{}:{method:"POST",headers:{"Content-Type":"application/json"},body:raw?data:JSON.stringify(data)});const v=await r.json();if(!r.ok)throw Error(v.error||"Ошибка");return v}
 async function load(){try{model=await api("state");document.querySelector("#app-version").textContent="v"+model.version;document.querySelector("#summary").textContent="Клавиши · устройства ("+model.devices.length+") · Сети Z2M ("+new Set(model.devices.map(d=>d.network).filter(n=>n!=="—")).size+")";notice.classList.toggle("error",!!model.scan.error);scan.disabled=model.scan.state==="updating"||busy;scan.textContent=model.scan.state==="updating"?"Сканирование…":"⟳ Сканировать";if(!editing)renderList();if(!editing&&!busy){if(model.scan.error)notice.textContent=model.scan.error;else if(model.scan.state==="updating")notice.textContent="Сканирование…";else if(model.report){const p=model.report.problems||[];notice.textContent="Последний Scan: "+(model.report.scanned??0)+" устройств · "+p.length+" проблем";notice.title=p.map(x=>x.name+": "+x.reason).join("\n")}}}catch(e){notice.textContent=e.message}}
 const keyNames={main:"Основная",left:"Левая",right:"Правая",center:"Центральная"};
-const modeNames={"":"Не управлять",control_relay:"Физическая",decoupled:"Логическая","decoupled/ON":"Логическая · питание ON"};
+const modeNames={"":"Не настроена",control_relay:"Физическая",decoupled:"Логическая","decoupled/ON":"Логическая · ON","decoupled/OFF":"Логическая · OFF"};
+const logicalPolicy=p=>["decoupled","decoupled/ON","decoupled/OFF"].includes(p);
 function actionAllowed(d,action){
   if(!Object.keys(d.key_modes||{}).length)return d.actions.includes(action);
   const keys=d.key_actions?.[action]||[];
-  return keys.length>0&&keys.every(k=>["decoupled","decoupled/ON"].includes(d.keep_mode?.[k]));
+  return keys.length>0&&keys.every(k=>logicalPolicy(d.keep_mode?.[k]));
 }
 function physicalAction(d,action){
   return (d.key_actions?.[action]||[]).some(k=>d.keep_mode?.[k]==="control_relay");
 }
+function selectOptions(choices,value,label){
+  const select=el("select");
+  select.setAttribute("aria-label",label);
+  for(const [v,name] of choices){const option=el("option",name);option.value=v;option.disabled=v==="";select.append(option)}
+  select.value=value;return select;
+}
 function modeControls(){
   const panel=el("div",undefined,"key-modes");
   for(const key of Object.keys(draft.key_modes||{})){
-    const row=el("label",undefined,"key-mode");
-    const select=el("select");
-    for(const [value,label] of Object.entries(modeNames)){
-      const option=el("option",label);option.value=value;select.append(option);
-    }
-    select.value=draft.keep_mode?.[key]||"";
+    const row=el("div",undefined,"key-mode");
+    const policy=draft.keep_mode?.[key]||"";
+    const select=selectOptions([["","Выберите тип"],["control_relay","Физическая"],["decoupled","Логическая"]],
+      logicalPolicy(policy)?"decoupled":policy,"Тип клавиши "+(keyNames[key]||key));
     select.onchange=()=>{
       draft.keep_mode??={};
-      if(select.value)draft.keep_mode[key]=select.value;else delete draft.keep_mode[key];
-      if(select.value)draft.enabled=true;
-      update();renderEdit();
+      draft.keep_mode[key]=select.value;
+      draft.enabled=true;update();renderEdit();
     };
-    row.append(el("strong",keyNames[key]||key),select);panel.append(row);
+    row.append(el("strong",keyNames[key]||key),select);
+    if(logicalPolicy(policy)){
+      const hold=selectOptions([["","Выберите ON/OFF"],["ON","ON"],["OFF","OFF"]],
+        policy.includes("/")?policy.split("/")[1]:"","Удерживать реле "+(keyNames[key]||key));
+      hold.onchange=()=>{draft.keep_mode[key]="decoupled/"+hold.value;update();renderEdit()};
+      const label=el("label");label.append(document.createTextNode("Удерживать"),hold);row.append(label);
+    }
+    panel.append(row);
   }
   return panel;
 }
@@ -67,7 +78,49 @@ function open(d){editing=d;draft=structuredClone(d);draft.disabled_actions??=[];
 function goBack(){if(dirty&&!confirm("Отменить несохранённые изменения?"))return;editing=null;draft=null;dirty=false;renderList();load()}
 function update(){dirty=true}
 function addParam(parent,t,a,key,label,min,max,step){const wrap=el("label"),check=el("input");check.type="checkbox";check.checked=Object.hasOwn(a.data,key);const input=el("input");input.type="number";input.min=min;input.max=max;input.step=step;input.value=a.data[key]??min;input.disabled=!check.checked;check.onchange=()=>{if(check.checked)a.data[key]=Number(input.value);else delete a.data[key];input.disabled=!check.checked;update();if(key==="color_temp_kelvin")renderEdit()};input.onchange=()=>{a.data[key]=Number(input.value);update()};wrap.append(check,document.createTextNode(label),input);parent.append(wrap)}
-function assignedRow(action,a,container){const t=model.targets.find(t=>t.entity_id===a.entity_id),row=el("div",undefined,"assigned");row.append(targetIcon(t,a.entity_id),el("strong",(t?.name||a.entity_id)+" · "+a.entity_id));const op=el("select");for(const [v,n] of [["toggle","Toggle"],["on","ON"],["off","OFF"]]){const o=el("option",n);o.value=v;op.append(o)}op.value=a.operation;op.onchange=()=>{a.operation=op.value;if(op.value==="off")for(const k of Object.keys(a.data))if(k!=="transition")delete a.data[k];update();renderEdit(action)};row.append(op,button("Удалить",()=>{draft.bindings[action]=draft.bindings[action].filter(x=>x.entity_id!==a.entity_id);if(!draft.bindings[action].length){delete draft.bindings[action];draft.disabled_actions=draft.disabled_actions.filter(x=>x!==action)}update();renderEdit(action)}));if(!t){row.append(el("span","⚠ Сущность отсутствует","problem"));container.append(row);return}if(a.entity_id.startsWith("light.")){const p=el("div",undefined,"params");if(a.operation!=="off"){if(t.brightness)addParam(p,t,a,"brightness_pct","Яркость %",0,100,1);if(t.cct&&Number.isInteger(t.min_kelvin)&&Number.isInteger(t.max_kelvin)&&!Object.hasOwn(a.data,"rgb_color"))addParam(p,t,a,"color_temp_kelvin","Kelvin",t.min_kelvin,t.max_kelvin,1);if(t.rgb&&!Object.hasOwn(a.data,"color_temp_kelvin")){const l=el("label"),c=el("input"),picker=el("input");c.type="checkbox";c.checked=Object.hasOwn(a.data,"rgb_color");picker.type="color";picker.value="#"+(a.data.rgb_color||[255,255,255]).map(v=>v.toString(16).padStart(2,"0")).join("");picker.disabled=!c.checked;c.onchange=()=>{if(c.checked)a.data.rgb_color=[1,3,5].map(i=>parseInt(picker.value.slice(i,i+2),16));else delete a.data.rgb_color;update();renderEdit(action)};picker.oninput=()=>{a.data.rgb_color=[1,3,5].map(i=>parseInt(picker.value.slice(i,i+2),16));update()};l.append(c,document.createTextNode("RGB"),picker);p.append(l)}}if(t.transition)addParam(p,t,a,"transition","Transition, сек",0,60,.1);row.append(p)}container.append(row)}
+const testRequests=new Map(),testErrors=new Map();
+function lightTestControl(t,id){
+  if(!id.startsWith("light."))return null;
+  const wrap=el("span",undefined,"light-test");wrap.dataset.testEntity=id;
+  const state=el("span","—","light-test-state");
+  const test=button("Тест",()=>requestLightTest(id),"light-test-button");
+  test.type="button";test.setAttribute("aria-label","Тест "+id);
+  const result=el("span","","light-test-result muted");
+  wrap.append(state,test,result);updateTestControl(wrap);return wrap;
+}
+function latestTest(id){
+  let latest=null;
+  for(const row of journal.values())if(row.action==="TEST"&&row.targets[id]&&(!latest||row.id>latest.id))latest=row;
+  return latest?.targets[id];
+}
+function updateTestControl(wrap){
+  const id=wrap.dataset.testEntity,t=model?.targets.find(x=>x.entity_id===id);
+  const state=liveStates[id]??t?.state;
+  const result=latestTest(id),pending=testRequests.has(id)||["queued","sent"].includes(result?.status);
+  const label=wrap.querySelector(".light-test-state"),b=wrap.querySelector("button"),note=wrap.querySelector(".light-test-result");
+  label.textContent=["on","off"].includes(state)?state.toUpperCase():"—";
+  label.title=!t?"Не найдено":["on","off"].includes(state)?"Наблюдаемое состояние":"Недоступно или состояние неизвестно";
+  const row=wrap.closest(".picker-line")?.querySelector(".picker-result")||wrap.closest(".assigned");
+  markIcon(row?.querySelector(".target-icon"),state);
+  label.classList.toggle("is-on",state==="on");b.disabled=!!model?.maintenance_mode||!t||!["on","off"].includes(state)||pending;
+  b.textContent=pending?"…":"Тест";
+  note.textContent=testErrors.get(id)||({queued:"В очереди",sent:"Ожидается состояние",confirmed:"✓✓",skipped:"Не выполнено",timeout:"Нет подтверждения",superseded:"Заменено"}[result?.status]||"");
+  note.title=testErrors.get(id)||result?.reason||"";
+}
+async function requestLightTest(id){
+  if(testRequests.has(id))return;
+  testErrors.delete(id);testRequests.set(id,null);applyLiveState();
+  try{
+    const response=await api("test-light",{entity_id:id});
+    testRequests.set(id,response.id);
+    // If the journal already received this row while HTTP was in flight,
+    // hand the state back to that authoritative journal immediately.
+    if(journal.has(response.id))testRequests.delete(id);
+    await pollLog();
+  }catch(e){testRequests.delete(id);testErrors.set(id,e.message)}
+  applyLiveState();
+}
+function assignedRow(action,a,container){const t=model.targets.find(t=>t.entity_id===a.entity_id),row=el("div",undefined,"assigned");row.append(targetIcon(t,a.entity_id),el("strong",(t?.name||a.entity_id)+" · "+a.entity_id));const op=el("select");for(const [v,n] of [["toggle","Toggle"],["on","ON"],["off","OFF"]]){const o=el("option",n);o.value=v;op.append(o)}op.value=a.operation;op.onchange=()=>{a.operation=op.value;if(op.value==="off")for(const k of Object.keys(a.data))if(k!=="transition")delete a.data[k];update();renderEdit(action)};const test=lightTestControl(t,a.entity_id);if(test)row.append(test);row.append(op,button("Удалить",()=>{draft.bindings[action]=draft.bindings[action].filter(x=>x.entity_id!==a.entity_id);if(!draft.bindings[action].length){delete draft.bindings[action];draft.disabled_actions=draft.disabled_actions.filter(x=>x!==action)}update();renderEdit(action)}));if(!t){row.append(el("span","⚠ Сущность отсутствует","problem"));container.append(row);return}if(a.entity_id.startsWith("light.")){const p=el("div",undefined,"params");if(a.operation!=="off"){if(t.brightness)addParam(p,t,a,"brightness_pct","Яркость %",0,100,1);if(t.cct&&Number.isInteger(t.min_kelvin)&&Number.isInteger(t.max_kelvin)&&!Object.hasOwn(a.data,"rgb_color"))addParam(p,t,a,"color_temp_kelvin","Kelvin",t.min_kelvin,t.max_kelvin,1);if(t.rgb&&!Object.hasOwn(a.data,"color_temp_kelvin")){const l=el("label"),c=el("input"),picker=el("input");c.type="checkbox";c.checked=Object.hasOwn(a.data,"rgb_color");picker.type="color";picker.value="#"+(a.data.rgb_color||[255,255,255]).map(v=>v.toString(16).padStart(2,"0")).join("");picker.disabled=!c.checked;c.onchange=()=>{if(c.checked)a.data.rgb_color=[1,3,5].map(i=>parseInt(picker.value.slice(i,i+2),16));else delete a.data.rgb_color;update();renderEdit(action)};picker.oninput=()=>{a.data.rgb_color=[1,3,5].map(i=>parseInt(picker.value.slice(i,i+2),16));update()};l.append(c,document.createTextNode("RGB"),picker);p.append(l)}}if(t.transition)addParam(p,t,a,"transition","Transition, сек",0,60,.1);row.append(p)}container.append(row)}
 function actionGroup(action){const p=action.match(/_(left|right|center|plus|minus|both|[0-9]+)$/)||action.match(/^(button_[0-9]+)_/);return p?p[1]:"Нажатия"}
 function renderEdit(expand){main.replaceChildren();const h=el("div",undefined,"head");h.append(button("← Клавиши",goBack),el("h2",draft.name+" · "+draft.room),button("Сохранить",save,"save"));main.append(h);const enabled=el("input");enabled.type="checkbox";enabled.checked=draft.enabled;enabled.onchange=()=>{draft.enabled=enabled.checked;update()};const l=el("label");l.append(enabled,document.createTextNode("Включено"));const controls=el("div",undefined,"editor-controls");controls.append(l);main.append(controls);
 if(Object.keys(draft.key_modes||{}).length)main.append(modeControls());
@@ -85,7 +138,7 @@ const allowed=actionAllowed(draft,action),detail=el("details",undefined,"action"
     for(const device of model.devices)for(const [press,assignments] of Object.entries(device.bindings))
       for(const item of assignments)(usage[item.entity_id]??=[]).push(device.name+" / "+press);
     DHElectricaEntityPicker.open({items:model.targets,values:existing.map(a=>a.entity_id),
-      areaId:draft.area_id,areaHint:draft.room,usage,renderIcon:targetIcon,
+      areaId:draft.area_id,areaHint:draft.room,usage,renderIcon:targetIcon,renderTest:lightTestControl,
       onConfirm:ids=>{
         if(JSON.stringify(ids)===JSON.stringify(existing.map(a=>a.entity_id)))return;
         if(ids.length){draft.bindings[action]=DHElectricaEntityPicker.mergeAssignments(existing,ids);draft.enabled=true}
@@ -94,7 +147,11 @@ const allowed=actionAllowed(draft,action),detail=el("details",undefined,"action"
       }});
   }));
 }main.append(detail)}}
-async function save(){try{await api("save",{id:draft.id,revision:draft.revision,enabled:draft.enabled,bindings:draft.bindings,disabled_actions:draft.disabled_actions,...(Object.keys(draft.key_modes||{}).length?{keep_mode:draft.keep_mode||{}}:{})});dirty=false;editing=null;notice.textContent="Сохранено";await load()}catch(e){notice.textContent=e.message}}
+async function save(){try{
+  for(const [key,policy] of Object.entries(draft.keep_mode||{}))
+    if(policy==="decoupled"&&editing.keep_mode?.[key]!=="decoupled")
+      throw Error("Выберите, удерживать ON или OFF: "+(keyNames[key]||key));
+  await api("save",{id:draft.id,revision:draft.revision,enabled:draft.enabled,bindings:draft.bindings,disabled_actions:draft.disabled_actions,...(Object.keys(draft.key_modes||{}).length?{keep_mode:draft.keep_mode||{}}:{})});dirty=false;editing=null;notice.textContent="Сохранено";await load()}catch(e){notice.textContent=e.message}}
 scan.onclick=async()=>{busy=true;scan.disabled=true;try{await api("scan",{});notice.textContent="Сканирование запущено"}catch(e){notice.textContent=e.message}finally{busy=false;await load()}};
 document.querySelector("#devices-nav").onclick=()=>{if(editing)goBack()};
 // Incremental journal feed: no additional HA/MQTT calls, no full catalog reload.
@@ -125,6 +182,7 @@ function applyLiveState(){
     if(warning)warning.hidden=["on","off"].includes(state);
     else if(!["on","off"].includes(state)){const w=el("span","⚠","problem");w.title="Сущность недоступна";n.append(w)}
   }
+  for(const wrap of document.querySelectorAll(".light-test"))updateTestControl(wrap);
   for(const [k,v] of recent)if(v<=Date.now())recent.delete(k);
 }
 function renderLogRow(row){
@@ -157,12 +215,17 @@ async function pollLog(){
     const data=await api("log?cursor="+cursor+"&generation="+encodeURIComponent(generation||""));
     const changedZone=data.timezone!==logTimezone;
     logTimezone=data.timezone;liveStates=data.states||{};
-    if(data.reset){journal.clear();recent.clear();logNodes.clear();logRows.replaceChildren()}
+    if(data.reset){
+      journal.clear();recent.clear();logNodes.clear();logRows.replaceChildren();
+      for(const [id,rid] of testRequests)if(rid!==null)testRequests.delete(id);
+    }
     generation=data.generation;cursor=data.cursor;
     for(const [id] of journal)if(id<data.oldest){journal.delete(id);logNodes.get(id)?.remove();logNodes.delete(id)}
     for(const row of data.rows){
       const isNew=!journal.has(row.id);
       journal.set(row.id,row);
+      if(row.action==="TEST")for(const eid of Object.keys(row.targets))
+        if(testRequests.get(eid)===row.id)testRequests.delete(eid);
       if(isNew&&Date.now()-new Date(row.at).getTime()<2000){
         recent.set(JSON.stringify([row.network,row.device,row.action]),new Date(row.at).getTime()+2000)
       }

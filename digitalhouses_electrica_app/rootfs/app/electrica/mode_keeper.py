@@ -19,11 +19,16 @@ MODE_TO_RELAY = {
 KEEP_VALUE = "decoupled/ON"
 PHYSICAL = "control_relay"
 LOGICAL = "decoupled"
-POLICIES = (PHYSICAL, LOGICAL, KEEP_VALUE)
+KEEP_OFF = "decoupled/OFF"
+POLICIES = (PHYSICAL, LOGICAL, KEEP_VALUE, KEEP_OFF)
+
+
+def held_relay(policy):
+    return {KEEP_VALUE: "ON", KEEP_OFF: "OFF"}.get(policy)
 
 
 def logical_policy(value):
-    return value in (LOGICAL, KEEP_VALUE)
+    return value in (LOGICAL, KEEP_VALUE, KEEP_OFF)
 
 
 def action_channels(action, channels):
@@ -140,7 +145,7 @@ def mode_action_allowed(sw: Mapping, action: str, state: Mapping,
         mode, relay = features[key]
         if state.get(mode) != LOGICAL:
             return False
-        if keep[key] == KEEP_VALUE and state.get(relay) != "ON":
+        if held_relay(keep[key]) and state.get(relay) != held_relay(keep[key]):
             return False
     return True
 
@@ -150,7 +155,7 @@ def next_repair(keep: Mapping, features: Mapping, state: Mapping,
     """First actual deviation; mode precedes relay. Never write in Scan.
 
     Maintenance sets control_relay but NEVER changes relay power.
-    Normal operation restores decoupled, then ON after mode confirmation.
+    Normal operation restores decoupled, then the selected relay state.
     Unknown states remain unknown instead of being written blindly.
     """
     for key in sorted(keep):
@@ -164,8 +169,9 @@ def next_repair(keep: Mapping, features: Mapping, state: Mapping,
             continue
         if seen != target_mode:
             return mode, target_mode
-        if not maintenance and keep[key] == KEEP_VALUE and state.get(relay) == "OFF":
-            return relay, "ON"
+        wanted = held_relay(keep[key])
+        if not maintenance and wanted and state.get(relay) in ("ON", "OFF") and state[relay] != wanted:
+            return relay, wanted
     return None
 
 
@@ -185,5 +191,5 @@ def validate_action_policy(fingerprint: Mapping, keep: Mapping, action: str) -> 
         raise CatalogError("Ambiguous physical-key action " + action)
     if not required <= hardware or not all(logical_policy(keep.get(k)) for k in required):
         raise CatalogError(
-            "Aqara action " + action + " requires decoupled/ON or decoupled on " +
+            "Aqara action " + action + " requires decoupled/ON, decoupled/OFF or decoupled on " +
             ", ".join(sorted(required)))
