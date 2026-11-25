@@ -392,7 +392,7 @@ def run(config: AppConfig, *, state_dir: Path = DEFAULT_STATE_DIR,
     setup_manager = UpsSetupManager(bridge, config_path=config_path, state_dir=state_dir)
     telemetry_runner = TelemetryRunner(_telemetry_client(config, state_dir))
     update_manager = UpdateManager(state_dir, _version())
-    card = AgentCard(state_dir / "agent_card.json", bridge.publish_agent_card)
+    card = AgentCard(bridge.publish_agent_card)
     runtime.collection_observer = card.collected
     # Separate read-only backup observer; never blocks UPS/NUT or the PVE scheduler.
     try:
@@ -500,6 +500,7 @@ def run(config: AppConfig, *, state_dir: Path = DEFAULT_STATE_DIR,
     if ups_runtime is not None:
         log.info("Найден сохраненный UPS %s", ups_runtime.config.name)
     bridge.start()
+    update_manager.sync_install_card(card, startup=True)
 
     try:
         while not stop_event.is_set():
@@ -535,6 +536,7 @@ def run(config: AppConfig, *, state_dir: Path = DEFAULT_STATE_DIR,
             ):
                 if bridge.publish_ups_debug_state(actual_debug):
                     debug_last_published = actual_debug
+            update_manager.sync_install_card(card)
             if bridge.restart_requested.is_set():
                 bridge.restart_requested.clear()
                 denied = (
@@ -586,23 +588,13 @@ def run(config: AppConfig, *, state_dir: Path = DEFAULT_STATE_DIR,
                 ),
             )
             if card.state == "running" and card.operation in {"check", "install"}:
-                result = update_manager._payload()
-                status = result.get("status")
+                status = update_manager._status
                 if card.operation == "check" and status in {"idle", "error"}:
                     card.finish(
                         "check",
-                        error=str(result.get("error") or "GitHub check failed") if status == "error" else None,
+                        error=str(update_manager._status_error or "GitHub check failed") if status == "error" else None,
                     )
-                elif card.operation == "install":
-                    outcome = update_manager.install_card_outcome(
-                        card_started_at=card.started_at,
-                    )
-                    if outcome is not None:
-                        success, error = outcome
-                        card.finish(
-                            "install",
-                            error=None if success else (error or "Update failed"),
-                        )
+            update_manager.sync_install_card(card, requested=install_update)
             card.tick()
 
             if ups_runtime is not None and not ups_startup_attempted:
@@ -659,12 +651,6 @@ def run(config: AppConfig, *, state_dir: Path = DEFAULT_STATE_DIR,
                 if bridge.reconnect_requested.is_set():
                     update_manager.publish(bridge)
                     card.publish()
-                # A restart is complete once this new agent process has
-                # initialized and MQTT is connected. It must not depend on
-                # every unrelated startup collector publishing successfully.
-                if (card.state == "running" and card.operation == "restart"
-                        and bridge.connected.is_set()):
-                    card.finish("restart")
                 memory_reconnected = bridge.reconnect_requested.is_set()
                 if card.state == "running" and card.operation in {"check", "install"}:
                     # Avoid starting an unrelated operation behind the active card.

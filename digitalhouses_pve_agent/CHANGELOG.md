@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.105
+
+- Simplify the aggregate status card: keep foreground presentation in memory, start clean after process restart, and observe the authoritative independent update worker without matching timestamps or restoring UI transactions. Existing checkpoint files are ignored; no manual cleanup required.
+- Preserve actionable installer failures and UPS preflight denials, clear superseded errors, and leave unavailable historical durations unknown. Preserve MQTT fields, card layout, Refresh/check/restart controls and installer safety/rollback.
+- Add regression coverage for the successful 0.5.104 CLI update with reordered timestamps, worker survival, actual rollback and missing UI history.
+
 ## 0.5.104
 
 - Prevent software FSD during UPS calibration (`OB CAL`) only when fresh input voltage and frequency confirm healthy mains; absent, invalid or abnormal measurements and critical UPS flags retain the original protection. Preserve raw NUT status and native NUT handling.
