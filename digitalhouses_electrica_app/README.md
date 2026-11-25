@@ -14,6 +14,9 @@ It is independent of any Home Assistant dashboard.
   the entire device row opens the editor. Display Z2M friendly name followed
   by the distinct HA device name (user-assigned name first), refreshed on Scan.
   Names are display metadata, never binding keys.
+  Every bound target in the device list displays the full domain-qualified
+  entity_id followed by its distinct HA friendly name, for all domains.
+  Missing targets retain the full ID and a warning; no invented names.
   The reusable Entity Picker provides room, domain, integration and availability
   filters, search by entity/device name or ID, usage hints and multi-selection.
   Existing selections remain visible outside filters or when missing. Their

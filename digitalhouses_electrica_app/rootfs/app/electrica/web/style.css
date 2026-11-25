@@ -140,3 +140,6 @@ label{display:inline-flex;align-items:center;gap:7px;flex-wrap:wrap;color:#ccd8e
 .ha-device-name{font-weight:400;color:#ccd8e4}
 
 .window-guard-name{overflow-wrap:anywhere;max-width:100%}
+
+.target-label{min-width:0;overflow-wrap:anywhere}
+.binding .target+.target{margin-left:6px}

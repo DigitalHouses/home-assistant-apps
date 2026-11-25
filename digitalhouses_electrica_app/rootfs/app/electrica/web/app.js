@@ -35,7 +35,8 @@ function targetIcon(t,id){
 }
 function stat(d){return {same:["●",""],disabled:["Ⅱ","muted"],missing:["✖","danger"],offline:["⚠","problem"],unknown:["?","muted"]}[d.status]||["⚠","problem"]}
 function knownState(state){return typeof state==="string"&&!["unknown","unavailable",""].includes(state)}
-function targetNode(id){const t=model.targets.find(x=>x.entity_id===id);const n=el("span",undefined,"target");n.dataset.entity=id;n.append(targetIcon(t,id),el("span",id.split(".")[1]||id));if(!t||!knownState(t.state)){const w=el("span","⚠","problem");w.title=t?"Сущность недоступна":"Сущность не найдена";n.append(w)}return n}
+function targetLabel(id,t){return t?.name&&t.name!==id?id+" - "+t.name:id}
+function targetNode(id){const t=model.targets.find(x=>x.entity_id===id);const n=el("span",undefined,"target");n.dataset.entity=id;n.append(targetIcon(t,id),el("span",targetLabel(id,t),"target-label"));if(!t||!knownState(t.state)){const w=el("span","⚠","problem");w.title=t?"Сущность недоступна":"Сущность не найдена";n.append(w)}return n}
 async function api(path,data,raw=false){const r=await fetch("api/"+path,data===undefined?{}:{method:"POST",headers:{"Content-Type":"application/json"},body:raw?data:JSON.stringify(data)});const v=await r.json();if(!r.ok)throw Error(v.error||"Ошибка");return v}
 async function load(){try{model=await api("state");document.querySelector("#app-version").textContent="v"+model.version;document.querySelector("#summary").textContent="Клавиши · устройства ("+model.devices.length+") · Сети Z2M ("+new Set(model.devices.map(d=>d.network).filter(n=>n!=="—")).size+")";notice.classList.toggle("error",!!model.scan.error);scan.disabled=model.scan.state==="updating"||busy;scan.textContent=model.scan.state==="updating"?"Сканирование…":"⟳ Сканировать";if(!editing)renderList();if(!editing&&!busy){if(model.scan.error)notice.textContent=model.scan.error;else if(model.scan.state==="updating")notice.textContent="Сканирование…";else if(model.report){const p=model.report.problems||[];notice.textContent="Последний Scan: "+(model.report.scanned??0)+" устройств · "+p.length+" проблем";notice.title=p.map(x=>x.name+": "+x.reason).join("\n")}}}catch(e){notice.textContent=e.message}}
 const keyNames={main:"Основная",left:"Левая",right:"Правая",center:"Центральная"};
@@ -203,7 +204,7 @@ let group=null;const ordered=[...new Set([...possible.filter(a=>actionAllowed(dr
     button("Удалить назначение",()=>{delete draft.bindings[action];draft.disabled_actions=draft.disabled_actions.filter(x=>x!==action);update();renderEdit()}));
   main.append(row);continue;
 }
-const allowed=actionAllowed(draft,action),detail=el("details",undefined,"action");detail.open=action===expand||(!expand&&!!draft.bindings[action]);detail.append(el("summary",action+" · "+(draft.bindings[action]||[]).map(a=>a.entity_id.split(".")[1]).join(", ")+(allowed?"":" ⚠")));if(draft.bindings[action]){const c=el("input");c.type="checkbox";c.checked=!draft.disabled_actions.includes(action);c.onchange=()=>{draft.disabled_actions=c.checked?draft.disabled_actions.filter(x=>x!==action):[...draft.disabled_actions,action];update()};const l=el("label");l.append(c,document.createTextNode("Назначение активно"));detail.append(l)}for(const a of draft.bindings[action]||[])assignedRow(action,a,detail);if(allowed){
+const allowed=actionAllowed(draft,action),detail=el("details",undefined,"action");detail.open=action===expand||(!expand&&!!draft.bindings[action]);detail.append(el("summary",action+" · "+(draft.bindings[action]||[]).map(a=>targetLabel(a.entity_id,model.targets.find(t=>t.entity_id===a.entity_id))).join(", ")+(allowed?"":" ⚠")));if(draft.bindings[action]){const c=el("input");c.type="checkbox";c.checked=!draft.disabled_actions.includes(action);c.onchange=()=>{draft.disabled_actions=c.checked?draft.disabled_actions.filter(x=>x!==action):[...draft.disabled_actions,action];update()};const l=el("label");l.append(c,document.createTextNode("Назначение активно"));detail.append(l)}for(const a of draft.bindings[action]||[])assignedRow(action,a,detail);if(allowed){
   const existing=draft.bindings[action]||[];
   detail.append(button(existing.length?"Изменить выбор сущностей":"+ Выбрать сущности",()=>{
     const usage={};
@@ -248,7 +249,8 @@ function applyLiveState(){
     n.classList.toggle("recent",until>Date.now());
   }
   for(const n of main.querySelectorAll(".target")){
-    const state=liveStates[n.dataset.entity]??model?.targets.find(t=>t.entity_id===n.dataset.entity)?.state;
+    const target=model?.targets.find(t=>t.entity_id===n.dataset.entity);
+    const state=target?(liveStates[n.dataset.entity]??target.state):undefined;
     markIcon(n.querySelector(".target-icon"),state);
     const warning=n.querySelector(".problem");
     if(warning)warning.hidden=knownState(state);

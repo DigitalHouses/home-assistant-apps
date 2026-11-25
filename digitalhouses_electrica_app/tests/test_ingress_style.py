@@ -67,3 +67,22 @@ class IngressStyleTests(TestCase):
         self.assertIn('n.min=t.min_temp',js)
         self.assertIn('n.max=t.max_temp',js)
         self.assertIn('n.step=t.target_temp_step',js)
+
+    def test_bound_targets_show_full_domain_and_friendly_name(self):
+        import shutil
+        import subprocess
+        js=(WEB/"app.js").read_text()
+        self.assertIn('el("span",targetLabel(id,t),"target-label")',js)
+        self.assertIn('for(const t of targets)x.append(targetNode(t.entity_id))',js)
+        self.assertIn('const state=target?(liveStates[n.dataset.entity]??target.state):undefined',js)
+        if shutil.which("node"):
+            source=next(line for line in js.splitlines() if line.startswith("function targetLabel("))
+            subprocess.run(["node","-e",source+"""
+const assert=require('node:assert/strict');
+for(const domain of ['light','switch','cover','climate','media_player','future_domain']){
+    const id=domain+'.living_room';
+    assert.equal(targetLabel(id,{name:'Зал'}),id+' - Зал');
+    assert.equal(targetLabel(id,{name:id}),id);
+    assert.equal(targetLabel(id,undefined),id);
+}
+"""],check=True)
