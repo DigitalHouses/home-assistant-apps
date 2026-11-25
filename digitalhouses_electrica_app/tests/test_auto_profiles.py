@@ -4,7 +4,7 @@ from copy import deepcopy
 from electrica import profiles
 from electrica.light_rules import parse_rule
 import test_ha_native_output as native
-from test_profiles import SNAP,CAP,binding
+from test_profiles import SNAP,CAP,binding,publish_profiles
 from test_lab_rest_fallback import BASE,PHYSICAL,PHYSICAL_DEVICE,COORD,DEVICE,packet
 
 TV=native.TV
@@ -127,3 +127,25 @@ class AutoProfileTests(unittest.TestCase):
         app._ha_shadows[TV]={"state":"on","at":time.monotonic()-120}
         self.transition(app)
         ha.execute.assert_called_once()
+
+
+    def test_canonical_topics_in_any_order_and_no_profile_edit_transition(self):
+        from types import SimpleNamespace
+        app,ha,_=self.app()
+        def state(value,retain=False):
+            app._on_message(None,None,SimpleNamespace(topic=profiles.STATE_TOPIC,payload=value,retain=retain))
+        state(b"off",True)
+        publish_profiles(app,mode=False)
+        self.assertTrue(app._jobs.empty())
+        publish_profiles(app,mode=False,values={"day":SNAP["day"],"night":{**SNAP["night"],"brightness":40}})
+        self.assertTrue(app._jobs.empty())
+        state(b"on")
+        self.assertEqual(app._jobs.qsize(),1)
+        state(b"on")
+        self.assertEqual(app._jobs.qsize(),1)
+        job=app._jobs.get_nowait()
+        app._adapt_home_profile(job[6])
+        self.assertEqual(ha.execute.call_args.args[0]["data"]["brightness_pct"],40)
+        state(b"")
+        state(b"off")
+        self.assertTrue(app._jobs.empty())

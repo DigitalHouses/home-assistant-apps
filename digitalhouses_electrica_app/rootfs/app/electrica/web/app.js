@@ -266,7 +266,7 @@ function profileSelect(a,t,p,action,volume=false){
     if(select.value==="custom")return true;
   }
   if(a.data.profile){
-    p.append(el("span",model.home_mode?"Глобальные параметры дома":"Глобальный модуль недоступен","muted"));
+    p.append(el("span",model.home_profiles_ready&&(a.data.profile!=="current"||model.home_mode)?"Глобальные параметры дома":"Глобальные параметры недоступны","muted"));
   }
   return false;
 }

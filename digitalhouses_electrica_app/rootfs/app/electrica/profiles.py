@@ -1,32 +1,47 @@
 """Read-only consumer contract for the future global home-mode module."""
-from collections.abc import Mapping
+import math
 from .catalog import CatalogError
 
-# Temporary development adapter only. The future producer owns night_mode
-# (on/off); its final MQTT topics and profile payloads are not agreed yet.
-TOPIC = "DigitalHouses/Global/day_night/state"
+STATE_TOPIC = "DigitalHouses/Global/night_mode/state"
+PROFILES_TOPIC = "DigitalHouses/Global/night_mode/profiles"
+TOPICS = (STATE_TOPIC, PROFILES_TOPIC)
 SOURCES = {"day","night","current"}
-FIELDS = {"brightness_pct","color_temp_kelvin","rgb_color","volume_pct","color_mode"}
+PERCENT_FIELDS = {"brightness","volume","display_brightness","indicator_brightness"}
+BOOLEAN_FIELDS = {"voice_notifications_enabled","noncritical_sound_notifications_enabled"}
+FIELDS = PERCENT_FIELDS | BOOLEAN_FIELDS | {"color_mode","color_temp_kelvin","rgb_color","transition_seconds"}
 
 def integer(value,lo,hi):
     return type(value) is int and lo<=value<=hi
 
-def validate_snapshot(value):
-    """One atomic retained snapshot; no guessed profiles or persisted copies."""
-    if not isinstance(value,dict) or set(value)!={"schema","mode","day","night"} or type(value["schema"]) is not int or value["schema"]!=1 or value["mode"] not in ("day","night"):
-        raise CatalogError("Invalid global home-mode snapshot")
-    for name in ("day","night"):
-        row=value[name]
-        if not isinstance(row,dict) or set(row)!=FIELDS:
+def validate_profiles(value):
+    """System Globals publishes both complete profiles, with explicit nulls."""
+    if not isinstance(value,dict) or set(value)!={"day","night"}:
+        raise CatalogError("Expected day and night profiles")
+    for row in value.values():
+        if not isinstance(row,dict) or not FIELDS <= set(row):
             raise CatalogError("Incomplete global profile")
-        if not integer(row["brightness_pct"],1,100) or not integer(row["color_temp_kelvin"],1000,12000) or not integer(row["volume_pct"],0,100):
-            raise CatalogError("Invalid global profile value")
-        rgb=row["rgb_color"]
-        if not isinstance(rgb,list) or len(rgb)!=3 or any(not integer(v,0,255) for v in rgb):
-            raise CatalogError("Invalid global RGB")
-        if row["color_mode"] not in ("cct","rgb"):
-            raise CatalogError("Invalid global color preference")
+        for field in PERCENT_FIELDS:
+            if row[field] is not None and not integer(row[field],0,100):
+                raise CatalogError("Invalid global percent")
+        for field in BOOLEAN_FIELDS:
+            if row[field] is not None and type(row[field]) is not bool:
+                raise CatalogError("Invalid global flag")
+        transition=row["transition_seconds"]
+        if transition is not None and (type(transition) not in (int,float) or not 0<=transition or not math.isfinite(transition)):
+            raise CatalogError("Invalid transition")
+        mode,cct,rgb=row["color_mode"],row["color_temp_kelvin"],row["rgb_color"]
+        if mode=="cct" and integer(cct,2000,6000) and rgb is None:continue
+        if mode=="rgb" and cct is None and isinstance(rgb,list) and len(rgb)==3 and all(integer(v,0,255) for v in rgb):continue
+        if mode is None and cct is None and rgb is None:continue
+        raise CatalogError("Invalid or conflicting global color")
     return value
+
+def state_mode(raw):
+    return {b"on":"night",b"off":"day"}.get(raw)
+
+def snapshot(mode,values):
+    # Fixed references work even before the first mode arrives.
+    return {"mode":mode,**(values or {})} if mode is not None or values is not None else None
 
 def source(data):
     if "profile" not in data:return None
@@ -42,23 +57,33 @@ def resolve(data,target,snapshot,domain):
     ref=source(data)
     if ref is None:return data
     if snapshot is None:raise CatalogError("Global Day/Night module unavailable")
-    row=snapshot[snapshot["mode"] if ref=="current" else ref]
+    name=snapshot.get("mode") if ref=="current" else ref
+    row=snapshot.get(name) if name else None
+    if row is None:raise CatalogError("Global profile or mode unavailable")
     if domain=="media_player":
         if "volume" not in target.get("operations",[]):
             raise CatalogError("Volume not supported")
-        return {"volume_pct":row["volume_pct"]}
+        if row["volume"] is None:raise CatalogError("Global volume is unset")
+        return {"volume_pct":row["volume"]}
     if not supported_light(target):raise CatalogError("Light has no profile capabilities")
     result={}
-    if target.get("brightness"):result["brightness_pct"]=row["brightness_pct"]
-    use_cct=target.get("cct") and (not target.get("rgb") or row["color_mode"]=="cct")
-    if use_cct:
+    if target.get("brightness") and row["brightness"] is not None:
+        result["brightness_pct"]=row["brightness"]
+    if row["color_mode"]=="cct" and target.get("cct"):
         lo,hi=target.get("min_kelvin"),target.get("max_kelvin")
-        if type(lo) is not int or type(hi) is not int or not lo<=hi:
-            raise CatalogError("Light CCT range unknown")
-        result["color_temp_kelvin"]=max(lo,min(hi,row["color_temp_kelvin"]))
-    elif target.get("rgb"):result["rgb_color"]=list(row["rgb_color"])
+        if type(lo) is int and type(hi) is int and 0<lo<=hi:
+            result["color_temp_kelvin"]=max(lo,min(hi,row["color_temp_kelvin"]))
+    elif row["color_mode"]=="rgb" and target.get("rgb"):
+        result["rgb_color"]=list(row["rgb_color"])
     if not result:raise CatalogError("No applicable profile parameters")
+    if result.get("brightness_pct")==0:
+        # Explicit zero illumination has no color requirement.
+        result={"brightness_pct":0}
+    if target.get("transition") and row["transition_seconds"] is not None:
+        # Existing engine's validated transition range is 0..60 seconds.
+        result["transition"]=min(60,row["transition_seconds"])
     return result
+
 
 def resolve_commands(commands,catalog,snapshot):
     """Resolve only profile references. Keep plain and legacy commands intact."""
@@ -121,3 +146,19 @@ def group_already_on(route,net,availability,fresh_fields,shadows):
                and (base,m["friendly_name"]) not in shadows
                and net.get("states",{}).get(m["friendly_name"],{}).get("state")=="ON"
                for m in route["members"]) and bool(route["members"])
+
+
+def apply_zero_to_ha_plans(plans,zero_ids):
+    """Keep legacy targets intact even when their parameters coalesce with a profile."""
+    for call in plans:
+        if call["service"]!="light.turn_on":
+            yield call
+            continue
+        ids=call["target"]["entity_id"]
+        zero=[eid for eid in ids if eid in zero_ids]
+        other=[eid for eid in ids if eid not in zero_ids]
+        if zero:
+            yield {"service":"light.turn_off","target":{"entity_id":zero},
+                   "data":{k:v for k,v in call.get("data",{}).items() if k=="transition"}}
+        if other:
+            yield {**call,"target":{"entity_id":other}}

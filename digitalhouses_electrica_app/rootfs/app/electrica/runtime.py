@@ -171,6 +171,8 @@ class Application:
         self._target_registries = None
         self._temperature_unit = None
         self._home_profile = None
+        self._global_mode = None
+        self._global_profiles = None
         self._last_refresh = None
         self._light_shadows = {}
         self._ha_shadows = {}
@@ -424,8 +426,10 @@ class Application:
             self._light_observed_at.clear()
             self._light_probe_at.clear()
             self._home_profile = None
+            self._global_mode = None
+            self._global_profiles = None
         for topic in (*_FILTERS, SCAN_REQUEST, ROOT + "/command/refresh",
-                      ROOT + "/command/check_updates", ROOT + "/command/delete_telemetry", "homeassistant/status", profiles.TOPIC):
+                      ROOT + "/command/check_updates", ROOT + "/command/delete_telemetry", "homeassistant/status", *profiles.TOPICS):
             self._subscribe(topic)
         self._publish(AVAILABILITY, "online")
         self._publish(SYNC_TOPIC, sync_payload(self.version))
@@ -447,20 +451,26 @@ class Application:
             self._light_observed_at.clear()
             self._light_probe_at.clear()
             self._home_profile = None
+            self._global_mode = None
+            self._global_profiles = None
 
     def _on_message(self, client, userdata, message):
         del client, userdata
-        if message.topic == profiles.TOPIC:
+        if message.topic in profiles.TOPICS:
             from .binding_store import decode_json
-            try:
-                raw=bytes(message.payload)
-                if len(raw)>4096:
-                    raise CatalogError("Global profile snapshot too large")
-                snapshot=profiles.validate_snapshot(decode_json(raw))
-            except (CatalogError,ValueError,TypeError,KeyError):
-                snapshot=None
+            raw=bytes(message.payload)
             with self._mutex:
-                self._accept_home_profile(snapshot, retained=message.retain)
+                if message.topic==profiles.STATE_TOPIC:
+                    self._global_mode=profiles.state_mode(raw)
+                else:
+                    try:
+                        if len(raw)>16384:raise CatalogError("Global profiles too large")
+                        self._global_profiles=profiles.validate_profiles(decode_json(raw))
+                    except (CatalogError,ValueError,TypeError,KeyError,OverflowError):
+                        self._global_profiles=None
+                self._accept_home_profile(
+                    profiles.snapshot(self._global_mode,self._global_profiles),
+                    retained=message.retain or message.topic==profiles.PROFILES_TOPIC)
             return
         if message.topic == ROOT + "/command/delete_telemetry":
             if (self.telemetry is not None and not message.retain
@@ -801,7 +811,9 @@ class Application:
         previous=self._home_profile
         if previous==snapshot:return
         self._home_profile=snapshot
-        if (retained or not previous or not snapshot or previous["mode"]==snapshot["mode"]
+        if (retained or not previous or not snapshot or previous.get("mode") not in ("day","night")
+                or snapshot.get("mode") not in ("day","night")
+                or previous["mode"]==snapshot["mode"] or snapshot["mode"] not in snapshot
                 or not self.globals.get("auto_day_night") or self.globals["maintenance_mode"]):
             return
         try:
@@ -848,11 +860,13 @@ class Application:
                         if not plans:raise ActionError(skipped[0]["reason"] if skipped else "No verified route")
                         plan=plans[0]
                         # Do not send a separate ON command during adaptation.
-                        payload={k:v for k,v in plan["payload"].items() if k!="state"}
+                        zero=data.get("brightness_pct")==0
+                        payload=({"state":"OFF",**{k:v for k,v in plan["payload"].items() if k=="transition"}} if zero
+                                 else {k:v for k,v in plan["payload"].items() if k!="state"})
                         if not payload or not self._publish(plan["topic"],payload,retain=False):
                             raise ActionError("MQTT profile command rejected")
                         handled.update(members)
-                        self.event_log.sent(rid,eid,("z2m",*ident),"on","on",accepted_only=True)
+                        self.event_log.sent(rid,eid,("z2m",*ident),"on","off" if zero else "on",accepted_only=not zero)
                         continue
                 if self._ha_client is None:self._ha_client=HAClient(os.environ.get("SUPERVISOR_TOKEN",""))
                 if eid.startswith("light."):
@@ -877,8 +891,10 @@ class Application:
                         if (not eligible(eid) or eid in self.config.get("light_routes",{})
                                 or (shadow and time.monotonic()-shadow["at"]<=HA_SHADOW_SECONDS)):
                             raise ActionError("Light route or profile changed")
-                    self._ha_client.execute({"service":"light.turn_on","target":{"entity_id":[eid]},"data":data})
-                    self.event_log.sent(rid,eid,("ha",eid),"on","on",sent_at=_iso_now(),accepted_only=True)
+                    zero=data.get("brightness_pct")==0
+                    at=_iso_now()
+                    self._ha_client.execute({"service":"light.turn_off" if zero else "light.turn_on","target":{"entity_id":[eid]},"data":{k:v for k,v in data.items() if k=="transition"} if zero else data})
+                    self.event_log.sent(rid,eid,("ha",eid),"on","off" if zero else "on",sent_at=at,accepted_only=not zero)
                 else:
                     entities=self.registry.fetch_entities()
                     matches=[e for e in entities if e.get("entity_id")==eid]
@@ -981,6 +997,8 @@ class Application:
                     commands,profile_skipped,unresolved_toggles=profiles.resolve_commands(commands,self.target_catalog,self._home_profile)
                 profile_lights={eid for c in all_commands if c["service"].startswith("light.")
                                 and "profile" in c.get("data",{}) for eid in c["target"]["entity_id"]}
+                zero_profile_lights={eid for c in commands if c["service"].startswith("light.")
+                    and c.get("data",{}).get("brightness_pct")==0 for eid in c["target"]["entity_id"] if eid in profile_lights}
                 is_test = base is None and action == "TEST"
                 switch_commands = [c for c in commands if c["service"].startswith("switch.")]
                 domain_commands = [c for c in commands if c["service"].startswith(("cover.","climate.","media_player."))]
@@ -1090,6 +1108,8 @@ class Application:
                         if plan["state"]=="ON" and plan["light"] in unresolved_toggles:
                             skipped.append({"light":plan["light"],"reason":unresolved_toggles[plan["light"]]})
                             continue
+                        if plan["state"]=="ON" and plan["light"] in zero_profile_lights:
+                            plan={**plan,"state":"OFF","payload":{"state":"OFF",**{k:v for k,v in plan["payload"].items() if k=="transition"}}}
                         if self._publish(plan["topic"], plan["payload"],
                                          retain=False):
                             ident = plan["ident"]
@@ -1116,7 +1136,7 @@ class Application:
                         toggle_state_override=toggle_override,
                         allowed_lights=ha_approved)
                     skipped.extend(lab_skipped)
-                    for call in lab_plans:
+                    for call in profiles.apply_zero_to_ha_plans(lab_plans,zero_profile_lights):
                         ids = call["target"]["entity_id"]
                         if call["service"]=="light.turn_on":
                             for eid in ids:

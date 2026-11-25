@@ -40,12 +40,14 @@ It is independent of any Home Assistant dashboard.
 - **Home profiles:** smart lights use ON/OFF, Fixed (Day / Night / Custom),
   or Day/Night. Media volume can reference the same global profiles.
   Only Custom displays local parameters. Day, Night and current are
-  references, resolved from a provisional atomic retained snapshot at
-  DigitalHouses/Global/day_night/state. The future global module owns all
+  references, resolved from System Globals retained night_mode/state (on/off)
+  and night_mode/profiles (day/night) under DigitalHouses/Global/.
+  The System Globals module owns all
   profile values. Missing/invalid snapshots block profile ON/volume, not
   OFF or independent assignments. No global settings are persisted here.
-  The external module will own night_mode on/off; the final transport contract
-  is pending. App option auto_day_night (default false) enables adaptation
+  Nulls are unset; zero brightness means OFF, zero volume means mute.
+  CCT/RGB are mutually exclusive; unsupported color is omitted.
+  Profile edits alone do not trigger a transition. App option auto_day_night (default false) enables adaptation
   on a real mode transition for active dynamic-only targets. Skip ambiguous
   fixed/dynamic overlaps, offline targets and groups without all members
   confirmed ON. No retained startup replay or playback start. HA light
