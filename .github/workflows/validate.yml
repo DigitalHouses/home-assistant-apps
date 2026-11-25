@@ -465,6 +465,36 @@ jobs:
           APP_VERSION="$(awk '$1 == "version:" {gsub(/"/,"",$2);print $2;exit}' digitalhouses_sync_app/config.yaml)"
           docker run --rm --entrypoint python3 "dh-sync-preview:$APP_VERSION" -c 'import sys; sys.path.insert(0, "/app"); from app import create_mqtt_client, on_connect; from resource_preview import PreviewCatalog; from local_audit import LocalAuditor; c = create_mqtt_client(); assert c is not None; assert PreviewCatalog(); assert LocalAuditor(); print("HAOS MQTT + preview + local audit imports OK")'
 
+  system-globals-app:
+    name: System Globals App
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - name: Install isolated test dependencies
+        run: |
+          python -m pip install --disable-pip-version-check -r digitalhouses_system_globals_app/requirements.txt PyYAML
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends mosquitto
+      - name: Compile Python and check launcher
+        run: |
+          python -m compileall -q digitalhouses_system_globals_app/rootfs/app digitalhouses_system_globals_app/tests
+          bash -n digitalhouses_system_globals_app/rootfs/run.sh
+      - name: Test autonomous runtime and readiness on real isolated MQTT broker
+        env:
+          PYTHONPATH: digitalhouses_system_globals_app/rootfs/app
+          DH_TEST_MOSQUITTO: /usr/sbin/mosquitto
+        run: python -m unittest discover -s digitalhouses_system_globals_app/tests -v
+      - name: Build and smoke-test HAOS image
+        run: |
+          APP_VERSION="$(awk '$1 == "version:" {print $2;exit}' digitalhouses_system_globals_app/config.yaml)"
+          docker build --build-arg BUILD_VERSION="$APP_VERSION" --build-arg BUILD_ARCH=amd64 --tag "dh-system-globals-ci:$APP_VERSION" digitalhouses_system_globals_app
+          docker run --rm --entrypoint python3 "dh-system-globals-ci:$APP_VERSION" -c 'import sys; sys.path.insert(0, "/app"); from runtime import Session; from service import Service; from discovery import discovery; assert Session("127.0.0.1",1883,None,None); assert discovery("0.1.0")'
+
   stats-server:
     name: Stats Server
     runs-on: ubuntu-latest
