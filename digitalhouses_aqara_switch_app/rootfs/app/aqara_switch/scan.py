@@ -97,6 +97,23 @@ def scan_once(snapshots: list[dict], options_client, ha_registry) -> tuple[dict,
     options = options_client.read()
     previous = parse_configuration(options, profile_path=STORE_PATH)
     prior_switches = [s for room in previous["rooms"] for s in room["switches"]]
+    metadata_changed = False
+    if options.get("_bindings_store"):
+        physical = {(sw["coordinator_ieee"],sw["ieee"]):sw for sw in prior_switches}
+        for candidate in candidates:
+            sw = physical.get((candidate["coordinator_ieee"],candidate["ieee"]))
+            if not sw:
+                continue
+            old, new = sw["fingerprint"], candidate["fingerprint"]
+            if {k:v for k,v in old.items() if k!="actions"} != {k:v for k,v in new.items() if k!="actions"}:
+                continue  # preserve incompatible hardware gate
+            if any(other is not sw and other["coordinator_ieee"]==candidate["coordinator_ieee"]
+                   and other["logical_name"]==candidate["logical_name"] for other in prior_switches):
+                continue
+            for field in ("logical_name","base_topic","fingerprint"):
+                if sw[field] != candidate[field]:
+                    sw[field] = deepcopy(candidate[field])
+                    metadata_changed = True
     by_entity = {sw["entity_id"]: sw for sw in prior_switches}
     by_logical = {(sw["coordinator_ieee"], sw["logical_name"]): sw
                   for sw in prior_switches}
@@ -185,6 +202,31 @@ def scan_once(snapshots: list[dict], options_client, ha_registry) -> tuple[dict,
             initialized.append(sw["entity_id"])
             for warning in warnings:
                 problems.append({"name": sw["logical_name"], "reason": warning})
+    if options.get("_bindings_store"):
+        # Reconcile observed areas and potential decoupled keys without touching
+        # any stored explicit keep_mode or executing a physical command.
+        for room in list(merged["rooms"]):
+            for sw in list(room["switches"]):
+                observed = observed_devices.get((sw["coordinator_ieee"],sw["ieee"]))
+                if not observed:
+                    continue
+                keep,_ = capture_keep_mode(*observed)
+                if sw.get("mode_default") != keep:
+                    sw["mode_default"] = keep
+                    metadata_changed = True
+                area = areas.get(sw["ieee"]) or {"area_id":None,"name":"Без комнаты"}
+                if room["area_id"] != area["area_id"]:
+                    dest = next((r for r in merged["rooms"] if r["area_id"]==area["area_id"]),None)
+                    if dest is None:
+                        dest={"area_id":area["area_id"],"name":area["name"],"switches":[]}
+                        merged["rooms"].append(dest)
+                    room["switches"].remove(sw)
+                    dest["switches"].append(sw)
+                    metadata_changed = True
+                elif room["name"] != area["name"]:
+                    room["name"] = area["name"]
+                    metadata_changed = True
+        merged["rooms"] = [r for r in merged["rooms"] if r["switches"]]
     report["keep_mode_initialized"] = initialized
     report["replaced"] = replaced
     report["logical_only"] = logical_only
@@ -199,7 +241,7 @@ def scan_once(snapshots: list[dict], options_client, ha_registry) -> tuple[dict,
         changed = store_scan(merged, options, STORE_PATH)
         options_client.write(changed)
         merged = parse_configuration(options_client.read(), profile_path=STORE_PATH)
-    elif routes_changed:
+    elif routes_changed or metadata_changed:
         # Route-only Scan has no reason to rewrite Supervisor YAML.
         _save_profiles(STORE_PATH, merged)
         merged = parse_configuration(options_client.read(), profile_path=STORE_PATH)

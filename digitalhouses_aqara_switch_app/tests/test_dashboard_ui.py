@@ -33,34 +33,21 @@ class DashboardTests(unittest.TestCase):
         self.assertEqual(view["type"], "sections")
         self.assertEqual(view["max_columns"], 4)
         self.assertEqual(view["path"], "aqara")
-        self.assertEqual([s["column_span"] for s in view["sections"]], [1, 1, 2])
-
-        status, scan, tree = [s["cards"] for s in view["sections"]]
+        self.assertEqual([s["column_span"] for s in view["sections"]], [1, 3])
+        status, tree = [s["cards"] for s in view["sections"]]
         self.assertEqual([c["type"] for c in status], [
-            "heading", "custom:mushroom-template-card", "vertical-stack",
+            "vertical-stack", "heading", "custom:mushroom-template-card",
             "heading", "markdown"])
-        self.assertEqual([c["type"] for c in scan], [
-            "heading", "markdown", "custom:auto-entities"])
         self.assertEqual([c["type"] for c in tree], ["heading", "markdown"])
-        self.assertEqual(status[1]["entity"], "sensor.dh_aqara_switch_app_problems")
-        self.assertTrue(status[1]["multiline_secondary"])
-        self.assertEqual(scan[2]["filter"]["include"], [{"domain": "light"}])
-        self.assertEqual(scan[2]["sort"]["method"], "name")
+        self.assertEqual(status[2]["entity"], "sensor.dh_aqara_switch_app_problems")
+        self.assertTrue(status[2]["multiline_secondary"])
         self.assertNotIn("cards", view)
-        self.assertEqual(str(standalone).count("button.dh_aqara_switch_app_scan"), 1)
-
-        cards = {
-            "status": status[2],
-            "last_action": status[4],
-            "scan": scan[1],
-            "tree": tree[1],
-        }
-        source = {
-            "status": "dh_aqara_switch_app_card_ru.yaml",
-            "last_action": "dh_aqara_switch_app_last_action_ru.yaml",
-            "scan": "dh_aqara_switch_app_last_scan_ru.yaml",
-            "tree": "dh_aqara_switch_app_tree_ru.yaml",
-        }
+        self.assertNotIn("button.dh_aqara_switch_app_scan", str(view))
+        self.assertNotIn("custom:auto-entities", str(view))
+        cards = {"status":status[0],"last_action":status[4],"tree":tree[1]}
+        source = {"status":"dh_aqara_switch_app_card_ru.yaml",
+                  "last_action":"dh_aqara_switch_app_last_action_ru.yaml",
+                  "tree":"dh_aqara_switch_app_tree_ru.yaml"}
         for key, filename in source.items():
             with self.subTest(card=key):
                 self.assertEqual(cards[key], yaml.safe_load((ROOT / filename).read_text()))
@@ -81,7 +68,8 @@ class DashboardTests(unittest.TestCase):
         ]
         self.assertEqual(embedded, [tree])
         self.assertIn("{% for target in targets -%}", tree)
-        self.assertIn("{% set light_state = states(target) -%}", tree)
+        self.assertIn("state_attr(entity, 'target_states')", tree)
+        self.assertNotIn("states(target)",tree)
         self.assertIn("light_state == 'on'", tree)
         self.assertIn("light_state == 'off'", tree)
         self.assertIn('icon="mdi:lightbulb"', tree)
@@ -100,16 +88,14 @@ class DashboardTests(unittest.TestCase):
     def test_only_supported_actions_and_no_fake_sensor(self):
         text = (ROOT / "dh_aqara_switch_app_dashboard_ru.yaml").read_text()
         self.assertNotIn("tojson", text)
-        self.assertNotIn("button.dh_aqara_switch_app_refresh", text)
-        self.assertNotIn("button.dh_aqara_switch_app_check_updates", text)
+        self.assertIn("button.dh_aqara_switch_app_refresh", text)
+        self.assertIn("button.dh_aqara_switch_app_check_updates", text)
         self.assertNotIn("light.toggle", text)
         for entity in (
             "sensor.dh_aqara_switch_app_card",
             "sensor.dh_aqara_switch_app_last_action",
             "sensor.dh_aqara_switch_app_devices_details",
-            "sensor.dh_aqara_switch_app_scan_details",
             "sensor.dh_aqara_switch_app_problems",
-            "button.dh_aqara_switch_app_scan",
         ):
             self.assertIn(entity, text)
 

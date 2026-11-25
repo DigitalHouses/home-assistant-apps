@@ -1,5 +1,14 @@
 # Changelog — DigitalHouses Aqara Switch App
 
+## 0.2.0
+
+- Add app-owned Ingress with a full-width device list, actual actions, per-target light/switch assignments, optional brightness, RGB, Kelvin and transition.
+- Migrate old Supervisor YAML bindings once into atomic /data/bindings.json; preserve orphaned/disabled assignments and use the internal file exclusively.
+- Add startup and scheduled Scan (auto_scan_interval in minutes, default 60; zero disables periodic scan), manual Scan in Ingress, stable hardware keys across rename and read-only diagnostics.
+- Preserve verified direct Z2M light transport, Mode Keeper, grouped light toggles, telemetry and DH Sync retained contract. HA switch targets exclude relays of adopted Aqara inputs. Newly detected devices require explicit enabling before relay control.
+- Adopt the unified App status card with real Refresh and release Check, Supervisor installation/restart; Dashboard only renders application-published data and no longer exposes Scan or binding editing.
+- Live HAOS upgrade, Supervisor Ingress and physical E2E acceptance are required before production publication.
+
 ## 0.1.19
 
 - Keep Zigbee/MQTT switch control running if an opted-in telemetry state file is malformed or unreadable. Log the error and preserve the original installation credentials instead of silently regenerating identity.
