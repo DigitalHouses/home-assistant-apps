@@ -85,7 +85,6 @@ class UpdateManager:
         self._published: str | None = None
         self._status_error: str | None = None
         self._status: str = "idle"
-        self._worker_stamp: str | None = None
         try:
             cached = self.cache.load()
             self.tag = str(cached.get("tag") or "")
@@ -211,68 +210,47 @@ class UpdateManager:
             "installation_error": worker.get("error"),
         }
 
-    def install_card_outcome(
-        self, *, card_started_at: str | None,
-    ) -> tuple[bool, str | None] | None:
-        """Resolve only the foreground installation that this card started.
-
-        The updater writes its *final* worker state after restarting the agent.
-        A later automatic GitHub check may already have made the aggregate
-        update status idle, so it cannot be used to complete an install card.
-        Return success only for the matching, terminal transaction. If a
-        terminal result is unrelated or unreadable, finish the card with an
-        explicit error instead of leaving its UI timer running forever.
-        """
-        worker = self._worker_status()
+    def installation_view(self) -> tuple[str, str | None]:
+        """Current installer facts, independent of any foreground card history."""
+        try:
+            worker = self.worker.load()
+        except (OSError, StateStoreError):
+            log.warning("Cannot read installer state for UI", exc_info=True)
+            return "unknown", None
         state = worker.get("state")
-        if state in {"completed", "error"}:
-            try:
-                started = datetime.fromisoformat(str(card_started_at))
-                request = self.request.load()
-                requested = datetime.fromisoformat(str(request.get("requested_at")))
-                finished = datetime.fromisoformat(str(worker.get("updated_at")))
-                target = request.get("version")
-                if not (
-                    started.tzinfo and requested.tzinfo and finished.tzinfo
-                    and requested >= started and finished >= requested
-                    and isinstance(target, str) and target
-                ):
-                    return False, str(
-                        self._status_error or "No matching installation transaction for this UI card"
-                    )
-            except (OSError, ValueError, TypeError, StateStoreError):
-                return (
-                    (False, str(self._status_error or "Update failed"))
-                    if self._status == "error" else (
-                        False, "Installation result cannot be verified from persisted state"
-                    )
-                )
-            if state == "error":
-                return False, str(worker.get("error") or "Update failed")
-            try:
-                # Also recover an old stuck card if a newer stable release was
-                # later installed manually. The updater already verified the
-                # original successful transaction; never accept an older
-                # running version as confirmation of a newer release.
-                if stable_version(self.version) >= stable_version(target):
-                    return True, None
-            except ValueError:
-                pass
-            return False, (
-                f"Updater completed but installed agent version {self.version} "
-                f"does not match requested {target}"
-            )
-
         if state in BUSY_PHASES:
-            return None
-        # A denied preflight, missing release or failure before worker launch
-        # is reported directly by UpdateManager, not by update_worker.json.
-        if self._status == "error":
-            return False, str(self._status_error or "Update failed")
-        # Without a live or terminal updater transaction an install card can
-        # never complete. Report the missing result instead of showing a
-        # perpetual foreground timer on a healthy agent.
-        return False, "No installation transaction is active"
+            return "running", None
+        if state == "error":
+            # A failed older update is no longer relevant once its target (or
+            # a newer version) is actually installed. No timestamp matching.
+            try:
+                target = self.request.load().get("version")
+                if isinstance(target, str) and stable_version(self.version) >= stable_version(target):
+                    return "idle", None
+            except (OSError, ValueError, TypeError, StateStoreError):
+                log.warning("Cannot read installation target for diagnostics")
+            return "error", str(worker.get("error") or "Update failed")
+        return ("completed" if state == "completed" else "idle"), None
+
+    def sync_install_card(self, card, *, startup: bool = False, requested: bool = False) -> None:
+        """Project the actual worker, not a restored UI transaction."""
+        state, error = self.installation_view()
+        if state == "running":
+            if card.operation != "install" or card.state != "running":
+                if card.state == "running":
+                    card.reset()
+                card.begin("install", observed=True)
+            return
+        if requested and self._status == "error":
+            error = self._status_error or "Update failed"
+        if card.state == "running" and card.operation == "install":
+            if error or state == "completed":
+                card.finish("install", error=error)
+            else:
+                card.reset()
+        elif startup and state == "error":
+            card.begin("install", observed=True)
+            card.finish("install", error=error)
 
     def tick(self, bridge: object, *, check: bool = False, install: bool = False,
              denial_reason: Callable[[], str | None] | None = None,
