@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from .state_store import StateStore
-from .ups_nut import UpsSnapshot
+from .ups_nut import UpsSnapshot, calibration_with_healthy_input
 
 
 HISTORY_LIMIT = 50
@@ -974,11 +974,11 @@ class ShutdownHistoryTracker:
         observed_at = self.now_iso()
         tokens = set(snapshot.status_tokens)
 
-        if snapshot.on_battery and not isinstance(updated.get("outage_started_at"), str):
+        if snapshot.on_battery and not calibration_with_healthy_input(snapshot) and not isinstance(updated.get("outage_started_at"), str):
             updated["outage_started_at"] = observed_at
             changed = True
 
-        if snapshot.line_power and "FSD" not in tokens and not isinstance(updated.get("fsd_at"), str):
+        if (snapshot.line_power or calibration_with_healthy_input(snapshot)) and "FSD" not in tokens and not isinstance(updated.get("fsd_at"), str):
             if "outage_started_at" in updated:
                 updated.pop("outage_started_at", None)
                 changed = True
