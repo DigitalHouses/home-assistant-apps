@@ -95,3 +95,12 @@ for(const domain of ['light','switch','cover','climate','media_player','future_d
         self.assertIn('if(item.can_play)line.append(button("Выбрать"',js)
         self.assertIn('n.min=0;n.max=100;n.step=1;n.value=a.data.volume_pct',js)
         self.assertIn('domains=["light","switch","cover","climate","media_player"]',picker)
+
+    def test_profile_modes_and_fixed_source_selection(self):
+        js=(WEB/"app.js").read_text()
+        self.assertIn('[["simple","ON/OFF"]]',js)
+        self.assertIn('["fixed","Фиксированные"],["current","День/Ночь"]',js)
+        self.assertIn('[["day","День"],["night","Ночь"],["custom","Свои"]]',js)
+        self.assertIn('if(profileSelect(a,t,p,action))',js)
+        self.assertIn('if(!(t.brightness||t.cct||t.rgb)&&!Object.keys(a.data).length)return',js)
+        self.assertIn('if(a.operation==="volume"&&profileSelect(a,t,p,action,true))',js)

@@ -37,6 +37,15 @@ It is independent of any Home Assistant dashboard.
   Protected Aqara input relays are excluded from switch assignments.
   Grouped light toggles retain the shared ON/OFF decision; switch toggles
   are grouped separately. Offline/unverified targets are skipped.
+- **Home profiles:** smart lights use ON/OFF, Fixed (Day / Night / Custom),
+  or Day/Night. Media volume can reference the same global profiles.
+  Only Custom displays local parameters. Day, Night and current are
+  references, resolved from a provisional atomic retained snapshot at
+  DigitalHouses/Global/day_night/state. The future global module owns all
+  profile values. Missing/invalid snapshots block profile ON/volume, not
+  OFF or independent assignments. No global settings are persisted here.
+  Automatic adaptation of already active targets is a separate pending
+  stage, not a per-assignment option.
 - **Cover:** select Toggle, Open, Close, Stop or Position according to the HA
   capability flags. Toggle resolves from a known settled state; moving or
   unknown state does not imply a direction. Optional window/door/opening

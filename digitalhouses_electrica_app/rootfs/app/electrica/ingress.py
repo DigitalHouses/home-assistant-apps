@@ -7,7 +7,7 @@ from pathlib import Path
 from urllib.parse import urlsplit, parse_qs
 
 from .catalog import CatalogError
-from . import climate_rules, media_rules
+from . import climate_rules, media_rules, profiles
 from .binding_store import binding_document, validate_document, decode_json
 from .entity_options import parse_rows, render_rows, project
 from .ingress_catalog import normalize, supported_actions, required_keep
@@ -30,6 +30,7 @@ def snapshot(app):
         scan = dict(app._scan)
         report = deepcopy(app._previous)
         maintenance = getattr(app,"globals",{}).get("maintenance_mode",False)
+        global_mode = getattr(app,"_home_profile",None)
     rows = parse_rows(app.options.read())
     indexed = {r["entity_id"]:r for r in rows}
     devices = []
@@ -62,7 +63,7 @@ def snapshot(app):
                         "enabled":row["enabled"],"disabled_actions":row.get("disabled_actions",[]),"actions":[],
                         "bindings":{k:normalize(v) for k,v in row["actions"].items()}})
     return {"devices":devices,"targets":list(targets.values()),"scan":scan,
-            "report":report,"revision":revision(rows),"version":app.version,"maintenance_mode":maintenance}
+            "report":report,"revision":revision(rows),"version":app.version,"maintenance_mode":maintenance,"home_mode":global_mode["mode"] if global_mode else None}
 
 def validate_assignment(assignment, targets):
     rule = parse_rule({"assignments":[assignment]})
@@ -71,6 +72,12 @@ def validate_assignment(assignment, targets):
     if not target:
         raise CatalogError("Целевая сущность отсутствует: " + eid)
     data = rule["target_data"][eid]
+    if "profile" in data:
+        if eid.startswith("light.") and not profiles.supported_light(target):
+            raise CatalogError("Светильник не поддерживает параметры профиля: "+eid)
+        if eid.startswith("media_player.") and "volume" not in target.get("operations",[]):
+            raise CatalogError("Громкость не поддерживается: "+eid)
+        return
     if eid.startswith("media_player."):
         media_rules.validate_capability(rule["target_operations"][eid],data,target)
         return

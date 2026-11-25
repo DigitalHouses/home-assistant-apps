@@ -73,7 +73,7 @@ class EventLog:
                     row["targets"][eid].update(status="skipped",reason=str(reason or "Пропущено")[:160])
             self._touch(row)
 
-    def sent(self, rid, eid, route, before, desired, started=None, sent_at=None):
+    def sent(self, rid, eid, route, before, desired, started=None, sent_at=None, accepted_only=False):
         # Called only after accepted dispatch. MQTT runtime holds its mutex.
         with self.lock:
             row = self.rows.get(rid)
@@ -88,10 +88,11 @@ class EventLog:
                 prev = self.rows[old[0]]
                 prev["targets"][old[1]]["status"] = "superseded"
                 self._touch(prev)
-            row["targets"][eid].update(status="sent",
+            row["targets"][eid].update(status="accepted" if accepted_only else "sent",
                 before=before.lower() if before in ("ON","OFF","on","off") else None,
                 desired=desired.lower(), sent_at=sent_at or datetime.now(timezone.utc).isoformat())
-            self.pending[route]=(rid,eid,now)
+            if not accepted_only:
+                self.pending[route]=(rid,eid,now)
             self._touch(row)
 
     def sent_cover(self,rid,eid,state,desired,sent_at):

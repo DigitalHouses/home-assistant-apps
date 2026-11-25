@@ -8,7 +8,7 @@ from collections.abc import Mapping
 import re
 
 from .catalog import CatalogError
-from . import cover_rules, climate_rules, media_rules
+from . import cover_rules, climate_rules, media_rules, profiles
 
 LIGHT_ID = re.compile(r"^light\.[a-z0-9_]+$")
 SERVICES = {"light.toggle": "toggle", "light.turn_on": "on",
@@ -86,7 +86,12 @@ def parse_rule(value: object) -> dict:
             if eid in targets or not isinstance(operation,str):
                 raise CatalogError("Invalid or duplicate target operation")
             data = entry.get("data", {})
-            if eid.startswith("media_player."):
+            if isinstance(data, Mapping) and "profile" in data:
+                profiles.source(data)
+                if not ((eid.startswith("light.") and operation in ("on","toggle")) or
+                        (eid.startswith("media_player.") and operation=="volume")):
+                    raise CatalogError("Profile not permitted for this operation")
+            elif eid.startswith("media_player."):
                 data = media_rules.validate_data(operation,data)
             elif eid.startswith("climate."):
                 data = climate_rules.validate_data(operation,data)

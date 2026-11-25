@@ -16,7 +16,7 @@ import re
 import threading
 import time
 
-from . import cover_rules, climate_rules, media_rules
+from . import cover_rules, climate_rules, media_rules, profiles
 from .catalog import (CatalogError, candidate_from_mqtt, decode_bridge_devices,
                       resolve_hardware, has_event_actions, has_device_power)
 from .actions import ActionError
@@ -170,6 +170,7 @@ class Application:
         self._last_problems_payload = None
         self._target_registries = None
         self._temperature_unit = None
+        self._home_profile = None
         self._last_refresh = None
         self._light_shadows = {}
         self._ha_shadows = {}
@@ -422,8 +423,9 @@ class Application:
             self._ha_shadows.clear()
             self._light_observed_at.clear()
             self._light_probe_at.clear()
+            self._home_profile = None
         for topic in (*_FILTERS, SCAN_REQUEST, ROOT + "/command/refresh",
-                      ROOT + "/command/check_updates", ROOT + "/command/delete_telemetry", "homeassistant/status"):
+                      ROOT + "/command/check_updates", ROOT + "/command/delete_telemetry", "homeassistant/status", profiles.TOPIC):
             self._subscribe(topic)
         self._publish(AVAILABILITY, "online")
         self._publish(SYNC_TOPIC, sync_payload(self.version))
@@ -444,9 +446,22 @@ class Application:
             self._ha_shadows.clear()
             self._light_observed_at.clear()
             self._light_probe_at.clear()
+            self._home_profile = None
 
     def _on_message(self, client, userdata, message):
         del client, userdata
+        if message.topic == profiles.TOPIC:
+            from .binding_store import decode_json
+            try:
+                raw=bytes(message.payload)
+                if len(raw)>4096:
+                    raise CatalogError("Global profile snapshot too large")
+                snapshot=profiles.validate_snapshot(decode_json(raw))
+            except (CatalogError,ValueError,TypeError,KeyError):
+                snapshot=None
+            with self._mutex:
+                self._home_profile=snapshot
+            return
         if message.topic == ROOT + "/command/delete_telemetry":
             if (self.telemetry is not None and not message.retain
                     and bytes(message.payload) == b"DELETE"):
@@ -858,6 +873,10 @@ class Application:
             targets = [eid for cmd in commands for eid in cmd["target"]["entity_id"]]
             try:
                 all_commands = commands
+                with self._mutex:
+                    commands,profile_skipped,unresolved_toggles=profiles.resolve_commands(commands,self.target_catalog,self._home_profile)
+                profile_lights={eid for c in all_commands if c["service"].startswith("light.")
+                                and "profile" in c.get("data",{}) for eid in c["target"]["entity_id"]}
                 is_test = base is None and action == "TEST"
                 switch_commands = [c for c in commands if c["service"].startswith("switch.")]
                 domain_commands = [c for c in commands if c["service"].startswith(("cover.","climate.","media_player."))]
@@ -961,8 +980,12 @@ class Application:
                         self._fresh_fields, self._light_shadows,
                         self._light_observed_at, time.monotonic(),
                         toggle_state_override=toggle_override)
+                    skipped.extend(profile_skipped)
                     sent = []
                     for plan in plans:
+                        if plan["state"]=="ON" and plan["light"] in unresolved_toggles:
+                            skipped.append({"light":plan["light"],"reason":unresolved_toggles[plan["light"]]})
+                            continue
                         if self._publish(plan["topic"], plan["payload"],
                                          retain=False):
                             ident = plan["ident"]
@@ -970,7 +993,8 @@ class Application:
                             net=self._networks.get(ident[0],{})
                             previous = (group_observed_state(route,net,self._fresh_fields)
                                         if route.get("kind")=="group" else net.get("states",{}).get(ident[1],{}).get("state"))
-                            self.event_log.sent(rid,plan["light"],("z2m",*ident),previous,plan["state"])
+                            self.event_log.sent(rid,plan["light"],("z2m",*ident),previous,plan["state"],
+                                accepted_only=plan["light"] in profile_lights and plan["state"]=="ON")
                             self._light_shadows[ident] = {
                                 "value": plan["state"], "at": time.monotonic()}
                             sent.append(plan["light"])
@@ -990,6 +1014,13 @@ class Application:
                     skipped.extend(lab_skipped)
                     for call in lab_plans:
                         ids = call["target"]["entity_id"]
+                        if call["service"]=="light.turn_on":
+                            for eid in ids:
+                                if eid in unresolved_toggles:
+                                    skipped.append({"light":eid,"reason":unresolved_toggles[eid]})
+                            ids=[eid for eid in ids if eid not in unresolved_toggles]
+                            if not ids:continue
+                            call={**call,"target":{"entity_id":ids}}
                         with self._mutex:
                             if is_test:
                                 authorized = (len(ids) == 1 and self._test_light_allowed(ids[0])
@@ -1034,7 +1065,8 @@ class Application:
                         value = "on" if call["service"] == "light.turn_on" else "off"
                         with self._mutex:
                             for eid in ids:
-                                self.event_log.sent(rid,eid,("ha",eid),lab_state_cache.get(eid,(False,None))[1] if lab_state_cache.get(eid,(False,None))[0] else None,value, sent_at=dispatched_at)
+                                self.event_log.sent(rid,eid,("ha",eid),lab_state_cache.get(eid,(False,None))[1] if lab_state_cache.get(eid,(False,None))[0] else None,value, sent_at=dispatched_at,
+                                    accepted_only=eid in profile_lights and value=="on")
                                 self._ha_shadows[eid] = {
                                     "state":value, "at": time.monotonic()}
                         sent.extend(ids)

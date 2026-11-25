@@ -226,7 +226,7 @@ function chooseMedia(a,action){
 function mediaControls(a,t,row,action){
   const p=el("div",undefined,"params");
   p.append(el("span","Состояние: "+(liveStates[a.entity_id]??t.state??"—"),"muted"));
-  if(a.operation==="volume"){
+  if(a.operation==="volume"&&profileSelect(a,t,p,action,true)){
     const n=el("input");n.type="number";n.min=0;n.max=100;n.step=1;n.value=a.data.volume_pct??"";
     n.onchange=()=>{a.data.volume_pct=n.value===""?null:Number(n.value);update()};
     const label=el("label","Громкость %");label.append(n);p.append(label);
@@ -236,10 +236,56 @@ function mediaControls(a,t,row,action){
   }
   row.append(p);
 }
+const customDrafts=new WeakSet();
+function profileSelect(a,t,p,action,volume=false){
+  const saved=a.data.profile;
+  const kind=saved==="current"?"current":saved||Object.keys(a.data).length||customDrafts.has(a)?"fixed":"simple";
+  const mode=el("select");
+  for(const [value,title] of [...(volume?[]:[["simple","ON/OFF"]]),["fixed","Фиксированные"],["current","День/Ночь"]]){
+    const option=el("option",title);option.value=value;mode.append(option);
+  }
+  mode.value=volume&&kind==="simple"?"fixed":kind;
+  mode.onchange=()=>{
+    customDrafts.delete(a);
+    a.data=mode.value==="current"?{profile:"current"}:mode.value==="fixed"?{profile:"day"}:{};
+    update();renderEdit(action);
+  };
+  p.append(mode);
+  if(mode.value==="fixed"){
+    const select=el("select");
+    for(const [value,title] of [["day","День"],["night","Ночь"],["custom","Свои"]]){
+      const o=el("option",title);o.value=value;select.append(o);
+    }
+    select.value=saved==="day"||saved==="night"?saved:"custom";
+    select.onchange=()=>{
+      if(select.value==="custom")customDrafts.add(a);else customDrafts.delete(a);
+      a.data=select.value==="custom"?(volume?{volume_pct:t.volume_pct??null}:{}):{profile:select.value};
+      update();renderEdit(action);
+    };
+    p.append(select);
+    if(select.value==="custom")return true;
+  }
+  if(a.data.profile){
+    p.append(el("span",model.home_mode?"Глобальные параметры дома":"Глобальный модуль недоступен","muted"));
+  }
+  return false;
+}
+function lightProfileControls(a,t,row,action){
+  const p=el("div",undefined,"params");
+  if(a.operation==="off"){
+    if(t.transition&&Object.hasOwn(a.data,"transition"))addParam(p,t,a,"transition","Transition, сек",0,60,.1);
+    row.append(p);return;
+  }
+  if(!(t.brightness||t.cct||t.rgb)&&!Object.keys(a.data).length)return;
+  if(profileSelect(a,t,p,action)){
+if(a.operation!=="off"){if(t.brightness)addParam(p,t,a,"brightness_pct","Яркость %",0,100,1);if(t.cct&&Number.isInteger(t.min_kelvin)&&Number.isInteger(t.max_kelvin)&&!Object.hasOwn(a.data,"rgb_color"))addParam(p,t,a,"color_temp_kelvin","Kelvin",t.min_kelvin,t.max_kelvin,1);if(t.rgb&&!Object.hasOwn(a.data,"color_temp_kelvin")){const l=el("label"),c=el("input"),picker=el("input");c.type="checkbox";c.checked=Object.hasOwn(a.data,"rgb_color");picker.type="color";picker.value="#"+(a.data.rgb_color||[255,255,255]).map(v=>v.toString(16).padStart(2,"0")).join("");picker.disabled=!c.checked;c.onchange=()=>{if(c.checked)a.data.rgb_color=[1,3,5].map(i=>parseInt(picker.value.slice(i,i+2),16));else delete a.data.rgb_color;update();renderEdit(action)};picker.oninput=()=>{a.data.rgb_color=[1,3,5].map(i=>parseInt(picker.value.slice(i,i+2),16));update()};l.append(c,document.createTextNode("RGB"),picker);p.append(l)}}if(t.transition)addParam(p,t,a,"transition","Transition, сек",0,60,.1);
+  }
+  row.append(p);
+}
 function assignedRow(action,a,container){const t=model.targets.find(t=>t.entity_id===a.entity_id),row=el("div",undefined,"assigned");row.append(targetIcon(t,a.entity_id),el("strong",(t?.name||a.entity_id)+" · "+a.entity_id));const op=el("select");for(const [v,n] of assignmentOperations(a,t)){const o=el("option",n);o.value=v;op.append(o)}op.value=a.operation;op.onchange=()=>{a.operation=op.value;
 if(a.entity_id.startsWith("cover.")){if(op.value==="position")a.data.position=50;else delete a.data.position}
 else if(/^(climate|media_player)\./.test(a.entity_id))a.data=DHElectricaEntityPicker.initialData(op.value,t);
-if(op.value==="off")for(const k of Object.keys(a.data))if(k!=="transition")delete a.data[k];update();renderEdit(action)};const test=lightTestControl(t,a.entity_id);if(test)row.append(test);row.append(op,button("Удалить",()=>{draft.bindings[action]=draft.bindings[action].filter(x=>x.entity_id!==a.entity_id);if(!draft.bindings[action].length){delete draft.bindings[action];draft.disabled_actions=draft.disabled_actions.filter(x=>x!==action)}update();renderEdit(action)}));if(!t){row.append(el("span","⚠ Сущность отсутствует","problem"));container.append(row);return}if(a.entity_id.startsWith("cover."))coverControls(action,a,t,row);if(a.entity_id.startsWith("climate."))climateControls(a,t,row);if(a.entity_id.startsWith("media_player."))mediaControls(a,t,row,action);if(a.entity_id.startsWith("light.")){const p=el("div",undefined,"params");if(a.operation!=="off"){if(t.brightness)addParam(p,t,a,"brightness_pct","Яркость %",0,100,1);if(t.cct&&Number.isInteger(t.min_kelvin)&&Number.isInteger(t.max_kelvin)&&!Object.hasOwn(a.data,"rgb_color"))addParam(p,t,a,"color_temp_kelvin","Kelvin",t.min_kelvin,t.max_kelvin,1);if(t.rgb&&!Object.hasOwn(a.data,"color_temp_kelvin")){const l=el("label"),c=el("input"),picker=el("input");c.type="checkbox";c.checked=Object.hasOwn(a.data,"rgb_color");picker.type="color";picker.value="#"+(a.data.rgb_color||[255,255,255]).map(v=>v.toString(16).padStart(2,"0")).join("");picker.disabled=!c.checked;c.onchange=()=>{if(c.checked)a.data.rgb_color=[1,3,5].map(i=>parseInt(picker.value.slice(i,i+2),16));else delete a.data.rgb_color;update();renderEdit(action)};picker.oninput=()=>{a.data.rgb_color=[1,3,5].map(i=>parseInt(picker.value.slice(i,i+2),16));update()};l.append(c,document.createTextNode("RGB"),picker);p.append(l)}}if(t.transition)addParam(p,t,a,"transition","Transition, сек",0,60,.1);row.append(p)}container.append(row)}
+if(op.value==="off")for(const k of Object.keys(a.data))if(k!=="transition")delete a.data[k];update();renderEdit(action)};const test=lightTestControl(t,a.entity_id);if(test)row.append(test);row.append(op,button("Удалить",()=>{draft.bindings[action]=draft.bindings[action].filter(x=>x.entity_id!==a.entity_id);if(!draft.bindings[action].length){delete draft.bindings[action];draft.disabled_actions=draft.disabled_actions.filter(x=>x!==action)}update();renderEdit(action)}));if(!t){row.append(el("span","⚠ Сущность отсутствует","problem"));container.append(row);return}if(a.entity_id.startsWith("cover."))coverControls(action,a,t,row);if(a.entity_id.startsWith("climate."))climateControls(a,t,row);if(a.entity_id.startsWith("media_player."))mediaControls(a,t,row,action);if(a.entity_id.startsWith("light."))lightProfileControls(a,t,row,action);container.append(row)}
 function actionGroup(action){const p=action.match(/_(left|right|center|plus|minus|both|[0-9]+)$/)||action.match(/^(button_[0-9]+)_/);return p?p[1]:"Нажатия"}
 function renderEdit(expand){main.replaceChildren();const h=el("div",undefined,"head");h.append(button("← Клавиши",goBack),el("h2",deviceTitle(draft)+" · "+draft.room),button("Сохранить",save,"save"));main.append(h);const enabled=el("input");enabled.type="checkbox";enabled.checked=draft.enabled;enabled.onchange=()=>{draft.enabled=enabled.checked;update()};const l=el("label");l.append(enabled,document.createTextNode("Включено"));const controls=el("div",undefined,"editor-controls");controls.append(l);main.append(controls);
 if(Object.keys(draft.key_modes||{}).length)main.append(modeControls());
