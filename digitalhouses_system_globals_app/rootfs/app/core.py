@@ -268,6 +268,26 @@ class Engine:
             return [Publication(GLOBAL + "/profiles", deepcopy(new["profiles"]))]
         raise ContractError("Unknown command topic")
 
+    def import_settings(self, value, now):
+        """Atomic import; never import a historical schedule cursor."""
+        mapping(value, ("night_mode", "config", "profiles"), exact=True)
+        now = instant(now)
+        new = self.state
+        new.update(deepcopy(value))
+        mode = new["night_mode"]
+        require(mode in (None, "on", "off"), "Invalid imported mode")
+        self._advance_cursor(new, now)
+        validate_state(new)
+        previous = self._state["night_mode"]
+        self._commit(new)
+        out = self.snapshot()
+        if previous in ("on", "off") and mode in ("on", "off") and previous != mode:
+            z = new["config"]["timezone"]
+            out.append(Publication(GLOBAL + "/event", {"schema_version":1,
+                "event_type":"night_mode_"+mode,
+                "observed_at":(now.astimezone(ZoneInfo(z)) if z else now).isoformat()}, False))
+        return out
+
     def tick(self, now):
         now = instant(now)
         new = self.state

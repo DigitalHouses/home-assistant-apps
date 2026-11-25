@@ -1,0 +1,13 @@
+configuration:
+  telemetry_enabled:
+    name: Accept telemetry terms
+    description: "DigitalHouses receives product name, version and random installation ID for statistics. Read the telemetry policy before enabling: https://github.com/DigitalHouses/home-assistant-apps/blob/main/docs/standards/PRODUCT_TELEMETRY_POLICY.md"
+  require_ha:
+    name: Require HA Core
+    description: Include verified HA MQTT readiness in System Ready.
+  require_z2m:
+    name: Require Zigbee2MQTT
+    description: Include verified Zigbee2MQTT readiness in System Ready.
+  z2m_base:
+    name: Zigbee2MQTT base topic
+    description: Exact MQTT topic prefix of the local Zigbee2MQTT network.

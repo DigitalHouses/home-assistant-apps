@@ -60,7 +60,7 @@ class MqttIntegration(unittest.TestCase):
                     client.publish(topic, payload, qos=1, retain=retain).wait_for_publish(timeout=3)
 
                 def start_app():
-                    app = Path(__file__).resolve().parents[1] / "app" / "runtime.py"
+                    app = Path(__file__).resolve().parents[1] / "rootfs" / "app" / "runtime.py"
                     p = subprocess.Popen([sys.executable, str(app), "--state", str(root / "state.json"),
                                           "--host", "127.0.0.1", "--port", str(port)],
                                          stdout=app_log, stderr=app_log)

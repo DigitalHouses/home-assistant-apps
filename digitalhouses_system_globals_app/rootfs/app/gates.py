@@ -99,7 +99,10 @@ def ha_probe(base, token, nonce, entity):
         state = cfg.get("state") if isinstance(cfg, dict) else None
         if state != "RUNNING":
             return HAResult(state, False, True)
-        obj = get("/states/" + entity)
+        try:
+            obj = get("/states/" + entity)
+        except (OSError, ValueError, TypeError):
+            return HAResult(state, False, True)
         return HAResult(state, isinstance(obj, dict) and obj.get("state") == nonce, True)
     except (OSError, ValueError, TypeError, urllib.error.URLError):
         return HAResult(None, False, False)

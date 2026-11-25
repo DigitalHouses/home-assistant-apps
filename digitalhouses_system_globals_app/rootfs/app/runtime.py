@@ -22,11 +22,14 @@ class TransportError(RuntimeError):
 
 class Session:
     """One MQTT connection; never reconnect an old client with queued events."""
-    def __init__(self, host, port, username, password):
+    def __init__(self, host, port, username, password, *, commands=COMMANDS, observations=(), availability=None):
         self.host, self.port = host, port
+        self.commands, self.observations = commands, observations
         self.client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2,
                                   protocol=mqtt.MQTTv5, reconnect_on_failure=False)
         self.client.connect_timeout = 5.0
+        if availability:
+            self.client.will_set(availability, 'offline', qos=1, retain=True)
         if username is not None:
             self.client.username_pw_set(username, password)
         self.client.on_connect = self.on_connect
@@ -44,10 +47,10 @@ class Session:
         if reason.is_failure:
             self.failed = True
             return
-        for topic in COMMANDS:
+        for topic in self.commands + self.observations:
             # MQTT5 preserves the sender's retain flag and skips old retained commands.
             rc, mid = client.subscribe(topic, options=mqtt.SubscribeOptions(
-                qos=1, retainAsPublished=True, retainHandling=2))
+                qos=1, retainAsPublished=True, retainHandling=2 if topic in self.commands else 0))
             if rc != mqtt.MQTT_ERR_SUCCESS:
                 self.failed = True
                 return
@@ -100,7 +103,17 @@ class Session:
             if self.publish_results.pop(info.mid).is_failure:
                 raise TransportError("Broker rejected publication")
 
-    def close(self):
+    def close(self, abort=False):
+        if abort:
+            sock = self.client.socket()
+            if sock is not None:
+                import socket
+                try:
+                    sock.shutdown(socket.SHUT_RDWR)
+                except OSError:
+                    pass
+                sock.close()
+            return
         self.client.disconnect()
         try:
             self.client.loop(timeout=0.1)
