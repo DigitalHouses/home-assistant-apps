@@ -1,5 +1,3 @@
-# One read-only tree, analogous to DigitalHouses Zigbee Monitor App.
-# Business logic is in Python; no UI-owned state or config writes.
 type: markdown
 content: |-
   {% set entity = 'sensor.dh_aqara_switch_app_devices_details' %}
@@ -7,7 +5,7 @@ content: |-
   {% if states(entity) != 'ready' %}
   *Нет подтверждённых данных от Aqara Switch App.*
   {% elif rooms | count == 0 %}
-  *Выключатели пока не импортированы. Нажмите «Сканировать».*
+  *Выключатели пока не импортированы. Откройте Ingress для настройки.*
   {% else %}
   **Aqara · Комнат: {{ rooms | count }}**
 
@@ -17,7 +15,7 @@ content: |-
   {% set tab = '   ' if loop.last else '│  ' -%}
   {% for device in room.switches -%}
   {% set state = device.runtime.status if device.runtime is defined else 'unknown' -%}
-  {{ tab }}{{ '└─' if loop.last else '├─' }} {{ '🟢' if state == 'same' else '🟠' if state in ['unverified', 'replacement', 'settings_mismatch'] else '🔴' if state == 'incompatible' else '⚪' }} {{ (device.entity_id or device.logical_name) | e }} · {{ ('проверен' if state == 'same' else 'отключён' if state == 'disabled' else state) | e }}
+  {{ tab }}{{ '└─' if loop.last else '├─' }} {{ '🟢' if state == 'same' else '🟠' if state in ['unverified', 'replacement', 'settings_mismatch', 'keep_mode_mismatch', 'offline'] else '🔴' if state in ['incompatible','missing'] else '⚪' }} {{ (device.entity_id or device.logical_name) | e }} · {{ ('проверен' if state == 'same' else 'отключён' if state == 'disabled' else state) | e }}
   {% set inner = tab ~ ('   ' if loop.last else '│  ') -%}
   {{ inner }}├─ ⚙️ Модель: {{ device.fingerprint.model | e }}
   {{ inner }}├─ 🔘 Нажатия: {{ (device.fingerprint.actions | join(', ')) | e }}
@@ -31,12 +29,13 @@ content: |-
   {% for key, bind in device.bindings.items() -%}
   {% set targets = bind.targets or [] -%}
   {% set target_prefix = inner ~ '│  ' ~ ('   ' if loop.last else '│  ') -%}
-  {{ inner }}│  {{ '└─' if loop.last else '├─' }} {{ key | e }} → {{ (bind.action if bind.action is defined else 'не задано') | e }}
+  {{ inner }}│  {{ '└─' if loop.last else '├─' }} {{ key | e }}{% if bind.enabled is defined and not bind.enabled %} ⚠{% endif %} → {{ (bind.action if bind.action is defined and bind.action != 'mixed' else '') | e }}
   {% for target in targets -%}
-  {% set light_state = states(target) -%}
+  {% set light_state = (state_attr(entity, 'target_states') or {}).get(target, 'unknown') -%}
+  {% set switch_target = target.startswith('switch.') -%}
   {% set per_target = bind.target_data.get(target, {}) if bind.target_data is defined else {} -%}
   {% set settings = per_target if per_target else (bind.data if bind.data is defined else {}) -%}
-  {{ target_prefix }}{{ '└─' if loop.last else '├─' }} {{ ('<ha-icon icon="mdi:lightbulb" style="color: #f5c542; --mdc-icon-size: 18px; vertical-align: middle;"></ha-icon>' if light_state == 'on' else '<ha-icon icon="mdi:lightbulb-outline" style="color: #9299a4; --mdc-icon-size: 18px; vertical-align: middle;"></ha-icon>' if light_state == 'off' else '❔') | safe }} {{ target | e }} · {{ 'ON' if light_state == 'on' else 'OFF' if light_state == 'off' else 'недоступен' if light_state == 'unavailable' else 'нет данных' }}{% if settings.rgb_color is defined %} · RGB({{ settings.rgb_color | join(',') }}){% endif %}{% if settings.color_temp_kelvin is defined %} · {{ settings.color_temp_kelvin }} K{% endif %}{% if settings.brightness_pct is defined %} · {{ settings.brightness_pct }}%{% endif %}{% if settings.brightness_step_pct is defined %} · Δ{{ settings.brightness_step_pct }}%{% endif %}{% if settings.transition is defined %} · {{ settings.transition }} c{% endif %}
+  {{ target_prefix }}{{ '└─' if loop.last else '├─' }} {{ ('<ha-icon icon="mdi:toggle-switch" style="color: #f5c542; --mdc-icon-size: 18px;"></ha-icon>' if light_state == 'on' else '<ha-icon icon="mdi:toggle-switch-off-outline" style="color: #9299a4; --mdc-icon-size: 18px;"></ha-icon>' if light_state == 'off' else '❔') | safe if switch_target else ('<ha-icon icon="mdi:lightbulb" style="color: #f5c542; --mdc-icon-size: 18px; vertical-align: middle;"></ha-icon>' if light_state == 'on' else '<ha-icon icon="mdi:lightbulb-outline" style="color: #9299a4; --mdc-icon-size: 18px; vertical-align: middle;"></ha-icon>' if light_state == 'off' else '❔') | safe }} {{ target | e }}{% if bind.target_operations is defined %} · {{ bind.target_operations.get(target, '') | upper | e }}{% endif %} · {{ 'ON' if light_state == 'on' else 'OFF' if light_state == 'off' else 'недоступен' if light_state == 'unavailable' else 'нет данных' }}{% if settings.rgb_color is defined %} · RGB({{ settings.rgb_color | join(',') }}){% endif %}{% if settings.color_temp_kelvin is defined %} · {{ settings.color_temp_kelvin }} K{% endif %}{% if settings.brightness_pct is defined %} · {{ settings.brightness_pct }}%{% endif %}{% if settings.brightness_step_pct is defined %} · Δ{{ settings.brightness_step_pct }}%{% endif %}{% if settings.transition is defined %} · {{ settings.transition }} c{% endif %}
   {% else -%}
   {{ target_prefix }}└─ Светильники не назначены
   {% endfor -%}

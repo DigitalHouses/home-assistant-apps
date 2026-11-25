@@ -43,7 +43,7 @@ def parse_rows(options: Mapping) -> list[dict]:
         unique.add(entity_id)
         if (not isinstance(value, Mapping) or
                 not {"enabled", "actions"} <= set(value) or
-                set(value) - {"enabled", "actions", "keep_mode", "maintenance_mode"}):
+                set(value) - {"enabled", "actions", "keep_mode", "maintenance_mode", "disabled_actions"}):
             raise CatalogError("Switch requires enabled and actions, optionally keep_mode/maintenance_mode")
         if "maintenance_mode" in value and type(value["maintenance_mode"]) is not bool:
             raise CatalogError("Local maintenance_mode must be boolean")
@@ -66,13 +66,19 @@ def parse_rows(options: Mapping) -> list[dict]:
             item["maintenance_mode"] = value["maintenance_mode"]
         if "keep_mode" in value:
             item["keep_mode"] = dict(keep)
+        if "disabled_actions" in value:
+            disabled = value["disabled_actions"]
+            if (not isinstance(disabled, list) or any(not isinstance(a,str) or a not in actions for a in disabled)
+                    or len(disabled) != len(set(disabled))):
+                raise CatalogError("Invalid disabled_actions")
+            item["disabled_actions"] = disabled
         result.append(item)
     return result
 
 
 def render_rows(rows: list[dict]) -> str:
     return yaml.safe_dump([
-        {row["entity_id"]: {key: row[key] for key in ("enabled", "maintenance_mode", "keep_mode", "actions") if key in row}}
+        {row["entity_id"]: {key: row[key] for key in ("enabled", "maintenance_mode", "keep_mode", "actions", "disabled_actions") if key in row}}
         for row in rows], allow_unicode=True, sort_keys=False,
         default_flow_style=False)
 
@@ -90,23 +96,52 @@ def project(profiles: Mapping, options: Mapping) -> dict:
                 raise CatalogError("Duplicate adopted logical switch key")
             index[entity_id] = item
             item["bindings"] = {}
+            item.pop("configured_bindings", None)
+            item.pop("disabled_actions", None)
             item["enabled"] = False
             item["maintenance_mode"] = False
             item["keep_mode"] = {}
+    issues = []
+    tolerant = options.get("_bindings_store") is True
     for row in rows:
         if row["entity_id"] not in index:
+            if tolerant:
+                issues.append({"object_name": row["entity_id"], "category": "missing",
+                               "reason": "Unadopted or removed switch entity"})
+                continue
             raise CatalogError("Unadopted or removed switch entity: " + row["entity_id"])
         item = index[row["entity_id"]]
-        item["keep_mode"] = validate_keep_mode(row.get("keep_mode", {}),
-                                                 item.get("fingerprint", {}))
+        if tolerant:
+            item["configured_bindings"] = {k:parse_rule(v) for k,v in row["actions"].items()}
+            item["disabled_actions"] = row.get("disabled_actions",[])
+        try:
+            item["keep_mode"] = validate_keep_mode(row.get("keep_mode", {}),
+                                                   item.get("fingerprint", {}))
+        except CatalogError as exc:
+            if not tolerant:
+                raise
+            issues.append({"object_name": row["entity_id"], "category": "invalid_keep_mode",
+                           "reason": str(exc)})
+            continue
         item["maintenance_mode"] = row.get("maintenance_mode", False)
         supported = item.get("fingerprint", {}).get("actions", [])
         for press, rule in row["actions"].items():
-            if press not in supported:
-                raise CatalogError("Unsupported Aqara action " + press + " for " + row["entity_id"])
-            validate_action_policy(item["fingerprint"], item["keep_mode"], press)
-            item["bindings"][press] = parse_rule(rule)
+            if press in row.get("disabled_actions", []):
+                continue
+            try:
+                if press not in supported:
+                    raise CatalogError("Unsupported Aqara action " + press + " for " + row["entity_id"])
+                validate_action_policy(item["fingerprint"], item["keep_mode"], press)
+                item["bindings"][press] = parse_rule(rule)
+            except CatalogError as exc:
+                if not tolerant:
+                    raise
+                issues.append({"object_name": row["entity_id"], "category": "invalid_binding",
+                               "reason": str(exc)})
         item["enabled"] = row["enabled"]
+    if tolerant:
+        data["binding_problems"] = issues
+        data["orphan_bindings"] = [r for r in rows if r["entity_id"] not in index]
     return data
 
 
@@ -121,8 +156,8 @@ def store_scan(merged: Mapping, options: Mapping, path: Path = STORE_PATH) -> di
         for sw in room["switches"]:
             entity = sw["entity_id"]
             if entity not in known:
-                row = {"entity_id": entity, "enabled": True, "actions": {}}
-                if sw.get("mode_default"):
+                row = {"entity_id": entity, "enabled": not options.get("_bindings_store", False), "actions": {}}
+                if sw.get("mode_default") and not options.get("_bindings_store"):
                     row["keep_mode"] = dict(sw["mode_default"])
                 rows.append(row)
                 known.add(entity)
