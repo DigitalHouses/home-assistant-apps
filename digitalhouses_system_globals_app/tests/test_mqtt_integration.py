@@ -21,10 +21,8 @@ class MqttIntegration(unittest.TestCase):
             with socket.socket() as sock:
                 sock.bind(("127.0.0.1", 0))
                 port = sock.getsockname()[1]
-            cfg = root / "mosquitto.conf"
-            cfg.write_text(f"listener {port} 127.0.0.1\nallow_anonymous true\npersistence false\n")
             with (root / "broker.log").open("w+") as broker_log, (root / "app.log").open("w+") as app_log:
-                broker = subprocess.Popen([os.environ["DH_TEST_MOSQUITTO"], "-c", str(cfg)], stdout=broker_log, stderr=broker_log)
+                broker = subprocess.Popen([os.environ["DH_TEST_MOSQUITTO"], "-p", str(port)], stdout=broker_log, stderr=broker_log)
                 self.addCleanup(self.stop, broker)
                 deadline = time.monotonic() + 5
                 while True:
@@ -33,7 +31,8 @@ class MqttIntegration(unittest.TestCase):
                             break
                     except OSError:
                         if time.monotonic() >= deadline:
-                            self.fail("Isolated broker failed to start")
+                            broker_log.seek(0)
+                            self.fail("Isolated broker failed to start:\n" + broker_log.read())
                         time.sleep(0.05)
                 received = []
                 client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, protocol=mqtt.MQTTv5)

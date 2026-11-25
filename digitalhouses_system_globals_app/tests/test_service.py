@@ -92,9 +92,7 @@ class LiveService(unittest.TestCase):
             root=Path(temp)
             with socket.socket() as sock:
                 sock.bind(("127.0.0.1",0));port=sock.getsockname()[1]
-            cfg=root/"mqtt.conf"
-            cfg.write_text(f"listener {port} 127.0.0.1\nallow_anonymous true\npersistence false\n")
-            broker=subprocess.Popen([os.environ["DH_TEST_MOSQUITTO"],"-c",str(cfg)],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
+            broker=subprocess.Popen([os.environ["DH_TEST_MOSQUITTO"],"-p",str(port)],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
             self.addCleanup(self.stop_proc,broker)
             def broker_up():
                 try:
