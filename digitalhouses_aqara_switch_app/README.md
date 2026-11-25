@@ -1,5 +1,9 @@
 # DigitalHouses Aqara Switch App
 
+## Target architecture (planned)
+
+See [DigitalHouses Electrica App — target architecture v0.3.0](docs/ELECTRICA_TARGET_ARCHITECTURE.md). The current Aqara 0.2.x release remains unchanged.
+
 ## 0.2.x — Ingress configuration
 
 Aqara Switch App consumes events from supported Aqara logical keys across MQTT
