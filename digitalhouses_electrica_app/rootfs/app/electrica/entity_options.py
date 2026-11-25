@@ -12,6 +12,7 @@ import yaml
 
 from .catalog import CatalogError, validate_config
 from .light_rules import parse_rule
+from . import sensor_rules
 from .mode_keeper import global_policy, validate_keep_mode, validate_action_policy, POLICIES, PHYSICAL, action_channels, MODE_TO_RELAY
 from .structured_options import _read_profiles, _save_profiles
 
@@ -56,6 +57,11 @@ def validate_rows(rows: object) -> list[dict]:
             raise CatalogError("Binding row requires entity_id")
         entity_id = row["entity_id"]
         value = {key: val for key, val in row.items() if key != "entity_id"}
+        if sensor_rules.is_source(entity_id):
+            if entity_id in unique:raise CatalogError("Duplicate sensor entity_id")
+            unique.add(entity_id)
+            result.append(sensor_rules.validate_row(row))
+            continue
         if not isinstance(entity_id, str) or not _ENTITY.fullmatch(entity_id):
             raise CatalogError("Switch key must be switch.* (HA entity or logical config key)")
         if entity_id in unique:
@@ -104,7 +110,7 @@ def validate_rows(rows: object) -> list[dict]:
 
 def render_rows(rows: list[dict]) -> str:
     return yaml.safe_dump([
-        {row["entity_id"]: {key: row[key] for key in ("enabled", "maintenance_mode", "keep_mode", "actions", "disabled_actions") if key in row}}
+        {row["entity_id"]: {key: row[key] for key in ("enabled", "maintenance_mode", "keep_mode", "actions", "disabled_actions", "assignments", "lux_entity_id", "lux_threshold") if key in row}}
         for row in rows], allow_unicode=True, sort_keys=False,
         default_flow_style=False)
 
@@ -112,6 +118,10 @@ def render_rows(rows: list[dict]) -> str:
 def project(profiles: Mapping, options: Mapping) -> dict:
     data = validate_config(profiles)
     rows = parse_rows(options)
+    sensors={r["entity_id"]:r for r in rows if sensor_rules.is_source(r["entity_id"])}
+    if sensors:data["sensor_bindings"]=sensors
+    else:data.pop("sensor_bindings",None)
+    rows=[r for r in rows if not sensor_rules.is_source(r["entity_id"])]
     index = {}
     for room in data["rooms"]:
         for item in room["switches"]:

@@ -1,5 +1,5 @@
 "use strict";
-let model, editing=null, draft=null, dirty=false, busy=false;
+let model, editing=null, draft=null, dirty=false, busy=false, section="keys";
 const main=document.querySelector("#main"), notice=document.querySelector("#notice"), scan=document.querySelector("#scan");
 function el(tag,text,cls){const n=document.createElement(tag);if(text!==undefined)n.textContent=text;if(cls)n.className=cls;return n}
 function button(text,fn,cls){const n=el("button",text,cls);n.onclick=fn;return n}
@@ -40,7 +40,7 @@ function knownState(state){return typeof state==="string"&&!["unknown","unavaila
 function targetLabel(id,t){return t?.name&&t.name!==id?id+" - "+t.name:id}
 function targetNode(id){const t=model.targets.find(x=>x.entity_id===id);const n=el("span",undefined,"target");n.dataset.entity=id;n.append(targetIcon(t,id),el("span",targetLabel(id,t),"target-label"));if(!t||!knownState(t.state)){const w=el("span","⚠","problem");w.title=t?"Сущность недоступна":"Сущность не найдена";n.append(w)}return n}
 async function api(path,data,raw=false){const r=await fetch("api/"+path,data===undefined?{}:{method:"POST",headers:{"Content-Type":"application/json"},body:raw?data:JSON.stringify(data)});const v=await r.json();if(!r.ok)throw Error(v.error||"Ошибка");return v}
-async function load(){try{model=await api("state");document.querySelector("#app-version").textContent="v"+model.version;document.querySelector("#summary").textContent="Клавиши · устройства ("+model.devices.length+") · Сети Z2M ("+new Set(model.devices.map(d=>d.network).filter(n=>n!=="—")).size+")";notice.classList.toggle("error",!!model.scan.error);scan.disabled=model.scan.state==="updating"||busy;scan.textContent=model.scan.state==="updating"?"Сканирование…":"⟳ Сканировать";if(!editing)renderList();if(!editing&&!busy){if(model.scan.error)notice.textContent=model.scan.error;else if(model.scan.state==="updating")notice.textContent="Сканирование…";else if(model.report){const p=model.report.problems||[];notice.textContent="Последний Scan: "+(model.report.scanned??0)+" устройств · "+p.length+" проблем";notice.title=p.map(x=>x.name+": "+x.reason).join("\n")}}}catch(e){notice.textContent=e.message}}
+async function load(){try{model=await api("state");document.querySelector("#app-version").textContent="v"+model.version;document.querySelector("#summary").textContent=section==="sensors"?"Датчики ("+(model.sensors||[]).length+")":"Клавиши · устройства ("+model.devices.length+") · Сети Z2M ("+new Set(model.devices.map(d=>d.network).filter(n=>n!=="—")).size+")";notice.classList.toggle("error",!!model.scan.error);scan.disabled=model.scan.state==="updating"||busy;scan.textContent=model.scan.state==="updating"?"Сканирование…":"⟳ Сканировать";if(!editing)renderList();if(!editing&&!busy){if(model.scan.error)notice.textContent=model.scan.error;else if(model.scan.state==="updating")notice.textContent="Сканирование…";else if(model.report){const p=model.report.problems||[];notice.textContent="Последний Scan: "+(model.report.scanned??0)+" устройств · "+p.length+" проблем";notice.title=p.map(x=>x.name+": "+x.reason).join("\n")}}}catch(e){notice.textContent=e.message}}
 const keyNames={main:"Основная",left:"Левая",right:"Правая",center:"Центральная"};
 const modeNames={"":"Не настроена",control_relay:"Физическая",decoupled:"Логическая","decoupled/ON":"Логическая · ON","decoupled/OFF":"Логическая · OFF"};
 const logicalPolicy=p=>["decoupled","decoupled/ON","decoupled/OFF"].includes(p);
@@ -83,6 +83,7 @@ function modeControls(){
 }
 function deviceTitle(d){return d.ha_name&&d.ha_name!==d.name?d.name+" - "+d.ha_name:d.name}
 function renderList(){
+if(section==="sensors"){renderSensors();return}
 const focused=main.contains(document.activeElement)?document.activeElement.dataset.deviceId:null;
 main.replaceChildren();for(const d of model.devices){const a=el("article"),h=el("div",undefined,"head"),info=el("div",undefined,"device-info"),[sym,cls]=stat(d),status=el("span",sym+" ", "status "+cls);status.title=d.reason||d.status;const name=el("strong",undefined,"device-name");name.append(status,document.createTextNode(d.name));
 if(d.ha_name&&d.ha_name!==d.name)name.append(el("span"," - "+d.ha_name,"ha-device-name"));info.append(name,el("div",d.model+" · "+d.room+" · "+d.network,"muted"));
@@ -282,12 +283,19 @@ if(a.operation!=="off"){if(t.brightness)addParam(p,t,a,"brightness_pct","Ярк�
   }
   row.append(p);
 }
-function assignedRow(action,a,container){const t=model.targets.find(t=>t.entity_id===a.entity_id),row=el("div",undefined,"assigned");row.append(targetIcon(t,a.entity_id),el("strong",(t?.name||a.entity_id)+" · "+a.entity_id));const op=el("select");for(const [v,n] of assignmentOperations(a,t)){const o=el("option",n);o.value=v;op.append(o)}op.value=a.operation;op.onchange=()=>{a.operation=op.value;
+function assignedRow(action,a,container){const t=model.targets.find(t=>t.entity_id===a.entity_id),row=el("div",undefined,"assigned");row.append(targetIcon(t,a.entity_id),el("strong",(t?.name||a.entity_id)+" · "+a.entity_id));const op=el("select");for(const [v,n] of (editing?.sensor?[["on","ON"]]:assignmentOperations(a,t))){const o=el("option",n);o.value=v;op.append(o)}op.value=a.operation;op.onchange=()=>{a.operation=op.value;
 if(a.entity_id.startsWith("cover.")){if(op.value==="position")a.data.position=50;else delete a.data.position}
 else if(/^(climate|media_player)\./.test(a.entity_id))a.data=DHElectricaEntityPicker.initialData(op.value,t);
-if(op.value==="off")for(const k of Object.keys(a.data))if(k!=="transition")delete a.data[k];update();renderEdit(action)};const test=lightTestControl(t,a.entity_id);if(test)row.append(test);row.append(op,button("Удалить",()=>{draft.bindings[action]=draft.bindings[action].filter(x=>x.entity_id!==a.entity_id);if(!draft.bindings[action].length){delete draft.bindings[action];draft.disabled_actions=draft.disabled_actions.filter(x=>x!==action)}update();renderEdit(action)}));if(!t){row.append(el("span","⚠ Сущность отсутствует","problem"));container.append(row);return}if(a.entity_id.startsWith("cover."))coverControls(action,a,t,row);if(a.entity_id.startsWith("climate."))climateControls(a,t,row);if(a.entity_id.startsWith("media_player."))mediaControls(a,t,row,action);if(a.entity_id.startsWith("light."))lightProfileControls(a,t,row,action);container.append(row)}
+if(op.value==="off")for(const k of Object.keys(a.data))if(k!=="transition")delete a.data[k];update();renderEdit(action)};const test=lightTestControl(t,a.entity_id);if(test)row.append(test);row.append(op,button("Удалить",()=>{draft.bindings[action]=draft.bindings[action].filter(x=>x.entity_id!==a.entity_id);if(!draft.bindings[action].length){delete draft.bindings[action];draft.disabled_actions=draft.disabled_actions.filter(x=>x!==action)}update();renderEdit(action)}));if(!t){row.append(el("span","⚠ Сущность отсутствует","problem"));container.append(row);return}if(a.entity_id.startsWith("cover."))coverControls(action,a,t,row);if(a.entity_id.startsWith("climate."))climateControls(a,t,row);if(a.entity_id.startsWith("media_player."))mediaControls(a,t,row,action);if(a.entity_id.startsWith("light."))lightProfileControls(a,t,row,action);
+if(editing?.sensor){
+  const p=el("div",undefined,"params"),l=el("label","Авто-OFF после отсутствия, сек.");
+  const n=el("input");n.type="number";n.min=0;n.max=86400;n.step=1;n.placeholder="Не задано";n.value=a.off_delay_seconds??"";
+  n.onchange=()=>{if(n.value==="")delete a.off_delay_seconds;else a.off_delay_seconds=Number(n.value);update()};
+  l.append(n);p.append(l);row.append(p);
+}
+container.append(row)}
 function actionGroup(action){const p=action.match(/_(left|right|center|plus|minus|both|[0-9]+)$/)||action.match(/^(button_[0-9]+)_/);return p?p[1]:"Нажатия"}
-function renderEdit(expand){main.replaceChildren();const h=el("div",undefined,"head");h.append(button("← Клавиши",goBack),el("h2",deviceTitle(draft)+" · "+draft.room),button("Сохранить",save,"save"));main.append(h);const enabled=el("input");enabled.type="checkbox";enabled.checked=draft.enabled;enabled.onchange=()=>{draft.enabled=enabled.checked;update()};const l=el("label");l.append(enabled,document.createTextNode("Включено"));const controls=el("div",undefined,"editor-controls");controls.append(l);main.append(controls);
+function renderEdit(expand){if(editing?.sensor){renderSensorEdit();return}main.replaceChildren();const h=el("div",undefined,"head");h.append(button("← Клавиши",goBack),el("h2",deviceTitle(draft)+" · "+draft.room),button("Сохранить",save,"save"));main.append(h);const enabled=el("input");enabled.type="checkbox";enabled.checked=draft.enabled;enabled.onchange=()=>{draft.enabled=enabled.checked;update()};const l=el("label");l.append(enabled,document.createTextNode("Включено"));const controls=el("div",undefined,"editor-controls");controls.append(l);main.append(controls);
 if(Object.keys(draft.key_modes||{}).length)main.append(modeControls());
 const possible=Object.keys(draft.key_modes||{}).length?Object.keys(draft.key_actions):draft.actions;
 let group=null;const ordered=[...new Set([...possible.filter(a=>actionAllowed(draft,a)),...Object.keys(draft.bindings)])].sort((a,b)=>actionGroup(a).localeCompare(actionGroup(b))||a.localeCompare(b));for(const action of ordered){const next=actionGroup(action);if(next!==group){main.append(el("h2",next==="Нажатия"?next:"Клавиша "+next));group=next;}if(physicalAction(draft,action)){
@@ -313,12 +321,88 @@ const allowed=actionAllowed(draft,action),detail=el("details",undefined,"action"
   }));
 }main.append(detail)}}
 async function save(){try{
+  if(editing?.sensor){
+    const config={entity_id:draft.id,enabled:draft.enabled,assignments:draft.bindings.presence||[]};
+    if(draft.lux_entity_id){config.lux_entity_id=draft.lux_entity_id;config.lux_threshold=draft.lux_threshold??null}
+    await api("save-sensor",{revision:draft.revision,config});
+    editing=null;draft=null;dirty=false;notice.textContent="Сохранено";await load();return;
+  }
   for(const [key,policy] of Object.entries(draft.keep_mode||{}))
     if(policy==="decoupled"&&editing.keep_mode?.[key]!=="decoupled")
       throw Error("Выберите, удерживать ON или OFF: "+(keyNames[key]||key));
   await api("save",{id:draft.id,revision:draft.revision,enabled:draft.enabled,bindings:draft.bindings,disabled_actions:draft.disabled_actions,...(Object.keys(draft.key_modes||{}).length?{keep_mode:draft.keep_mode||{}}:{})});dirty=false;editing=null;notice.textContent="Сохранено";await load()}catch(e){notice.textContent=e.message}}
 scan.onclick=async()=>{busy=true;scan.disabled=true;try{await api("scan",{});notice.textContent="Сканирование запущено"}catch(e){notice.textContent=e.message}finally{busy=false;await load()}};
-document.querySelector("#devices-nav").onclick=()=>{if(editing)goBack()};
+function selectSection(next){
+  if(dirty&&!confirm("Отменить несохранённые изменения?"))return;
+  section=next;editing=null;draft=null;dirty=false;
+  document.querySelector("#devices-nav").classList.toggle("active",next==="keys");
+  document.querySelector("#sensors-nav").classList.toggle("active",next==="sensors");
+  if(model)renderList();load();
+}
+document.querySelector("#devices-nav").onclick=()=>selectSection("keys");
+document.querySelector("#sensors-nav").onclick=()=>selectSection("sensors");
+function renderSensors(){
+  main.replaceChildren();
+  main.append(el("p","DEV: настройка датчиков. Автоматическое исполнение пока не подключено.","muted"));
+  for(const sensor of model.sensors||[]){
+    const card=el("article",undefined,"device-card");
+    card.tabIndex=0;card.setAttribute("role","button");
+    const title=el("strong",(sensor.state==="on"?"● ":sensor.state==="off"?"○ ":"⚠ ")+targetLabel(sensor.entity_id,sensor));
+    const info=el("div",[sensor.area,sensor.device_class,sensor.state].filter(Boolean).join(" · "),"muted");
+    const targets=el("div",undefined,"bindings");
+    for(const a of sensor.config.assignments||[])targets.append(targetNode(a.entity_id));
+    if(!targets.children.length)targets.append(el("span","Нет назначений","muted"));
+    card.append(title,info,targets);
+    card.onclick=()=>openSensor(sensor);
+    card.onkeydown=e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();openSensor(sensor)}};
+    main.append(card);
+  }
+  if(!(model.sensors||[]).length)main.append(el("p","Нет подтверждённых Motion / Presence датчиков","muted"));
+  applyLiveState();
+}
+function openSensor(sensor){
+  editing={...sensor,sensor:true};
+  const c=structuredClone(sensor.config);
+  draft={id:sensor.entity_id,room:sensor.area,area_id:sensor.area_id,enabled:c.enabled,
+         bindings:{presence:c.assignments.map(a=>({...a,data:a.data||{}}))},revision:model.revision,
+         disabled_actions:[],lux_entity_id:c.lux_entity_id||(sensor.lux_sources?.length===1?sensor.lux_sources[0].entity_id:undefined),lux_threshold:c.lux_threshold};
+  dirty=false;renderSensorEdit();
+}
+function renderSensorEdit(){
+  main.replaceChildren();
+  const h=el("div",undefined,"head");
+  h.append(button("← Датчики",goBack),el("h2",targetLabel(editing.entity_id,editing)),button("Сохранить",save,"save"));main.append(h);
+  main.append(el("p","DEV: сохраняются назначения, автоматическое исполнение ещё не подключено.","muted"));
+  const enable=el("input");enable.type="checkbox";enable.checked=draft.enabled;enable.onchange=()=>{draft.enabled=enable.checked;update()};
+  const l=el("label");l.append(enable,document.createTextNode("Включено"));main.append(l);
+  const lux=editing.lux_sources||[];
+  if(lux.length||draft.lux_entity_id){
+    const p=el("div",undefined,"params");
+    const choices=lux.map(x=>[x.entity_id,targetLabel(x.entity_id,x)]);
+    if(draft.lux_entity_id&&!choices.some(x=>x[0]===draft.lux_entity_id))choices.push([draft.lux_entity_id,"⚠ "+draft.lux_entity_id]);
+    const select=selectOptions([["","Выбрать Lux"],...choices],draft.lux_entity_id||"","Источник Lux");
+    // Same-device Lux has no separate enable flag. Choosing a single known source is explicit.
+    select.onchange=()=>{draft.lux_entity_id=select.value;update();renderSensorEdit()};
+    p.append(select);
+    if(draft.lux_entity_id){
+      const threshold=el("input");threshold.type="number";threshold.min=0;threshold.max=1000000;threshold.step="any";threshold.value=draft.lux_threshold??"";
+      threshold.onchange=()=>{draft.lux_threshold=threshold.value===""?null:Number(threshold.value);update()};
+      const label=el("label","Включать при Lux ниже, lx");label.append(threshold);p.append(label);
+    }
+    main.append(p);
+  }
+  main.append(el("h2","При обнаружении присутствия"));
+  const action="presence",existing=draft.bindings[action]||[];
+  for(const a of existing)assignedRow(action,a,main);
+  main.append(button(existing.length?"Изменить выбор сущностей":"+ Выбрать сущности",()=>{
+    DHElectricaEntityPicker.open({items:model.targets,values:existing.map(a=>a.entity_id),domains:["light","switch"],
+      areaId:draft.area_id,areaHint:draft.room,renderIcon:targetIcon,renderTest:lightTestControl,
+      onConfirm:ids=>{
+        draft.bindings[action]=DHElectricaEntityPicker.mergeAssignments(existing,ids,model.targets).map(a=>({...a,operation:"on"}));
+        if(ids.length)draft.enabled=true;update();renderSensorEdit();
+      }});
+  }));
+}
 // Incremental journal feed: no additional HA/MQTT calls, no full catalog reload.
 const logPanel=document.querySelector("#log-panel"),logButton=document.querySelector("#toggle-log"),logRows=document.querySelector("#log-rows");
 let generation=null,cursor=0,logTimezone=null,logBusy=false,logOpen=false;

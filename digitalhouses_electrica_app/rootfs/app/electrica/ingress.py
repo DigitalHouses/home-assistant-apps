@@ -7,7 +7,7 @@ from pathlib import Path
 from urllib.parse import urlsplit, parse_qs
 
 from .catalog import CatalogError
-from . import climate_rules, media_rules, profiles
+from . import climate_rules, media_rules, profiles, sensor_rules
 from .binding_store import binding_document, validate_document, decode_json
 from .entity_options import parse_rows, render_rows, project
 from .ingress_catalog import normalize, supported_actions, required_keep
@@ -30,10 +30,16 @@ def snapshot(app):
         scan = dict(app._scan)
         report = deepcopy(app._previous)
         maintenance = getattr(app,"globals",{}).get("maintenance_mode",False)
+        sensor_catalog=deepcopy(getattr(app,"sensor_catalog",{}))
         global_mode = getattr(app,"_home_profile",None)
         auto_day_night = getattr(app,"globals",{}).get("auto_day_night",False)
     rows = parse_rows(app.options.read())
-    indexed = {r["entity_id"]:r for r in rows}
+    indexed = {r["entity_id"]:r for r in rows if not sensor_rules.is_source(r["entity_id"])}
+    sensor_rows={r["entity_id"]:r for r in rows if sensor_rules.is_source(r["entity_id"])}
+    sensors=[]
+    for eid in sorted(set(sensor_catalog)|set(sensor_rows)):
+        entry=sensor_catalog.get(eid,{"entity_id":eid,"name":eid,"state":"unavailable","area":"—","lux_sources":[],"missing":True})
+        sensors.append({**entry,"config":sensor_rows.get(eid,{"entity_id":eid,"enabled":False,"assignments":[]})})
     devices = []
     for room in details or config["rooms"]:
         for sw in room["switches"]:
@@ -63,7 +69,7 @@ def snapshot(app):
                         "status":"missing","reason":"Не найден в каталоге",
                         "enabled":row["enabled"],"disabled_actions":row.get("disabled_actions",[]),"actions":[],
                         "bindings":{k:normalize(v) for k,v in row["actions"].items()}})
-    return {"devices":devices,"targets":list(targets.values()),"scan":scan,
+    return {"devices":devices,"sensors":sensors,"targets":list(targets.values()),"scan":scan,
             "report":report,"revision":revision(rows),"version":app.version,"maintenance_mode":maintenance,"home_mode":global_mode["mode"] if global_mode else None,"auto_day_night":auto_day_night,"home_profiles_ready":bool(global_mode and "day" in global_mode and "night" in global_mode)}
 
 def validate_assignment(assignment, targets):
@@ -180,6 +186,43 @@ def save_device(app, payload):
     finally:
         app._scan_lock.release()
 
+def validate_sensor_assignment(row,sources,targets,previous=None):
+    source=sources.get(row["entity_id"])
+    if not source:
+        if row.get("enabled"):raise CatalogError("Датчик не подтверждён каталогом")
+        return
+    lux_ids={x["entity_id"] for x in source.get("lux_sources",[])}
+    if "lux_entity_id" in row and row["lux_entity_id"] not in lux_ids:
+        raise CatalogError("Lux не подтверждён для этого датчика")
+    if row["enabled"] and row["assignments"] and lux_ids and "lux_entity_id" not in row:
+        raise CatalogError("Задайте порог освещённости для датчика с Lux")
+    previous=previous or {}
+    for a in row["assignments"]:
+        check={k:v for k,v in a.items() if k!="off_delay_seconds"}
+        if a not in previous.get("assignments",[]):
+            validate_assignment(check,targets)
+
+def save_sensor(app,payload):
+    if not isinstance(payload,dict) or set(payload)!={"revision","config"}:
+        raise CatalogError("Некорректные настройки датчика")
+    row=sensor_rules.validate_row(payload["config"])
+    if not app._scan_lock.acquire(blocking=False):
+        raise CatalogError("Идёт сканирование — повторите сохранение")
+    try:
+        options=app.options.read()
+        rows=parse_rows(options)
+        if payload["revision"]!=revision(rows):
+            raise CatalogError("Настройки изменились — обновите страницу")
+        old=next((r for r in rows if r["entity_id"]==row["entity_id"]),None)
+        with app._mutex:
+            validate_sensor_assignment(row,app.sensor_catalog,app.target_catalog,old)
+            rows=[r for r in rows if r["entity_id"]!=row["entity_id"]]+[row]
+            options["switches"]=render_rows(rows)
+            projected=project(app.config,options)
+            app.options.write(options)
+            app.config=projected
+    finally:app._scan_lock.release()
+
 def export_bindings(app):
     rows = parse_rows(app.options.read())
     return binding_document(rows)[0]
@@ -210,6 +253,16 @@ def import_bindings(app, payload):
                 if issue.get("category") in ("invalid_binding","invalid_keep_mode"):
                     raise CatalogError(issue["object_name"]+": "+issue["reason"])
             for row in rows:
+                if sensor_rules.is_source(row["entity_id"]):
+                    # Preserve missing sources/targets on import, but validate
+                    # all discovered capabilities; missing never authorizes ON.
+                    if row["entity_id"] in getattr(app,"sensor_catalog",{}):
+                        for a in row["assignments"]:
+                            if a["entity_id"] in app.target_catalog:
+                                validate_assignment({k:v for k,v in a.items() if k!="off_delay_seconds"},app.target_catalog)
+                        if "lux_entity_id" in row and row["lux_entity_id"] not in {x["entity_id"] for x in app.sensor_catalog[row["entity_id"]]["lux_sources"]}:
+                            raise CatalogError("Lux source does not belong to sensor")
+                    continue
                 for rule in row["actions"].values():
                     for assignment in normalize(rule):
                         if assignment["entity_id"] in app.target_catalog:
@@ -316,6 +369,8 @@ def start_ingress(app, port=8099):
                 elif path == "/api/browse-media":
                     self.reply(200,browse_media(app,payload))
                     return
+                elif path == "/api/save-sensor":
+                    save_sensor(app,payload)
                 elif path == "/api/save":
                     save_device(app,payload)
                 elif path == "/api/import":

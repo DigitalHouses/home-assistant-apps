@@ -16,7 +16,7 @@ import re
 import threading
 import time
 
-from . import cover_rules, climate_rules, media_rules, profiles
+from . import cover_rules, climate_rules, media_rules, profiles, sensor_rules
 from .catalog import (CatalogError, candidate_from_mqtt, decode_bridge_devices,
                       resolve_hardware, has_event_actions, has_device_power)
 from .actions import ActionError
@@ -183,6 +183,7 @@ class Application:
         self._mutex = threading.RLock()
         self._scan_lock = threading.Lock()
         self.target_catalog = {}
+        self.sensor_catalog = {}
         self.device_details = []
         self._networks: dict[str, dict] = {}
         self._subscribed: set[str] = set()
@@ -1390,6 +1391,7 @@ class Application:
         with self._mutex:
             self._target_registries = registry
             self.target_catalog = target_catalog(registry, states, self.config, self._temperature_unit)
+            self.sensor_catalog = sensor_rules.discover(registry,states)
         self._publish_details()
 
     def _observe_targets(self):
@@ -1398,7 +1400,7 @@ class Application:
                 self.refresh_targets(refresh_registry=False)
             except Exception:
                 with self._mutex:
-                    for entry in self.target_catalog.values():
+                    for entry in (*self.target_catalog.values(),*self.sensor_catalog.values()):
                         entry["state"] = "unknown"
                 self._publish_details()
             self._stop.wait(15)
