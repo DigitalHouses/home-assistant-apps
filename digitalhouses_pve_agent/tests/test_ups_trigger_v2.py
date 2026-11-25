@@ -176,3 +176,37 @@ def test_controller_without_active_policy_never_executes():
     assert result is None
     assert calls == []
     assert controller.committed is False
+
+
+def test_calibration_with_healthy_input_does_not_commit_fsd():
+    from app.ups_health import ups_problem_observations
+    from app.line_power_statistics import LinePowerState, line_power_state_from_snapshot
+    from app.ups_nut import ups_metrics
+    snapshot = parse_upsc_output("ups.status: OB CAL DISCHRG\nbattery.charge: 47\nbattery.runtime: 60\ninput.voltage: 227\noutput.voltage: 230\ninput.frequency: 50\n")
+    calls = []
+    controller = SoftwareShutdownController(calls.append)
+    result = controller.evaluate_and_commit(snapshot, UpsPolicyDraft(20, 180), _budget())
+    assert not result.triggered and not calls
+    assert snapshot.on_battery and "CAL" in snapshot.status_tokens
+    assert line_power_state_from_snapshot(snapshot, nut_available=True) is LinePowerState.ONLINE
+    assert not next(p.active for p in ups_problem_observations(snapshot) if p.problem_id == "on_battery")
+    assert ups_metrics(snapshot)["line_power"].value is True
+
+
+def test_calibration_cannot_mask_real_failure_or_invalid_input():
+    for status, measurements in [
+        ("OB CAL", "input.voltage: 0\ninput.frequency: 0\n"),
+        ("OB CAL", ""),
+        ("OB CAL", "input.voltage: 227\n"),
+        ("OB CAL", "input.voltage: nan\ninput.frequency: 50\n"),
+        ("OB CAL", "input.voltage: 150\ninput.frequency: 50\n"),
+        ("OB CAL", "input.voltage: 227\ninput.frequency: 40\n"),
+        ("OB CAL", "input.voltage: 227\ninput.frequency: 50\ninput.transfer.low: 235\n"),
+        ("OB CAL LB", "input.voltage: 227\ninput.frequency: 50\n"),
+        ("OB CAL FSD", "input.voltage: 227\ninput.frequency: 50\n"),
+        ("OB", "input.voltage: 227\ninput.frequency: 50\n"),
+    ]:
+        snapshot = parse_upsc_output(f"ups.status: {status}\nbattery.charge: 2\nbattery.runtime: 60\noutput.voltage: 230\n{measurements}")
+        result = evaluate_software_shutdown_trigger(snapshot, UpsPolicyDraft(20, 180), _budget())
+        assert result.triggered, (status, measurements)
+        assert result.reason == "charge_guard"

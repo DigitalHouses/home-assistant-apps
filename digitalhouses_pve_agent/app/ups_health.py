@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from .ups_nut import UpsSnapshot
+from .ups_nut import UpsSnapshot, calibration_with_healthy_input
 
 
 STATUS_DERIVED_UPS_PROBLEM_IDS = frozenset(
@@ -52,7 +52,7 @@ def ups_problem_observations(
         ),
         UpsProblemObservation(
             problem_id="on_battery",
-            active=snapshot.on_battery,
+            active=snapshot.on_battery and not calibration_with_healthy_input(snapshot),
             severity="warning",
         ),
         UpsProblemObservation(

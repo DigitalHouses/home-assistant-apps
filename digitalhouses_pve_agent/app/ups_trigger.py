@@ -4,7 +4,7 @@ import math
 from collections.abc import Callable
 from dataclasses import dataclass
 
-from .ups_nut import UpsSnapshot
+from .ups_nut import UpsSnapshot, calibration_with_healthy_input
 from .ups_policy import UpsPolicyDraft
 from .ups_shutdown_budget import ShutdownBudgetResult
 
@@ -50,7 +50,7 @@ def evaluate_software_shutdown_trigger(
         policy.runtime_reserve_seconds
     )
 
-    if not snapshot.on_battery:
+    if not snapshot.on_battery or calibration_with_healthy_input(snapshot):
         return SoftwareShutdownTriggerResult(
             triggered=False,
             reason=None,

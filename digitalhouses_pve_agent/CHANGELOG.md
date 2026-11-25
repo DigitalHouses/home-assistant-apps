@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.104
+
+- Prevent software FSD during UPS calibration (`OB CAL`) only when fresh input voltage and frequency confirm healthy mains; absent, invalid or abnormal measurements and critical UPS flags retain the original protection. Preserve raw NUT status and native NUT handling.
+- Exclude verified calibration from line-power outage statistics and on-battery problem/events. Preserve the v0.5.103 UPS layout and existing calibration presentation.
+- Physical calibration acceptance remains required before stable deployment.
+
 ## 0.5.103
 
 - Promote the guided USB UPS/NUT commissioning workflow and PVE shutdown history fixes from v0.5.100–0.5.102 into the regular stable PVE Agent release line. Keep the seven independent setup stages, USB identity reporting and retained HA MQTT setup diagnostics.
