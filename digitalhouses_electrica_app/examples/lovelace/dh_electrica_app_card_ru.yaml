@@ -1,22 +1,22 @@
-# DigitalHouses Aqara Switch App · compact unified card
+# DigitalHouses Electrica App · compact unified card
 # Requires Mushroom and custom:button-card >= 5.0 for update_timer.
 # Runtime operations are App-owned; installation/restart remain Supervisor-owned.
 type: vertical-stack
 cards:
   - type: custom:button-card
-    entity: sensor.dh_aqara_switch_app_card
+    entity: sensor.dh_electrica_app_card
     triggers_update:
-      - sensor.dh_aqara_switch_app_card
-      - sensor.dh_aqara_switch_app_version
-      - sensor.dh_aqara_switch_app_latest_version
-      - binary_sensor.dh_aqara_switch_app_update_available
-      - sensor.dh_aqara_switch_app_problems
-      - update.digitalhouses_aqara_switch_app_update
+      - sensor.dh_electrica_app_card
+      - sensor.dh_electrica_app_version
+      - sensor.dh_electrica_app_latest_version
+      - binary_sensor.dh_electrica_app_update_available
+      - sensor.dh_electrica_app_problems
+      - update.digitalhouses_electrica_app_update
     update_timer: |
       [[[
-        const s = states['sensor.dh_aqara_switch_app_card']?.state;
+        const s = states['sensor.dh_electrica_app_card']?.state;
         const updating =
-          states['update.digitalhouses_aqara_switch_app_update']?.attributes?.in_progress === true;
+          states['update.digitalhouses_electrica_app_update']?.attributes?.in_progress === true;
         return s === 'running' || updating ? 1000 : 5000;
       ]]]
     show_icon: true
@@ -24,13 +24,13 @@ cards:
     show_label: true
     icon: |
       [[[
-        const s = states['sensor.dh_aqara_switch_app_card']?.state;
-        const health = states['sensor.dh_aqara_switch_app_problems']?.state;
-        const problems = Number(states['sensor.dh_aqara_switch_app_problems']?.attributes?.count ?? -1);
+        const s = states['sensor.dh_electrica_app_card']?.state;
+        const health = states['sensor.dh_electrica_app_problems']?.state;
+        const problems = Number(states['sensor.dh_electrica_app_problems']?.attributes?.count ?? -1);
         const upgrade =
-          states['binary_sensor.dh_aqara_switch_app_update_available']?.state === 'on';
+          states['binary_sensor.dh_electrica_app_update_available']?.state === 'on';
         const updating =
-          states['update.digitalhouses_aqara_switch_app_update']?.attributes?.in_progress === true;
+          states['update.digitalhouses_electrica_app_update']?.attributes?.in_progress === true;
 
         if (updating || s === 'running') return 'mdi:progress-clock';
         if (s === 'error' || ['unknown','unavailable'].includes(s) || !s) return 'mdi:alert-circle';
@@ -42,26 +42,26 @@ cards:
       ]]]
     name: |
       [[[
-        const installed = states['sensor.dh_aqara_switch_app_version']?.state;
-        const latest = states['sensor.dh_aqara_switch_app_latest_version']?.state;
+        const installed = states['sensor.dh_electrica_app_version']?.state;
+        const latest = states['sensor.dh_electrica_app_latest_version']?.state;
         const available =
-          states['binary_sensor.dh_aqara_switch_app_update_available']?.state === 'on';
+          states['binary_sensor.dh_electrica_app_update_available']?.state === 'on';
         const valid = (v) =>
           typeof v === 'string'
           && /^\d+\.\d+\.\d+$/.test(v);
         const upgrade =
           available && valid(installed) && valid(latest) && latest !== installed;
 
-        return 'Aqara Switch App' + (valid(installed)
+        return 'Electrica App' + (valid(installed)
           ? ' · v' + installed + (upgrade ? ' → v' + latest : '')
           : '');
       ]]]
     label: |
       [[[
-        const item = states['sensor.dh_aqara_switch_app_card'];
-        const health = states['sensor.dh_aqara_switch_app_problems']?.state;
-        const problems = Number(states['sensor.dh_aqara_switch_app_problems']?.attributes?.count ?? -1);
-        const supervisorUpdate = states['update.digitalhouses_aqara_switch_app_update'];
+        const item = states['sensor.dh_electrica_app_card'];
+        const health = states['sensor.dh_electrica_app_problems']?.state;
+        const problems = Number(states['sensor.dh_electrica_app_problems']?.attributes?.count ?? -1);
+        const supervisorUpdate = states['update.digitalhouses_electrica_app_update'];
 
         const elapsedText = (since) => {
           const seconds = Math.max(
@@ -82,8 +82,8 @@ cards:
         };
 
         if (supervisorUpdate?.attributes?.in_progress === true) {
-          if (this._dh_aqara_timer?.operation !== 'install') {
-            this._dh_aqara_timer = {
+          if (this._dh_electrica_timer?.operation !== 'install') {
+            this._dh_electrica_timer = {
               operation: 'install',
               since: performance.now()
             };
@@ -91,7 +91,7 @@ cards:
           const pct = supervisorUpdate.attributes.update_percentage;
           return 'Установка версии… '
             + (typeof pct === 'number' ? Math.round(pct) + '% · ' : '')
-            + elapsedText(this._dh_aqara_timer.since);
+            + elapsedText(this._dh_electrica_timer.since);
         }
 
         if (!item || ['unknown', 'unavailable'].includes(item.state)) {
@@ -107,18 +107,18 @@ cards:
 
         if (item.state === 'running') {
           const key = String(operation) + '|' + String(a.started_at || '');
-          if (this._dh_aqara_timer?.key !== key) {
-            this._dh_aqara_timer = {
+          if (this._dh_electrica_timer?.key !== key) {
+            this._dh_electrica_timer = {
               key: key,
               operation: operation,
               since: performance.now()
             };
           }
           return (names[operation] || 'Операция') + '… '
-            + elapsedText(this._dh_aqara_timer.since);
+            + elapsedText(this._dh_electrica_timer.since);
         }
 
-        this._dh_aqara_timer = null;
+        this._dh_electrica_timer = null;
 
         if (item.state === 'error') {
           return 'Ошибка: ' + (a.error || 'операция не выполнена');
@@ -129,9 +129,9 @@ cards:
             ? 'Данные обновлены'
             : operation === 'check'
               ? (
-                  states['binary_sensor.dh_aqara_switch_app_update_available']?.state === 'on'
+                  states['binary_sensor.dh_electrica_app_update_available']?.state === 'on'
                     ? 'Доступна новая версия'
-                    : states['binary_sensor.dh_aqara_switch_app_update_available']?.state === 'off'
+                    : states['binary_sensor.dh_electrica_app_update_available']?.state === 'off'
                       ? 'Версия актуальна'
                       : 'Проверка завершена'
                 )
@@ -143,7 +143,7 @@ cards:
         if (Number.isFinite(problems) && problems > 0) {
           return 'Проблемы: ' + problems;
         }
-        if (states['binary_sensor.dh_aqara_switch_app_update_available']?.state === 'on') {
+        if (states['binary_sensor.dh_electrica_app_update_available']?.state === 'on') {
           return 'Доступна новая версия';
         }
         if (health === 'ready') return 'Работает штатно';
@@ -164,15 +164,15 @@ cards:
         - width: 26px
         - color: |
             [[[
-              const s = states['sensor.dh_aqara_switch_app_card']?.state;
+              const s = states['sensor.dh_electrica_app_card']?.state;
               const health =
-                states['sensor.dh_aqara_switch_app_problems']?.state;
+                states['sensor.dh_electrica_app_problems']?.state;
               const problems =
-                Number(states['sensor.dh_aqara_switch_app_problems']?.attributes?.count ?? -1);
+                Number(states['sensor.dh_electrica_app_problems']?.attributes?.count ?? -1);
               const upgrade =
-                states['binary_sensor.dh_aqara_switch_app_update_available']?.state === 'on';
+                states['binary_sensor.dh_electrica_app_update_available']?.state === 'on';
               const updating =
-                states['update.digitalhouses_aqara_switch_app_update']?.attributes?.in_progress === true;
+                states['update.digitalhouses_electrica_app_update']?.attributes?.in_progress === true;
 
               return s === 'error' || ['unknown','unavailable'].includes(s) || !s || health === 'unavailable'
                 ? 'var(--error-color)'
@@ -211,7 +211,7 @@ cards:
           action: perform-action
           perform_action: button.press
           target:
-            entity_id: button.dh_aqara_switch_app_refresh
+            entity_id: button.dh_electrica_app_refresh
 
       - type: template
         icon: mdi:cloud-search
@@ -220,11 +220,11 @@ cards:
           action: perform-action
           perform_action: button.press
           target:
-            entity_id: button.dh_aqara_switch_app_check_updates
+            entity_id: button.dh_electrica_app_check_updates
 
       - type: conditional
         conditions:
-          - entity: update.digitalhouses_aqara_switch_app_update
+          - entity: update.digitalhouses_electrica_app_update
             state: "on"
         chip:
           type: template
@@ -235,12 +235,12 @@ cards:
             action: perform-action
             perform_action: update.install
             target:
-              entity_id: update.digitalhouses_aqara_switch_app_update
+              entity_id: update.digitalhouses_electrica_app_update
             data:
               backup: true
             confirmation:
               text: >-
-                Установить новую версию Aqara Switch App?
+                Установить новую версию Electrica App?
                 Перед обновлением Home Assistant создаст резервную копию App.
                 Управление освещением через приложение временно прервётся.
 
@@ -251,10 +251,10 @@ cards:
           action: perform-action
           perform_action: hassio.app_restart
           data:
-            app: 8133339d_digitalhouses_aqara_switch_app
+            app: 8133339d_digitalhouses_electrica_app
           confirmation:
             text: >-
-              Перезапустить Aqara Switch App?
+              Перезапустить Electrica App?
               Управление освещением через приложение временно прервётся.
 grid_options:
   columns: 12

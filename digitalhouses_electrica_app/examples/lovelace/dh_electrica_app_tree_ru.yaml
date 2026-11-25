@@ -1,9 +1,9 @@
 type: markdown
 content: |-
-  {% set entity = 'sensor.dh_aqara_switch_app_devices_details' %}
+  {% set entity = 'sensor.dh_electrica_app_devices_details' %}
   {% set rooms = state_attr(entity, 'rooms') or [] %}
   {% if states(entity) != 'ready' %}
-  *Нет подтверждённых данных от Aqara Switch App.*
+  *Нет подтверждённых данных от Electrica App.*
   {% elif rooms | count == 0 %}
   *Выключатели пока не импортированы. Откройте Ingress для настройки.*
   {% else %}

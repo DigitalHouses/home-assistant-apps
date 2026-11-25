@@ -7,9 +7,9 @@ import types
 import unittest
 from unittest.mock import Mock, patch
 
-from aqara_switch.control import HAClient
-from aqara_switch.lab_lights import authorized_ha_light_ids, partition_commands
-from aqara_switch.runtime import Application
+from electrica.control import HAClient
+from electrica.lab_lights import authorized_ha_light_ids, partition_commands
+from electrica.runtime import Application
 from test_lab_rest_fallback import (
     PROFILE, DEVICE, BASE, COORD, NAME, LAB, PHYSICAL, PHYSICAL_DEVICE,
     PHYSICAL_ROUTE, FakeMQTT, packet)
@@ -80,7 +80,7 @@ class NativeLightIntegration(unittest.TestCase):
             [{"entity_id":TV,"platform":"template","disabled_by":None}]
             if registry is None else registry)
         with TemporaryDirectory() as td,patch(
-            "aqara_switch.entity_options._read_profiles",return_value=profiles):
+            "electrica.entity_options._read_profiles",return_value=profiles):
             app=Application(FakeMQTT,options=options,registry=source,
                 last_scan_path=Path(td)/"scan.json",version="0.1.15",
                 ha_client=ha)
@@ -211,7 +211,7 @@ if __name__=="__main__":
 class NativeRegistryWebsocketTests(unittest.TestCase):
     def test_fetch_entities_only_uses_read_only_registry_method(self):
         import sys
-        from aqara_switch.ha_registry import HARegistryClient
+        from electrica.ha_registry import HARegistryClient
         class Socket:
             def __init__(self):
                 self.frames=iter([

@@ -1,4 +1,4 @@
-"""Compact UI controls and stable release checks for Aqara Switch App."""
+"""Compact UI controls and stable release checks for Electrica App."""
 from __future__ import annotations
 
 import json
@@ -9,9 +9,9 @@ import urllib.request
 from datetime import datetime, timezone
 from typing import Callable
 
-PRODUCT = "digitalhouses_aqara_switch_app"
+PRODUCT = "digitalhouses_electrica_app"
 RELEASES_URL = "https://api.github.com/repos/DigitalHouses/home-assistant-apps/releases"
-STABLE_TAG = re.compile(r"^digitalhouses_aqara_switch_app-v(\d+)\.(\d+)\.(\d+)$")
+STABLE_TAG = re.compile(r"^digitalhouses_electrica_app-v(\d+)\.(\d+)\.(\d+)$")
 CHECK_INTERVAL_SECONDS = 24 * 3600
 RESULT_SECONDS = 5.0
 OPERATIONS = frozenset({"refresh", "check"})
@@ -34,7 +34,7 @@ def latest_release(*, opener=urllib.request.urlopen) -> tuple[str, str]:
         request = urllib.request.Request(
             f"{RELEASES_URL}?per_page=100&page={page}",
             headers={
-                "User-Agent": "DigitalHouses-Aqara-Switch-App",
+                "User-Agent": "DigitalHouses-Electrica-App",
                 "Accept": "application/vnd.github+json",
             },
         )
@@ -60,7 +60,7 @@ def latest_release(*, opener=urllib.request.urlopen) -> tuple[str, str]:
                 selected = (tag, ".".join(match.groups()))
         if len(releases) < 100:
             if selected is None:
-                raise ValueError("No published stable Aqara Switch App release")
+                raise ValueError("No published stable Electrica App release")
             return selected
     raise ValueError("GitHub release pagination limit exceeded")
 

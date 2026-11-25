@@ -78,9 +78,9 @@ class Observer:
         self.output = None
         if hasattr(mqtt, "CallbackAPIVersion"):
             self.client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION1,
-                                      client_id="dh-aqara-one-room-observer")
+                                      client_id="dh-electrica-one-room-observer")
         else:
-            self.client = mqtt.Client(client_id="dh-aqara-one-room-observer")
+            self.client = mqtt.Client(client_id="dh-electrica-one-room-observer")
         if service.get("username"):
             self.client.username_pw_set(service["username"], service.get("password", ""))
         if service.get("ssl"):

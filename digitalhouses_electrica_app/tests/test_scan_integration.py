@@ -5,10 +5,10 @@ import json
 import unittest
 from unittest.mock import patch
 
-from aqara_switch.scan import scan_once
-from aqara_switch.entity_options import parse_rows, current
-from aqara_switch.ha_registry import areas_from_registries, switch_entities
-from aqara_switch.catalog import CatalogError
+from electrica.scan import scan_once
+from electrica.entity_options import parse_rows, current
+from electrica.ha_registry import areas_from_registries, switch_entities
+from electrica.catalog import CatalogError
 
 COORD="0x00124b002e1330dd"
 IEEE="0x00158d0000000001"
@@ -47,7 +47,7 @@ class Registry:
 
 class ScanTests(unittest.TestCase):
     def test_scan_uses_real_entity_and_repeat_no_duplicates(self):
-        with TemporaryDirectory() as td, patch("aqara_switch.scan.STORE_PATH",Path(td)/"store.json"):
+        with TemporaryDirectory() as td, patch("electrica.scan.STORE_PATH",Path(td)/"store.json"):
             opts=Options()
             data,report=scan_once([snap()],opts,Registry())
             self.assertEqual(report["added"][0]["name"],NAME)
@@ -60,7 +60,7 @@ class ScanTests(unittest.TestCase):
             self.assertEqual(new,data)
 
     def test_battery_button_with_only_ha_event_gets_logical_key(self):
-        with TemporaryDirectory() as td, patch("aqara_switch.scan.STORE_PATH", Path(td)/"store.json"):
+        with TemporaryDirectory() as td, patch("electrica.scan.STORE_PATH", Path(td)/"store.json"):
             opts = Options()
             dev, report = scan_once([snap()], opts, Registry(entities=[
                 {"device_id": "ha-1", "entity_id": "event.aqara_button_action"}]))
@@ -78,7 +78,7 @@ class ScanTests(unittest.TestCase):
             self.assertEqual(again, dev)
 
     def test_multiple_switch_entities_use_logical_key_not_random_relay(self):
-        with TemporaryDirectory() as td, patch("aqara_switch.scan.STORE_PATH",Path(td)/"store.json"):
+        with TemporaryDirectory() as td, patch("electrica.scan.STORE_PATH",Path(td)/"store.json"):
             opts=Options()
             data, report=scan_once([snap()],opts,Registry(entities=[
                 {"device_id":"ha-1","entity_id":"switch.a"},
@@ -91,7 +91,7 @@ class ScanTests(unittest.TestCase):
         class EmptyRegistry:
             def fetch(self):
                 return [], [], []
-        with TemporaryDirectory() as td, patch("aqara_switch.scan.STORE_PATH",Path(td)/"store.json"):
+        with TemporaryDirectory() as td, patch("electrica.scan.STORE_PATH",Path(td)/"store.json"):
             opts=Options()
             data, report=scan_once([snap()],opts,EmptyRegistry())
             self.assertEqual(opts.writes,1)
@@ -99,7 +99,7 @@ class ScanTests(unittest.TestCase):
             self.assertEqual(data["rooms"][0]["switches"][0]["entity_id"],"switch.aqara_button")
 
     def test_same_key_survives_ha_entity_arrival(self):
-        with TemporaryDirectory() as td, patch("aqara_switch.scan.STORE_PATH",Path(td)/"store.json"):
+        with TemporaryDirectory() as td, patch("electrica.scan.STORE_PATH",Path(td)/"store.json"):
             opts=Options()
             scan_once([snap()],opts,Registry(entities=[]))
             before=opts.read()["switches"]
@@ -109,7 +109,7 @@ class ScanTests(unittest.TestCase):
             self.assertEqual(opts.writes,1)
 
     def test_renamed_devices_dont_reuse_same_ieee_key_without_confirmation(self):
-        with TemporaryDirectory() as td, patch("aqara_switch.scan.STORE_PATH",Path(td)/"store.json"):
+        with TemporaryDirectory() as td, patch("electrica.scan.STORE_PATH",Path(td)/"store.json"):
             opts=Options()
             scan_once([snap()],opts,Registry(entities=[]))
             _, report=scan_once([snap(name="new_aqara_button")],opts,Registry(entities=[]))
@@ -118,7 +118,7 @@ class ScanTests(unittest.TestCase):
             self.assertEqual(opts.writes,1)
 
     def test_scan_captures_only_decoupled_wired_key_and_not_battery(self):
-        from aqara_switch.entity_options import _read_profiles
+        from electrica.entity_options import _read_profiles
         wired={"ieee_address":"0x00158d0000000099","friendly_name":"aqara_wired",
                "type":"Router",
                "definition":{"vendor":"Aqara","model":"WS-EUK04",
@@ -141,7 +141,7 @@ class ScanTests(unittest.TestCase):
               "state_left":"ON","state_right":"OFF"}}}
         class EmptyRegistry:
             def fetch(self):return [],[],[]
-        with TemporaryDirectory() as td, patch("aqara_switch.scan.STORE_PATH",Path(td)/"store.json"):
+        with TemporaryDirectory() as td, patch("electrica.scan.STORE_PATH",Path(td)/"store.json"):
             opts=Options()
             data,report=scan_once([snapshot],opts,EmptyRegistry())
             rows={r["entity_id"]:r for r in parse_rows(opts.read())}
@@ -156,7 +156,7 @@ class ScanTests(unittest.TestCase):
             # must not recreate it, even when decoupled is still observed.
             for row in rows.values():
                 row.pop("keep_mode",None)
-            from aqara_switch.entity_options import render_rows
+            from electrica.entity_options import render_rows
             opts.options["switches"]=render_rows(list(rows.values()))
             before=opts.writes
             scan_once([snapshot],opts,EmptyRegistry())
@@ -172,7 +172,7 @@ class ScanTests(unittest.TestCase):
 
     def test_compatible_button_replacement_keeps_logical_key_and_two_lights(self):
         new_ieee="0x00158d0000000002"
-        with TemporaryDirectory() as td, patch("aqara_switch.scan.STORE_PATH", Path(td)/"store.json"):
+        with TemporaryDirectory() as td, patch("electrica.scan.STORE_PATH", Path(td)/"store.json"):
             opts=Options()
             scan_once([snap()],opts,Registry(entities=[]))
             opts.options["switches"] = """
@@ -192,7 +192,7 @@ class ScanTests(unittest.TestCase):
                              ["light.dh_aqara_lab_chandelier","light.dh_aqara_lab_spots"])
 
     def test_manual_rescan_reintroduces_deleted_yaml_row(self):
-        with TemporaryDirectory() as td, patch("aqara_switch.scan.STORE_PATH",Path(td)/"store.json"):
+        with TemporaryDirectory() as td, patch("electrica.scan.STORE_PATH",Path(td)/"store.json"):
             opts=Options()
             scan_once([snap()],opts,Registry(entities=[]))
             opts.options["switches"]="[]"
@@ -203,7 +203,7 @@ class ScanTests(unittest.TestCase):
             self.assertEqual(data["rooms"][0]["switches"][0]["entity_id"],"switch.aqara_button")
 
     def test_slug_collision_has_stable_network_key(self):
-        from aqara_switch.scan import _choose_key
+        from electrica.scan import _choose_key
         known={}
         first={"coordinator_ieee":COORD,"logical_name":"button-1","base_topic":"zigbee2mqtt_1"}
         second={"coordinator_ieee":COORD,"logical_name":"button_1","base_topic":"zigbee2mqtt_1"}
@@ -216,7 +216,7 @@ class ScanTests(unittest.TestCase):
 
     def test_compatible_replacement_preserves_actions(self):
         new_ieee="0x00158d0000000002"
-        with TemporaryDirectory() as td, patch("aqara_switch.scan.STORE_PATH",Path(td)/"store.json"):
+        with TemporaryDirectory() as td, patch("electrica.scan.STORE_PATH",Path(td)/"store.json"):
             opts=Options()
             scan_once([snap()],opts,Registry())
             opts.options["switches"] = """

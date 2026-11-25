@@ -5,7 +5,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "rootfs/app"))
 try:
-    from aqara_switch.actions import plan_action, ActionError
+    from electrica.actions import plan_action, ActionError
 finally:
     sys.path.pop(0)
 

@@ -1,7 +1,7 @@
 import unittest
 from unittest.mock import patch
 from datetime import datetime, timezone, timedelta
-from aqara_switch.event_log import EventLog
+from electrica.event_log import EventLog
 
 EID="light.bra"
 ROUTE=("z2m","zigbee2mqtt","bra")
@@ -24,7 +24,7 @@ class EventLogTests(unittest.TestCase):
         self.assertEqual(feed["rows"][0]["targets"][EID]["before"],"off")
         self.assertEqual(self.log.snapshot(feed["cursor"],self.log.generation)["rows"],[])
     def test_superseded_disconnect_and_timeout(self):
-        with patch("aqara_switch.event_log.monotonic",return_value=1):
+        with patch("electrica.event_log.monotonic",return_value=1):
             first=self.log.press("net","button","single",[EID])
             self.log.sent(first,EID,ROUTE,"off","on")
             second=self.log.press("net","button","single",[EID])
@@ -32,7 +32,7 @@ class EventLogTests(unittest.TestCase):
             self.assertEqual(self.row(first)["targets"][EID]["status"],"superseded")
             self.log.observe(ROUTE,"ON")
             self.assertEqual(self.row(second)["targets"][EID]["status"],"sent")
-        with patch("aqara_switch.event_log.monotonic",return_value=92):
+        with patch("electrica.event_log.monotonic",return_value=92):
             self.assertEqual(self.row(second)["targets"][EID]["status"],"timeout")
             self.log.observe(ROUTE,"OFF")
             self.assertEqual(self.row(second)["targets"][EID]["status"],"timeout")
@@ -51,7 +51,7 @@ class EventLogTests(unittest.TestCase):
         self.log.observe(route,"on",(now+timedelta(seconds=1)).isoformat())
         self.assertEqual(self.row(rid)["targets"][EID]["status"],"confirmed")
     def test_retention_count_age_and_reset(self):
-        with patch("aqara_switch.event_log.monotonic",return_value=10):
+        with patch("electrica.event_log.monotonic",return_value=10):
             for i in range(520):
                 rid=self.log.press("net","button","single",[EID])
                 self.log.sent(rid,EID,("z2m","net",str(i)),"off","on")
@@ -59,7 +59,7 @@ class EventLogTests(unittest.TestCase):
             self.assertEqual(len(data["rows"]),500)
             self.assertEqual(len(self.log.pending),500)
             self.assertEqual(data["oldest"],data["rows"][0]["id"])
-        with patch("aqara_switch.event_log.monotonic",return_value=86411):
+        with patch("electrica.event_log.monotonic",return_value=86411):
             self.assertEqual(self.log.snapshot()["rows"],[])
             self.assertEqual(self.log.pending,{})
         self.assertTrue(self.log.snapshot(100,"different")["reset"])

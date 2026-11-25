@@ -2,7 +2,7 @@
 from pathlib import Path
 from unittest import TestCase
 
-WEB = Path(__file__).resolve().parents[1] / "rootfs/app/aqara_switch/web"
+WEB = Path(__file__).resolve().parents[1] / "rootfs/app/electrica/web"
 
 class IngressStyleTests(TestCase):
     def test_network_reference_palette_and_header(self):

@@ -7,15 +7,15 @@ from types import SimpleNamespace
 from unittest.mock import Mock, patch
 from copy import deepcopy
 
-from aqara_switch.binding_store import BindingStore
-from aqara_switch.catalog import CatalogError
-from aqara_switch.control import light_commands
-from aqara_switch.entity_options import project, parse_rows
-from aqara_switch.ingress import save_device, revision, validate_assignment
-from aqara_switch.ingress_catalog import target_catalog, safe_switch_targets, normalize
-from aqara_switch.light_rules import parse_rule
-from aqara_switch.scan import scan_once
-from aqara_switch.operation_ui import AppCard, latest_release
+from electrica.binding_store import BindingStore
+from electrica.catalog import CatalogError
+from electrica.control import light_commands
+from electrica.entity_options import project, parse_rows
+from electrica.ingress import save_device, revision, validate_assignment
+from electrica.ingress_catalog import target_catalog, safe_switch_targets, normalize
+from electrica.light_rules import parse_rule
+from electrica.scan import scan_once
+from electrica.operation_ui import AppCard, latest_release
 from test_scan_integration import snap, Registry, IEEE, COORD
 
 KEY = "switch.aqara_button"
@@ -102,7 +102,7 @@ class IngressTests(unittest.TestCase):
             supervisor=Mock()
             supervisor.read.return_value={"switches":"[]"}
             store=BindingStore(supervisor,Path(td)/"bindings.json")
-            with patch("aqara_switch.scan.STORE_PATH",Path(td)/"profiles.json"):
+            with patch("electrica.scan.STORE_PATH",Path(td)/"profiles.json"):
                 first,_=scan_once([snap()],store,Registry(entities=[]))
                 sw=first["rooms"][0]["switches"][0]
                 self.assertEqual(sw["entity_id"],KEY)
@@ -110,7 +110,7 @@ class IngressTests(unittest.TestCase):
                 rows=parse_rows(store.read())
                 rows[0]["enabled"]=True
                 rows[0]["actions"]={"single":["light.bra"]}
-                from aqara_switch.entity_options import render_rows
+                from electrica.entity_options import render_rows
                 store.write({**store.read(),"switches":render_rows(rows)})
                 renamed,_=scan_once([snap(name="renamed_button")],store,Registry(entities=[]))
                 sw=renamed["rooms"][0]["switches"][0]

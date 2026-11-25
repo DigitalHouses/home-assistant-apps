@@ -1,5 +1,5 @@
-# DigitalHouses Aqara Switch App LAB — virtual loads, not physical relays.
-# Example installation: /config/packages/Global/DH_APP/dh_aqara_switch_app_lab.yaml
+# DigitalHouses Electrica App LAB — virtual loads, not physical relays.
+# Example installation: /config/packages/Global/DH_APP/dh_electrica_app_lab.yaml
 # Confirm site package layout before copying. No automations or real hardware writes.
 # Built on standard HA template light backed by persistent input_boolean helpers.
 input_boolean:

@@ -10,8 +10,8 @@ from unittest.mock import Mock, patch
 
 import yaml
 
-from aqara_switch.runtime import Application
-from aqara_switch.telemetry import ContractDataError, TelemetryClient, TelemetryRunner
+from electrica.runtime import Application
+from electrica.telemetry import ContractDataError, TelemetryClient, TelemetryRunner
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -53,7 +53,7 @@ class TelemetryTests(unittest.TestCase):
             with TemporaryDirectory() as td:
                 options = Mock()
                 options.read.return_value = {"switches": "[]", "telemetry_enabled": value}
-                with patch("aqara_switch.runtime.TelemetryClient") as telemetry:
+                with patch("electrica.runtime.TelemetryClient") as telemetry:
                     app = Application(
                         types.SimpleNamespace(Client=FakeMQTT), options=options,
                         registry=Mock(), last_scan_path=Path(td)/"scan.json",
@@ -68,8 +68,8 @@ class TelemetryTests(unittest.TestCase):
         options = Mock()
         options.read.return_value = {"switches": "[]", "telemetry_enabled": True}
         with TemporaryDirectory() as td, \
-                patch("aqara_switch.runtime.TelemetryClient") as telemetry, \
-                patch("aqara_switch.runtime.TelemetryRunner") as runner:
+                patch("electrica.runtime.TelemetryClient") as telemetry, \
+                patch("electrica.runtime.TelemetryRunner") as runner:
             app = Application(
                 types.SimpleNamespace(Client=FakeMQTT), options=options,
                 registry=Mock(), last_scan_path=Path(td)/"scan.json",
@@ -89,7 +89,7 @@ class TelemetryTests(unittest.TestCase):
             self.assertEqual(t.payload(), {
                 "schema": 1, "telemetry_policy_version": 2,
                 "installation_id": t.installation_id,
-                "product": "digitalhouses_aqara_switch_app",
+                "product": "digitalhouses_electrica_app",
                 "version": "0.1.18",
             })
             self.assertEqual(len(bytes.fromhex(t.installation_token)), 32)
@@ -166,8 +166,8 @@ class TelemetryTests(unittest.TestCase):
             def load_client(**kwargs):
                 return real_client(state_file=state, **kwargs)
 
-            with patch("aqara_switch.runtime.TelemetryClient", side_effect=load_client):
-                with self.assertLogs("aqara_switch.runtime", level="ERROR") as logs:
+            with patch("electrica.runtime.TelemetryClient", side_effect=load_client):
+                with self.assertLogs("electrica.runtime", level="ERROR") as logs:
                     app = Application(
                         types.SimpleNamespace(Client=FakeMQTT), options=options,
                         registry=Mock(), last_scan_path=Path(td) / "scan.json",
@@ -188,9 +188,9 @@ class TelemetryTests(unittest.TestCase):
         options = Mock()
         options.read.return_value = {"switches": "[]", "telemetry_enabled": True}
         with TemporaryDirectory() as td:
-            with patch("aqara_switch.runtime.TelemetryClient",
+            with patch("electrica.runtime.TelemetryClient",
                        side_effect=OSError("read-only filesystem")):
-                with self.assertLogs("aqara_switch.runtime", level="ERROR"):
+                with self.assertLogs("electrica.runtime", level="ERROR"):
                     app = Application(
                         types.SimpleNamespace(Client=FakeMQTT), options=options,
                         registry=Mock(), last_scan_path=Path(td) / "scan.json",
@@ -221,15 +221,15 @@ class TelemetryTests(unittest.TestCase):
         options = Mock()
         options.read.return_value = {"switches": "[]", "telemetry_enabled": True}
         with TemporaryDirectory() as td:
-            with patch("aqara_switch.runtime.TelemetryClient") as telemetry:
-                with patch("aqara_switch.runtime.TelemetryRunner"):
+            with patch("electrica.runtime.TelemetryClient") as telemetry:
+                with patch("electrica.runtime.TelemetryRunner"):
                     telemetry.return_value.delete.side_effect = OSError("disk full")
                     app = Application(
                         types.SimpleNamespace(Client=FakeMQTT), options=options,
                         registry=Mock(), last_scan_path=Path(td) / "scan.json",
                         version="0.1.19",
                     )
-                    with self.assertLogs("aqara_switch.runtime", level="ERROR") as logs:
+                    with self.assertLogs("electrica.runtime", level="ERROR") as logs:
                         app._delete_telemetry()
                     self.assertTrue(any(
                         "deletion state error" in line for line in logs.output

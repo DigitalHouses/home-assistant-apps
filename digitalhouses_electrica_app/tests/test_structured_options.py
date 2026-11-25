@@ -5,8 +5,8 @@ import unittest
 from unittest.mock import patch
 import yaml
 
-from aqara_switch.catalog import CatalogError
-from aqara_switch.entity_options import (
+from electrica.catalog import CatalogError
+from electrica.entity_options import (
     _read_profiles, _save_profiles, parse_rows, render_rows, current, store_scan,
 )
 

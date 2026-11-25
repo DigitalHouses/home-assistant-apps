@@ -1,4 +1,4 @@
-"""Pure configuration/discovery contract of DigitalHouses Aqara Switch App."""
+"""Pure configuration/discovery contract of DigitalHouses Electrica App."""
 
 from .catalog import (CatalogError, candidate_from_mqtt, import_new,
                       resolve_hardware, validate_config)

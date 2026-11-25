@@ -6,9 +6,9 @@ from tempfile import TemporaryDirectory
 from unittest.mock import Mock, patch
 import types
 
-from aqara_switch.light_routes import discover_routes
-from aqara_switch.mqtt_lights import plan_batch
-from aqara_switch.runtime import Application
+from electrica.light_routes import discover_routes
+from electrica.mqtt_lights import plan_batch
+from electrica.runtime import Application
 
 BASE="zigbee2mqtt_1"
 COORD="0x00124b002e1330dd"
@@ -139,8 +139,8 @@ class LightOutputTests(unittest.TestCase):
         self.assertIn("x",plans[1]["payload"]["color"])
 
     def test_real_z2m_color_exposes_xy_hs_and_read_only(self):
-        from aqara_switch.light_routes import _light_features
-        from aqara_switch.mqtt_lights import _mqtt_data
+        from electrica.light_routes import _light_features
+        from electrica.mqtt_lights import _mqtt_data
 
         # Real Z2M schema: composite name=color_xy, property=color.
         # Composite access is optional; nested x/y carry access rights.
@@ -207,7 +207,7 @@ def msg(topic,payload,retained=False):
 
 class IntegrationTests(unittest.TestCase):
     def test_button_to_online_only_z2m_commands_without_ha(self):
-        from aqara_switch.catalog import candidate_from_mqtt
+        from electrica.catalog import candidate_from_mqtt
         saved=candidate_from_mqtt(switch(),coordinator_ieee=COORD,
                                   base_topic=BASE,reported_state={})
         saved.update({"entity_id":SKEY,"enabled":True,"bindings":{},
@@ -224,7 +224,7 @@ class IntegrationTests(unittest.TestCase):
         - light.livingroom_spots
 """}
         with TemporaryDirectory() as td, patch(
-                "aqara_switch.entity_options._read_profiles",
+                "electrica.entity_options._read_profiles",
                 return_value=adopted):
             ha=Mock()
             app=Application(FakeMQTT,options=opts,registry=Mock(),

@@ -5,11 +5,11 @@ from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import patch
 
-from aqara_switch.catalog import CatalogError, candidate_from_mqtt
-from aqara_switch.control import verified_adopted_switch
-from aqara_switch.entity_options import _save_profiles, current, parse_rows
-from aqara_switch.keeper_runtime import tick
-from aqara_switch.mode_keeper import (
+from electrica.catalog import CatalogError, candidate_from_mqtt
+from electrica.control import verified_adopted_switch
+from electrica.entity_options import _save_profiles, current, parse_rows
+from electrica.keeper_runtime import tick
+from electrica.mode_keeper import (
     KEEP_VALUE, MODE_TO_RELAY, capabilities, capture_keep_mode,
     global_policy, maintained_switch, mode_action_allowed, next_repair)
 

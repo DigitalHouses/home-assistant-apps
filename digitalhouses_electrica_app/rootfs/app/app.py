@@ -1,13 +1,13 @@
-"""DigitalHouses Aqara Switch App: Ingress, persistent bindings and MQTT engine."""
+"""DigitalHouses Electrica App: Ingress, persistent bindings and MQTT engine."""
 from __future__ import annotations
 import logging
 import os
 import json
 from pathlib import Path
 
-from aqara_switch.runtime import Application
-from aqara_switch.binding_store import BindingStore
-from aqara_switch.supervisor import SupervisorOptions
+from electrica.runtime import Application
+from electrica.binding_store import BindingStore
+from electrica.supervisor import SupervisorOptions
 
 
 def main() -> int:

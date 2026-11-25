@@ -5,11 +5,11 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock
 from copy import deepcopy
-from aqara_switch.binding_store import BindingStore
-from aqara_switch.catalog import CatalogError
-from aqara_switch.entity_options import parse_rows, project
-from aqara_switch.ingress import export_bindings, import_bindings, revision
-from aqara_switch.ingress_catalog import target_catalog
+from electrica.binding_store import BindingStore
+from electrica.catalog import CatalogError
+from electrica.entity_options import parse_rows, project
+from electrica.ingress import export_bindings, import_bindings, revision
+from electrica.ingress_catalog import target_catalog
 from test_ingress import PROFILE, REGISTRIES, STATES, KEY
 
 class BackupTests(unittest.TestCase):

@@ -1,12 +1,12 @@
-# DigitalHouses Aqara Switch App
+# DigitalHouses Electrica App
 
 ## Target architecture (planned)
 
-See [DigitalHouses Electrica App — target architecture v0.3.0](docs/ELECTRICA_TARGET_ARCHITECTURE.md). The current Aqara 0.2.x release remains unchanged.
+See [DigitalHouses Electrica App — target architecture v0.3.0](docs/ELECTRICA_TARGET_ARCHITECTURE.md). The previously published Aqara 0.2.3 release remains unchanged. This branch is a staged rename, not a published Electrica release.
 
 ## 0.2.x — Ingress configuration
 
-Aqara Switch App consumes events from supported Aqara logical keys across MQTT
+Electrica App consumes events from supported Aqara logical keys across MQTT
 Zigbee2MQTT instances and dispatches explicitly configured light/switch actions.
 It is independent of any Home Assistant dashboard.
 
@@ -34,15 +34,15 @@ It is independent of any Home Assistant dashboard.
 - **Dashboard:** standard DigitalHouses product card, problems, last action,
   compact device tree. No Scan button or binding controls. State and assignments
   are published by the App. Reported state is not physical confirmation.
-- **DH Sync:** unchanged product ID `digitalhouses_aqara_switch_app`;
+- **DH Sync:** target product ID `digitalhouses_electrica_app`;
   retained QoS 1 /sync on MQTT connect/reconnect;
-  `dashboards/ru/aqara.yaml`, stable `path: aqara`. No panel edits.
+  `dashboards/ru/electrica.yaml`, stable `path: electrica`. Panel integration is coordinated separately.
   LAB examples are not automatic Packages.
 
 ## Installation and upgrade
 
 Install via the DigitalHouses Home Assistant Apps repository. Use the App's
-**Open Web UI** / DH Aqara Switch Ingress sidebar to configure bindings.
+**Open Web UI** / DH Electrica Ingress sidebar to configure bindings.
 When upgrading from 0.1.19, old YAML assignments are not imported. Configure
 new assignments manually in Ingress; until then, the App sends no button-based
 commands and does not enable new Mode Keeper policies. Only system parameters
@@ -59,7 +59,7 @@ No additional service, database, broker or HA Automation is introduced.
 PYTHONPATH=digitalhouses_electrica_app/rootfs/app \
 python -m unittest discover -s digitalhouses_electrica_app/tests -v
 python -m compileall -q digitalhouses_electrica_app/rootfs/app
-node --check digitalhouses_electrica_app/rootfs/app/aqara_switch/web/app.js
+node --check digitalhouses_electrica_app/rootfs/app/electrica/web/app.js
 python scripts/validate_repository.py
 ```
 

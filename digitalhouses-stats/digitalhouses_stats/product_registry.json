@@ -145,18 +145,18 @@
       "haos_slug": "digitalhouses_zigbee_monitor_app"
     },
     {
-      "id": "digitalhouses_aqara_switch_app",
+      "id": "digitalhouses_electrica_app",
       "type": "app",
-      "entity_prefix": "dh_aqara_switch_app",
-      "display_name": "Aqara Switch App",
+      "entity_prefix": "dh_electrica_app",
+      "display_name": "Electrica App",
       "telemetry_allowed": true,
       "release": {
-        "title": "DigitalHouses Aqara Switch App",
+        "title": "DigitalHouses Electrica App",
         "version_source": "haos_config",
         "policy_baseline": "0.1.2"
       },
-      "repository_directory": "digitalhouses_aqara_switch_app",
-      "haos_slug": "digitalhouses_aqara_switch_app"
+      "repository_directory": "digitalhouses_electrica_app",
+      "haos_slug": "digitalhouses_electrica_app"
     },
     {
       "id": "digitalhouses_network_app",

@@ -4,10 +4,10 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import Mock, patch
 from copy import deepcopy
-from aqara_switch.light_routes import discover_routes, current_route
-from aqara_switch.mqtt_lights import plan_batch
-from aqara_switch.runtime import Application, verified_snapshots
-from aqara_switch.catalog import candidate_from_mqtt
+from electrica.light_routes import discover_routes, current_route
+from electrica.mqtt_lights import plan_batch
+from electrica.runtime import Application, verified_snapshots
+from electrica.catalog import candidate_from_mqtt
 from test_mqtt_light_output import BASE,COORD,A,B,SN,SKEY,DEV,DEVICES,ENTITIES,light,switch,FakeMQTT,msg
 
 GROUP="zg_livingroom_lights"
@@ -68,7 +68,7 @@ class GroupTests(unittest.TestCase):
         adopted={"rooms":[{"name":"Living","area_id":None,"switches":[saved]}],"light_routes":routes()}
         opts=Mock();opts.read.return_value={"switches":f"- {SKEY}: {{enabled: true, actions: {{single: [{EID}]}}}}"}
         ha=Mock()
-        with TemporaryDirectory() as td,patch("aqara_switch.entity_options._read_profiles",return_value=adopted):
+        with TemporaryDirectory() as td,patch("electrica.entity_options._read_profiles",return_value=adopted):
             app=Application(FakeMQTT,options=opts,registry=Mock(),last_scan_path=Path(td)/"scan.json",version="0.2.3",ha_client=ha)
         app._on_connect(None,None,None,0)
         for suffix,data in [("info",{"coordinator":{"ieee_address":COORD}}),("devices",INVENTORY),("groups",GROUPS),("state",{"state":"online"})]:

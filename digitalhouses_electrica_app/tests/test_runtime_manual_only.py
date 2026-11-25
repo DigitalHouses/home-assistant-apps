@@ -6,8 +6,8 @@ import unittest
 from pathlib import Path
 from unittest.mock import Mock, patch
 
-from aqara_switch.runtime import Application
-from aqara_switch.mqtt_ui import SCAN_REQUEST, SYNC_TOPIC
+from electrica.runtime import Application
+from electrica.mqtt_ui import SCAN_REQUEST, SYNC_TOPIC
 
 
 class MQTTResult:
@@ -76,14 +76,14 @@ class RuntimeManualTests(unittest.TestCase):
             self.assertEqual(len(records), 2)
             expected = {
                 "schema": 1,
-                "product_id": "digitalhouses_aqara_switch_app",
+                "product_id": "digitalhouses_electrica_app",
                 "type": "app",
                 "version": "0.1.99",
                 "repository": "https://github.com/DigitalHouses/home-assistant-apps",
-                "product_path": "digitalhouses_aqara_switch_app",
+                "product_path": "digitalhouses_electrica_app",
             }
             for topic, payload, qos, retain in records:
-                self.assertEqual(topic, "DigitalHouses/Global/digitalhouses_aqara_switch_app/sync")
+                self.assertEqual(topic, "DigitalHouses/Global/digitalhouses_electrica_app/sync")
                 self.assertEqual(qos, 1)
                 self.assertTrue(retain)
                 self.assertEqual(json.loads(payload), expected)

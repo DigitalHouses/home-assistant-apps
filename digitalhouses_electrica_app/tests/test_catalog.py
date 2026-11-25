@@ -7,7 +7,7 @@ import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "rootfs" / "app"))
 try:
-    from aqara_switch.catalog import (
+    from electrica.catalog import (
         CatalogError, candidate_from_mqtt, import_new, resolve_hardware,
         validate_config, decode_bridge_devices,
     )

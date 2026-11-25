@@ -1,9 +1,9 @@
-title: DH Aqara Switch
+title: DH Electrica
 views:
 - type: sections
   max_columns: 4
-  title: aqara
-  path: aqara
+  title: electrica
+  path: electrica
   icon: mdi:light-switch
   sections:
   - type: grid
@@ -12,19 +12,19 @@ views:
     - type: vertical-stack
       cards:
       - type: custom:button-card
-        entity: sensor.dh_aqara_switch_app_card
+        entity: sensor.dh_electrica_app_card
         triggers_update:
-        - sensor.dh_aqara_switch_app_card
-        - sensor.dh_aqara_switch_app_version
-        - sensor.dh_aqara_switch_app_latest_version
-        - binary_sensor.dh_aqara_switch_app_update_available
-        - sensor.dh_aqara_switch_app_problems
-        - update.digitalhouses_aqara_switch_app_update
+        - sensor.dh_electrica_app_card
+        - sensor.dh_electrica_app_version
+        - sensor.dh_electrica_app_latest_version
+        - binary_sensor.dh_electrica_app_update_available
+        - sensor.dh_electrica_app_problems
+        - update.digitalhouses_electrica_app_update
         update_timer: |
           [[[
-            const s = states['sensor.dh_aqara_switch_app_card']?.state;
+            const s = states['sensor.dh_electrica_app_card']?.state;
             const updating =
-              states['update.digitalhouses_aqara_switch_app_update']?.attributes?.in_progress === true;
+              states['update.digitalhouses_electrica_app_update']?.attributes?.in_progress === true;
             return s === 'running' || updating ? 1000 : 5000;
           ]]]
         show_icon: true
@@ -32,13 +32,13 @@ views:
         show_label: true
         icon: |
           [[[
-            const s = states['sensor.dh_aqara_switch_app_card']?.state;
-            const health = states['sensor.dh_aqara_switch_app_problems']?.state;
-            const problems = Number(states['sensor.dh_aqara_switch_app_problems']?.attributes?.count ?? -1);
+            const s = states['sensor.dh_electrica_app_card']?.state;
+            const health = states['sensor.dh_electrica_app_problems']?.state;
+            const problems = Number(states['sensor.dh_electrica_app_problems']?.attributes?.count ?? -1);
             const upgrade =
-              states['binary_sensor.dh_aqara_switch_app_update_available']?.state === 'on';
+              states['binary_sensor.dh_electrica_app_update_available']?.state === 'on';
             const updating =
-              states['update.digitalhouses_aqara_switch_app_update']?.attributes?.in_progress === true;
+              states['update.digitalhouses_electrica_app_update']?.attributes?.in_progress === true;
 
             if (updating || s === 'running') return 'mdi:progress-clock';
             if (s === 'error' || ['unknown','unavailable'].includes(s) || !s) return 'mdi:alert-circle';
@@ -50,26 +50,26 @@ views:
           ]]]
         name: |
           [[[
-            const installed = states['sensor.dh_aqara_switch_app_version']?.state;
-            const latest = states['sensor.dh_aqara_switch_app_latest_version']?.state;
+            const installed = states['sensor.dh_electrica_app_version']?.state;
+            const latest = states['sensor.dh_electrica_app_latest_version']?.state;
             const available =
-              states['binary_sensor.dh_aqara_switch_app_update_available']?.state === 'on';
+              states['binary_sensor.dh_electrica_app_update_available']?.state === 'on';
             const valid = (v) =>
               typeof v === 'string'
               && /^\d+\.\d+\.\d+$/.test(v);
             const upgrade =
               available && valid(installed) && valid(latest) && latest !== installed;
 
-            return 'Aqara Switch App' + (valid(installed)
+            return 'Electrica App' + (valid(installed)
               ? ' · v' + installed + (upgrade ? ' → v' + latest : '')
               : '');
           ]]]
         label: |
           [[[
-            const item = states['sensor.dh_aqara_switch_app_card'];
-            const health = states['sensor.dh_aqara_switch_app_problems']?.state;
-            const problems = Number(states['sensor.dh_aqara_switch_app_problems']?.attributes?.count ?? -1);
-            const supervisorUpdate = states['update.digitalhouses_aqara_switch_app_update'];
+            const item = states['sensor.dh_electrica_app_card'];
+            const health = states['sensor.dh_electrica_app_problems']?.state;
+            const problems = Number(states['sensor.dh_electrica_app_problems']?.attributes?.count ?? -1);
+            const supervisorUpdate = states['update.digitalhouses_electrica_app_update'];
 
             const elapsedText = (since) => {
               const seconds = Math.max(
@@ -90,8 +90,8 @@ views:
             };
 
             if (supervisorUpdate?.attributes?.in_progress === true) {
-              if (this._dh_aqara_timer?.operation !== 'install') {
-                this._dh_aqara_timer = {
+              if (this._dh_electrica_timer?.operation !== 'install') {
+                this._dh_electrica_timer = {
                   operation: 'install',
                   since: performance.now()
                 };
@@ -99,7 +99,7 @@ views:
               const pct = supervisorUpdate.attributes.update_percentage;
               return 'Установка версии… '
                 + (typeof pct === 'number' ? Math.round(pct) + '% · ' : '')
-                + elapsedText(this._dh_aqara_timer.since);
+                + elapsedText(this._dh_electrica_timer.since);
             }
 
             if (!item || ['unknown', 'unavailable'].includes(item.state)) {
@@ -115,18 +115,18 @@ views:
 
             if (item.state === 'running') {
               const key = String(operation) + '|' + String(a.started_at || '');
-              if (this._dh_aqara_timer?.key !== key) {
-                this._dh_aqara_timer = {
+              if (this._dh_electrica_timer?.key !== key) {
+                this._dh_electrica_timer = {
                   key: key,
                   operation: operation,
                   since: performance.now()
                 };
               }
               return (names[operation] || 'Операция') + '… '
-                + elapsedText(this._dh_aqara_timer.since);
+                + elapsedText(this._dh_electrica_timer.since);
             }
 
-            this._dh_aqara_timer = null;
+            this._dh_electrica_timer = null;
 
             if (item.state === 'error') {
               return 'Ошибка: ' + (a.error || 'операция не выполнена');
@@ -137,9 +137,9 @@ views:
                 ? 'Данные обновлены'
                 : operation === 'check'
                   ? (
-                      states['binary_sensor.dh_aqara_switch_app_update_available']?.state === 'on'
+                      states['binary_sensor.dh_electrica_app_update_available']?.state === 'on'
                         ? 'Доступна новая версия'
-                        : states['binary_sensor.dh_aqara_switch_app_update_available']?.state === 'off'
+                        : states['binary_sensor.dh_electrica_app_update_available']?.state === 'off'
                           ? 'Версия актуальна'
                           : 'Проверка завершена'
                     )
@@ -151,7 +151,7 @@ views:
             if (Number.isFinite(problems) && problems > 0) {
               return 'Проблемы: ' + problems;
             }
-            if (states['binary_sensor.dh_aqara_switch_app_update_available']?.state === 'on') {
+            if (states['binary_sensor.dh_electrica_app_update_available']?.state === 'on') {
               return 'Доступна новая версия';
             }
             if (health === 'ready') return 'Работает штатно';
@@ -172,15 +172,15 @@ views:
           - width: 26px
           - color: |
               [[[
-                const s = states['sensor.dh_aqara_switch_app_card']?.state;
+                const s = states['sensor.dh_electrica_app_card']?.state;
                 const health =
-                  states['sensor.dh_aqara_switch_app_problems']?.state;
+                  states['sensor.dh_electrica_app_problems']?.state;
                 const problems =
-                  Number(states['sensor.dh_aqara_switch_app_problems']?.attributes?.count ?? -1);
+                  Number(states['sensor.dh_electrica_app_problems']?.attributes?.count ?? -1);
                 const upgrade =
-                  states['binary_sensor.dh_aqara_switch_app_update_available']?.state === 'on';
+                  states['binary_sensor.dh_electrica_app_update_available']?.state === 'on';
                 const updating =
-                  states['update.digitalhouses_aqara_switch_app_update']?.attributes?.in_progress === true;
+                  states['update.digitalhouses_electrica_app_update']?.attributes?.in_progress === true;
 
                 return s === 'error' || ['unknown','unavailable'].includes(s) || !s || health === 'unavailable'
                   ? 'var(--error-color)'
@@ -218,7 +218,7 @@ views:
             action: perform-action
             perform_action: button.press
             target:
-              entity_id: button.dh_aqara_switch_app_refresh
+              entity_id: button.dh_electrica_app_refresh
         - type: template
           icon: mdi:cloud-search
           content: Версия
@@ -226,10 +226,10 @@ views:
             action: perform-action
             perform_action: button.press
             target:
-              entity_id: button.dh_aqara_switch_app_check_updates
+              entity_id: button.dh_electrica_app_check_updates
         - type: conditional
           conditions:
-          - entity: update.digitalhouses_aqara_switch_app_update
+          - entity: update.digitalhouses_electrica_app_update
             state: 'on'
           chip:
             type: template
@@ -240,11 +240,11 @@ views:
               action: perform-action
               perform_action: update.install
               target:
-                entity_id: update.digitalhouses_aqara_switch_app_update
+                entity_id: update.digitalhouses_electrica_app_update
               data:
                 backup: true
               confirmation:
-                text: Установить новую версию Aqara Switch App? Перед обновлением Home Assistant создаст резервную копию App. Управление освещением через приложение временно прервётся.
+                text: Установить новую версию Electrica App? Перед обновлением Home Assistant создаст резервную копию App. Управление освещением через приложение временно прервётся.
         - type: template
           icon: mdi:restart
           content: Перезапуск
@@ -252,9 +252,9 @@ views:
             action: perform-action
             perform_action: hassio.app_restart
             data:
-              app: 8133339d_digitalhouses_aqara_switch_app
+              app: 8133339d_digitalhouses_electrica_app
             confirmation:
-              text: Перезапустить Aqara Switch App? Управление освещением через приложение временно прервётся.
+              text: Перезапустить Electrica App? Управление освещением через приложение временно прервётся.
       grid_options:
         columns: 12
     - type: heading
@@ -262,7 +262,7 @@ views:
       heading_style: title
       icon: mdi:light-switch
     - type: custom:mushroom-template-card
-      entity: sensor.dh_aqara_switch_app_problems
+      entity: sensor.dh_electrica_app_problems
       primary: |-
         {% set n = state_attr(entity, 'count') %}
         {% if states(entity) != 'ready' %}
@@ -312,7 +312,7 @@ views:
       heading_style: subtitle
       icon: mdi:gesture-tap-button
     - type: markdown
-      content: "{% set e = 'sensor.dh_aqara_switch_app_last_action' -%}\n{% set status = states(e) -%}\n{% set a = states[e].attributes if states[e] is defined else {} -%}\n{% if status in ['unknown','unavailable'] -%}\n⚪ Нет связи с приложением или данных о последнем нажатии.\n{% elif status == 'idle' -%}\n*После запуска ещё не было назначенных нажатий.*\n{% else -%}\n{% if status == 'sent' -%}\n✅ **Отправлено** · Команда передана выбранным исполнителям.\n{% elif status == 'partial' -%}\n\U0001F7E0 **Частично выполнено** · Некоторые светильники пропущены.\n{% elif status == 'skipped' -%}\n⚠️ **Пропущено** · Команды светильникам не отправлены.\n{% elif status == 'queued' -%}\n⏳ **В очереди** · Ожидается обработка.\n{% elif status == 'error' -%}\n\U0001F534 **Ошибка выполнения**\n{% elif status == 'accepted' -%}\n✅ **Команда принята** · Статус устаревшего исполнителя.\n{% else -%}\n**Состояние:** {{ status | e }}\n{% endif %}\n\n**Выключатель:** `{{ (a.switch or '—') | e }}`  \n**Нажатие:**\
+      content: "{% set e = 'sensor.dh_electrica_app_last_action' -%}\n{% set status = states(e) -%}\n{% set a = states[e].attributes if states[e] is defined else {} -%}\n{% if status in ['unknown','unavailable'] -%}\n⚪ Нет связи с приложением или данных о последнем нажатии.\n{% elif status == 'idle' -%}\n*После запуска ещё не было назначенных нажатий.*\n{% else -%}\n{% if status == 'sent' -%}\n✅ **Отправлено** · Команда передана выбранным исполнителям.\n{% elif status == 'partial' -%}\n\U0001F7E0 **Частично выполнено** · Некоторые светильники пропущены.\n{% elif status == 'skipped' -%}\n⚠️ **Пропущено** · Команды светильникам не отправлены.\n{% elif status == 'queued' -%}\n⏳ **В очереди** · Ожидается обработка.\n{% elif status == 'error' -%}\n\U0001F534 **Ошибка выполнения**\n{% elif status == 'accepted' -%}\n✅ **Команда принята** · Статус устаревшего исполнителя.\n{% else -%}\n**Состояние:** {{ status | e }}\n{% endif %}\n\n**Выключатель:** `{{ (a.switch or '—') | e }}`  \n**Нажатие:**\
         \ `{{ (a.action or '—') | e }}`  \n**Отправлено:** {{ (a.target or '—') | e }}  \n**Время:** {{ (a.at or '—') | e }}\n{% if a.error -%}\n**Причина:** {{ a.error | e }}\n{% endif -%}\n\n*MQTT/HA подтвердили принятие к отправке, но не физическое переключение светильника.*\n{% endif %}"
   - type: grid
     column_span: 3
@@ -323,10 +323,10 @@ views:
       icon: mdi:family-tree
     - type: markdown
       content: |-
-        {% set entity = 'sensor.dh_aqara_switch_app_devices_details' %}
+        {% set entity = 'sensor.dh_electrica_app_devices_details' %}
         {% set rooms = state_attr(entity, 'rooms') or [] %}
         {% if states(entity) != 'ready' %}
-        *Нет подтверждённых данных от Aqara Switch App.*
+        *Нет подтверждённых данных от Electrica App.*
         {% elif rooms | count == 0 %}
         *Выключатели пока не импортированы. Откройте Ingress для настройки.*
         {% else %}

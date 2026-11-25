@@ -4,9 +4,9 @@ import unittest
 from pathlib import Path
 from unittest.mock import Mock
 
-from aqara_switch.binding_store import BindingStore
-from aqara_switch.entity_options import project, parse_rows
-from aqara_switch.catalog import CatalogError
+from electrica.binding_store import BindingStore
+from electrica.entity_options import project, parse_rows
+from electrica.catalog import CatalogError
 
 YAML = """
 - switch.aqara_button:

@@ -6,10 +6,10 @@ from unittest.mock import Mock, patch
 import json
 import types
 
-from aqara_switch.catalog import candidate_from_mqtt
-from aqara_switch.control import HAClient, light_action, settings_drift
-from aqara_switch.runtime import Application
-from aqara_switch.mqtt_ui import ROOT
+from electrica.catalog import candidate_from_mqtt
+from electrica.control import HAClient, light_action, settings_drift
+from electrica.runtime import Application
+from electrica.mqtt_ui import ROOT
 
 COORD="0x00124b002e1330dd"
 IEEE="0x00158d0000000001"
@@ -69,7 +69,7 @@ class ControlTests(TestCase):
             "      single:\n"
             "        - light.dh_aqara_lab_chandelier\n"
             "        - light.dh_aqara_lab_spots\n")}
-        with patch("aqara_switch.entity_options._read_profiles",return_value=PROFILES):
+        with patch("electrica.entity_options._read_profiles",return_value=PROFILES):
             app=Application(FakeMQTT,options=options,registry=Mock(),
                             last_scan_path=Path(td)/"scan.json",version="0.1.6",
                             ha_client=Mock())

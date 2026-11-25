@@ -142,7 +142,7 @@ document.querySelector("#json-copy").onclick=async()=>{
 document.querySelector("#export").onclick=async()=>{
   try{const doc=await api("bindings"),blob=new Blob([JSON.stringify(doc,null,2)],{type:"application/json"});
     const url=URL.createObjectURL(blob),a=el("a");
-    a.href=url;a.download="dh-aqara-bindings-"+new Date().toISOString().slice(0,10)+".json";document.body.append(a);a.click();a.remove();
+    a.href=url;a.download="dh-electrica-bindings-"+new Date().toISOString().slice(0,10)+".json";document.body.append(a);a.click();a.remove();
     setTimeout(()=>URL.revokeObjectURL(url),10000);
     notice.textContent="JSON подготовлен. Если Ingress блокирует скачивание, используйте JSON / Копировать.";
   }catch(e){notice.textContent=e.message}

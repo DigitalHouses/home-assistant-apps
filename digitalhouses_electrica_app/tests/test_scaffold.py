@@ -10,7 +10,7 @@ from unittest.mock import patch
 class RuntimeEntrypointTests(TestCase):
     def test_entrypoint_requires_version(self):
         path = Path(__file__).resolve().parents[1] / "rootfs" / "app" / "app.py"
-        spec = importlib.util.spec_from_file_location("aqara_app_entrypoint", path)
+        spec = importlib.util.spec_from_file_location("electrica_app_entrypoint", path)
         self.assertIsNotNone(spec)
         self.assertIsNotNone(spec.loader)
         # Runtime has local Python dependencies; configured CI PYTHONPATH loads them.

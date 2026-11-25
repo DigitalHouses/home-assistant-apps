@@ -1,7 +1,7 @@
 # Last action is App-owned; sent != physical Zigbee acknowledgement.
 type: markdown
 content: |-
-  {% set e = 'sensor.dh_aqara_switch_app_last_action' -%}
+  {% set e = 'sensor.dh_electrica_app_last_action' -%}
   {% set status = states(e) -%}
   {% set a = states[e].attributes if states[e] is defined else {} -%}
   {% if status in ['unknown','unavailable'] -%}

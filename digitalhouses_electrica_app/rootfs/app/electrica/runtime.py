@@ -189,10 +189,10 @@ class Application:
         if hasattr(mqtt_module, "CallbackAPIVersion"):
             self.client = mqtt_module.Client(
                 mqtt_module.CallbackAPIVersion.VERSION1,
-                client_id="dh-aqara-switch-app",
+                client_id="dh-electrica-app",
             )
         else:
-            self.client = mqtt_module.Client(client_id="dh-aqara-switch-app")
+            self.client = mqtt_module.Client(client_id="dh-electrica-app")
         user = os.getenv("MQTT_USER", "")
         if user:
             self.client.username_pw_set(user, os.getenv("MQTT_PASSWORD", ""))
@@ -430,7 +430,7 @@ class Application:
             if (self.telemetry is not None and not message.retain
                     and bytes(message.payload) == b"DELETE"):
                 threading.Thread(target=self._delete_telemetry, daemon=True,
-                                 name="dh-aqara-telemetry-delete").start()
+                                 name="dh-electrica-telemetry-delete").start()
             return
         if message.topic in (ROOT + "/command/refresh", ROOT + "/command/check_updates"):
             operation = "refresh" if message.topic.endswith("/refresh") else "check"
@@ -958,7 +958,7 @@ class Application:
         if not self._scan_lock.acquire(blocking=False):
             return False
         threading.Thread(target=self._run_scan, args=(foreground,), daemon=True,
-                         name="dh-aqara-manual-scan").start()
+                         name="dh-electrica-manual-scan").start()
         return True
 
     def _run_scan(self, foreground=True) -> None:
@@ -1131,21 +1131,21 @@ class Application:
         host, port = os.environ["MQTT_HOST"], int(os.environ["MQTT_PORT"])
         LOG.info("Starting Aqara MQTT input, Mode Keeper and direct MQTT lights %s", self.version)
         threading.Thread(target=self._run_actions, daemon=True,
-                         name="dh-aqara-action-worker").start()
+                         name="dh-electrica-action-worker").start()
         threading.Thread(target=run_keeper, args=(self,), daemon=True,
-                         name="dh-aqara-mode-keeper").start()
+                         name="dh-electrica-mode-keeper").start()
         threading.Thread(target=self._run_light_probes, daemon=True,
-                         name="dh-aqara-light-state-probes").start()
+                         name="dh-electrica-light-state-probes").start()
         from .ingress import start_ingress
         web = start_ingress(self)
         threading.Thread(target=web.serve_forever, daemon=True,
-                         name="dh-aqara-ingress").start()
+                         name="dh-electrica-ingress").start()
         threading.Thread(target=self._scheduled_release_check, daemon=True,
-                         name="dh-aqara-release-check").start()
+                         name="dh-electrica-release-check").start()
         threading.Thread(target=self._observe_targets, daemon=True,
-                         name="dh-aqara-target-observer").start()
+                         name="dh-electrica-target-observer").start()
         threading.Thread(target=self._auto_scan, daemon=True,
-                         name="dh-aqara-auto-scan").start()
+                         name="dh-electrica-auto-scan").start()
         if self.telemetry_runner is None:
             LOG.info('DigitalHouses telemetry disabled (consent not enabled); '
                      'legacy lighting runtime remains active during migration')

@@ -28,7 +28,7 @@ def load_json_object(path: Path, *, label: str) -> dict[str, Any] | None:
     return value
 
 
-PRODUCT = "digitalhouses_aqara_switch_app"
+PRODUCT = "digitalhouses_electrica_app"
 SCHEMA_VERSION = 1
 TELEMETRY_POLICY_VERSION = 2
 BASE_URL = "https://telemetry.digitalhouses.vip"
@@ -350,7 +350,7 @@ class TelemetryRunner:
         self._stop.clear()
         self._thread = threading.Thread(
             target=self._run,
-            name="dh-aqara-switch-telemetry",
+            name="dh-electrica-telemetry",
             daemon=False,
         )
         self._thread.start()

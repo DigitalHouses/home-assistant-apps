@@ -1,7 +1,7 @@
 # Scan results are produced by the App, never computed from a dashboard click.
 type: markdown
 content: |-
-  {% set e = 'sensor.dh_aqara_switch_app_scan_details' -%}
+  {% set e = 'sensor.dh_electrica_app_scan_details' -%}
   {% set scanned = state_attr(e,'scanned') -%}
   {% set added = state_attr(e,'added') or [] -%}
   {% set skipped = state_attr(e,'skipped') or [] -%}

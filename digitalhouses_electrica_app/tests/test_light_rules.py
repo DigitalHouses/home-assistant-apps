@@ -5,10 +5,10 @@ from unittest import TestCase
 from unittest.mock import patch
 import json
 
-from aqara_switch.catalog import CatalogError
-from aqara_switch.actions import ActionError, plan_action
-from aqara_switch.control import HAClient, light_action, light_commands
-from aqara_switch.entity_options import _save_profiles, current, parse_rows
+from electrica.catalog import CatalogError
+from electrica.actions import ActionError, plan_action
+from electrica.control import HAClient, light_action, light_commands
+from electrica.entity_options import _save_profiles, current, parse_rows
 
 ID="switch.livingroomaqaraswitch"
 COORD="0x00124b002e1330dd"

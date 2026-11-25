@@ -7,11 +7,11 @@ import types
 import unittest
 from unittest.mock import Mock, patch
 
-from aqara_switch.actions import ActionError
-from aqara_switch.catalog import candidate_from_mqtt
-from aqara_switch.control import HAClient
-from aqara_switch.lab_lights import LAB_LIGHTS, partition_commands, plan_lab
-from aqara_switch.runtime import Application
+from electrica.actions import ActionError
+from electrica.catalog import candidate_from_mqtt
+from electrica.control import HAClient
+from electrica.lab_lights import LAB_LIGHTS, partition_commands, plan_lab
+from electrica.runtime import Application
 
 COORD="0x00124b002e1330dd"
 IEEE="0x00158d0000000088"
@@ -152,7 +152,7 @@ class LabTests(unittest.TestCase):
               color_temp_kelvin: 3000
 """}
         with TemporaryDirectory() as td,patch(
-            "aqara_switch.entity_options._read_profiles",
+            "electrica.entity_options._read_profiles",
             return_value=PROFILE):
             app=Application(FakeMQTT,options=options,registry=Mock(),
                 last_scan_path=Path(td)/"scan.json",version="0.1.15",
@@ -217,7 +217,7 @@ class MixedTransportTests(unittest.TestCase):
         lab_states = lab_states or {name:"on" for name in MIXED_LABS}
         ha.read_lab_state.side_effect=lambda entity:lab_states[entity]
         with TemporaryDirectory() as td,patch(
-                "aqara_switch.entity_options._read_profiles",
+                "electrica.entity_options._read_profiles",
                 return_value=profile):
             app=Application(FakeMQTT,options=options,registry=Mock(),
                 last_scan_path=Path(td)/"scan.json",version="0.1.15",

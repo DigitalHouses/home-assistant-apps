@@ -1,12 +1,12 @@
-name: DigitalHouses Aqara Switch App
+name: DigitalHouses Electrica App
 version: 0.2.3
-slug: digitalhouses_aqara_switch_app
-description: Aqara Scan/Adopt, Mode Keeper, direct Zigbee2MQTT and verified HA-native light control.
-url: https://github.com/DigitalHouses/home-assistant-apps/tree/main/digitalhouses_aqara_switch_app
+slug: digitalhouses_electrica_app
+description: Device actions, Mode Keeper, direct Zigbee2MQTT and verified HA-native light control.
+url: https://github.com/DigitalHouses/home-assistant-apps/tree/main/digitalhouses_electrica_app
 arch:
   - amd64
   - aarch64
-image: ghcr.io/digitalhouses/digitalhouses_aqara_switch_app
+image: ghcr.io/digitalhouses/digitalhouses_electrica_app
 startup: application
 boot: manual
 init: false
@@ -18,7 +18,7 @@ hassio_role: default
 homeassistant_api: true
 ingress: true
 ingress_port: 8099
-panel_title: DH Aqara Switch
+panel_title: DH Electrica
 panel_icon: mdi:light-switch
 panel_admin: true
 services:

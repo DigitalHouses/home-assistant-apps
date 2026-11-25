@@ -9,7 +9,7 @@ from unittest.mock import patch
 
 import yaml
 
-from aqara_switch.ha_registry import HARegistryClient
+from electrica.ha_registry import HARegistryClient
 
 
 ROOT = Path(__file__).resolve().parents[1]

@@ -7,7 +7,7 @@ import yaml
 class LabPackageTests(unittest.TestCase):
     def test_six_independent_virtual_lights(self):
         root = Path(__file__).resolve().parents[1]
-        path = root / "examples" / "packages" / "dh_aqara_switch_app_lab.yaml"
+        path = root / "examples" / "packages" / "dh_electrica_app_lab.yaml"
         content = path.read_text(encoding="utf-8")
         package = yaml.safe_load(content)
         self.assertEqual(set(package), {"input_boolean", "template"})
@@ -43,7 +43,7 @@ class LabPackageTests(unittest.TestCase):
 
     def test_lovelace_lists_all_six_lights(self):
         root = Path(__file__).resolve().parents[1] / "examples" / "lovelace"
-        card = yaml.safe_load((root / "dh_aqara_switch_app_lab_lights_ru.yaml")
+        card = yaml.safe_load((root / "dh_electrica_app_lab_lights_ru.yaml")
                               .read_text(encoding="utf-8"))
         self.assertEqual(card["type"], "entities")
         entries = card["entities"]
@@ -59,7 +59,7 @@ class LabPackageTests(unittest.TestCase):
 
     def test_sections_grid_for_six_light_lab(self):
         root = Path(__file__).resolve().parents[1] / "examples" / "lovelace"
-        card = yaml.safe_load((root / "dh_aqara_switch_app_lab_section_ru.yaml")
+        card = yaml.safe_load((root / "dh_electrica_app_lab_section_ru.yaml")
                               .read_text(encoding="utf-8"))
         self.assertEqual(card["type"], "grid")
         self.assertEqual(card["column_span"], 4)

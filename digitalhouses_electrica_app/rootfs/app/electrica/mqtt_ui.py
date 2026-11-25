@@ -1,16 +1,16 @@
-"""Home Assistant MQTT Device Discovery for the Aqara App scan pilot.
+"""Home Assistant MQTT Device Discovery for the Electrica App scan pilot.
 
 No device-control commands, only app-local SCAN request topic.
 """
 from __future__ import annotations
 import json
 
-PREFIX = "dh_aqara_switch_app"
+PREFIX = "dh_electrica_app"
 ROOT = "DigitalHouses/Global/" + PREFIX
 DISCOVERY_TOPIC = "homeassistant/device/" + PREFIX + "/config"
 AVAILABILITY = ROOT + "/availability"
 SCAN_REQUEST = ROOT + "/command/scan"
-PRODUCT_ID = "digitalhouses_aqara_switch_app"
+PRODUCT_ID = "digitalhouses_electrica_app"
 SYNC_TOPIC = "DigitalHouses/Global/" + PRODUCT_ID + "/sync"
 
 
@@ -28,14 +28,14 @@ def sync_payload(version: str) -> dict:
 
 def configuration(version: str) -> dict:
     device = {
-        "identifiers": ["digitalhouses_aqara_switch_app"],
-        "name": "DigitalHouses Aqara Switch App",
+        "identifiers": ["digitalhouses_electrica_app"],
+        "name": "DigitalHouses Electrica App",
         "manufacturer": "DigitalHouses",
-        "model": "Aqara Switch App",
+        "model": "Electrica App",
         "sw_version": version,
     }
     origin = {
-        "name": "DigitalHouses Aqara Switch App",
+        "name": "DigitalHouses Electrica App",
         "sw_version": version,
         "support_url": "https://github.com/DigitalHouses/home-assistant-apps",
     }
