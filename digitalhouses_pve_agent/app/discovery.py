@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
+from .discovery_ups_setup import components as ups_setup_components
 from .config import AppConfig
 from .identity import HostIdentity
 from .runtime_settings import SETTING_SPECS
@@ -404,6 +405,8 @@ def build_discovery_payload(
         if spec.unit:
             component["unit_of_measurement"] = spec.unit
         components[component_key] = component
+
+    components.update(ups_setup_components(topics))
 
     return {
         "device": {

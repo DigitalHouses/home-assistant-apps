@@ -1,0 +1,18 @@
+[Unit]
+Description=DigitalHouses PVE Agent UPS commissioning (%i)
+After=network-online.target
+Wants=network-online.target
+ConditionPathExists=/etc/digitalhouses_pve_agent/digitalhouses_pve_agent.conf
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+WorkingDirectory=/opt/digitalhouses/digitalhouses_pve_agent
+ExecStart=/opt/digitalhouses/digitalhouses_pve_agent/.venv/bin/python -m app.ups_setup_apply %i
+UMask=0077
+PrivateTmp=true
+ProtectHome=true
+TimeoutStartSec=360
+
+# This unit is deliberately not enabled: MQTT requests invoke fixed instances.

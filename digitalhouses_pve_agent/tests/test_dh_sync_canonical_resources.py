@@ -1,4 +1,4 @@
-"""Guard DH Sync PVE/UPS canonical views against CORE v3 dashboard regressions."""
+"""Guard DH Sync PVE/UPS canonical views against approved dashboard regressions."""
 from __future__ import annotations
 
 import hashlib
@@ -17,8 +17,8 @@ HEADERS = {
     ),
     "11_pve_ups.yaml": (
         "# DH-View: dh_pve_agent\n"
-        "# DH-View-Version: 1.0.0\n"
-        "# DH-View-Date: 2026-11-14\n"
+        "# DH-View-Version: 1.0.1\n"
+        "# DH-View-Date: 2026-11-24\n"
         "\n"
     ),
 }
@@ -47,14 +47,14 @@ BASELINES = {
         "path": "dh_pve_agent_ups",
         "title": "Электропитание",
         "icon": "mdi:power-plug-battery",
-        "sha256": "5aef50ab9e4d5db307e1c66a2924a20f38638a77ebd70d06311aa697fd082f96",
+        "sha256": "bab67c7fd21b2b490c3f3476020d3345598e40458cdbd8e363ca38a3545e7279",
     },
 }
 
 
 class DhSyncCanonicalPveResourcesTests(unittest.TestCase):
     def test_only_approved_core_v3_body_changes(self):
-        """Reverse approved nav changes and compare with actual read-only CORE snapshots."""
+        """Protect accepted PVE v3 and approved UPS v1.0.1 body from regressions."""
         for filename, expected in BASELINES.items():
             with self.subTest(filename=filename):
                 resource = (DASHBOARDS / filename).read_text(encoding="utf-8")

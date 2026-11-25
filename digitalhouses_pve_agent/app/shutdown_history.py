@@ -13,7 +13,7 @@ from .ups_nut import UpsSnapshot
 
 HISTORY_LIMIT = 50
 PUBLISHED_HISTORY_LIMIT = 10
-HISTORY_PARSER_VERSION = 5
+HISTORY_PARSER_VERSION = 6
 GUEST_SHUTDOWN_WARNING_RATIO = 0.8
 GUEST_SHUTDOWN_CRITICAL_RATIO = 1.0
 
@@ -53,6 +53,13 @@ _GENERIC_TIMEOUT_MARKER = "vm quit/powerdown failed - got timeout"
 _SHUTDOWN_START_MARKERS = (
     "the system will power off now",
     "system is powering down",
+    # Reboot uses different systemd-logind messages than poweroff.
+    # Without these, manual qm/pct tasks from earlier days in the same
+    # boot are accidentally counted in the host shutdown duration.
+    "the system will reboot now",
+    "system is rebooting",
+    # Proxmox emits this at the beginning of its real guest-stop sequence.
+    "stopping pve-guests.service - pve guests",
 )
 _CLEAN_MARKERS = (
     "reached target shutdown.target",
