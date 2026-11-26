@@ -37,7 +37,12 @@ Lifecycle reports observed states only; lost API is not proof of a shutdown.
 
 The owner View is published at dashboards/ru/10_system_globals.yaml, path
 system-globals. Placement in a non-admin panel is configured by DH Sync, not this App.
-The Recorder package is separate. The compact control card uses Mushroom and
+The Recorder package in packages/common/dh_system_globals_app.yaml includes
+the authoritative night-mode switch (off = day, on = night). The View displays
+its native 24-hour history graph; no additional sensor or automation is needed.
+DH Sync installs the package and View from main; HA Recorder must load the
+package before new state changes are recorded. Previously unrecorded states
+cannot be reconstructed. The compact control card uses Mushroom and
 custom:button-card >=5.0; no private notifications are required.
 
 Telemetry: the official App configuration defaults to telemetry_enabled=false.
