@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.1.5
+- Remove display and indicator brightness from profiles, storage, MQTT and HA Dashboard. Migrate existing settings without changing remaining values. Simplify Ingress RGB editing to a color picker and clear action, without a visible HEX text input.
+
 ## 0.1.4
 - Store independent CCT and RGB values simultaneously in both day/night profiles. Remove the global color-mode selector, migrate existing state and imports, and expose independent Ingress and MQTT Discovery controls. Update MQTT contract and dashboard; consumers choose a supported color mode per device.
 

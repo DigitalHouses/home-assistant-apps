@@ -11,7 +11,9 @@ profiles. Unconfigured values are unset. Set CCT and RGB independently in each p
 The MQTT HA owner controls use the same store; separate text entities accept
 CCT in kelvin and RGB as #RRGGBB (empty clears only that value). Consumers
 select the applicable device color mode. Existing profile values are migrated
-without loss from storage schema 1 to 2; old exports can also be imported. HA Core restart does not stop
+without loss from storage schema 1 to 2; old exports can also be imported. Version 0.1.5 removes display/indicator
+brightness, migrates to storage schema 3, and uses a color picker with a clear
+action in Ingress instead of a visible HEX input. HA Core restart does not stop
 the App schedule. A complete HAOS restart does.
 
 Readiness uses an MQTT roundtrip, an actual HA MQTT sensor update checked through
