@@ -59,6 +59,24 @@ class AutoMergeWorkflowTests(unittest.TestCase):
         self.assertIn('refs/pull/{0}/merge', text)
         self.assertIn("Restrict main recovery validation", text)
 
+    def test_all_jobs_pin_exact_scoped_merge_revision(self):
+        text = VALIDATE.read_text()
+        self.assertIn('merge_sha: ${{ steps.pin.outputs.merge_sha }}', text)
+        self.assertIn('merge_sha="$(git rev-parse HEAD)"', text)
+        self.assertEqual(text.count("format('refs/pull/{0}/merge'"), 1)
+        self.assertEqual(
+            text.count('ref: ${{ needs.validation-scope.outputs.merge_sha }}'),
+            text.count('uses: actions/checkout@v6') - 2,
+        )
+        self.assertIn(
+            'repository-contract:\n    name: Repository contract\n    needs: validation-scope',
+            text,
+        )
+        self.assertIn(
+            'release-readiness:\n    name: Release readiness\n    needs: validation-scope',
+            text,
+        )
+
     def test_native_build_and_publish_gates(self):
         text = self._text()
         self.assertNotIn('setup-qemu-action', text)
