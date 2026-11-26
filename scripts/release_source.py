@@ -25,7 +25,10 @@ def source_for(product, version, head):
         try:
             commit_version = version_at(commit, product)
         except subprocess.CalledProcessError:
-            raise ValueError("Cannot resolve product history")
+            # A deletion of the version file marks the boundary of its lifetime.
+            if not git("ls-tree", commit, "--", f"{product}/config.yaml"):
+                break
+            raise
         if commit_version != version:
             break
         source = commit
@@ -43,7 +46,7 @@ def validate_manifest(doc, source, version, platform, digests=None):
     if platform == "final":
         if annotations.get("org.digitalhouses.source-digests") != digests:
             raise ValueError("Final index source digest mismatch")
-        if not platforms or len(platforms) != len(set(platforms)) or any(p not in [("linux", "amd64"), ("linux", "arm64")] for p in platforms):
+        if len(platforms) != len(digests.split(",")) or len(platforms) != len(set(platforms)) or any(p not in [("linux", "amd64"), ("linux", "arm64")] for p in platforms):
             raise ValueError("Invalid final index platforms")
     elif platforms != [tuple(platform.split("/"))]:
         raise ValueError("Architecture index platform mismatch")
