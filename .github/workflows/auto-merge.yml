@@ -375,6 +375,7 @@ jobs:
             source_sha="$(python scripts/release_source.py "$product" "$version" "$MERGE_SHA")"
             refs=()
             digests=()
+            child_digests=()
             for arch in "${architectures[@]}"; do
               arch_ref="$image:$version-$arch"
               digest="$(cat "image-digests/$product-$arch")"
@@ -387,13 +388,22 @@ jobs:
                 aarch64) platform=linux/arm64 ;;
                 *) exit 1 ;;
               esac
-              python scripts/release_source.py "$product" "$version" "$MERGE_SHA" "$source_sha" "$platform" < <(python scripts/registry_manifest.py "$arch_ref" raw)
+              arch_doc="$(python scripts/registry_manifest.py "$arch_ref" raw)"
+              python scripts/release_source.py "$product" "$version" "$MERGE_SHA" "$source_sha" "$platform" <<<"$arch_doc"
+              # Buildx flattens single-platform OCI indexes into their image
+              # manifests when it composes the final multi-arch index.
+              child_digest="$(jq -er --arg arch "${platform#linux/}" \
+                '[.manifests[] | select(.platform.os == "linux" and .platform.architecture == $arch) | .digest] | if length == 1 then .[0] else error("Expected one native child manifest") end' \
+                <<<"$arch_doc")"
+              [[ "$child_digest" =~ ^sha256:[0-9a-f]{64}$ ]]
+              child_digests+=("$child_digest")
               echo "Expected $arch digest: $digest; manifest body: $actual"
               test "$actual" = "$digest"
               refs+=("$image@$digest")
               digests+=("$digest")
             done
             source_digests="$(IFS=,; echo "${digests[*]}")"
+            source_children="$(IFS=,; echo "${child_digests[*]}")"
             if docker buildx imagetools inspect "$release_ref" >/dev/null 2>&1; then
               # Resume a partially completed release only if the final tag
               # proves exact source/version and the full ordered digest set.
@@ -420,7 +430,7 @@ jobs:
 
             digest="$(python scripts/registry_manifest.py "$release_ref" digest)"
             python scripts/registry_manifest.py "$release_ref" raw > final-manifest.json
-            python scripts/release_source.py "$product" "$version" "$MERGE_SHA" "$source_sha" final "$source_digests" < final-manifest.json
+            python scripts/release_source.py "$product" "$version" "$MERGE_SHA" "$source_sha" final "$source_digests" "$source_children" < final-manifest.json
             printf '%s\t%s\t%s\t%s\t%s\n' "$product" "$version" "$release_ref" "$digest" "$source_sha" >> app-release-artifacts.tsv
           done
       - name: Publish product releases
