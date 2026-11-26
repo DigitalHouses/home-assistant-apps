@@ -1,0 +1,100 @@
+/* Shared visual language: Network App 0.1.32, cmd/dh-network/ui/index.html.
+ * Aqara intentionally uses the full available width. */
+:root{color-scheme:dark;--line:#304154;--muted:#aebed1}
+*{box-sizing:border-box}
+body{font:14px system-ui,sans-serif;margin:0;background:#111b29;color:#e9f0f7}
+.app-header{position:relative;z-index:2;padding:12px 24px;background:#192b41;border-bottom:1px solid #32475f;display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+.brand{flex:0 0 auto}
+.brand h1{white-space:nowrap}
+.app-header nav{display:flex;align-items:center;gap:6px;margin:0;flex-wrap:wrap}
+.app-header nav button{background:transparent;border-color:transparent;padding:8px 11px}
+.app-header nav button.active{background:#137b78;border-color:#26b6a5}
+#scan{margin-left:auto}
+h1{font-size:20px;margin:0 0 3px}
+h2{font-size:18px;margin:18px 0}
+small,.muted{color:#aebed1}
+main{padding:14px 22px 22px;width:100%;margin:auto}
+.devices-tools{display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin:12px 0 8px}
+.devices-tools h2{margin:0}
+.head,.toolbar{display:flex;align-items:center;gap:12px;justify-content:space-between;flex-wrap:wrap}
+button,input,select{font:inherit}
+button{cursor:pointer;padding:9px 13px;background:#284059;color:#f1f7fb;border:1px solid #536e83;border-radius:8px}
+button.active{background:#137b78;border-color:#26b6a5}
+button:hover{filter:brightness(1.16)}
+button:focus-visible,input:focus-visible,select:focus-visible,summary:focus-visible{outline:2px solid #82efc7;outline-offset:2px}
+button:disabled{opacity:.55;cursor:default;filter:none}
+input,select{padding:10px;color:#f0f4f9;background:#203147;border:1px solid #526d86;border-radius:8px;max-width:100%}
+input[type=checkbox]{width:17px;height:17px;accent-color:#16a899;flex:0 0 auto;margin:0}
+input[type=color]{width:44px;height:36px;padding:3px}
+input:disabled{opacity:.5}
+.scan-notice{margin:8px 0 12px;color:#aebed1;font-size:13px;overflow-wrap:anywhere}
+.scan-notice:empty{display:none}
+.scan-notice.error{padding:12px 16px;border:1px solid #76673b;background:#34301f;border-radius:9px;color:#ffd094}
+article{padding:12px 10px;border-bottom:1px solid #304154}
+article:hover{background:#192b41}
+.device-name{display:flex;align-items:center;gap:7px;font-weight:650;overflow-wrap:anywhere}
+.device-info{min-width:0;flex:1}
+.device-info .muted{margin-top:4px;overflow-wrap:anywhere;font-size:12px}
+.bindings{display:flex;gap:8px 16px;flex-wrap:wrap;margin-top:8px}
+.binding{display:inline-flex;flex-wrap:wrap;align-items:center;gap:5px;max-width:100%;overflow-wrap:anywhere}
+.binding>span:first-child{color:#a9c1d1}
+.target{display:inline-flex;gap:4px;align-items:center;max-width:100%;overflow-wrap:anywhere;color:#e9f0f7}
+.target-icon{display:inline-grid;place-items:center;width:18px;height:18px;flex:0 0 18px}
+.target-icon svg{width:17px;height:17px;display:block;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.settings{flex:0 0 auto;font-size:18px;line-height:1;padding:7px 11px}
+.editor-controls{display:flex;flex-wrap:wrap;align-items:center;gap:14px;margin:10px 0 18px}
+.action{border:1px solid #41536a;background:#192b41;border-radius:9px;padding:14px;margin:10px 0}
+.action[open]>summary{margin-bottom:12px}
+.action summary{cursor:pointer;font-weight:650;overflow-wrap:anywhere}
+.assigned{display:flex;align-items:center;flex-wrap:wrap;gap:8px;padding:10px 0;border-top:1px solid #41536a}
+.assigned>strong{flex:1;min-width:min(180px,100%);overflow-wrap:anywhere}
+.params{display:flex;gap:10px 14px;flex-wrap:wrap;align-items:center;width:100%}
+label{display:inline-flex;align-items:center;gap:7px;flex-wrap:wrap;color:#ccd8e4}
+.params input[type=number]{width:92px}
+.search{display:block;width:min(100%,560px);margin:10px 0}
+.addlist{display:flex;flex-wrap:wrap;gap:8px}
+.addlist button{display:inline-flex;align-items:center;gap:6px;text-align:left;overflow-wrap:anywhere;max-width:100%}
+.problem{color:#ffd094}
+.rgb{color:#c5a4ff}
+.cct{color:#ffd094}
+.plain{color:#a9c1d1}
+.save{background:#176761;border-color:#3aa99d}
+.danger{color:#ffb4ac}
+.status{font-size:16px;line-height:1;color:#82efc7}
+.status.muted{color:#aebed1}
+.status.problem{color:#ffd094}
+.status.danger{color:#ffb4ac}
+@media(max-width:750px){
+  main{padding:13px}.app-header{padding:12px;gap:10px}.brand{width:100%}
+  .brand h1{font-size:18px;white-space:normal}.app-header nav{flex:1 1 auto}
+  .app-header nav button{padding:6px 9px}.action{padding:12px}
+}
+
+/* The log shares the device workspace, not the header. */
+.header-tools{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-left:auto}
+#scan{margin-left:0}
+.workspace{display:flex;align-items:stretch;min-width:0}
+.workspace>main{flex:1;min-width:0;margin:0}
+.workspace.log-open>main{flex:0 0 50%;width:50%}
+#log-panel{position:sticky;top:0;align-self:flex-start;width:50%;min-width:0;background:#0d1724;border-left:1px solid #32475f;height:calc(100vh - 80px);display:flex;flex-direction:column}
+#log-panel[hidden]{display:none}
+.log-header{display:flex;align-items:center;gap:10px;justify-content:space-between;padding:14px 12px;border-bottom:1px solid #304154;background:#192b41}
+.log-legend{font-size:11px;padding:7px 12px;color:#aebed1;white-space:normal}
+#log-scroll{overflow:auto;flex:1;min-height:0}
+#log-rows{width:max-content;min-width:100%}
+.log-row{display:flex;align-items:center;gap:8px;padding:8px 10px;border-bottom:1px solid #304154;white-space:nowrap;font:12px ui-monospace,SFMono-Regular,Consolas,monospace}
+.log-row:hover{background:#192b41}
+.log-time{color:#aebed1;font-variant-numeric:tabular-nums}
+.log-target{display:inline-flex;align-items:center;gap:4px;white-space:nowrap}
+.log-check{color:#82efc7;font-weight:700}.log-check.sent{color:#aebed1}
+.log-check.problem{color:#ffd094}
+.binding{border-radius:5px;padding:3px 4px}
+.binding.recent{background:#194d3b;outline:1px solid #3e997d}
+.target-icon.is-on{color:#ffd094}
+.target-icon.is-off{color:#77899d;filter:grayscale(1);opacity:.72}
+.target-icon.is-unknown{color:#77899d;opacity:.55}
+#json-dialog{width:min(820px,calc(100% - 24px));background:#192b41;color:#e9f0f7;border:1px solid #49647e;border-radius:12px;padding:18px}
+#json-dialog::backdrop{background:#0009}
+#json-dialog textarea{width:100%;height:min(55vh,500px);resize:vertical;white-space:pre;overflow:auto;color:#e9f0f7;background:#0d1e31;border:1px solid #526d86;border-radius:8px;padding:12px;font:13px ui-monospace,monospace}
+#json-dialog .toolbar{margin-top:12px}
+@media(max-width:750px){.header-tools{margin-left:0}.header-tools button{padding:7px 9px}.workspace.log-open>main{flex:0 0 50%;padding:8px}.log-header{padding:8px}.log-legend{padding:5px}.log-row{font-size:11px}}

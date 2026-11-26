@@ -9,6 +9,7 @@ from datetime import datetime, timezone
 from dataclasses import dataclass
 from typing import Any
 
+from .ups_setup import VALID_STAGES, driver_options
 from .config import MqttConfig
 from .runtime_settings import LEGACY_SETTING_KEYS, RuntimeSettingError, RuntimeSettings
 from .sync_discovery import build_sync_payload
@@ -76,8 +77,11 @@ class MqttEvents:
         self.check_updates_requested = threading.Event()
         self.install_update_requested = threading.Event()
         self.auto_update_updates: queue.SimpleQueue[bool] = queue.SimpleQueue()
+        self.backup_limit_updates: queue.SimpleQueue[int] = queue.SimpleQueue()
         self.refresh_in_progress = threading.Event()
         self.reconnect_requested = threading.Event()
+        self.ups_setup_requests: queue.SimpleQueue[str] = queue.SimpleQueue()
+        self.ups_setup_driver_updates: queue.SimpleQueue[str] = queue.SimpleQueue()
         self.ups_scan_requested = threading.Event()
         self.ups_scan_in_progress = threading.Event()
         self.fan_max_rpm_updates: queue.SimpleQueue[FanMaxRpmUpdate] = queue.SimpleQueue()
@@ -127,11 +131,28 @@ class MqttEvents:
             )
             request.set()
             return True
+        if topic == f"{self.topics.base}/backup/history_limit/set":
+            if re.fullmatch(r"(?:[1-9]|[1-4][0-9]|50)(?:\.0+)?", text):
+                self.backup_limit_updates.put(int(text.split(".", 1)[0]))
+                return True
+            return False
         if topic == self.topics.update_auto_set:
             if text not in {"ON", "OFF"}:
                 return False
             self.auto_update_updates.put(text == "ON")
             return True
+        setup_prefix = f"{self.topics.base}/ups/setup"
+        if topic == f"{setup_prefix}/driver/set":
+            if text in driver_options():
+                self.ups_setup_driver_updates.put(text)
+                return True
+            return False
+        if topic.startswith(setup_prefix + "/"):
+            stage = topic[len(setup_prefix) + 1:]
+            if stage in VALID_STAGES and text.upper() == "PRESS":
+                self.ups_setup_requests.put(stage)
+                return True
+            return False
         if topic == self.topics.ups_scan:
             if text.upper() == "PRESS":
                 if self.ups_scan_in_progress.is_set() or self.ups_scan_requested.is_set():
@@ -333,7 +354,10 @@ class MqttBridge(MqttEvents):
         client.subscribe(self.topics.update_check, qos=1)
         client.subscribe(self.topics.update_install, qos=1)
         client.subscribe(self.topics.update_auto_set, qos=1)
+        client.subscribe(f"{self.topics.base}/backup/history_limit/set", qos=1)
         client.subscribe(self.topics.ups_scan, qos=1)
+        client.subscribe(f"{self.topics.base}/ups/setup/+", qos=1)
+        client.subscribe(f"{self.topics.base}/ups/setup/driver/set", qos=1)
         client.subscribe(f"{self.topics.fan_max_rpm_prefix}/+/max_rpm/set", qos=1)
         client.subscribe(f"{self.topics.base}/ups/refresh", qos=1)
         client.subscribe(f"{self.topics.base}/ups/beeper/set", qos=1)
@@ -408,6 +432,9 @@ class MqttBridge(MqttEvents):
     def _on_message(self, client, userdata, message) -> None:
         payload = bytes(message.payload)
         text = payload.decode("utf-8", errors="replace").strip()
+        if message.topic == f"{self.topics.base}/backup/history_limit/set" and getattr(message, "retain", False):
+            self.log.warning("Rejected retained backup history setting")
+            return
         if message.topic in {
             self.topics.restart_agent, self.topics.update_check, self.topics.update_install,
             self.topics.update_auto_set,
@@ -418,6 +445,9 @@ class MqttBridge(MqttEvents):
                 and message.topic == self.ups_topics.debug_set
                 and getattr(message, "retain", False)):
             self.log.warning("Rejected retained UPS debug command")
+            return
+        if message.topic.startswith(f"{self.topics.base}/ups/setup/") and getattr(message, "retain", False):
+            self.log.warning("Rejected retained UPS setup command")
             return
         if (message.topic.startswith(f"{self.topics.fan_max_rpm_prefix}/")
                 and message.topic.endswith("/max_rpm/set")
@@ -533,20 +563,12 @@ class MqttBridge(MqttEvents):
             retain=True,
         )
 
-    def publish_backup_state(self, payload: dict[str, object]) -> bool:
-        """Current backup inventory, job outcomes and guest coverage (retained)."""
+    def publish_ups_setup_state(self, payload: dict[str, object]) -> bool:
+        """Retained setup status remains available before NUT/UPS selection."""
         return self._publish(
-            f"{self.topics.base}/backup/state",
+            f"{self.topics.base}/ups/setup/state",
             json.dumps(payload, ensure_ascii=False, separators=(",", ":")),
             retain=True,
-        )
-
-    def publish_backup_event(self, payload: dict[str, object]) -> bool:
-        """Transient factual backup incident, never a retained notification."""
-        return self._publish(
-            f"{self.topics.base}/backup/event",
-            json.dumps(payload, ensure_ascii=False, separators=(",", ":")),
-            retain=False,
         )
 
     def publish_nfs_diagnostics(self, payload: dict[str, object]) -> bool:
@@ -555,6 +577,25 @@ class MqttBridge(MqttEvents):
             f"{self.topics.base}/nfs/diagnostics",
             json.dumps(payload, ensure_ascii=False, separators=(",", ":")),
             retain=True,
+        )
+
+    def publish_backup_history(self, payload: dict[str, object]) -> bool:
+        return self._publish(
+            f"{self.topics.base}/backup/history",
+            json.dumps(payload, ensure_ascii=False, separators=(",", ":")),
+            retain=True,
+        )
+
+    def publish_backup_history_limit(self, limit: int) -> bool:
+        return self._publish(
+            f"{self.topics.base}/backup/history_limit/state", str(limit), retain=True,
+        )
+
+    def publish_backup_event(self, payload: dict[str, object]) -> bool:
+        return self._publish(
+            f"{self.topics.base}/backup/event",
+            json.dumps(payload, ensure_ascii=False, separators=(",", ":")),
+            retain=False,
         )
 
     def publish_memory_diagnostics(self, payload: dict[str, object]) -> bool:

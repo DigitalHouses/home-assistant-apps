@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.1.32
+
+- Add **optional, explicitly enabled** DH Stats HTTPS telemetry using the same wire schema 1 and legacy telemetry policy 1 currently used by DigitalHouses PVE Agent. New and upgraded Network App installations have `telemetry_enabled: false` by default; when disabled, no installation ID is created, no heartbeat is sent and LAN discovery, Presence, MQTT and Ingress continue normally.
+- When enabled in HAOS App options, the isolated telemetry worker sends only `schema`, `telemetry_policy_version`, `installation_id`, `product` and `version` to `https://telemetry.digitalhouses.vip/v1/heartbeat`. It persists a random UUIDv4 and 256-bit token, reports roughly once a day with bounded jitter and failure backoff, and never transfers scanned devices, IP addresses, hostnames or secrets in the payload.
+- Preserve the installation identity across App updates and restarts; allow authenticated record deletion (and identity rotation) with `python3 /app/telemetry.py --delete` inside the App container. Disabling telemetry stops future requests without affecting Network App operation.
+- Admit the canonical `digitalhouses_network_app` identifier to DH Stats through the shared registry. Live server visibility still requires deploying the updated Stats registry and enabling the App option on a test installation.
+- This is an **experimental source-built App Store update** and an opt-in telemetry policy-v1 pilot, **not** the mandatory policy-v2 rollout. The stricter v2 activation/legal and immutable production-release requirements remain separate, pending decisions. DH Sync, network discovery and persistent inventory are unchanged.
+
+## 0.1.31
+
+- Announce DigitalHouses Network App to DH Sync 0.6.0 using retained QoS 1 MQTT `DigitalHouses/Global/digitalhouses_network_app/sync` after every successful broker connect/reconnect. The payload carries only canonical product identity, running version and the GitHub resource source; no Dashboard/View placement, credentials, home IPs or availability checks.
+- Reuse the existing optional MQTT worker and preserve the existing event and Home Assistant MQTT discovery topics, Ingress scanner, inventory, notes, Presence and SQLite data. No data migration or new timers required.
+- Add regression tests covering the payload and connect/reconnect behavior. This remains an experimental, source-built Home Assistant App Store update; the production GHCR migration is out of scope.
+
 ## 0.1.30
 
 - Repair pre-0.1.29 inventories where an earlier Bonjour poll already updated `mdns_hosts.hostname` but left `devices.display_name` stale. On uniquely ARP-confirmed mDNS observations, infer the legacy name is Bonjour-derived only when the device has no HA router identity and no WSD name/endpoint; preserve UUID, MAC, Notes, Presence and timestamps.

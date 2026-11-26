@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.16
+
+- Register the running Backblaze App with DH Sync 0.6.0 using the existing MQTT connection: publish the canonical six-field `/sync` announcement with QoS 1 and retain on each connect/reconnect.
+- Publish the existing standalone Backblaze Sections View and narrow Recorder Package in canonical GitHub resource directories for automatic synchronization.
+- Preserve the existing MQTT Discovery namespace, Home Assistant entity IDs, bucket storage calculations, manual refresh, 30-day graph and telemetry behavior.
+- Add DH Sync contract and resource-regression tests; panel placement remains owned by DH Sync.
+
 ## 0.1.15
 
 - Pin account Total used and all per-bucket used sensors to decimal GB presentation by removing the `data_size` device class that caused Home Assistant to preserve and auto-convert the previous GiB display unit.

@@ -12,6 +12,7 @@ from .ups_event_context import (
 from .ups_problem_events import semantic_ups_problem_event
 from .ups_problems import UpsProblemEngine, transition_uses_status_event
 from .ups_runtime import UpsRuntime
+from .ups_nut import calibration_with_healthy_input
 from .ups_status_events import UpsStatusEventTracker, semantic_status_events
 
 
@@ -310,8 +311,12 @@ class AdaptiveUpsRuntime(UpsRuntime):
             )
         )
 
+        planned_discharge = calibration_with_healthy_input(snapshot)
+        semantic_status = tuple(
+            s for s in snapshot.normalized_status if not (planned_discharge and s == "on_battery")
+        )
         status_event = self.status_event_tracker.observe(
-            current_status=tuple(snapshot.normalized_status),
+            current_status=semantic_status,
             current_raw_status=tuple(snapshot.status_tokens),
             observed_at=observed_at,
         )
@@ -332,7 +337,7 @@ class AdaptiveUpsRuntime(UpsRuntime):
         battery_tracker = self.battery_event_tracker
         if battery_tracker is not None:
             for key, payload in battery_tracker.observe_discharge(
-                on_battery=snapshot.on_battery,
+                on_battery=snapshot.on_battery and not planned_discharge,
                 charge_percent=snapshot.battery_charge_percent,
                 observed_at=observed_at,
             ):

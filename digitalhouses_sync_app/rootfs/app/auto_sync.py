@@ -152,18 +152,23 @@ def _safe_file(root: Path, relative: Path) -> Path:
 class AutoSync:
     def __init__(self, root: Path = Path("/homeassistant"),
                  data: Path = Path("/data/dh-sync-auto"), *, backend=None,
-                 publisher=None, reloader=None):
+                 publisher=None, reloader=None, journal=None):
         self.root = Path(root)
         self.data = Path(data)
         self.backend = backend if backend is not None else BACKEND
         self.publisher = publisher
         self.reloader = reloader
+        self.journal = journal
         self.lock = threading.RLock()
         self.report = {
             "last_run": "", "state": "Ожидание MQTT", "updated": 0,
             "unchanged": 0, "issues": [], "resources": [], "dashboard": None,
             "packages": None,
         }
+
+    def _event(self, event, detail='', **kwargs):
+        if self.journal is not None:
+            self.journal.record(event, detail, **kwargs)
 
     def status(self) -> dict:
         with self.lock:
@@ -308,6 +313,9 @@ class AutoSync:
         if old is not None:
             _file_sync(journal / "original.yaml", old)
         _save_json(journal / "manifest.json", manifest)
+        self._event("backup_created" if old is not None else "transaction_prepared",
+                    relative.as_posix() + " · " + journal.name,
+                    product=source.get("product", "digitalhouses_sync_app"))
         try:
             _safe_path(self.root, target)
             current = target.read_bytes() if target.exists() else None
@@ -368,6 +376,7 @@ class AutoSync:
 
     def sync(self, claims: dict, *, refresh: bool = False) -> dict:
         with self.lock:
+            self._event('sync_started', 'manual' if refresh else 'automatic')
             if refresh:
                 invalidate = getattr(self.backend, "invalidate", None)
                 if callable(invalidate):
@@ -413,6 +422,7 @@ class AutoSync:
                             if source["kind"] == "package":
                                 changed_packages += 1
                             outcome = "Updated"
+                            self._event("package_updated", dest.as_posix(), product=source["product"])
                             # Refresh identities for subsequent files in same pass.
                             packages = self._local_packages()
                         else:
@@ -421,6 +431,7 @@ class AutoSync:
                     except Exception as exc:
                         outcome = "Skipped: " + str(exc)[:150]
                         report["issues"].append(label + ": " + str(exc)[:150])
+                        self._event("package_error", label + ": " + str(exc), product=source["product"], level="error")
                     report["resources"].append({"name": label, "status": outcome})
                 if changed_packages or (report["packages"] and
                                         report["packages"]["loader"] == "Configured"):
@@ -428,6 +439,7 @@ class AutoSync:
                         try:
                             self.reloader()
                             report["packages"]["reload"] = "Requested"
+                            self._event("package_reload_requested")
                         except Exception as exc:
                             report["packages"]["reload"] = "Unavailable"
                             report["issues"].append("Packages quick reload: " + str(exc)[:150])
@@ -448,6 +460,10 @@ class AutoSync:
                 report["state"] = "Error"
                 report["issues"].append(str(exc)[:200])
                 LOG.exception("Automatic sync failed")
+            for issue in report["issues"]:
+                self._event("sync_issue", issue, level="warning")
+            self._event("sync_finished", f"{report['state']} · updated={report['updated']} · current={report['unchanged']} · issues={len(report['issues'])}",
+                        level="info" if report["state"] == "OK" else "warning")
             self.report = report
             LOG.info("Auto-sync %s: updated=%s current=%s issues=%s",
                      report["state"], report["updated"], report["unchanged"],

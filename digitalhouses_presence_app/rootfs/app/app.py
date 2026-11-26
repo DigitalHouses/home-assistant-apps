@@ -30,6 +30,7 @@ from dh_presence.phone_removal import EMPTY, PhoneRemovalSelection, phone_remova
 from dh_presence.phone_tree import registered_phones_tree
 from dh_presence.router import poll_router_trackers
 from dh_presence.ui import start_ingress_ui
+from telemetry import TelemetryClient, TelemetryRunner, TelemetryStateError
 
 LOG = logging.getLogger("dh_presence_app")
 OPTIONS = "/data/options.json"
@@ -39,6 +40,7 @@ MODE_FILE = "/data/presence_mode.json"
 NOTIFICATIONS_FILE = "/data/presence_notifications.json"
 ZONES_FILE = "/data/presence_zones.json"
 HISTORY_FILE = "/data/presence_event_history.json"
+SYNC_TOPIC = "DigitalHouses/Global/digitalhouses_presence_app/sync"
 OPERATIONS_FILE = "/data/presence_refresh.json"
 REGISTRATIONS_FILE = "/data/presence_registrations.json"
 EVENT_NAMES = {"arrival", "departure", "gps_in", "gps_out", "wifi_in", "wifi_out", "wifi_lost", "zone_enter", "zone_leave"}
@@ -215,14 +217,29 @@ class MqttOutput:
         self.operation_commands = queue.SimpleQueue()
         self.phone_commands = queue.SimpleQueue()
         self.client.will_set(topic("availability"), "offline", retain=True, qos=1)
+        self.version = version
         self.client.connect_async(os.environ["MQTT_HOST"], int(os.environ["MQTT_PORT"]), keepalive=60)
         self.client.loop_start()
-        self.version = version
 
     def _connected(self, client, userdata, flags, reason_code, *args):
         if reason_code == 0:
             self.cache.clear()
             self.connected.set()
+            # Nonblocking: on_connect runs in Paho's loop thread, so waiting
+            # for PUBACK here would block the very thread that processes it.
+            sync_payload = {
+                "schema": 1,
+                "product_id": "digitalhouses_presence_app",
+                "type": "app",
+                "version": self.version,
+                "repository": "https://github.com/DigitalHouses/home-assistant-apps",
+                "product_path": "digitalhouses_presence_app",
+            }
+            sync_result = client.publish(
+                SYNC_TOPIC, json.dumps(sync_payload, sort_keys=True, separators=(",", ":")),
+                qos=1, retain=True)
+            if sync_result.rc != mqtt.MQTT_ERR_SUCCESS:
+                LOG.error("MQTT DH Sync declaration rejected rc=%s", sync_result.rc)
             mode_result = client.subscribe(topic("mode/set"), qos=1)
             birth_result = client.subscribe("homeassistant/status", qos=1)
             command_result = client.subscribe(topic("command"), qos=1)
@@ -620,8 +637,20 @@ def run():
     LOG.info("Starting %s version %s mode=%s residents=%d Wi-Fi source=HA router tracker",
              "DigitalHouses Presence App", version, engine.mode.value,
              len(engine.residents))
+    telemetry_runner = None
     if options["telemetry_enabled"]:
-        LOG.warning("Experimental pilot: telemetry_enabled=true, but there is no telemetry sender; no statistics are transmitted.")
+        try:
+            telemetry_runner = TelemetryRunner(
+                TelemetryClient(version=version, enabled=True)
+            )
+            telemetry_runner.start()
+            LOG.info("Opt-in DigitalHouses telemetry enabled (protocol v1, 24h cadence)")
+        except (OSError, TelemetryStateError, ValueError) as exc:
+            # Never block household presence or notification delivery due to statistics.
+            LOG.warning("Telemetry initialization failed; presence continues: %s", type(exc).__name__)
+            telemetry_runner = None
+    else:
+        LOG.info("DigitalHouses telemetry disabled by operator; presence remains active")
     if not engine.residents:
         LOG.info("No residents registered yet; use the DH Presence Ingress UI on a local phone")
     try:
@@ -933,6 +962,8 @@ def run():
                 WAKE.wait(min(options["gps_poll_interval_seconds"],
                               5 if operations.state == "success" else options["gps_poll_interval_seconds"]))
     finally:
+        if telemetry_runner is not None:
+            telemetry_runner.stop()
         mqtt_out.stop()
         ingress.shutdown()
         ingress.server_close()

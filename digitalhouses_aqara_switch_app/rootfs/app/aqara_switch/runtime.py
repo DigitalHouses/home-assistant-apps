@@ -18,34 +18,38 @@ import time
 from .catalog import (CatalogError, candidate_from_mqtt, decode_bridge_devices,
                       resolve_hardware)
 from .actions import ActionError
+from .event_log import EventLog
 from .control import HAClient, light_commands, verified_adopted_switch
 from .mqtt_lights import plan_batch
 from .lab_lights import (LAB_LIGHTS, authorized_ha_light_ids,
                          partition_commands, plan_lab)
-from .light_routes import current_route
+from .light_routes import current_route, group_observed_state
 from .keeper_runtime import run_keeper
 from .mode_keeper import (capabilities, global_policy, maintained_switch,
                           mode_action_allowed)
 from .configuration import parse_configuration
 from .ha_registry import HARegistryClient
 from .mqtt_ui import (
-    AVAILABILITY, DISCOVERY_TOPIC, ROOT, SCAN_REQUEST, wire_payload,
+    AVAILABILITY, DISCOVERY_TOPIC, ROOT, SCAN_REQUEST, SYNC_TOPIC,
+    sync_payload, wire_payload,
 )
 from .scan import scan_once
+from .operation_ui import AppCard, ReleaseChecker
 from .supervisor import SupervisorOptions
+from .telemetry import ContractDataError, TelemetryClient, TelemetryRunner
 
 LOG = logging.getLogger(__name__)
 _IEEE = re.compile(r"^0x[0-9a-f]{16}$")
 _BASE_FORBIDDEN = {"homeassistant", "DigitalHouses", "$SYS"}
 _FILTERS = tuple(
     "/".join(["+"] * levels) + "/bridge/" + suffix
-    for levels in (1, 2, 3) for suffix in ("info", "devices", "state")
+    for levels in (1, 2, 3) for suffix in ("info", "devices", "state", "groups")
 )
 
 
 def bridge_path(topic: str) -> tuple[str, str] | None:
     base, sep, suffix = topic.rpartition("/bridge/")
-    if not sep or suffix not in ("info", "devices", "state"):
+    if not sep or suffix not in ("info", "devices", "state", "groups"):
         return None
     parts = base.split("/")
     if not 1 <= len(parts) <= 3 or parts[0] in _BASE_FORBIDDEN or any(
@@ -80,6 +84,7 @@ def verified_snapshots(networks: Mapping) -> list[dict]:
             "base_topic": base,
             "coordinator_ieee": coord.lower(),
             "devices": raw_devices,
+            "groups": info.get("groups"),
             "states": deepcopy(info.get("states", {})),
         })
     return ready
@@ -125,11 +130,31 @@ class Application:
         options_snapshot = self.options.read()
         self.config = parse_configuration(options_snapshot)
         self.globals = global_policy(options_snapshot)
+        self.auto_scan_interval = options_snapshot.get("auto_scan_interval", 60)
+        # Staged migration: existing lighting controls continue with the new
+        # HAOS telemetry switch unset/false. No identity or network request
+        # is created without explicit opt-in.
+        self.telemetry = None
+        self.telemetry_runner = None
+        if options_snapshot.get("telemetry_enabled") is True:
+            try:
+                self.telemetry = TelemetryClient(enabled=True, version=self.version)
+                self.telemetry_runner = TelemetryRunner(self.telemetry)
+            except (ContractDataError, OSError, ValueError) as exc:
+                # A failed telemetry identity must never interrupt light
+                # control or be silently replaced with a fresh identifier.
+                LOG.error(
+                    "Aqara telemetry unavailable (persistent state error): %s; "
+                    "lighting remains operational; saved identity preserved", exc
+                )
+                self.telemetry = None
+                self.telemetry_runner = None
         self._previous = _load_previous(last_scan_path)
         self._previous_path = last_scan_path
         self._stop = threading.Event()
         self._ha_client = ha_client
         self._jobs = queue.Queue(maxsize=64)
+        self.event_log = EventLog()
         self._last_action = {"state": "idle", "at": None, "switch": None,
                              "action": None, "target": None, "error": None}
         self._last_action_at = {}
@@ -138,6 +163,11 @@ class Application:
         self._mode_probes = {}
         self._fresh_fields = set()
         self._light_availability = {}
+        self._input_availability = {}
+        self._last_details_payload = None
+        self._last_problems_payload = None
+        self._target_registries = None
+        self._last_refresh = None
         self._light_shadows = {}
         self._ha_shadows = {}
         self._ha_registry_snapshot = None
@@ -146,13 +176,16 @@ class Application:
         self._light_probe_at = {}
         self._mutex = threading.RLock()
         self._scan_lock = threading.Lock()
+        self.target_catalog = {}
+        self.device_details = []
         self._networks: dict[str, dict] = {}
         self._subscribed: set[str] = set()
         self._scan = {"state": "idle", "started_at": None,
                       "finished_at": None, "duration_seconds": None, "error": None}
-        self._card = {"state": "idle", "operation": None,
-                      "started_at": None, "finished_at": None,
-                      "duration_seconds": None, "error": None}
+        self._card = AppCard(lambda payload: self._publish(ROOT + "/card", payload))
+        self._release = ReleaseChecker(self.version)
+        self._refresh_state = {"state":"idle","started_at":None,"finished_at":None,
+                               "duration_seconds":None,"error":None}
         if hasattr(mqtt_module, "CallbackAPIVersion"):
             self.client = mqtt_module.Client(
                 mqtt_module.CallbackAPIVersion.VERSION1,
@@ -204,9 +237,12 @@ class Application:
         self._publish(ROOT + "/scan_state", dict(self._scan))
         self._publish(ROOT + "/scan_details", {"state": "ready" if self._previous else "unknown",
                                                **(self._previous or {})})
-        self._publish_details()
+        self._publish_details(force=True)
         self._publish(ROOT + "/last_action", dict(self._last_action))
         self._publish_card()
+        self._publish_release()
+        self._publish(ROOT + "/refresh_state", self._refresh_state)
+        self._publish(ROOT + "/last_refresh", self._last_refresh or "unknown")
 
     def _publish_action(self, *, state, switch, action, target, error=None):
         self._last_action = {"state": state, "at": _iso_now(),
@@ -215,14 +251,21 @@ class Application:
         self._publish(ROOT + "/last_action", dict(self._last_action))
 
     def _publish_card(self):
-        self._publish(ROOT + "/card", dict(self._card))
+        self._card.publish()
 
-    def _publish_details(self):
+    def _publish_details(self, force=False):
         """Publish device identity/fingerprint problems without relay writes."""
         with self._mutex:
             config = deepcopy(self.config)
             networks = verified_snapshots(self._networks)
-        problems = []
+            bridge_states = {base: net.get("bridge_state") for base,net in self._networks.items()}
+            availability = dict(self._input_availability)
+            target_catalog = deepcopy(self.target_catalog)
+            routes = dict(config.get("light_routes", {}))
+            light_availability = dict(self._light_availability)
+            fresh = set(self._fresh_fields)
+        problems = list(config.get("binding_problems", []))
+        observed_targets = {}
         for room in config["rooms"]:
             for switch in room["switches"]:
                 peers = []
@@ -270,17 +313,74 @@ class Application:
                         if mismatches:
                             result = {"status":"keep_mode_mismatch",
                                       "reason":"Protected keys drifted: " + ", ".join(mismatches)}
+                bridge_status = bridge_states.get(switch["base_topic"])
+                input_status = availability.get((switch["base_topic"], switch["logical_name"]), "unknown")
+                if result["status"] == "same" and (bridge_status == "offline" or input_status == "offline"):
+                    result = {"status":"offline","reason":"Zigbee2MQTT or input reports offline"}
+                elif result["status"] == "missing" and not any(
+                        n["coordinator_ieee"] == switch["coordinator_ieee"] for n in networks):
+                    result = {"status":"offline" if bridge_status == "offline" else "unknown",
+                              "reason":"No current inventory for this coordinator"}
+                result["availability"] = input_status
                 switch["runtime"] = result
+                # The public tree shows the saved choices, including disabled
+                # or invalid actions; the execution tree remains fail-closed.
+                effective = switch.get("bindings", {})
+                switch["bindings"] = switch.get("configured_bindings",effective)
+                for action, rule in switch["bindings"].items():
+                    rule["enabled"] = action in effective and switch.get("enabled",False)
+                    for eid in rule.get("targets",[]):
+                        target = target_catalog.get(eid, {})
+                        state = target.get("state", "unknown")
+                        route = routes.get(eid)
+                        if route:
+                            ident = (route["base_topic"],route["friendly_name"])
+                            if bridge_states.get(ident[0]) != "online" or light_availability.get(ident) != "online":
+                                state = "unavailable" if bridge_states.get(ident[0]) == "offline" or light_availability.get(ident) == "offline" else "unknown"
+                            elif route.get("kind")=="group":
+                                live=next((n for n in networks if n["base_topic"]==ident[0]),{})
+                                reported=group_observed_state(route,live,fresh)
+                                state=reported.lower() if reported else "unknown"
+                            elif (*ident,"state") in fresh:
+                                reported = next((n["states"].get(ident[1],{}).get("state")
+                                                 for n in networks if n["base_topic"]==ident[0]),None)
+                                state = reported.lower() if reported in ("ON","OFF") else "unknown"
+                        observed_targets[eid] = state
+                        if state not in ("on","off"):
+                            problems.append({"object_name":eid,"category":"target_unavailable",
+                                             "reason":"Target not found" if not target and not route else state})
                 if result["status"] not in ("same", "disabled"):
                     problems.append({
                         "object_name": switch["logical_name"],
                         "category": result["status"],
                         "reason": result.get("reason"),
                     })
-        self._publish(ROOT + "/devices", {"state": "ready", "rooms": config["rooms"]})
-        self._publish(ROOT + "/problems", {
-            "state": "ready", "active": problems[:100], "count": len(problems)
-        })
+        from .light_rules import parse_rule
+        orphan_devices = []
+        for row in config.get("orphan_bindings",[]):
+            bindings = {k:parse_rule(v) for k,v in row["actions"].items()}
+            for rule in bindings.values():
+                rule["enabled"] = False
+                for eid in rule["targets"]:
+                    observed_targets[eid] = target_catalog.get(eid,{}).get("state","unknown")
+            orphan_devices.append({"entity_id":row["entity_id"],"logical_name":row["entity_id"],
+                "base_topic":"—","fingerprint":{"model":"—","actions":[]},"settings":{},
+                "bindings":bindings,"runtime":{"status":"missing","reason":"Not adopted"}})
+        if orphan_devices:
+            config["rooms"].append({"area_id":None,"name":"Не обнаружены","switches":orphan_devices})
+        details = {"state":"ready","rooms":config["rooms"],"target_states":observed_targets}
+        # Deduplicate diagnostics and avoid a 15-second Recorder event when
+        # nothing changed. MQTT/HA reconnect republish is explicit.
+        problems = list({(x["object_name"],x["category"],x.get("reason")):x for x in problems}.values())
+        diagnostic = {"state":"ready","active":problems[:100],"count":len(problems)}
+        with self._mutex:
+            self.device_details = deepcopy(config["rooms"])
+            if force or details != self._last_details_payload:
+                if self._publish(ROOT + "/devices",details):
+                    self._last_details_payload = details
+            if force or diagnostic != self._last_problems_payload:
+                if self._publish(ROOT + "/problems",diagnostic):
+                    self._last_problems_payload = diagnostic
 
     def _on_connect(self, client, userdata, flags, rc):
         del client, userdata, flags
@@ -296,16 +396,20 @@ class Application:
             self._mode_probes.clear()
             self._fresh_fields.clear()
             self._light_availability.clear()
+            self._input_availability.clear()
             self._light_shadows.clear()
             self._ha_shadows.clear()
             self._light_observed_at.clear()
             self._light_probe_at.clear()
-        for topic in (*_FILTERS, SCAN_REQUEST, "homeassistant/status"):
+        for topic in (*_FILTERS, SCAN_REQUEST, ROOT + "/command/refresh",
+                      ROOT + "/command/check_updates", ROOT + "/command/delete_telemetry", "homeassistant/status"):
             self._subscribe(topic)
         self._publish(AVAILABILITY, "online")
+        self._publish(SYNC_TOPIC, sync_payload(self.version))
         self._publish_all()
 
     def _on_disconnect(self, client, userdata, rc):
+        self.event_log.disconnect()
         del client, userdata
         if rc:
             LOG.warning("MQTT disconnected: %s", rc)
@@ -314,6 +418,7 @@ class Application:
             self._networks.clear()
             self._fresh_fields.clear()
             self._light_availability.clear()
+            self._input_availability.clear()
             self._light_shadows.clear()
             self._ha_shadows.clear()
             self._light_observed_at.clear()
@@ -321,6 +426,18 @@ class Application:
 
     def _on_message(self, client, userdata, message):
         del client, userdata
+        if message.topic == ROOT + "/command/delete_telemetry":
+            if (self.telemetry is not None and not message.retain
+                    and bytes(message.payload) == b"DELETE"):
+                threading.Thread(target=self._delete_telemetry, daemon=True,
+                                 name="dh-aqara-telemetry-delete").start()
+            return
+        if message.topic in (ROOT + "/command/refresh", ROOT + "/command/check_updates"):
+            operation = "refresh" if message.topic.endswith("/refresh") else "check"
+            expected = b"REFRESH" if operation == "refresh" else b"CHECK"
+            if not message.retain and bytes(message.payload) == expected:
+                self.request_operation(operation)
+            return
         if message.topic == SCAN_REQUEST:
             # No startup scan; no retained command replay.
             if not message.retain and bytes(message.payload) == b"SCAN":
@@ -332,6 +449,21 @@ class Application:
             return
         if message.topic.endswith("/availability"):
             with self._mutex:
+                for base, net in self._networks.items():
+                    if not message.topic.startswith(base+"/"):
+                        continue
+                    name = message.topic[len(base)+1:-len("/availability")]
+                    try:
+                        inventory = decode_bridge_devices(net["devices"])
+                        if not any(d.get("friendly_name")==name and
+                                   (d.get("definition") or {}).get("vendor","").casefold()=="aqara"
+                                   for d in inventory):
+                            continue
+                        raw = bytes(message.payload).decode().strip()
+                        value = json.loads(raw).get("state","unknown") if raw.startswith("{") else raw
+                        self._input_availability[(base,name)] = value if value in ("online","offline") else "unknown"
+                    except (KeyError,CatalogError,ValueError,TypeError,UnicodeError):
+                        self._input_availability[(base,name)] = "unknown"
                 for route in self.config.get("light_routes", {}).values():
                     base, name = route["base_topic"], route["friendly_name"]
                     if message.topic != base + "/" + name + "/availability":
@@ -373,7 +505,22 @@ class Application:
                                 self._light_shadows.pop(ident, None)
                                 self._fresh_fields.discard((base, ident[1], "state"))
                     return
-                node[suffix] = bytes(message.payload)
+                if suffix=="groups":
+                    if node.get("groups")!=bytes(message.payload):
+                        updated={**node,"groups":bytes(message.payload)}
+                        for route in self.config.get("light_routes",{}).values():
+                            if (route.get("kind")=="group" and route["base_topic"]==base
+                                    and not current_route(route,updated)):
+                                ident=(base,route["friendly_name"])
+                                self._fresh_fields.discard((*ident,"state"))
+                                self._light_shadows.pop(ident,None)
+                                self._light_observed_at.pop(ident,None)
+                                node["states"].pop(ident[1],None)
+                                self.event_log.invalidate(("z2m",*ident))
+                    node[suffix]=bytes(message.payload)
+                    self._sync_light_topics()
+                else:
+                    node[suffix] = bytes(message.payload)
                 if suffix == "devices":
                     try:
                         devices = decode_bridge_devices(node["devices"])
@@ -384,6 +531,8 @@ class Application:
                         name = device.get("friendly_name")
                         if isinstance(name, str) and name and device.get("type") != "Coordinator":
                             self._subscribe(base + "/" + name)
+                            if (device.get("definition") or {}).get("vendor","").casefold()=="aqara":
+                                self._subscribe(base + "/" + name + "/availability")
                     self._sync_light_topics()
             self._publish_details()
             return
@@ -399,7 +548,12 @@ class Application:
                     device = next((d for d in devices if d.get("friendly_name") == name
                                    and d.get("type") != "Coordinator"), None)
                     if device is None:
-                        continue
+                        # Never interpret group data as an input action.
+                        group=next((r for r in self.config.get("light_routes",{}).values()
+                                    if r.get("kind")=="group" and r["base_topic"]==base
+                                    and r["friendly_name"]==name and current_route(r,net)),None)
+                        if group is None:
+                            continue
                     data = json.loads(bytes(message.payload))
                     if not isinstance(data, dict):
                         continue
@@ -418,10 +572,12 @@ class Application:
                         if data.get("state") in ("ON", "OFF"):
                             ident = (base, name)
                             self._light_observed_at[ident] = time.monotonic()
+                            if not getattr(message, "dup", False):
+                                self.event_log.observe(("z2m", *ident), data["state"])
                             shadow = self._light_shadows.get(ident)
                             if shadow and shadow["value"] == data["state"]:
                                 self._light_shadows.pop(ident, None)
-                    if not getattr(message, "retain", False) and not getattr(message, "dup", False):
+                    if device is not None and not getattr(message, "retain", False) and not getattr(message, "dup", False):
                         self._process_adopted_event(base, net, device, data)
                 except (KeyError, CatalogError, ValueError, UnicodeDecodeError, TypeError) as exc:
                     LOG.warning("Invalid Z2M state %s: %s", message.topic, exc)
@@ -443,8 +599,6 @@ class Application:
             return
         for room in self.config["rooms"]:
             for saved in room["switches"]:
-                if not saved.get("enabled", True):
-                    continue
                 if not verified_adopted_switch(saved, device, coordinator, base):
                     continue
                 name = saved["logical_name"]
@@ -454,10 +608,18 @@ class Application:
                 action = data.get("action")
                 if not isinstance(action, str) or not action:
                     continue
+                if not saved.get("enabled", True):
+                    if action in saved.get("fingerprint", {}).get("actions", []):
+                        rid = self.event_log.press(base,name,action)
+                        self.event_log.finish(rid,"Устройство отключено")
+                    continue
                 maintenance = maintained_switch(saved, self.globals)
                 state = net.get("states", {}).get(name, {})
                 features = capabilities(device)
                 if not mode_action_allowed(saved, action, state, features, maintenance):
+                    if action in saved.get("fingerprint", {}).get("actions", []):
+                        rid = self.event_log.press(base,name,action)
+                        self.event_log.finish(rid,"Maintenance / режим клавиши не разрешён")
                     continue
                 # Wired key mode must be freshly confirmed after reconnect.
                 if features:
@@ -467,6 +629,8 @@ class Application:
                             else tuple(features))
                     if any((base, name, features[k][0]) not in self._fresh_fields
                            for k in keys if k in features):
+                        rid = self.event_log.press(base,name,action)
+                        self.event_log.finish(rid,"Режим клавиши не подтверждён")
                         continue
                 dedupe_key = (coordinator, name, action)
                 if now - self._last_action_at.get(dedupe_key, -1e9) < 0.35:
@@ -481,14 +645,19 @@ class Application:
                                          target=None, error=str(exc))
                     continue
                 if commands is None:
+                    if action in saved.get("fingerprint", {}).get("actions", []):
+                        rid = self.event_log.press(base,name,action)
+                        self.event_log.finish(rid,"Нет активной привязки")
                     continue
                 targets = [eid for command in commands for eid in command["target"]["entity_id"]]
                 target_label = ", ".join(targets)
+                rid = self.event_log.press(base,name,action,targets)
                 try:
-                    self._jobs.put_nowait((base, coordinator, name, action, commands))
+                    self._jobs.put_nowait((base, coordinator, name, action, commands, rid))
                     self._publish_action(state="queued", switch=name, action=action,
                                          target=target_label)
                 except queue.Full:
+                    self.event_log.finish(rid,"Очередь заполнена",targets)
                     self._publish_action(state="error", switch=name, action=action,
                                          target=target_label, error="Action queue is full")
 
@@ -545,11 +714,16 @@ class Application:
         """Dispatch verified Z2M lights via MQTT and HA-native lights via REST."""
         while not self._stop.is_set():
             try:
-                base, coordinator, name, action, commands = self._jobs.get(timeout=1)
+                job = self._jobs.get(timeout=1)
+                base, coordinator, name, action, commands = job[:5]
+                rid = job[5] if len(job)>5 else None
             except queue.Empty:
                 continue
             targets = [eid for cmd in commands for eid in cmd["target"]["entity_id"]]
             try:
+                all_commands = commands
+                switch_commands = [c for c in commands if c["service"].startswith("switch.")]
+                commands = [c for c in commands if c["service"].startswith("light.")]
                 # A missing route is NOT permission for HA fallback.
                 # HA registry platform must positively identify a native light.
                 with self._mutex:
@@ -561,7 +735,8 @@ class Application:
                     commands, routes, ha_approved)
                 mixed_toggle = bool(
                     z2m_commands and lab_commands
-                    and all(cmd["service"] == "light.toggle" for cmd in commands))
+                    and any(cmd["service"] == "light.toggle" for cmd in z2m_commands)
+                    and any(cmd["service"] == "light.toggle" for cmd in lab_commands))
                 original_z2m, original_lab = z2m_commands, lab_commands
                 lab_state_cache = {}
                 def read_lab_once(entity):
@@ -582,7 +757,8 @@ class Application:
                     if self._ha_client is None:
                         self._ha_client = HAClient(os.environ.get("SUPERVISOR_TOKEN", ""))
                     lab_preview, _ = plan_lab(
-                        lab_commands, read_lab_once, self._ha_shadows,
+                        [c for c in lab_commands if c["service"] == "light.toggle"],
+                        read_lab_once, self._ha_shadows,
                         time.monotonic(), allowed_lights=ha_approved)
 
                 with self._mutex:
@@ -594,6 +770,8 @@ class Application:
                     if (sw is None or not sw.get("enabled", False) or
                             maintained_switch(sw, self.globals)):
                         raise ActionError("Disabled switch or Maintenance active")
+                    if light_commands(sw, action) != all_commands:
+                        raise ActionError("Binding changed while command was queued")
                     net = self._networks.get(base, {})
                     raw = net.get("devices")
                     if not isinstance(raw, bytes):
@@ -616,7 +794,8 @@ class Application:
                     toggle_override = None
                     if mixed_toggle:
                         z2m_preview, _ = plan_batch(
-                            z2m_commands, self.config.get("light_routes", {}),
+                            [c for c in z2m_commands if c["service"] == "light.toggle"],
+                            self.config.get("light_routes", {}),
                             self._networks, self._light_availability,
                             self._fresh_fields, self._light_shadows,
                             self._light_observed_at, time.monotonic())
@@ -639,6 +818,11 @@ class Application:
                         if self._publish(plan["topic"], plan["payload"],
                                          retain=False):
                             ident = plan["ident"]
+                            route=self.config.get("light_routes",{}).get(plan["light"],{})
+                            net=self._networks.get(ident[0],{})
+                            previous = (group_observed_state(route,net,self._fresh_fields)
+                                        if route.get("kind")=="group" else net.get("states",{}).get(ident[1],{}).get("state"))
+                            self.event_log.sent(rid,plan["light"],("z2m",*ident),previous,plan["state"])
                             self._light_shadows[ident] = {
                                 "value": plan["state"], "at": time.monotonic()}
                             sent.append(plan["light"])
@@ -674,6 +858,7 @@ class Application:
                             authorized = (
                                 current_sw is not None and device is not None
                                 and current_sw.get("enabled", False)
+                                and light_commands(current_sw, action) == all_commands
                                 and not maintained_switch(current_sw, self.globals)
                                 and verified_adopted_switch(
                                     current_sw, device, coordinator, base)
@@ -686,6 +871,7 @@ class Application:
                                             "reason":"Aqara key or Maintenance changed"}
                                            for eid in ids)
                             continue
+                        dispatched_at = _iso_now()
                         try:
                             self._ha_client.execute(call)
                         except Exception as exc:
@@ -697,9 +883,58 @@ class Application:
                         value = "on" if call["service"] == "light.turn_on" else "off"
                         with self._mutex:
                             for eid in ids:
+                                self.event_log.sent(rid,eid,("ha",eid),lab_state_cache.get(eid,(False,None))[1] if lab_state_cache.get(eid,(False,None))[0] else None,value, sent_at=dispatched_at)
                                 self._ha_shadows[eid] = {
                                     "state":value, "at": time.monotonic()}
                         sent.extend(ids)
+                if switch_commands:
+                    from .ingress_catalog import safe_switch_targets
+                    try:
+                        approved = safe_switch_targets(self.registry.fetch(), self.config)
+                    except Exception:
+                        approved = set()
+                    if self._ha_client is None:
+                        self._ha_client = HAClient(os.environ.get("SUPERVISOR_TOKEN", ""))
+                    pending_switches = []
+                    for call in switch_commands:
+                        for eid in call["target"]["entity_id"]:
+                            try:
+                                if eid not in approved:
+                                    raise ActionError("Switch not verified or is an Aqara input relay")
+                                state = self._ha_client.read_switch_state(eid)
+                                if state not in ("on", "off"):
+                                    raise ActionError("Switch unavailable")
+                                pending_switches.append((eid, call["service"], state))
+                            except Exception as exc:
+                                skipped.append({"light":eid,"reason":str(exc)[:120]})
+                    switch_toggle = "on" if any(c == "switch.toggle" and st == "off"
+                                                 for _, c, st in pending_switches) else "off"
+                    for eid, service, state in pending_switches:
+                        try:
+                            with self._mutex:
+                                sw = next((x for room in self.config["rooms"] for x in room["switches"]
+                                           if x["logical_name"] == name and x["base_topic"] == base
+                                           and x["coordinator_ieee"] == coordinator), None)
+                                net = self._networks.get(base, {})
+                                device = next((d for d in decode_bridge_devices(net["devices"])
+                                               if d.get("friendly_name") == name), None)
+                                if (not sw or not device or not sw.get("enabled", False)
+                                    or maintained_switch(sw, self.globals)
+                                    or light_commands(sw, action) != all_commands
+                                    or not verified_adopted_switch(sw, device, coordinator, base)
+                                    or not mode_action_allowed(sw, action, net.get("states", {}).get(name, {}),
+                                                               capabilities(device), False)):
+                                    raise ActionError("Input or binding changed")
+                            desired = switch_toggle if service == "switch.toggle" else service.rsplit("_", 1)[-1]
+                            dispatched_at = _iso_now()
+                            self._ha_client.execute_switch(eid, desired)
+                            self.event_log.sent(rid,eid,("ha",eid),state,desired,sent_at=dispatched_at)
+                            sent.append(eid)
+                        except Exception as exc:
+                            skipped.append({"light":eid,"reason":str(exc)[:120]})
+                for item in skipped:
+                    self.event_log.skip(rid,item["light"],item["reason"])
+                self.event_log.finish(rid)
                 if skipped:
                     LOG.warning("Aqara action %s %s skipped: %s", name, action, skipped)
                 note = "; ".join(x["light"]+": "+x["reason"] for x in skipped)
@@ -712,48 +947,51 @@ class Application:
                          "(Z2M physical + authorized HA lights)",
                          name, action, len(sent), len(skipped))
             except Exception as exc:
+                self.event_log.finish(rid,str(exc),targets)
                 LOG.exception("Aqara MQTT light action failed")
                 self._publish_action(state="error", switch=name, action=action,
                                      target=", ".join(targets), error=str(exc)[:300])
             finally:
                 self._jobs.task_done()
 
-    def request_scan(self) -> bool:
+    def request_scan(self, foreground=True) -> bool:
         if not self._scan_lock.acquire(blocking=False):
             return False
-        threading.Thread(target=self._run_scan, daemon=True,
+        threading.Thread(target=self._run_scan, args=(foreground,), daemon=True,
                          name="dh-aqara-manual-scan").start()
         return True
 
-    def _run_scan(self) -> None:
+    def _run_scan(self, foreground=True) -> None:
         start = time.monotonic()
         now = _iso_now()
         with self._mutex:
             snapshots = verified_snapshots(self._networks)
         self._scan = {"state": "updating", "started_at": now,
                       "finished_at": None, "duration_seconds": None, "error": None}
-        self._card = {"state": "running", "operation": "scan",
-                      "started_at": now, "finished_at": None,
-                      "duration_seconds": None, "error": None}
         self._publish(ROOT + "/scan_state", self._scan)
-        self._publish_card()
         try:
             if not snapshots:
                 raise CatalogError("No confirmed Zigbee2MQTT network snapshot available")
             merged, report = scan_once(snapshots, self.options, self.registry)
             _save_previous(self._previous_path, report)
             with self._mutex:
+                routes_changed = self.config.get("light_routes",{}) != merged.get("light_routes",{})
                 self.config = merged
                 self.globals = global_policy(self.options.read())
-                self._light_shadows.clear()
-                self._ha_shadows.clear()
+                if routes_changed:
+                    self._light_shadows.clear()
+                    self._ha_shadows.clear()
+                    self._light_observed_at.clear()
+                    self._light_probe_at.clear()
                 self._ha_registry_snapshot = None
                 self._ha_registry_checked_at = -1e9
-                self._light_observed_at.clear()
-                self._light_probe_at.clear()
                 self._sync_light_topics()
                 self._previous = report
-            self._publish_details()
+            try:
+                self.refresh_targets()
+            except Exception:
+                LOG.warning("HA target catalog refresh after scan failed")
+                self._publish_details()
             self._publish(ROOT + "/scan_details", {"state": "ready", **report})
             error = None
         except Exception as exc:
@@ -765,13 +1003,129 @@ class Application:
             self._scan = {"state": "error" if error else "idle", "started_at": now,
                           "finished_at": finished, "duration_seconds": duration,
                           "error": error}
-            self._card = {"state": "error" if error else "success",
-                          "operation": "scan", "started_at": now,
-                          "finished_at": finished, "duration_seconds": duration,
-                          "error": error}
             self._publish(ROOT + "/scan_state", self._scan)
-            self._publish_card()
             self._scan_lock.release()
+
+    def _publish_release(self):
+        data = self._release.payload()
+        self._publish(ROOT + "/latest_version", data["latest_version"])
+        self._publish(ROOT + "/update_available",
+                      "unknown" if data["available"] is None else "ON" if data["available"] else "OFF")
+        self._publish(ROOT + "/release_check", data)
+
+    def request_operation(self, operation):
+        if not self._card.begin(operation):
+            return False
+        threading.Thread(target=self._run_operation, args=(operation,), daemon=True).start()
+        return True
+
+    def _run_operation(self, operation):
+        error = None
+        start = time.monotonic()
+        started = _iso_now()
+        if operation == "refresh":
+            self._refresh_state = {"state":"updating","started_at":started,
+                                   "finished_at":None,"duration_seconds":None,"error":None}
+            self._publish(ROOT + "/refresh_state", self._refresh_state)
+        try:
+            if operation == "refresh":
+                self.refresh_targets()
+                with self._mutex:
+                    if not verified_snapshots(self._networks):
+                        raise CatalogError("No verified Z2M inventory")
+            else:
+                if not self._release.begin():
+                    raise CatalogError("Release check already in progress")
+                _, error = self._release.complete()
+                self._publish_release()
+        except Exception as exc:
+            error = str(exc)[:250]
+        finally:
+            duration = round(time.monotonic()-start,3)
+            if operation == "refresh":
+                self._refresh_state = {"state":"error" if error else "idle","started_at":started,
+                                       "finished_at":_iso_now(),"duration_seconds":duration,"error":error}
+                self._publish(ROOT + "/refresh_state",self._refresh_state)
+                if not error:
+                    self._last_refresh = self._refresh_state["finished_at"]
+                    self._publish(ROOT + "/last_refresh",self._last_refresh)
+            self._card.finish(operation,error=error,measured_seconds=duration)
+
+    def _scheduled_release_check(self):
+        while not self._stop.wait(10):
+            if self._release.begin():
+                self._release.complete()
+                self._publish_release()
+            if self._stop.wait(86400):
+                break
+
+    def refresh_targets(self, refresh_registry=True):
+        from .ingress_catalog import target_catalog
+        with self._mutex:
+            registry = self._target_registries
+        if refresh_registry or registry is None:
+            registry = self.registry.fetch()
+        states = self.registry.fetch_states()
+        self.event_log.ha_observations(states)
+        if self.event_log.timezone is None and hasattr(self.registry,"fetch_timezone"):
+            try:
+                self.event_log.set_timezone(self.registry.fetch_timezone())
+            except Exception:
+                pass  # HA unavailable: keep UTC explicitly labelled in UI.
+        with self._mutex:
+            self._target_registries = registry
+            self.target_catalog = target_catalog(registry, states, self.config)
+        self._publish_details()
+
+    def _observe_targets(self):
+        while not self._stop.is_set():
+            try:
+                self.refresh_targets(refresh_registry=False)
+            except Exception:
+                with self._mutex:
+                    for entry in self.target_catalog.values():
+                        entry["state"] = "unknown"
+                self._publish_details()
+            self._stop.wait(15)
+
+    def _auto_scan(self):
+        """Startup scan after a complete inventory; later scans use a minute interval."""
+        next_due = 0.0
+        completed = False
+        while not self._stop.wait(5):
+            try:
+                interval = self.auto_scan_interval
+                if type(interval) is not int or not 0 <= interval <= 1440:
+                    raise ValueError("Invalid auto_scan_interval")
+                if completed and (interval == 0 or time.monotonic() < next_due):
+                    continue
+                with self._mutex:
+                    ready = bool(verified_snapshots(self._networks))
+                if ready and self.request_scan(foreground=False):
+                    # Allow retained inventories and states to arrive; retry a
+                    # failed first scan without interrupting existing bindings.
+                    while not self._stop.wait(1) and self._scan_lock.locked():
+                        pass
+                    completed = self._scan["state"] == "idle"
+                    next_due = time.monotonic() + (interval * 60 if completed else 30)
+                    if not completed:
+                        self._stop.wait(30)
+            except Exception:
+                LOG.exception("Automatic Aqara scan scheduling failed")
+                self._stop.wait(30)
+
+    def _delete_telemetry(self) -> None:
+        if self.telemetry is None:
+            return
+        try:
+            deleted = self.telemetry.delete()
+        except (ContractDataError, OSError, ValueError) as exc:
+            LOG.error("Aqara telemetry deletion state error: %s", exc)
+            return
+        if deleted:
+            LOG.info("Aqara telemetry installation and history deleted; identity rotated")
+        else:
+            LOG.warning("Aqara telemetry deletion failed")
 
     def run(self) -> None:
         host, port = os.environ["MQTT_HOST"], int(os.environ["MQTT_PORT"])
@@ -782,5 +1136,27 @@ class Application:
                          name="dh-aqara-mode-keeper").start()
         threading.Thread(target=self._run_light_probes, daemon=True,
                          name="dh-aqara-light-state-probes").start()
-        self.client.connect(host, port, keepalive=60)
-        self.client.loop_forever(retry_first_connection=True)
+        from .ingress import start_ingress
+        web = start_ingress(self)
+        threading.Thread(target=web.serve_forever, daemon=True,
+                         name="dh-aqara-ingress").start()
+        threading.Thread(target=self._scheduled_release_check, daemon=True,
+                         name="dh-aqara-release-check").start()
+        threading.Thread(target=self._observe_targets, daemon=True,
+                         name="dh-aqara-target-observer").start()
+        threading.Thread(target=self._auto_scan, daemon=True,
+                         name="dh-aqara-auto-scan").start()
+        if self.telemetry_runner is None:
+            LOG.info('DigitalHouses telemetry disabled (consent not enabled); '
+                     'legacy lighting runtime remains active during migration')
+        else:
+            self.telemetry_runner.start()
+        try:
+            self.client.connect(host, port, keepalive=60)
+            self.client.loop_forever(retry_first_connection=True)
+        finally:
+            self._stop.set()
+            web.shutdown()
+            web.server_close()
+            if self.telemetry_runner is not None:
+                self.telemetry_runner.stop()

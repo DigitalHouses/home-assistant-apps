@@ -1,5 +1,63 @@
 # Changelog — DigitalHouses Aqara Switch App
 
+## 0.2.3
+
+- Discover Zigbee2MQTT groups from bridge/groups, exact HA MQTT unique ID and verified member endpoints; support one direct group MQTT command with no HA fallback.
+- Limit configurable brightness/CCT/RGB to the intersection of member light capabilities. Observe group state or derive the initial toggle state from fresh member states; never issue group GET.
+- Group availability and live identity are checked before dispatch. Invalidate stale state/confirmation on membership changes; display a group icon and group-level observed-state confirmation.
+- Existing binding JSON and individual-light transport remain unchanged.
+
+## 0.2.2
+
+- Ingress: export, import and view/copy the app-owned JSON bindings, validated before atomic replacement; no restart.
+- Add toggleable right-half LOG panel, one non-wrapping row per key press, per-target send and observed-state confirmation, HA timezone, and 2-second action highlights.
+- Bounded RAM journal: 500 presses or 24 hours, 90-second confirmation deadline, latest in-flight target only. No persistence, Recorder or additional MQTT writes.
+- Physical Z2M confirmation is a fresh reported state (not physical delivery proof); HA confirmation requires a state change newer than dispatch. Unverified routes, including unsupported direct Z2M groups, remain fail-closed.
+- Existing action routing and Mode Keeper policies unchanged.
+
+## 0.2.1
+
+- Align both Ingress screens with the actual DH Network App 0.1.32 dark-blue visual design (header, typography, buttons, controls and status colors).
+- Retain full-width device rows, horizontal wrapping action summaries and header Scan. Use consistent light-type and relay icons.
+- UI-only release: no changes to binding storage, supported device filtering, action engine, Mode Keeper, MQTT or DH Sync.
+
+## 0.2.0
+
+- Add app-owned Ingress with a full-width device list, actual actions, per-target light/switch assignments, optional brightness, RGB, Kelvin and transition.
+- Start with empty atomic /data/bindings.json; no import of legacy YAML. Configure assignments in Ingress, preserve existing JSON bindings, including orphaned/disabled assignments. Supervisor configuration contains system parameters only.
+- Add startup and scheduled Scan (auto_scan_interval in minutes, default 60; zero disables periodic scan), manual Scan in Ingress, stable hardware keys across rename and read-only diagnostics.
+- Preserve verified direct Z2M light transport, Mode Keeper, grouped light toggles, telemetry and DH Sync retained contract. HA switch targets exclude relays of adopted Aqara inputs. Newly detected devices require explicit enabling before relay control.
+- Adopt the unified App status card with real Refresh and release Check, Supervisor installation/restart; Dashboard only renders application-published data and no longer exposes Scan or binding editing.
+- Live HAOS Ingress and physical E2E tests remain deployment acceptance checks.
+
+## 0.1.19
+
+- Keep Zigbee/MQTT switch control running if an opted-in telemetry state file is malformed or unreadable. Log the error and preserve the original installation credentials instead of silently regenerating identity.
+- Keep the telemetry worker alive on heartbeat state/persistence errors, retaining its existing retry cadence.
+- Handle telemetry deletion persistence failures in its worker without unhandled exceptions.
+- Extend regression tests for telemetry fault isolation while leaving physical relays, DH Sync, consent and server protocol unchanged.
+
+## 0.1.18
+
+- Add explicit opt-in DigitalHouses Stats protocol-v1/policy-v2 telemetry: HTTPS heartbeat on initial activation and approximately daily thereafter, persistent pseudonymous installation identity/token in `/data/telemetry.json`, authenticated history deletion with identity rotation, retry backoff and network-error isolation.
+- Send only product ID, running release version and random UUID. Country is derived by the server, not sent by the App. Never transmit Zigbee inventory, MQTT devices, HA identity, switches, actions, customer data or secrets.
+- Add HAOS `telemetry_enabled: false` consent option with English/Russian disclosure and public policy link. During the safety-gated transition, previously installed Aqara lighting control continues working when consent has not been accepted; no installation identity or outbound telemetry is created until consent is enabled.
+- Admit Aqara product to the DigitalHouses Stats allowlist; the Stats host must deploy the updated registry for ingestion. DH Sync discovery and physical switching remain unchanged.
+- Add tests for consent, persistence, single heartbeat per interval, upgrade version, deletion, invalid stored credentials and MQTT command safety.
+
+## 0.1.17
+
+DH Sync 0.6.0 publication:
+
+- Publish product identity on each MQTT connect/reconnect via the existing
+  client at `DigitalHouses/Global/digitalhouses_aqara_switch_app/sync`,
+  QoS 1, retained, with version from running `APP_VERSION`.
+- Publish the existing standalone operator View at
+  `dashboards/ru/aqara.yaml` (`path: aqara`) for DH Sync discovery.
+- Keep dashboard placement under DH Sync ownership and the opt-in LAB package
+  under `examples/`; no automatic LAB device creation or physical relay change.
+- Add regression tests for MQTT reconnect, payload and canonical View equality.
+
 ### PVE-style four-column dashboard layout (no App version change)
 
 - Ship a separate paste-ready `type: sections` Aqara view with four columns,

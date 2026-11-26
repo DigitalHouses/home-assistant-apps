@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 import subprocess
 from dataclasses import dataclass
 from typing import Callable
@@ -72,6 +73,32 @@ class UpsSnapshot:
     primary_status: str = "unknown"
     battery_charger_status_raw: str | None = None
     battery_charger_status: str = "unknown"
+
+
+def calibration_with_healthy_input(snapshot: UpsSnapshot) -> bool:
+    """CAL alone is not proof of mains availability; fail closed on missing data.
+
+    Use reported nominal voltage or the measured regulated output as a reference.
+    Require normal input frequency and respect reported transfer limits. Raw NUT
+    status and native shutdown handling remain untouched.
+    """
+    tokens = set(snapshot.status_tokens)
+    if not {"OB", "CAL"}.issubset(tokens) or tokens & {"FSD", "OFF", "ALARM", "OVER", "LB"}:
+        return False
+    voltage = snapshot.input_voltage_v
+    frequency = snapshot.input_frequency_hz
+    nominal = snapshot.input_nominal_voltage_v
+    reference = nominal if nominal is not None else snapshot.output_voltage_v
+    if any(v is None or not math.isfinite(v) for v in (voltage, frequency, reference)):
+        return False
+    if not (47 <= frequency <= 53 or 57 <= frequency <= 63):
+        return False
+    if not (90 <= reference <= 264 and 0.9 * reference <= voltage <= 1.1 * reference):
+        return False
+    for bound, is_lower in ((snapshot.input_transfer_low_v, True), (snapshot.input_transfer_high_v, False)):
+        if bound is not None and (not math.isfinite(bound) or (voltage < bound if is_lower else voltage > bound)):
+            return False
+    return True
 
 
 def _optional_text(raw: dict[str, str], *keys: str) -> str | None:
@@ -231,7 +258,7 @@ def ups_metrics(snapshot: UpsSnapshot) -> dict[str, MetricValue]:
     metrics: dict[str, MetricValue] = {
         "available": _metric(True, "discrete"),
         "status": _metric(snapshot.status_raw, "discrete"),
-        "line_power": _metric(snapshot.line_power, "discrete"),
+        "line_power": _metric(snapshot.line_power or calibration_with_healthy_input(snapshot), "discrete"),
         "on_battery": _metric(snapshot.on_battery, "discrete"),
         "low_battery": _metric(snapshot.low_battery, "discrete"),
         "replace_battery": _metric(snapshot.replace_battery, "discrete"),

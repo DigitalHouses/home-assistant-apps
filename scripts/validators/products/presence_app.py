@@ -20,7 +20,7 @@ def validate_presence_network_policy(config: dict, version: str) -> None:
             or config.get("host_dbus") or config.get("host_uts")
             or config.get("map")):
         fail("Presence cannot request host-wide access, unsafe mounts or elevated Supervisor role")
-    if version in ("0.1.11", "0.1.12", "0.1.13", "0.1.14", "0.1.15", "0.1.16", "0.1.17", "0.1.18", "0.1.19", "0.1.20", "0.1.21", "0.1.22", "0.1.23", "0.1.24", "0.1.25", "0.1.26", "0.1.27", "0.1.28", "0.1.29", "0.1.30", "0.1.31", "0.1.32", "0.1.33", "0.1.34", "0.1.35", "0.1.36", "0.1.37", "0.1.38"):
+    if version in ("0.1.11", "0.1.12", "0.1.13", "0.1.14", "0.1.15", "0.1.16", "0.1.17", "0.1.18", "0.1.19", "0.1.20", "0.1.21", "0.1.22", "0.1.23", "0.1.24", "0.1.25", "0.1.26", "0.1.27", "0.1.28", "0.1.29", "0.1.30", "0.1.31", "0.1.32", "0.1.33", "0.1.34", "0.1.35", "0.1.36", "0.1.37", "0.1.38", "0.1.39", "0.1.40", "0.1.41", "0.1.42"):
         if config.get("host_network") is not True or config.get("privileged") != ["NET_RAW"]:
             fail("Presence experimental registration pilot permits only host_network and NET_RAW for one-time ARP")
         if (config.get("ingress") is not True
@@ -43,15 +43,17 @@ def validate_presence(root: Path, app: Path, context: dict) -> None:
         fail("Presence App slug must remain canonical")
     if config.get("stage") != "experimental":
         fail("Presence App must remain experimental until acceptance")
-    if config.get("image"):
-        fail("Pilot uses Supervisor local build; no unpublished GHCR image")
+    if config.get("image") != "ghcr.io/digitalhouses/digitalhouses_presence_app":
+        fail("Presence release requires canonical immutable GHCR image repository")
     if config.get("homeassistant_api") is not True:
         fail("Presence App needs HA Core API")
     if "mqtt:need" not in config.get("services", []):
         fail("Presence App requires MQTT service")
     validate_presence_network_policy(config, version)
     if config.get("options", {}).get("telemetry_enabled") is not False:
-        fail("Pilot does not have telemetry integration")
+        fail("Presence telemetry must require explicit opt-in (default false)")
+    if config.get("schema", {}).get("telemetry_enabled") != "bool":
+        fail("Presence telemetry option must remain boolean")
     if config.get("options", {}).get("residents") != []:
         fail("Pilot must have zero residents until configured locally")
     if config.get("schema", {}).get("residents") != ["str"]:
@@ -60,6 +62,8 @@ def validate_presence(root: Path, app: Path, context: dict) -> None:
     require_files(root, [
         app / "icon.png", app / "logo.png",
         app / "rootfs/app/app.py",
+        app / "rootfs/app/telemetry.py",
+        app / "tests/test_telemetry.py",
         app / "rootfs/app/dh_presence/core.py",
         app / "rootfs/app/dh_presence/discovery.py",
         app / "rootfs/app/dh_presence/storage.py",

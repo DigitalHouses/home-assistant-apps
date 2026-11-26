@@ -155,7 +155,7 @@ def test_v5_reconciliation_preserves_v4_shutdown_scope_fix(tmp_path):
 
     previous = tracker.startup()["previous_shutdown"]
 
-    assert previous["history_parser_version"] == 5
+    assert previous["history_parser_version"] == HISTORY_PARSER_VERSION
     assert previous["shutdown_class"] == "ups_power"
     assert previous["shutdown_reason"] == "on_battery_fsd"
     assert previous["shutdown_clean"] is False
@@ -189,3 +189,72 @@ def test_manual_pct_shutdown_task_upid_records_duration_from_real_pve_journal():
     assert item["timeout_seconds"] is None
     assert item["result"] == "clean"
     assert item["forced"] is False
+from app.shutdown_history import HISTORY_PARSER_VERSION
+
+
+def _core_reboot_journal_with_old_manual_tasks() -> str:
+    return """\
+2026-11-03T05:10:00+05:00 pve pvedaemon[1]: starting task UPID:pve:1:2:3:4:qmshutdown:2232:root@pam:
+2026-11-03T05:10:11+05:00 pve pvedaemon[1]: end task UPID:pve:1:2:3:4:qmshutdown:2232:root@pam: OK
+2026-11-23T01:10:00+05:00 pve qm[1]: starting task UPID:pve:1:2:3:4:qmshutdown:2250:root@pam:
+2026-11-23T01:10:15+05:00 pve qm[1]: end task UPID:pve:1:2:3:4:qmshutdown:2250:root@pam: OK
+2026-11-24T21:25:15+05:00 pve systemd-logind[1148]: The system will reboot now!
+2026-11-24T21:25:15+05:00 pve systemd-logind[1148]: System is rebooting.
+2026-11-24T21:25:16+05:00 pve systemd[1]: Stopping pve-guests.service - PVE guests...
+2026-11-24T21:25:17+05:00 pve pvesh[1573460]: Stopping VM 2242 (timeout = 150 seconds)
+2026-11-24T21:26:03+05:00 pve pve-guests[1573461]: end task UPID:pve:1:2:3:4:qmshutdown:2242:root@pam:
+2026-11-24T21:26:04+05:00 pve pvesh[1573460]: Stopping CT 1254 (timeout = 20 seconds)
+2026-11-24T21:26:08+05:00 pve pve-guests[1573461]: end task UPID:pve:1:2:3:4:vzshutdown:1254:root@pam:
+2026-11-24T21:26:15+05:00 pve pve-guests[1573461]: all VMs and CTs stopped
+2026-11-24T21:26:30+05:00 pve systemd[1]: Reached target shutdown.target - System Shutdown.
+"""
+
+
+def test_reboot_scope_excludes_manual_vm_shutdowns_from_previous_21_days():
+    parsed = parse_guest_shutdown_journal(_core_reboot_journal_with_old_manual_tasks())
+    assert set(parsed["guests"]["vm"]) == {"2242"}
+    assert set(parsed["guests"]["lxc"]) == {"1254"}
+    assert parsed["guest_shutdown_total_seconds"] == 58
+    assert parsed["guests"]["vm"]["2242"]["duration_seconds"] == 46
+    assert parsed["guests"]["lxc"]["1254"]["duration_seconds"] == 4
+    assert parsed["clean_shutdown"] is True
+
+
+def test_v6_reconciles_previous_v5_oversized_actual_shutdown_after_agent_update(tmp_path):
+    store = StateStore(tmp_path / "shutdown_history.json")
+    old_record = {
+        "history_parser_version": 5,
+        "boot_id": "core-old-boot",
+        "boot_at": "2026-11-03T03:32:08+05:00",
+        "shutdown_at": "2026-11-24T21:26:30+05:00",
+        "shutdown_class": "normal",
+        "shutdown_reason": "shutdown",
+        "shutdown_clean": True,
+        "actual_shutdown_seconds": 1873030,
+        "guest_shutdown_total_seconds": 1873015,
+        "planned_shutdown_seconds": 395,
+        "guests": {"vm": {"2232": {"duration_seconds": 11}}, "lxc": {}},
+    }
+    store.save({
+        "current_boot": {"boot_id": "core-current", "boot_at": "2026-11-24T21:27:31+05:00"},
+        "previous_shutdown": old_record,
+        "history": [old_record],
+    })
+    tracker = ShutdownHistoryTracker(
+        state_store=store,
+        boot_id_reader=lambda: "core-current",
+        boot_time_reader=lambda: "2026-11-24T21:27:31+05:00",
+        previous_boot_journal_reader=_core_reboot_journal_with_old_manual_tasks,
+    )
+    payload = tracker.startup()
+    previous = payload["previous_shutdown"]
+    assert previous["history_parser_version"] == HISTORY_PARSER_VERSION
+    assert previous["actual_guest_shutdown_seconds"] == 58
+    assert previous["actual_shutdown_seconds"] == 73
+    assert previous["planned_shutdown_seconds"] == 395
+    assert set(previous["guests"]["vm"]) == {"2242"}
+    assert set(previous["guests"]["lxc"]) == {"1254"}
+    assert len(payload["history"]) == 1
+    assert payload["history"][-1]["actual_shutdown_seconds"] == 73
+    # Idempotency: the updated parser does not append the same boot twice.
+    assert len(tracker.startup()["history"]) == 1

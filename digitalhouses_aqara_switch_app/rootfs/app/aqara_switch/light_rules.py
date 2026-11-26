@@ -71,6 +71,30 @@ def parse_rule(value: object) -> dict:
        {service, targets: [{light.a: {brightness_pct: 70}}, light.b]}
        gives each light independent attributes, without global inheritance.
     """
+    if isinstance(value, Mapping) and set(value) == {"assignments"}:
+        entries = value["assignments"]
+        if not isinstance(entries, list) or not 1 <= len(entries) <= 16:
+            raise CatalogError("Each action needs 1..16 targets")
+        targets, operations, attributes = [], {}, {}
+        for entry in entries:
+            if not isinstance(entry, Mapping) or set(entry) - {"entity_id", "operation", "data"}:
+                raise CatalogError("Invalid target assignment")
+            eid, operation = entry.get("entity_id"), entry.get("operation")
+            if not isinstance(eid, str) or not re.fullmatch(r"(light|switch)\.[a-z0-9_]+", eid):
+                raise CatalogError("Expected light.* or switch.*")
+            if eid in targets or operation not in ("toggle", "on", "off"):
+                raise CatalogError("Invalid or duplicate target operation")
+            data = entry.get("data", {})
+            if eid.startswith("light."):
+                data = validate_data({"toggle":"light.toggle","on":"light.turn_on",
+                                      "off":"light.turn_off"}[operation], data)
+            elif not isinstance(data, Mapping) or data:
+                raise CatalogError("Switch target cannot have light parameters")
+            targets.append(eid)
+            operations[eid] = operation
+            attributes[eid] = dict(data)
+        return {"action": "mixed", "targets": targets, "data": {},
+                "target_data": attributes, "target_operations": operations}
     if isinstance(value, list):
         entries, service, data = value, "light.toggle", {}
     elif isinstance(value, Mapping):

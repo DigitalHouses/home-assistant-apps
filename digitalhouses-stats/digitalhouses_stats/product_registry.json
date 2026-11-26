@@ -15,6 +15,19 @@
       "repository_directory": "digitalhouses_pve_agent"
     },
     {
+      "id": "digitalhouses_pbs_agent",
+      "type": "agent",
+      "entity_prefix": "dh_pbs_agent",
+      "display_name": "PBS Agent",
+      "telemetry_allowed": true,
+      "release": {
+        "title": "DigitalHouses PBS Agent",
+        "version_source": "version_file",
+        "policy_baseline": "0.0.0"
+      },
+      "repository_directory": "digitalhouses_pbs_agent"
+    },
+    {
       "id": "digitalhouses_plex_agent",
       "type": "agent",
       "entity_prefix": "dh_plex_agent",
@@ -108,8 +121,12 @@
       "type": "app",
       "entity_prefix": "dh_presence_app",
       "display_name": "Presence App",
-      "telemetry_allowed": false,
-      "release": null,
+      "telemetry_allowed": true,
+      "release": {
+        "title": "DigitalHouses Presence App",
+        "version_source": "haos_config",
+        "policy_baseline": "0.1.38"
+      },
       "repository_directory": "digitalhouses_presence_app",
       "haos_slug": "digitalhouses_presence_app"
     },
@@ -132,7 +149,7 @@
       "type": "app",
       "entity_prefix": "dh_aqara_switch_app",
       "display_name": "Aqara Switch App",
-      "telemetry_allowed": false,
+      "telemetry_allowed": true,
       "release": {
         "title": "DigitalHouses Aqara Switch App",
         "version_source": "haos_config",
@@ -146,7 +163,7 @@
       "type": "app",
       "entity_prefix": "dh_network_app",
       "display_name": "Network App",
-      "telemetry_allowed": false,
+      "telemetry_allowed": true,
       "release": null,
       "repository_directory": "digitalhouses_network_app",
       "haos_slug": "digitalhouses_network_app"
@@ -156,7 +173,7 @@
       "type": "app",
       "entity_prefix": "dh_sync_app",
       "display_name": "Sync App",
-      "telemetry_allowed": false,
+      "telemetry_allowed": true,
       "release": {
         "title": "DigitalHouses Sync App",
         "version_source": "haos_config",
@@ -164,6 +181,20 @@
       },
       "repository_directory": "digitalhouses_sync_app",
       "haos_slug": "digitalhouses_sync_app"
+    },
+    {
+      "id": "digitalhouses_system_globals_app",
+      "type": "app",
+      "entity_prefix": "dh_system_globals_app",
+      "display_name": "System Globals App",
+      "telemetry_allowed": true,
+      "release": {
+        "title": "DigitalHouses System Globals App",
+        "version_source": "haos_config",
+        "policy_baseline": "0.0.0"
+      },
+      "repository_directory": "digitalhouses_system_globals_app",
+      "haos_slug": "digitalhouses_system_globals_app"
     }
   ]
 }

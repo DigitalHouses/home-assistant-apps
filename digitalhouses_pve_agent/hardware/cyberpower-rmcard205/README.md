@@ -3,6 +3,14 @@
 Field-tested setup: 2026-10-03, Proxmox VE 8.x / Debian 12, CyberPower PR3000ELCDSL with RMCARD205.
 **Scope: host NUT and UPS management card only. The DigitalHouses PVE Agent is unchanged.**
 
+## Known model-specific field issues (2026-11-25)
+
+- **Model:** CyberPower PR3000ELCDSL, USB VID:PID `0764:0601`, management card RMCARD205.
+- **USB:** the site operator reports unreliable operation over USB (`usbhid-ups`). Prefer the field-tested SNMP transport described below for this particular installation. The precise USB failure mode and firmware dependency have not been independently established; this is not a blanket recommendation against USB on other CyberPower models.
+- **Deep battery test:** a test launched from Home Assistant on 2026-11-25 produced NUT status `OB CAL DISCHRG` (NUT 2.8.5, `snmp-ups`, CyberPower MIB 0.56). At 19:47:24 local time the Agent 0.5.99 committed `runtime_guard` FSD at 47% charge, 900 s runtime and 12% load. The host shut down after 204 s. A second boot during calibration committed `charge_guard` FSD at 2% charge and 60 s runtime. The driver reported success for `shutdown.return` on both occasions.
+- **Interpretation:** this model reports battery operation during calibration; `OB` alone does not establish a utility outage. Agent versions 0.5.99 and 0.5.103 evaluated software shutdown guards without considering `CAL`. The observed behavior is a model-specific compatibility issue and exposes a generic Agent logic defect. A manufacturer firmware bug, or actual mains voltage during the incident, has not been independently verified.
+- **Safety:** keep native NUT shutdown protection active. Do not suppress FSD solely because `CAL` is present. Any calibration-aware software exception must require credible contemporaneous input-power evidence and preserve protection on missing/abnormal readings or critical flags. Physical acceptance of input telemetry during calibration and real mains loss remains outstanding. Do not repeat a deep test on a production load merely to verify the issue.
+
 ## Architecture
 
 ```text

@@ -2,12 +2,14 @@
 from __future__ import annotations
 
 import html
+import json
 import hmac
 import secrets
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlsplit, parse_qs, quote
 
 from discovery_contract import ProductSources
+from journal_web import section as journal_section, filters as journal_filters
 
 STYLE = """body{background:#121619;color:#e5e9eb;font:15px system-ui,sans-serif;
 margin:0;line-height:1.5}a{color:#8dcaf1}header{padding:22px;border-bottom:1px solid #343d43}
@@ -36,8 +38,8 @@ form.sync-now{margin:14px 0}
 def _h(value: object) -> str:
     return html.escape(str(value), quote=True)
 
-def make_server(sources: ProductSources, inventory=None, *, version: str = 'development', port: int = 8099, inspect=None, audit=None, apply_manager=None, auto_status=None, auto_sync=None):
-    sync_token = secrets.token_urlsafe(24) if auto_sync is not None else None
+def make_server(sources: ProductSources, inventory=None, *, version: str = 'development', port: int = 8099, inspect=None, audit=None, apply_manager=None, auto_status=None, auto_sync=None, journal=None):
+    sync_token = secrets.token_urlsafe(24) if auto_sync is not None or journal is not None else None
 
     class Handler(BaseHTTPRequestHandler):
         server_version = "DHSync/" + version
@@ -158,6 +160,27 @@ def make_server(sources: ProductSources, inventory=None, *, version: str = 'deve
                 self._send(404, "<html><body>Not found</body></html>")
                 return
             params = parse_qs(urlsplit(self.path).query)
+            journal_allowed = (self.client_address[0] == "172.30.32.2"
+                               or (port == 0 and self.client_address[0] == "127.0.0.1"))
+            if journal is not None and params.get("journal_export") == ["1"]:
+                if not journal_allowed:
+                    self._action_shell("Access denied", "Supervisor Ingress required", 403)
+                    return
+                try:
+                    body = ("".join(json.dumps(row, ensure_ascii=False) + "\n"
+                                    for row in journal.rows(*journal_filters(params), all_rows=True))).encode("utf-8")
+                except Exception:
+                    self._action_shell("Журнал недоступен", "SQLite error", 503)
+                    return
+                self.send_response(200)
+                self.send_header("Content-Type", "application/x-ndjson; charset=utf-8")
+                self.send_header("Content-Disposition", 'attachment; filename="dh-sync-events.jsonl"')
+                self.send_header("Content-Length", str(len(body)))
+                self.send_header("Cache-Control", "no-store")
+                self.send_header("X-Content-Type-Options", "nosniff")
+                self.end_headers()
+                self.wfile.write(body)
+                return
             if "plan" in params:
                 identity = params["plan"][0][:200]
                 self._plan_page(identity)
@@ -261,7 +284,9 @@ def make_server(sources: ProductSources, inventory=None, *, version: str = 'deve
                     "<table><thead><tr>"
                     "<th>Продукт / Instance</th><th>Версия</th>"
                     "<th>Источник</th></tr></thead><tbody>" +
-                    rows + "</tbody></table></section>" + summary + "</main></body></html>"
+                    rows + "</tbody></table></section>" + summary +
+                    (journal_section(journal, sync_token, params) if journal is not None and journal_allowed else "") +
+                    "</main></body></html>"
                 )
                 self._send(200, page)
                 return
@@ -421,7 +446,7 @@ def make_server(sources: ProductSources, inventory=None, *, version: str = 'deve
 
         def do_POST(self) -> None:
             # All changes are accessible only through Supervisor admin Ingress.
-            if apply_manager is None and auto_sync is None:
+            if apply_manager is None and auto_sync is None and journal is None:
                 self._send(405, "<html><body>Read-only catalog</body></html>")
                 return
             allowed = (self.client_address[0] == "172.30.32.2"
@@ -447,6 +472,20 @@ def make_server(sources: ProductSources, inventory=None, *, version: str = 'deve
                 )
                 if len(token) > 80:
                     raise ValueError("invalid request")
+                if op in ("journal_clear", "journal_settings") and journal is not None:
+                    if not hmac.compare_digest(token, sync_token):
+                        raise ValueError("invalid request token")
+                    if op == "journal_clear":
+                        if confirm != "YES":
+                            raise ValueError("Confirmation required")
+                        journal.clear()
+                    else:
+                        journal.configure(*(int(fields[key][0]) for key in ("days", "max_rows", "visible")))
+                    self.send_response(303)
+                    self.send_header("Location", "./#journal")
+                    self.send_header("Content-Length", "0")
+                    self.end_headers()
+                    return
                 if op == "sync" and auto_sync is not None:
                     if not hmac.compare_digest(token, sync_token):
                         raise ValueError("invalid request token")

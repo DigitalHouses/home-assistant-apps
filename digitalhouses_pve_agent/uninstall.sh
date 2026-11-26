@@ -30,6 +30,13 @@ if [[ "${EUID}" -ne 0 ]]; then
     exit 1
 fi
 
+for stage in install driver server primary monitor activate; do
+    if systemctl is-active --quiet "digitalhouses_pve_agent-ups-setup@${stage}.service"; then
+        echo "UPS/NUT setup in progress; agent installation/removal denied." >&2
+        exit 1
+    fi
+done
+
 if ! command -v pveversion >/dev/null 2>&1 || [[ ! -d /etc/pve ]]; then
     echo "Ошибка: этот uninstall предназначен для Proxmox VE."
     exit 1
@@ -98,6 +105,7 @@ else
     systemctl disable "${SERVICE_NAME}" >/dev/null 2>&1 || true
 fi
 
+rm -f -- /etc/systemd/system/digitalhouses_pve_agent-ups-setup@.service
 rm -f -- /etc/systemd/system/digitalhouses_pve_agent-update.service
 rm -f -- /etc/systemd/system/digitalhouses_pve_agent-update-recover.service
 rm -f -- /usr/local/libexec/digitalhouses-pve-agent-update-runner

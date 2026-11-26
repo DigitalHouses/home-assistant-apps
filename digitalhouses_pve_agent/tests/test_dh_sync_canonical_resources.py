@@ -1,4 +1,4 @@
-"""Guard DH Sync PVE/UPS canonical views against CORE v3 dashboard regressions."""
+"""Guard DH Sync PVE/UPS canonical views against approved dashboard regressions."""
 from __future__ import annotations
 
 import hashlib
@@ -11,14 +11,14 @@ DASHBOARDS = PRODUCT / "dashboards" / "ru"
 HEADERS = {
     "10_pve_proxmox.yaml": (
         "# DH-View: dh_pve_agent\n"
-        "# DH-View-Version: 1.1.0\n"
-        "# DH-View-Date: 2026-11-18\n"
+        "# DH-View-Version: 1.0.2\n"
+        "# DH-View-Date: 2026-11-22\n"
         "\n"
     ),
     "11_pve_ups.yaml": (
         "# DH-View: dh_pve_agent\n"
-        "# DH-View-Version: 1.0.0\n"
-        "# DH-View-Date: 2026-11-14\n"
+        "# DH-View-Version: 1.0.1\n"
+        "# DH-View-Date: 2026-11-24\n"
         "\n"
     ),
 }
@@ -47,14 +47,14 @@ BASELINES = {
         "path": "dh_pve_agent_ups",
         "title": "Электропитание",
         "icon": "mdi:power-plug-battery",
-        "sha256": "5aef50ab9e4d5db307e1c66a2924a20f38638a77ebd70d06311aa697fd082f96",
+        "sha256": "bab67c7fd21b2b490c3f3476020d3345598e40458cdbd8e363ca38a3545e7279",
     },
 }
 
 
 class DhSyncCanonicalPveResourcesTests(unittest.TestCase):
     def test_only_approved_core_v3_body_changes(self):
-        """Reverse approved nav changes and compare with actual read-only CORE snapshots."""
+        """Protect accepted PVE v3 and approved UPS v1.0.1 body from regressions."""
         for filename, expected in BASELINES.items():
             with self.subTest(filename=filename):
                 resource = (DASHBOARDS / filename).read_text(encoding="utf-8")
@@ -62,19 +62,14 @@ class DhSyncCanonicalPveResourcesTests(unittest.TestCase):
                 self.assertTrue(resource.startswith(header))
                 body = resource[len(header):]
                 if filename == "10_pve_proxmox.yaml":
-                    # Keep the original CORE v3 view body immutable, while
-                    # allowing this product-owned additive Backup Jobs section.
-                    backup_marker = (
-                        "  - type: grid\n"
-                        "    cards:\n"
-                        "      - type: heading\n"
-                        "        heading: Резервное копирование PVE\n"
-                    )
-                    self.assertEqual(body.count(backup_marker), 1)
-                    original, extension = body.split(backup_marker, 1)
-                    self.assertIn("sensor.dh_pve_agent_backup_monitor", extension)
-                    self.assertTrue(extension.endswith("cards: []\nbadges: []\n"))
-                    body = original + "cards: []\nbadges: []\n"
+                    # Undo the approved additive backup history card before
+                    # comparing the previously accepted CORE v3 dashboard.
+                    start = body.index("      - type: heading\n        heading: Резервное копирование PVE\n")
+                    end = body.index("      - type: markdown\n        title: PVE · События памяти", start)
+                    backup_fragment = body[start:end]
+                    self.assertIn("number.dh_pve_agent_backup_history_limit", backup_fragment)
+                    self.assertIn("<details", backup_fragment)
+                    body = body[:start] + body[end:]
                     # Preserve the exact v3 CORE baseline except for the
                     # intentional, narrowly scoped Diagnostics UI update.
                     self.assertEqual(body.count("        heading: Диагностика\n"), 1)

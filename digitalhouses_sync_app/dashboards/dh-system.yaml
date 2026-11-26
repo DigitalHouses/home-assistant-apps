@@ -15,6 +15,18 @@ views:
     icon: mdi:power-plug-battery
     show_icon_and_title: false
 
+  - product: digitalhouses_pbs_agent
+    path: dh_pbs_agent
+    title: PBS
+    icon: mdi:backup-restore
+    show_icon_and_title: true
+
+  - product: digitalhouses_backblaze_app
+    path: backblaze
+    title: Backblaze
+    icon: mdi:cloud-outline
+    show_icon_and_title: true
+
   - product: digitalhouses_plex_agent
     path: dh-plex-agent
     title: Plex
@@ -31,4 +43,16 @@ views:
     path: internet
     title: Internet
     icon: mdi:web
+    show_icon_and_title: true
+
+  - product: digitalhouses_aqara_switch_app
+    path: aqara
+    title: Aqara
+    icon: mdi:light-switch
+    show_icon_and_title: true
+
+  - product: digitalhouses_system_globals_app
+    path: system-globals
+    title: System Globals
+    icon: mdi:state-machine
     show_icon_and_title: true

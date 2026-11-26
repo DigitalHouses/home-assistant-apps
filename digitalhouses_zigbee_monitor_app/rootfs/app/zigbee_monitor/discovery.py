@@ -11,6 +11,7 @@ from .core import Network
 from .problems import PROBLEM_TYPES
 
 PRODUCT = "digitalhouses_zigbee_monitor_app"
+SYNC_TOPIC = f"DigitalHouses/Global/{PRODUCT}/sync"
 PREFIX = "dh_zigbee_monitor_app"
 ROOT = "DigitalHouses/Global/dh_zigbee_monitor_app"
 DISCOVERY = f"homeassistant/device/{PREFIX}/config"

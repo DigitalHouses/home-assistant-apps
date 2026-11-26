@@ -55,6 +55,13 @@ if [[ "${EUID}" -ne 0 ]]; then
     exit 1
 fi
 
+for stage in install driver server primary monitor activate; do
+    if systemctl is-active --quiet "digitalhouses_pve_agent-ups-setup@${stage}.service"; then
+        echo "UPS/NUT setup in progress; agent installation/removal denied." >&2
+        exit 1
+    fi
+done
+
 if ! command -v pveversion >/dev/null 2>&1 || [[ ! -d /etc/pve ]]; then
     echo "Ошибка: этот установщик предназначен для Proxmox VE."
     exit 1
@@ -348,6 +355,9 @@ install -o root -g root -m 0644 \
 install -o root -g root -m 0644 \
     "${APP_DIR}/systemd/${SERVICE_NAME}" \
     "${UNIT_FILE}"
+install -o root -g root -m 0644 \
+    "${APP_DIR}/systemd/digitalhouses_pve_agent-ups-setup@.service" \
+    /etc/systemd/system/digitalhouses_pve_agent-ups-setup@.service
 
 # Exact K15 model only: load the read-only Linux EC observer after each boot.
 # Never enable write_support, write to EC registers or alter BIOS fan control.

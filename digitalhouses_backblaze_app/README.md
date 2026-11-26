@@ -6,7 +6,7 @@ The App authorizes against the Backblaze B2 Native API v4, discovers all buckets
 
 ## Status
 
-Version 0.1.15 is the current stable production release.
+Version 0.1.16 is the current stable production release.
 
 ## Backblaze key
 
@@ -38,11 +38,13 @@ Every discovered bucket also gets used, files, and versions sensors under the sa
 
 ## Home Assistant package
 
-Reusable Recorder package:
+Canonical Recorder package (installed automatically by DH Sync):
 
 ```text
-examples/packages/dh_app_backblaze_package.yaml
+packages/common/dh_app_backblaze_package.yaml
 ```
+
+The previous `examples/packages/` copy remains as a reference for manual installations.
 
 Recommended Home Assistant target:
 
@@ -59,11 +61,13 @@ Bucket-level entities remain live but are not recorded by the reusable package.
 
 ## Dashboard
 
-Reusable Sections dashboard:
+Canonical standalone Sections View (published automatically by DH Sync when referenced by a panel):
 
 ```text
-examples/lovelace/dh_app_backblaze_dashboard.yaml
+dashboards/ru/backblaze.yaml
 ```
+
+The earlier `examples/lovelace/` file remains available as a reference.
 
 The dashboard contains account totals, a first-level bucket/folder storage tree, dynamic bucket cards, diagnostics, manual refresh, and a 30-day daily bar chart for Total used.
 
@@ -81,6 +85,27 @@ stat_types:
 ```
 
 Recorder history from `dh_app_backblaze_package.yaml` is required for the chart. On a new installation the chart fills naturally as statistics accumulate.
+
+## DH Sync 0.6.0
+
+On every successful MQTT connect/reconnect, the App publishes a retained QoS 1
+announcement to `DigitalHouses/Global/digitalhouses_backblaze_app/sync` via
+its existing MQTT client. The six fields identify the running App and its
+GitHub resource location (`schema`, `product_id`, `type`, `version`,
+`repository`, `product_path`). The App does not choose or create a panel.
+
+DH Sync discovers the product from this MQTT topic and synchronizes the
+canonical View and Recorder Package from the repository's main branch.
+Panel placement, display name and tab order belong exclusively to
+`digitalhouses_sync_app/dashboards/*.yaml`. No new MQTT client, timer,
+availability gate, credentials or secrets are introduced. The old
+`DigitalHouses/Global/backblaze` topics and Home Assistant entity identities
+remain unchanged.
+
+The View requires the existing Mushroom, auto-entities and card-mod frontend
+custom cards. DH Sync distributes YAML, not these HACS dependencies. Recorder
+configuration changes may require a normal Home Assistant restart before the
+long-term statistics chart is populated.
 
 ## Refresh model
 

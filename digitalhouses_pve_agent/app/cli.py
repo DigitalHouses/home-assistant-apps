@@ -45,7 +45,6 @@ for _section, _fields in {
     'ups': ('enabled', 'name', 'host', 'port', 'command_timeout_seconds', 'command_username', 'command_password'),
     'events': ('pve_problem_debounce_seconds',),
     'telemetry': ('enabled',),
-    'backup': ('excluded_vmids', 'missed_grace_seconds'),
 }.items():
     for _field in _fields:
         _target = (_section, _field)

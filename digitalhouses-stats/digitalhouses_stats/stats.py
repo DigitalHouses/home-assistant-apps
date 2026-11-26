@@ -172,20 +172,27 @@ def countries(
                     installation_id,
                     received_at DESC,
                     id DESC
+            ),
+            first_seen AS (
+                SELECT country, min(received_at) AS first_seen
+                FROM heartbeats
+                GROUP BY country
             )
             SELECT
-                country,
-                product,
+                l.country,
+                l.product,
+                f.first_seen,
                 count(*) AS observed_installations,
                 count(*) FILTER (
-                    WHERE received_at >= now() - interval '7 days'
+                    WHERE l.received_at >= now() - interval '7 days'
                 ) AS active_7d,
                 count(*) FILTER (
-                    WHERE received_at >= now() - interval '30 days'
+                    WHERE l.received_at >= now() - interval '30 days'
                 ) AS active_30d
-            FROM latest
-            GROUP BY country, product
-            ORDER BY country, observed_installations DESC, product
+            FROM latest AS l
+            JOIN first_seen AS f ON f.country = l.country
+            GROUP BY l.country, l.product, f.first_seen
+            ORDER BY l.country, observed_installations DESC, l.product
             """
         ),
         {"product": product},
@@ -198,6 +205,7 @@ def countries(
             country,
             {
                 "country": country,
+                "first_seen": row["first_seen"].isoformat(),
                 "observed_installations": 0,
                 "active_7d": 0,
                 "active_30d": 0,
@@ -269,3 +277,58 @@ def history(
         row["active_installations"] = int(row["active_installations"])
         row["heartbeats"] = int(row["heartbeats"])
     return rows
+
+
+def installation_history(db: Session, *, days: int = 7) -> list[dict[str, object]]:
+    """Total registered vs. active in the preceding 7 days, as of each UTC day.
+
+    A row represents the end of a UTC day. Today ends at the current instant,
+    not an assumed future midnight. Only currently retained registrations can
+    be reconstructed: explicitly deleted installations have been removed.
+    """
+    result = db.execute(
+        text(
+            """
+            WITH days AS (
+                SELECT generate_series(
+                    (now() AT TIME ZONE 'UTC')::date - (:days - 1),
+                    (now() AT TIME ZONE 'UTC')::date,
+                    interval '1 day'
+                )::date AS day
+            ),
+            cutoffs AS (
+                SELECT
+                    day,
+                    least(
+                        (day + interval '1 day') AT TIME ZONE 'UTC',
+                        now()
+                    ) AS cutoff
+                FROM days
+            )
+            SELECT
+                c.day,
+                (
+                    SELECT count(*)
+                    FROM installations i
+                    WHERE i.created_at < c.cutoff
+                ) AS total_installations,
+                (
+                    SELECT count(DISTINCT (h.product, h.installation_id))
+                    FROM heartbeats h
+                    WHERE h.received_at >= c.cutoff - interval '7 days'
+                      AND h.received_at < c.cutoff
+                ) AS active_installations
+            FROM cutoffs c
+            ORDER BY c.day
+            """
+        ),
+        {"days": days},
+    )
+    return [
+        {
+            "day": row["day"].isoformat(),
+            "total_installations": int(row["total_installations"]),
+            "active_installations": int(row["active_installations"]),
+        }
+        for row in _rows(result)
+    ]

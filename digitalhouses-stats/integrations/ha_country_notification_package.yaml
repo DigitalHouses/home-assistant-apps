@@ -1,0 +1,24 @@
+# CORE HA (192.168.11.242). Requires the existing DH Telegram dispatcher.
+# Its client route targets notify.dh_core_group and keeps messages in the
+# retained MQTT queue until Telegram delivery.
+dh_stats_country_notification_package:
+  automation:
+    - id: dh_stats_new_country_notification
+      alias: "DigitalHouses Stats · New country"
+      mode: queued
+      triggers:
+        - trigger: mqtt
+          topic: DigitalHouses/Global/digitalhouses_stats/event/new_country
+          value_template: "{{ value_json.event_type }}"
+          payload: new_country
+      actions:
+        - action: script.dh_tg_enqueue
+          data:
+            route: client
+            title: "🌍 DigitalHouses — новая страна"
+            message: |-
+              {{ trigger.payload_json.country_name }} ({{ trigger.payload_json.country }})
+              Всего стран: {{ trigger.payload_json.country_count }}
+              Первое появление: {{ as_timestamp(trigger.payload_json.first_seen) | timestamp_custom('%d.%m.%Y %H:%M', true) }} (Алматы)
+            source: digitalhouses_stats
+            severity: info

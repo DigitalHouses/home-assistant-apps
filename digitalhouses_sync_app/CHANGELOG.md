@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.6.5
+
+- Persistent local SQLite operational journal in admin Ingress with product/event filters, JSONL export and explicit clear.
+- Configurable retention (30 days / 10,000 rows / 100 displayed by default), enforced on write/read and at startup; no external database.
+- Logs lifecycle, MQTT registry changes, sync runs, package transactions, panel/view updates and errors without changing sync eligibility or HA restart policy.
+
+## 0.6.4
+
+- Emergency rollback of the unauthorized cross-project changes introduced in v0.6.3 (PR #608).
+- Restores the exact DH Sync v0.6.2 runtime, automatic YAML synchronization and reload-only behavior.
+- No Recorder Core restart feature, no new permissions, no change to PBS Agent, dashboards or backup jobs.
+- New release number is required because a previous immutable v0.6.2 tag already exists; v0.6.4 is the deployable rollback.
+
+## 0.6.2
+
+- Implement DH Sync telemetry using shared protocol v1 / policy v2 with explicit HA App consent.
+- Add persistent per-installation UUIDv4 and 256-bit token in `/data`, 24-hour jittered reporting and one-hour failure backoff.
+- Include authenticated installation/history erasure and local credential rotation; isolate telemetry network errors from dashboard synchronization.
+- Register only DH Sync's product identifier in the shared Stats allowlist and update DH Sync validation; no changes to other product runtime.
+- **Activation required:** `telemetry_enabled` defaults false. After upgrading, explicit acceptance (`true`) is required before the App starts; operators must plan this for auto-updated installations. Legal/privacy assessment of mandatory public deployment remains a separate obligation.
+
+
 ## 0.6.1
 
 - Restore the agreed **«Проверить и обновить»** button in DH Sync admin Ingress.

@@ -1,71 +1,17 @@
 # DigitalHouses PVE Agent
 
+
 [![CI](https://github.com/DigitalHouses/home-assistant-apps/actions/workflows/validate.yml/badge.svg)](https://github.com/DigitalHouses/home-assistant-apps/actions/workflows/validate.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](../LICENSE)
 ![Type: Linux agent](https://img.shields.io/badge/type-Linux%20agent-555555.svg)
 
+**Shared Linux Agent operational UX:** PVE Agent is the canonical reference
+for applicable CLI command text, `status` output, update/restart/version
+feedback and the Home Assistant status/control card. The normative contract
+is in [Linux Agent Management Standard](../docs/standards/DH_LINUX_AGENT_MANAGEMENT_STANDARD.md)
+and [Unified Product Status Card Standard](../docs/standards/UNIFIED_PRODUCT_STATUS_CARD_STANDARD.md).
+
 Native Linux agent for **Proxmox VE 8.x** (previously verified) and **9.x** (requires live acceptance) that publishes host, CPU, memory, storage, disk/SMART, GPU, fan, VM/LXC and optional NUT/UPS observability to Home Assistant through MQTT Discovery.
-
-## HOME PVE Backup Jobs observability (development branch)
-
-The existing PVE Agent now contains a **read-only backup monitoring module**.
-The module runs on PVE itself: no PVE API token, SSH, PBS API, sidecar or
-additional service is needed. It reads official PVE data with `pvesh get`,
-the local scheduler jobstate and the task UPID/log, without changing jobs.
-
-* Discovers local VM/CT inventory and enabled/disabled backup jobs.
-* Resolves job selection (`all`, explicit `vmid`, resource pool, `exclude`).
-* Shows each guest as `COVERED`, `UNCOVERED`, `EXCLUDED` or `UNKNOWN`.
-* Provides per-job outcomes, UPID, timestamps, and participant outcomes.
-  `UNKNOWN` means a backup could not be confirmed; a successful task
-  is never taken as proof of success for an individual guest.
-* Detects missed schedules when reliable PVE `next-run` information and an
-  earlier monitoring baseline exist. Never invents missed runs at first start.
-* Publishes a retained MQTT state plus seven non-retained QoS1 machine events,
-  rendered in Russian by the *existing* Notification Package.
-* Reuses the existing canonical Proxmox View with an added backup section.
-
-MQTT state and event topics for each PVE instance:
-
-```text
-DigitalHouses/Global/digitalhouses_pve_agent/<instance>/backup/state
-DigitalHouses/Global/digitalhouses_pve_agent/<instance>/backup/event
-```
-
-Single HA sensor: `sensor.dh_pve_agent_backup_monitor`.
-Single HA event: `event.dh_pve_agent_backup`. No entity per VM/CT.
-
-### Exclusions and missing-run policy
-
-PVE job `exclude` entries are automatically recognized as deliberate
-exclusions. To explicitly omit additional guests which do not belong to
-any job (for example, a MediaServer/PBS VM), set their VMIDs in the
-agent's existing native INI using the existing safe CLI:
-
-```bash
-dh-pve-agent set backup_excluded_vmids=2223
-dh-pve-agent set backup_missed_grace_seconds=900
-```
-
-The VMID above is only an **example** for the serzhan HOME pilot; it is
-not a product default. With an empty exclusion list, every guest
-outside an enabled job is reported uncovered. The two keys map to
-`[backup] excluded_vmids` and `[backup] missed_grace_seconds`.
-
-If a task log does not prove an individual participant's result, the
-participant is reported `UNKNOWN`, not `OK` or `MISSING`.
-Task failure can still be reported from the official task exit status.
-All scans are asynchronous to the existing UPS safety loop, with a
-5-minute scan interval and no polling loop or new process.
-
-**DH Sync 0.6.0:** the existing retained `/sync` declaration is already
-compliant: the declaration identifies the product and GitHub source
-only. This feature does not modify any DH Sync panels or other products.
-Its canonical view keeps stable `path: dh_pve_agent`.
-
-**Acceptance gate:** before production release, validate the actual
-PVE scheduler state, UPID and task-log formats, as well as local HA
-events, on HOME PVE. Until then this module is development-only.
 
 ## Native CLI and unattended installation (development source)
 
@@ -110,7 +56,7 @@ The installed `/root/dh-pve-agent.txt` guide is mode `0600`. The existing MQTT D
 
 The canonical product and runtime identity is **DigitalHouses PVE Agent** / `digitalhouses_pve_agent`: systemd service `digitalhouses_pve_agent.service`, filesystem roots under `/opt/digitalhouses/digitalhouses_pve_agent`, `/etc/digitalhouses_pve_agent` and `/var/lib/digitalhouses_pve_agent`, MQTT base `DigitalHouses/Global/digitalhouses_pve_agent/<instance>`, and Home Assistant entity prefix `dh_pve_agent_*`. Version 0.5.30 performs the corrected one-time controlled migration from the former `dh_pve_app` / `dh_app_pve_*` runtime, including deterministic cleanup of retained data owned by the legacy MQTT instance namespace.
 
-Current source version: `VERSION` is `0.5.96`.
+Current source version: `VERSION` is `0.5.105`.
 Proxmox VE 9.0 RRD key prefixes for node/VM/storage are supported alongside the PVE 8 prefixes (see changelog 0.5.94). A physical PVE 9.2 installation still needs live acceptance testing.
 See [GMKtec K15 and PVE 8/9 acceptance checklist](docs/GMKTEC_K15_PVE8_PVE9.md) for exact DMI/EC read-only handling, regression requirements, and the remaining live-host verification.
 DH Sync 0.6.0 uses the existing instance-qualified retained MQTT `/sync` topic to identify the product and GitHub source only. Dashboard placement, order and access are controlled by DH Sync YAML; see [PVE Agent resources](docs/DH_SYNC_COMPATIBILITY.md) and the [developer standard](../docs/standards/DH_SYNC_DEVELOPER_STANDARD.md).
@@ -137,6 +83,55 @@ PCI passthrough inventory uses the read-only bundled `bin/pve-pci-inventory` hel
 
 Example of the DigitalHouses PVE Agent dashboard in Home Assistant.
 
+### PVE backup execution history (0.5.99)
+
+Unreleased development: the same read-only history worker also resolves
+configured backup job membership from PVE job and guest inventories.
+Configured coverage is not proof of a successful or scheduled backup.
+Disabled jobs do not cover guests; ambiguous selectors remain unknown.
+The separate coverage sensor shares the existing retained MQTT history
+payload, with its own bounded HA attribute view. No second task/log scanner
+or duplicate failure notification is introduced.
+
+
+The Proxmox View shows a compact collapsible `vzdump` run tree: date/time,
+verified job name (or `vzdump` when unknown), result, elapsed time and
+a size *only when its meaning is known*. Successful runs are collapsed by
+default; failed, running and unknown runs expand to show actual VM/LXC
+statuses. Skipped guests are not counted as completed. The native Proxmox
+API reports task outcomes; job identity comes from the explicit scheduler
+job ID in the task log, not inferred from coincidental schedules.
+
+`sensor.dh_pve_agent_backup_history` carries bounded ready-to-render run
+attributes. `number.dh_pve_agent_backup_history_limit` controls the last
+1–50 runs (default 10) via persistent MQTT Number without restarting the
+agent. `event.dh_pve_agent_backup` emits `backup_job_completed` and
+`backup_job_failed` for newly observed terminal runs, not old completed
+tasks during initial backfill. Events use QoS 1 and a persisted delivery
+outbox, but broker ACK does not guarantee a Home Assistant event consumer
+was online.
+
+**Size semantics:** `archive` is the actual local archive file size
+(from `archive file size`); `processed` is source data processed
+(from `transferred`). PBS stored/compressed/deduplicated bytes are **not**
+inferred from the PVE log; use PBS Agent for those. PVE 8.4.21's PBS
+LXC logs report `root.pxar: had to backup X of Y`: `Y` is the
+logical backup data size, while `X` and the compressed size describe
+the incremental transfer. In the same way, a VM `transferred 32 GiB`
+entry describes processed data even when 100% was reused. If size
+cannot be verified, the tree leaves it empty. Without a confirmed
+scheduler job ID, the branch says `vzdump · <storage>`, not the name
+of a potentially unrelated configured schedule. Unavailable task
+API/log data does not become a false backup success.
+
+The observer reads active and archived tasks (`--source all`) using read-only native `pvesh get` operations at most once
+per 60-second scan, with completed-log caching and one independent worker.
+It does not create, run, delete or reschedule backup jobs; PVE/UPS core
+collection and NUT protection are unaffected. It reads only the local
+node's `vzdump` tasks. The frontend tree requires the already-used
+`custom:button-card` component. Live acceptance on PVE 8/9 and a real
+Home Assistant dashboard is pending.
+
 ## Architecture
 
 The App is the source of truth for acquisition, calculations, thresholds, problem state, topology, UPS interpretation and effective policy. Home Assistant is a light client for UI, explicit Recorder history, notifications and user configuration input.
@@ -146,7 +141,8 @@ Normal data-source priority on Proxmox VE 8.x is:
 1. `/proc` and `/sys`;
 2. `/etc/pve` configuration and PVE-maintained cache/status files;
 3. a subprocess only when there is no suitable cheap source;
-4. `pvesh`/API actions only for rare or on-demand work.
+4. `pvesh`/API actions only for rare or on-demand work, except for the
+   explicitly bounded read-only backup history observer in its own worker.
 
 A failed cheap parser/source is reported as unavailable/problem state. The daemon does not fall back permanently to heavy `pvesh`, `qm`, `pct`, `pvesm` or QGA polling loops.
 
@@ -158,6 +154,7 @@ Collection cadence is App-owned and does not accelerate because a resource becom
 - `UPS` — 10 s: NUT runtime data;
 - `SLOW` — 60 s: storage usage, disk temperature, GPU inventory/temperature, VM/LXC runtime, host runtime diagnostics and `/etc/pve/.version` check;
 - `HEALTH` — 1 h: full SMART/wear and genuinely heavy health diagnostics;
+- `BACKUP` — 60 s: local-node `vzdump` task list and only newly discovered or active task logs, asynchronously;
 - `STATIC` — startup and detected PVE configuration-version changes. Manual Refresh is the explicit full refresh path: it rebuilds topology, rescans QGA-backed passthrough storage, and sequentially refreshes every PVE collector, including guests, host, CPU, memory, storage, fans, SMART/health, disk temperature and GPU inventory/temperature. If UPS is configured, the same main Refresh request also refreshes UPS state; the dedicated UPS Refresh remains available for UPS-only refresh.
 
 The legacy `[ups] poll_interval_seconds` configuration key is accepted only for upgrade compatibility and is ignored; UPS collection remains fixed at 10 seconds.
@@ -374,6 +371,20 @@ Local-only examples remain available:
 
 The admin-chat variant shares the canonical notification package key and automation ID. Use it only as a site-specific replacement, not alongside the canonical file. DH Sync never publishes files from `examples/`. The agent requires neither delivery variant to operate.
 
+PVE backup failures: the agent publishes the existing non-retained
+`event.dh_pve_agent_backup` / `backup_job_failed` event with the UPID,
+`job_name`, overall `error`, and verified guest-level `id`, `kind`,
+`status`, optional `name` and `error`. The canonical Russian notification
+package adds one independent handler delivering a local persistent HA
+notification with failed VM/CT IDs, errors, and successful-guest count.
+For sites with `script.write2admins`, use the optional standalone
+`examples/packages/locales/ru/dh_pve_agent_backup_write2admins.yaml`
+as a site-owned package: it routes the same event to the existing script
+without modifying any other event handlers. DH Sync never installs this
+optional site-specific file. If both are enabled, the HA local notification
+and the admin-chat notification are deliberately both delivered.
+Older failures from initial startup are not replayed as new alerts.
+
 Event data is read directly from `trigger.to_state.attributes`. Events remain transient; states remain available through MQTT sensors. No legacy YAML migration is required.
 
 ## Product telemetry
@@ -532,7 +543,7 @@ Production install/update is release-tag only. Version 0.5.30 is the corrected c
 For the canonical runtime, install/update/reinstall never clears the current canonical MQTT namespace. Canonical retained MQTT cleanup is owned exclusively by the supported uninstaller.
 
 ```bash
-TAG=digitalhouses_pve_agent-v0.5.96
+TAG=digitalhouses_pve_agent-v0.5.105
 DIGITALHOUSES_SOURCE_REF="$TAG" \
   bash <(curl -fsSL "https://raw.githubusercontent.com/DigitalHouses/home-assistant-apps/$TAG/digitalhouses_pve_agent/install.sh")
 ```

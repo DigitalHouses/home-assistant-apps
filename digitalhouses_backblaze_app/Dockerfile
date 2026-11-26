@@ -1,6 +1,6 @@
 FROM ghcr.io/home-assistant/base:latest
 
-ARG BUILD_VERSION="0.1.15"
+ARG BUILD_VERSION="0.1.16"
 ARG BUILD_ARCH
 
 ENV APP_VERSION="${BUILD_VERSION}" \
@@ -24,6 +24,7 @@ RUN chmod a+x /run.sh \
         /app/backblaze.py \
         /app/config.py \
         /app/discovery.py \
+        /app/sync_discovery.py \
         /app/telemetry.py
 
 CMD ["/run.sh"]

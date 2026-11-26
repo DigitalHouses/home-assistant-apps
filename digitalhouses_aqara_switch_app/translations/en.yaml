@@ -1,7 +1,10 @@
 configuration:
+  telemetry_enabled:
+    name: DigitalHouses statistics
+    description: Consent to collect statistics (product name, version, random installation ID). https://github.com/DigitalHouses/home-assistant-apps/blob/main/docs/standards/PRODUCT_TELEMETRY_POLICY.md
   log_level:
     name: Log level
     description: Application log verbosity.
-  switches:
-    name: Switches and assignments (YAML)
-    description: "Scan adds all supported Aqara action devices under switch.* config keys. If no HA switch entity exists, the key is logical-only (no new HA entity). Configure enabled and actions with one or more light.* targets. Each action can be a short toggle list or an advanced service/targets mapping with optional brightness, color temperature, RGB and transition attributes under each light.* target. Hardware IEEE is stored privately."
+  auto_scan_interval:
+    name: Auto scan interval (minutes)
+    description: 0 disables periodic scanning; startup and manual scans remain available.

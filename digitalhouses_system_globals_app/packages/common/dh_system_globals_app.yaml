@@ -1,0 +1,15 @@
+dh_system_globals_app_package:
+  recorder:
+    include:
+      entities:
+      # Authoritative Day/Night state: off = day, on = night.
+      - switch.dh_system_globals_app_night_mode
+      - switch.dh_system_globals_app_auto_switch
+      - binary_sensor.dh_system_globals_app_mqtt_ready
+      - binary_sensor.dh_system_globals_app_ha_ready
+      - binary_sensor.dh_system_globals_app_zigbee_ready
+      - binary_sensor.dh_system_globals_app_system_ready
+      - sensor.dh_system_globals_app_active_brightness
+      - sensor.dh_system_globals_app_active_color_temp_kelvin
+      - sensor.dh_system_globals_app_active_rgb_color
+      - sensor.dh_system_globals_app_active_volume

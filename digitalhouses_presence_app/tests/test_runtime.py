@@ -1,5 +1,6 @@
 import json
 import queue
+import threading
 import tempfile
 import unittest
 from unittest.mock import Mock, patch
@@ -203,6 +204,35 @@ class RuntimeSafetyTests(unittest.TestCase):
             f.write_text(json.dumps(cfg), encoding="utf-8")
             with self.assertRaisesRegex(ValueError, "only once"):
                 load_options(str(f))
+
+    def test_sync_declaration_published_on_every_mqtt_connect_and_reconnect(self):
+        from app import SYNC_TOPIC
+        output = object.__new__(MqttOutput)
+        output.version = "0.1.42"
+        output.connected = threading.Event()
+        output.cache = {}
+        client = Mock()
+        client.subscribe.return_value = (0, 1)
+        client.publish.return_value = SimpleNamespace(rc=0)
+
+        for _ in range(2):
+            output._connected(client, None, None, 0)
+            self.assertTrue(output.connected.is_set())
+            output._disconnected(client, None)
+            self.assertFalse(output.connected.is_set())
+
+        self.assertEqual(client.publish.call_count, 2)
+        for call in client.publish.call_args_list:
+            self.assertEqual(call.args[0], SYNC_TOPIC)
+            self.assertEqual(call.kwargs, {"qos": 1, "retain": True})
+            self.assertEqual(json.loads(call.args[1]), {
+                "schema": 1,
+                "product_id": "digitalhouses_presence_app",
+                "type": "app",
+                "version": "0.1.42",
+                "repository": "https://github.com/DigitalHouses/home-assistant-apps",
+                "product_path": "digitalhouses_presence_app",
+            })
 
     def test_mqtt_mode_command_validation(self):
         output = object.__new__(MqttOutput)

@@ -35,16 +35,17 @@ nginx maps the following browser paths to the loopback-only statistics API:
 /api/products
 /api/versions
 /api/countries
-/api/history?days=30
+/api/history?days=30\n/api/installation-history?days=7
 ```
 
 The underlying API process uses `/v1/stats/*` on `127.0.0.1:8081`.
 
 Version and country distributions count each installation only in the value
-from its latest heartbeat. Countries are expandable: select a country to see
-each agent/app and its Known, active 7d and active 30d counters. The country
-totals equal the sum of the product rows, and the `/api/countries` response
-includes additive `products` breakdown entries (no installation IDs or tokens).
+from its latest heartbeat. The dashboard combines product and country views into one table, with full
+English country names and all App/Agent counts shown under each country. The country header also shows the current country count and the most recently first-seen country, including the timestamp of its earliest recorded heartbeat (displayed in Asia/Almaty). Its
+bottom Total sums known installations across countries. The `/api/countries`
+response already includes `products` breakdown entries (no installation IDs
+or tokens), so the API remains unchanged.
 History is grouped by UTC calendar day.
 
 ## Installation
@@ -77,6 +78,13 @@ The dashboard summary shows:
 - total accepted heartbeat count;
 - the latest heartbeat time, rendered locally in the browser.
 
-The activity chart compares unique active installations with accepted heartbeat
-volume for each UTC calendar day. The selected period also shows total
-heartbeats, number of active days and peak active installations.
+The seven-day installation chart renders two vertical columns for each UTC
+date, oldest to newest. **Total** is the number of currently retained
+registrations created before that day's cutoff. **Inactive** is the subset with
+no heartbeat during the preceding rolling seven days (Total minus Active).
+The chart visibly displays zero values for inactive installations.
+
+**Inactive does not mean uninstalled**: a device can simply be offline.
+Explicitly deleted registrations are removed from the registry, and the
+current data model does not retain an audit record of deletions. Historical
+totals therefore cannot reconstruct deleted registrations.

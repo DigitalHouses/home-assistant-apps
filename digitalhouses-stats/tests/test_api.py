@@ -41,6 +41,13 @@ def test_empty_dashboard_summary() -> None:
     }
 
 
+def test_empty_country_history() -> None:
+    reset_database()
+    response = dashboard_client.get("/v1/stats/countries")
+    assert response.status_code == 200
+    assert response.json() == []
+
+
 def test_empty_dashboard_products_lists_full_catalog() -> None:
     reset_database()
 
@@ -50,6 +57,7 @@ def test_empty_dashboard_products_lists_full_catalog() -> None:
     rows = response.json()
     assert [row["product"] for row in rows] == [
         "digitalhouses_pve_agent",
+        "digitalhouses_pbs_agent",
         "digitalhouses_plex_agent",
         "digitalhouses_recorder_app",
         "digitalhouses_speedtest_app",
@@ -61,6 +69,7 @@ def test_empty_dashboard_products_lists_full_catalog() -> None:
         "digitalhouses_aqara_switch_app",
         "digitalhouses_network_app",
         "digitalhouses_sync_app",
+        "digitalhouses_system_globals_app",
     ]
     assert all(row["observed_installations"] == 0 for row in rows)
     assert all(row["active_24h"] == 0 for row in rows)
@@ -322,6 +331,10 @@ def test_local_stats_use_latest_installation_state() -> None:
     countries = dashboard_client.get("/v1/stats/countries")
     assert countries.status_code == 200
     by_country = {row["country"]: row for row in countries.json()}
+    assert by_country["KZ"]["first_seen"]
+    assert by_country["DE"]["first_seen"]
+    assert by_country["US"]["first_seen"]
+    assert all("first_seen" in country for country in countries.json())
     assert by_country["KZ"]["observed_installations"] == 1
     assert by_country["KZ"]["active_7d"] == 1
     assert by_country["DE"]["active_7d"] == 1
@@ -446,3 +459,44 @@ def test_dashboard_healthz() -> None:
     response = dashboard_client.get("/healthz")
     assert response.status_code == 200
     assert response.json() == {"status": "ok"}
+
+
+
+def test_seven_day_installation_history() -> None:
+    reset_database()
+
+    empty = dashboard_client.get("/v1/stats/installation-history?days=7")
+    assert empty.status_code == 200
+    assert len(empty.json()) == 7
+    assert all(row["total_installations"] == 0 for row in empty.json())
+    assert all(row["active_installations"] == 0 for row in empty.json())
+
+    product = "digitalhouses_pve_agent"
+    installation_id = str(uuid.uuid4())
+    response = telemetry_client.post(
+        "/v1/heartbeat",
+        json={
+            "schema": 1,
+            "telemetry_policy_version": 2,
+            "installation_id": installation_id,
+            "product": product,
+            "version": "0.5.96",
+        },
+        headers={
+            "Authorization": f"Bearer {'aa' * 32}",
+            "Content-Type": "application/json",
+            "CF-IPCountry": "KZ",
+        },
+    )
+    assert response.status_code == 204
+
+    history = dashboard_client.get("/v1/stats/installation-history?days=7")
+    assert history.status_code == 200
+    rows = history.json()
+    assert len(rows) == 7
+    assert rows[-1]["total_installations"] == 1
+    assert rows[-1]["active_installations"] == 1
+    assert all(
+        row["active_installations"] <= row["total_installations"]
+        for row in rows
+    )

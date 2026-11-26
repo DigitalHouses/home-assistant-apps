@@ -1,6 +1,57 @@
-# DigitalHouses Network App
+## Optional DH Stats telemetry (0.1.32)
 
-Experimental native **Home Assistant OS App** for a durable LAN device inventory, presence history, and future device events. Internal/entity prefix: `dh_network_app`. Canonical product ID, App Store slug, and repository directory: `digitalhouses_network_app`.
+Network App supports **explicitly opt-in** installation statistics, following
+the working DigitalHouses PVE Agent telemetry policy-v1 approach. The Home
+Assistant App configuration has one switch, `telemetry_enabled`, initially
+`false` both on new installs and existing upgrades.
+
+- With the switch **off**, Network App runs all LAN scanning, Ingress, MQTT
+  events, DH Sync and Presence normally. It creates no new telemetry identity
+  and sends no installation heartbeat. Turning it off later prevents further
+  reporting on the next App restart and retains the local identity.
+- With the switch **on**, an independent HTTPS worker sends only the five
+  protocol-v1 fields `schema`, `telemetry_policy_version` (1),
+  `installation_id` (random UUIDv4), `product`
+  (`digitalhouses_network_app`), and `version` to
+  `https://telemetry.digitalhouses.vip/v1/heartbeat`. Its token is an HTTPS
+  Authorization credential and is never in the payload.
+- The identity and token are persisted in `/data/telemetry.json` with owner-only
+  permissions; the periodic heartbeat has 24-hour cadence with jitter and
+  backed-off retries. Failure to reach the Stats server does not affect LAN
+  monitoring.
+- To erase the remote installation record, run
+  `python3 /app/telemetry.py --delete` from the App container. Deletion
+  authenticates with the persisted secret and replaces the local identity.
+  If the optional switch remains enabled, subsequent reporting uses the new
+  identity. Turning the switch off is how to stop reporting.
+
+The standard <https://github.com/DigitalHouses/home-assistant-apps/blob/main/docs/standards/PRODUCT_TELEMETRY_POLICY.md>
+describes the target policy v2. This experimental release uses **policy v1
+opt-in**, not mandatory v2, so existing Network App installations are never
+stopped over missing telemetry consent. Production immutable-image provenance
+and the policy-v2 privacy/legal rollout remain separate work.
+
+The DH Stats product registry includes Network App, but an already deployed
+Stats backend must reload/deploy the changed registry before it will accept
+this product's heartbeat. After updating the App, enable the option explicitly
+and restart it to test. MQTT `/sync` is only the DH Sync resource announcement,
+not a Stats heartbeat.
+
+## DH Sync 0.6.0 discovery (0.1.31)
+
+When the existing optional MQTT worker connects or reconnects, the App publishes
+`DigitalHouses/Global/digitalhouses_network_app/sync` with QoS 1 and retain.
+The message identifies the running App and points DH Sync at its canonical
+`digitalhouses_network_app` directory in
+`https://github.com/DigitalHouses/home-assistant-apps`.
+The announcement does not contain Dashboard/View placement, credentials,
+site addresses or network inventory. MQTT Event and Home Assistant Discovery
+topics are unchanged.
+
+The App's full management interface remains in Home Assistant Ingress. No
+canonical Lovelace Views or automatically installed HA Packages are currently
+published for DH Sync. The optional local notification package remains under
+`examples/` and is not part of DH Sync's automatic installation.
 
 ## Current state (0.1.16 NEW badges and machine events)
 

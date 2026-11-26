@@ -459,69 +459,6 @@ dh_pve_agent_notification_local_package:
               - config_changed
           id: config_changed
 
-        # Резервное копирование: backup_job_failed
-        - trigger: event.received
-          target:
-            entity_id: event.dh_pve_agent_backup
-          options:
-            event_type:
-              - backup_job_failed
-          id: backup_job_failed
-
-        # Резервное копирование: backup_job_missed
-        - trigger: event.received
-          target:
-            entity_id: event.dh_pve_agent_backup
-          options:
-            event_type:
-              - backup_job_missed
-          id: backup_job_missed
-
-        # Резервное копирование: backup_job_recovered
-        - trigger: event.received
-          target:
-            entity_id: event.dh_pve_agent_backup
-          options:
-            event_type:
-              - backup_job_recovered
-          id: backup_job_recovered
-
-        # Резервное копирование: backup_guest_failed
-        - trigger: event.received
-          target:
-            entity_id: event.dh_pve_agent_backup
-          options:
-            event_type:
-              - backup_guest_failed
-          id: backup_guest_failed
-
-        # Резервное копирование: backup_guest_missing
-        - trigger: event.received
-          target:
-            entity_id: event.dh_pve_agent_backup
-          options:
-            event_type:
-              - backup_guest_missing
-          id: backup_guest_missing
-
-        # Резервное копирование: backup_guest_uncovered
-        - trigger: event.received
-          target:
-            entity_id: event.dh_pve_agent_backup
-          options:
-            event_type:
-              - backup_guest_uncovered
-          id: backup_guest_uncovered
-
-        # Резервное копирование: backup_guest_recovered
-        - trigger: event.received
-          target:
-            entity_id: event.dh_pve_agent_backup
-          options:
-            event_type:
-              - backup_guest_recovered
-          id: backup_guest_recovered
-
       conditions: []
 
       actions:
@@ -1194,90 +1131,6 @@ dh_pve_agent_notification_local_package:
                       {%- endif -%}
                       {{- ns.parts | join(' · ') if ns.parts else 'Настройки применены без изменения значений' -}}.
 
-            # backup_job_failed
-            - conditions:
-                - condition: trigger
-                  id:
-                    - backup_job_failed
-              sequence:
-                - action: persistent_notification.create
-                  data:
-                    title: "🔴 PVE: ошибка задания резервирования"
-                    message: >-
-                      Задание {{ trigger.to_state.attributes.job_name }} ({{ trigger.to_state.attributes.job_id }}) завершилось со статусом {{ trigger.to_state.attributes.result }}. UPID: {{ trigger.to_state.attributes.task_id }}.
-
-            # backup_job_missed
-            - conditions:
-                - condition: trigger
-                  id:
-                    - backup_job_missed
-              sequence:
-                - action: persistent_notification.create
-                  data:
-                    title: "🔴 PVE: пропущен Backup Job"
-                    message: >-
-                      Задание {{ trigger.to_state.attributes.job_name }} ({{ trigger.to_state.attributes.job_id }}) не выполнено к ожидаемому времени {{ trigger.to_state.attributes.expected_at }}.
-
-            # backup_job_recovered
-            - conditions:
-                - condition: trigger
-                  id:
-                    - backup_job_recovered
-              sequence:
-                - action: persistent_notification.create
-                  data:
-                    title: "✅ PVE: Backup Job восстановлен"
-                    message: >-
-                      Задание {{ trigger.to_state.attributes.job_name }} ({{ trigger.to_state.attributes.job_id }}) завершилось успешно. UPID: {{ trigger.to_state.attributes.task_id }}.
-
-            # backup_guest_failed
-            - conditions:
-                - condition: trigger
-                  id:
-                    - backup_guest_failed
-              sequence:
-                - action: persistent_notification.create
-                  data:
-                    title: "🔴 PVE: ошибка копии VM/CT {{ trigger.to_state.attributes.vmid }}"
-                    message: >-
-                      {{ trigger.to_state.attributes.guest_name }} ({{ trigger.to_state.attributes.guest_type }}, VMID {{ trigger.to_state.attributes.vmid }}) в задании {{ trigger.to_state.attributes.job_name }}: {{ trigger.to_state.attributes.result }}. Причина: {{ trigger.to_state.attributes.reason }}.
-
-            # backup_guest_missing
-            - conditions:
-                - condition: trigger
-                  id:
-                    - backup_guest_missing
-              sequence:
-                - action: persistent_notification.create
-                  data:
-                    title: "🔴 PVE: VM/CT не обработана"
-                    message: >-
-                      {{ trigger.to_state.attributes.guest_name }} (VMID {{ trigger.to_state.attributes.vmid }}) ожидалась в задании {{ trigger.to_state.attributes.job_name }}, но в журнале завершённого запуска нет результата.
-
-            # backup_guest_uncovered
-            - conditions:
-                - condition: trigger
-                  id:
-                    - backup_guest_uncovered
-              sequence:
-                - action: persistent_notification.create
-                  data:
-                    title: "⚠️ PVE: гость без резервирования"
-                    message: >-
-                      {{ trigger.to_state.attributes.guest_name }} ({{ trigger.to_state.attributes.guest_type }}, VMID {{ trigger.to_state.attributes.vmid }}) не входит ни в одно активное задание Backup Job и не исключена явно.
-
-            # backup_guest_recovered
-            - conditions:
-                - condition: trigger
-                  id:
-                    - backup_guest_recovered
-              sequence:
-                - action: persistent_notification.create
-                  data:
-                    title: "✅ PVE: резервирование гостя восстановлено"
-                    message: >-
-                      {% if trigger.to_state.attributes.recovery_reason == "coverage_restored" %}{{ trigger.to_state.attributes.guest_name }} (VMID {{ trigger.to_state.attributes.vmid }}) снова включён в Backup Job; фактическое выполнение проверяется отдельно.{% else %}{{ trigger.to_state.attributes.guest_name }} (VMID {{ trigger.to_state.attributes.vmid }}) — резервная копия успешно создана.{% endif %}
-
     - id: dh_pve_agent_replace_battery_reminder
       alias: DH PVE Agent · Напоминание о замене батареи
       mode: single
@@ -1298,3 +1151,61 @@ dh_pve_agent_notification_local_package:
             title: "🔋🔴 UPS: батарея всё ещё требует замены"
             message: >-
               {% set charge = states('sensor.dh_pve_agent_ups_battery_charge') %}{% set voltage = states('sensor.dh_pve_agent_ups_battery_voltage') %}REPLACE BATTERY остаётся активным · заряд: {{ '—' if charge in ['unknown', 'unavailable', 'none', ''] else charge }}% · напряжение батареи: {{ '—' if voltage in ['unknown', 'unavailable', 'none', ''] else voltage }} В. Напоминание повторяется каждый час, пока UPS не снимет это состояние.
+
+    # Отдельный обработчик резервного копирования. Не меняет PVE/UPS уведомления.
+    - id: dh_pve_agent_backup_failed_notification
+      alias: DH PVE Agent · Ошибка резервного копирования
+      mode: queued
+      max: 20
+
+      triggers:
+        - trigger: event.received
+          target:
+            entity_id: event.dh_pve_agent_backup
+          options:
+            event_type:
+              - backup_job_failed
+          id: backup_job_failed
+
+      variables:
+        backup_title: "🚨💾 PVE: ошибка резервного копирования"
+        backup_message: >-
+          {%- set a = trigger.to_state.attributes -%}
+          {%- set guests = a.guests | default([], true) -%}
+          {%- set ns = namespace(parts=['Задание: ' ~ (a.job_name | default('vzdump', true))], missing=[], skipped=[], unknown=[]) -%}
+          {%- for g in guests -%}
+            {%- if g.status == 'failed' -%}
+              {%- set label = g.kind ~ ' ' ~ g.id -%}
+              {%- if g.name | default('') -%}{%- set label = label ~ ' (' ~ g.name ~ ')' -%}{%- endif -%}
+              {%- if g.error | default('') -%}{%- set label = label ~ ' — ' ~ g.error -%}{%- endif -%}
+              {%- set ns.missing = ns.missing + [label] -%}
+            {%- elif g.status == 'skipped' -%}
+              {%- set ns.skipped = ns.skipped + [g.kind ~ ' ' ~ g.id] -%}
+            {%- elif g.status == 'unknown' -%}
+              {%- set ns.unknown = ns.unknown + [g.kind ~ ' ' ~ g.id] -%}
+            {%- endif -%}
+          {%- endfor -%}
+          {%- if ns.missing -%}
+            {%- set ns.parts = ns.parts + ['Не скопировано: ' ~ (ns.missing | join('; '))] -%}
+          {%- elif a.error | default('') -%}
+            {%- set ns.parts = ns.parts + ['Ошибка: ' ~ a.error] -%}
+          {%- else -%}
+            {%- set ns.parts = ns.parts + ['Нет подтверждения успешного копирования'] -%}
+          {%- endif -%}
+          {%- if ns.skipped -%}
+            {%- set ns.parts = ns.parts + ['Пропущено: ' ~ (ns.skipped | join(', '))] -%}
+          {%- endif -%}
+          {%- if ns.unknown -%}
+            {%- set ns.parts = ns.parts + ['Без подтверждения: ' ~ (ns.unknown | join(', '))] -%}
+          {%- endif -%}
+          {%- if guests -%}
+            {%- set success_count = (guests | selectattr('status', 'eq', 'success') | list | length) -%}
+            {%- set ns.parts = ns.parts + ['Успешно: ' ~ success_count ~ ' из ' ~ (guests | length) ~ ' обработанных гостей'] -%}
+          {%- endif -%}
+          {{- ns.parts | join(' · ') -}}
+
+      actions:
+        - action: persistent_notification.create
+          data:
+            title: "{{ backup_title }}"
+            message: "{{ backup_message }}"

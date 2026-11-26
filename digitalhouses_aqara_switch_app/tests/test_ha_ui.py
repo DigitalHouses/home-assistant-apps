@@ -35,10 +35,10 @@ class UIContract(unittest.TestCase):
         self.assertIn("Нет связи",status["label"])
         self.assertIn("in_progress",status["label"])
         self.assertEqual(chips["type"],"custom:mushroom-chips-card")
-        scan,version,install,restart=chips["chips"]
-        self.assertEqual(scan["tap_action"]["target"]["entity_id"],
-                         "button.dh_aqara_switch_app_scan")
-        self.assertEqual(version["tap_action"]["action"],"more-info")
+        refresh,version,install,restart=chips["chips"]
+        self.assertEqual(refresh["tap_action"]["target"]["entity_id"],
+                         "button.dh_aqara_switch_app_refresh")
+        self.assertEqual(version["tap_action"]["target"]["entity_id"],"button.dh_aqara_switch_app_check_updates")
         self.assertEqual(install["type"],"conditional")
         self.assertEqual(install["conditions"][0],{
             "entity":"update.digitalhouses_aqara_switch_app_update","state":"on"})
@@ -49,8 +49,8 @@ class UIContract(unittest.TestCase):
                          "8133339d_digitalhouses_aqara_switch_app")
         for chip in (install["chip"],restart):
             self.assertIn("confirmation",chip["tap_action"])
-        self.assertNotIn("button.dh_aqara_switch_app_check_updates",str(card))
-        self.assertNotIn("button.dh_aqara_switch_app_refresh",str(card))
+        self.assertIn("button.dh_aqara_switch_app_check_updates",str(card))
+        self.assertNotIn("button.dh_aqara_switch_app_scan",str(card))
 
     def test_diagnostics_use_real_action_states_and_tree_options(self):
         action=(LOVE/"dh_aqara_switch_app_last_action_ru.yaml").read_text()
@@ -65,13 +65,13 @@ class UIContract(unittest.TestCase):
         self.assertIn("<pre>",tree)
         self.assertNotIn("tojson",tree)
 
-    def test_control_card_uses_real_scan_and_supervisor_restart(self):
+    def test_control_card_uses_real_refresh_and_supervisor_restart(self):
         ui=yaml.safe_load((LOVE/"dh_aqara_switch_app_card_ru.yaml").read_text(encoding="utf-8"))
         body=str(ui)
-        self.assertIn("button.dh_aqara_switch_app_scan",body)
+        self.assertNotIn("button.dh_aqara_switch_app_scan",body)
         self.assertIn("hassio.app_restart",body)
         self.assertIn("confirmation",body)
-        self.assertNotIn("button.dh_aqara_switch_app_refresh",body)
+        self.assertIn("button.dh_aqara_switch_app_refresh",body)
 
 
 if __name__=="__main__":

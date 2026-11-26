@@ -66,19 +66,12 @@ class UpsConfig:
 
 
 @dataclass(frozen=True)
-class BackupConfig:
-    excluded_vmids: tuple[int, ...] = ()
-    missed_grace_seconds: int = 900
-
-
-@dataclass(frozen=True)
 class AppConfig:
     general: GeneralConfig
     mqtt: MqttConfig
     ups: UpsConfig = field(default_factory=UpsConfig)
     telemetry: TelemetryConfig = field(default_factory=TelemetryConfig)
     events: EventConfig = field(default_factory=EventConfig)
-    backup: BackupConfig = field(default_factory=BackupConfig)
 
 
 def _get(parser: configparser.ConfigParser, section: str, key: str, default: str) -> str:
@@ -208,16 +201,6 @@ def load_config(path: Path) -> AppConfig:
     if not 1.0 <= ups_timeout <= 30.0:
         raise ConfigError("ups.command_timeout_seconds must be between 1 and 30")
 
-    excluded_raw = _get(parser, "backup", "excluded_vmids", "").strip()
-    excluded_items = [part.strip() for part in excluded_raw.split(",") if part.strip()]
-    if any(not part.isdecimal() or int(part) <= 0 for part in excluded_items):
-        raise ConfigError("backup.excluded_vmids must be comma-separated VMIDs")
-    if excluded_raw and len(excluded_items) != len(excluded_raw.split(",")):
-        raise ConfigError("backup.excluded_vmids must be comma-separated VMIDs")
-    missed_grace = _get_int(parser, "backup", "missed_grace_seconds", 900)
-    if not 60 <= missed_grace <= 86400:
-        raise ConfigError("backup.missed_grace_seconds must be 60..86400")
-
     # Legacy keys that are no longer part of the runtime contract, including
     # ups.poll_interval_seconds and ups.policy_apply_enabled, are intentionally
     # ignored. Existing installations remain loadable while collection cadence
@@ -249,9 +232,5 @@ def load_config(path: Path) -> AppConfig:
         telemetry=TelemetryConfig(enabled=telemetry_enabled),
         events=EventConfig(
             pve_problem_debounce_seconds=pve_problem_debounce_seconds,
-        ),
-        backup=BackupConfig(
-            excluded_vmids=tuple(sorted(set(map(int, excluded_items)))),
-            missed_grace_seconds=missed_grace,
         ),
     )

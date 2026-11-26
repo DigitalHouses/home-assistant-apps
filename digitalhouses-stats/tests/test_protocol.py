@@ -82,9 +82,23 @@ def test_heartbeat_payload_accepts_climate_app() -> None:
     assert payload.product == "digitalhouses_climate_app"
 
 
+def test_heartbeat_payload_accepts_pbs_agent() -> None:
+    payload = HeartbeatPayload(
+        schema=1,
+        telemetry_policy_version=2,
+        installation_id=uuid.uuid4(),
+        product="digitalhouses_pbs_agent",
+        version="0.1.0",
+    )
+    assert payload.product == "digitalhouses_pbs_agent"
+    assert payload.telemetry_policy_version == 2
+    assert "digitalhouses_pbs_agent" in ALLOWED_PRODUCTS
+
+
 def test_product_registry_is_complete_and_drives_allowlist() -> None:
     assert [product.identifier for product in PRODUCTS] == [
         "digitalhouses_pve_agent",
+        "digitalhouses_pbs_agent",
         "digitalhouses_plex_agent",
         "digitalhouses_recorder_app",
         "digitalhouses_speedtest_app",
@@ -96,12 +110,25 @@ def test_product_registry_is_complete_and_drives_allowlist() -> None:
         "digitalhouses_aqara_switch_app",
         "digitalhouses_network_app",
         "digitalhouses_sync_app",
+        "digitalhouses_system_globals_app",
     ]
     assert ALLOWED_PRODUCTS == {
         product.identifier
         for product in PRODUCTS
         if product.telemetry_allowed
     }
+
+
+def test_heartbeat_payload_accepts_dh_sync_policy_v2() -> None:
+    payload = HeartbeatPayload(
+        schema=1,
+        telemetry_policy_version=2,
+        installation_id=uuid.uuid4(),
+        product="digitalhouses_sync_app",
+        version="0.6.2",
+    )
+    assert payload.product == "digitalhouses_sync_app"
+    assert payload.telemetry_policy_version == 2
 
 
 def test_heartbeat_payload_accepts_backblaze_app() -> None:
@@ -136,3 +163,16 @@ def test_heartbeat_payload_rejects_extra_fields() -> None:
             version="0.5.8",
             hostname="must-not-be-accepted",
         )
+
+
+def test_heartbeat_payload_accepts_system_globals_policy_v2() -> None:
+    payload = HeartbeatPayload(
+        schema=1,
+        telemetry_policy_version=2,
+        installation_id=uuid.uuid4(),
+        product="digitalhouses_system_globals_app",
+        version="0.1.0",
+    )
+    assert payload.product == "digitalhouses_system_globals_app"
+    assert payload.telemetry_policy_version == 2
+    assert payload.product in ALLOWED_PRODUCTS

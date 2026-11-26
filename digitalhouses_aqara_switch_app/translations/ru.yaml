@@ -1,7 +1,10 @@
 configuration:
+  telemetry_enabled:
+    name: Статистика DigitalHouses
+    description: Согласие на передачу статистики (название приложения, версия, случайный идентификатор установки). https://github.com/DigitalHouses/home-assistant-apps/blob/main/docs/standards/PRODUCT_TELEMETRY_POLICY.md
   log_level:
     name: Уровень журнала
     description: Подробность журнала приложения.
-  switches:
-    name: Выключатели и назначения (YAML)
-    description: "Scan добавляет Aqara с событиями action под ключами switch.*. Для кнопок без сущности switch.* создаётся только логический ключ в YAML, не новая сущность HA. Внутри каждого выключателя настройте enabled и actions с одним или несколькими light.*. Допускаются список для toggle или расширенная команда с service и targets, причём яркость, температура, RGB и transition задаются опционально под каждым light.*. Физические IEEE хранятся в App, не редактируются."
+  auto_scan_interval:
+    name: Интервал сканирования, мин
+    description: 0 отключает периодическое сканирование; первый Scan при запуске и ручной Scan остаются.

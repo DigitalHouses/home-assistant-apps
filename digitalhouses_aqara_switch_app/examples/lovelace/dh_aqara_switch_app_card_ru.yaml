@@ -1,7 +1,6 @@
-# DH Aqara Switch App · unified status and Supervisor controls
-# Requires Mushroom and custom:button-card >= 5.0.
-# Only Scan is App-owned; install/restart are Supervisor-owned.
-# "Версия" opens version details; there is no App-owned release-check API yet.
+# DigitalHouses Aqara Switch App · compact unified card
+# Requires Mushroom and custom:button-card >= 5.0 for update_timer.
+# Runtime operations are App-owned; installation/restart remain Supervisor-owned.
 type: vertical-stack
 cards:
   - type: custom:button-card
@@ -9,88 +8,146 @@ cards:
     triggers_update:
       - sensor.dh_aqara_switch_app_card
       - sensor.dh_aqara_switch_app_version
+      - sensor.dh_aqara_switch_app_latest_version
+      - binary_sensor.dh_aqara_switch_app_update_available
       - sensor.dh_aqara_switch_app_problems
       - update.digitalhouses_aqara_switch_app_update
     update_timer: |
       [[[
         const s = states['sensor.dh_aqara_switch_app_card']?.state;
-        const installing = states['update.digitalhouses_aqara_switch_app_update']?.attributes?.in_progress === true;
-        return s === 'running' || installing ? 1000 : 5000;
+        const updating =
+          states['update.digitalhouses_aqara_switch_app_update']?.attributes?.in_progress === true;
+        return s === 'running' || updating ? 1000 : 5000;
       ]]]
     show_icon: true
     show_name: true
     show_label: true
     icon: |
       [[[
-        const item = states['sensor.dh_aqara_switch_app_card'];
-        const s = item?.state;
-        const installing = states['update.digitalhouses_aqara_switch_app_update']?.attributes?.in_progress === true;
-        const count = states['sensor.dh_aqara_switch_app_problems']?.attributes?.count;
-        if (installing || s === 'running') return 'mdi:progress-clock';
-        if (!s || ['unknown','unavailable'].includes(s)) return 'mdi:lan-disconnect';
-        if (s === 'error') return 'mdi:alert-circle';
-        if (typeof count === 'number' && count > 0) return 'mdi:alert-circle-outline';
-        if (states['update.digitalhouses_aqara_switch_app_update']?.state === 'on') return 'mdi:package-up';
-        return s === 'success' ? 'mdi:check-circle' : 'mdi:light-switch';
+        const s = states['sensor.dh_aqara_switch_app_card']?.state;
+        const health = states['sensor.dh_aqara_switch_app_problems']?.state;
+        const problems = Number(states['sensor.dh_aqara_switch_app_problems']?.attributes?.count ?? -1);
+        const upgrade =
+          states['binary_sensor.dh_aqara_switch_app_update_available']?.state === 'on';
+        const updating =
+          states['update.digitalhouses_aqara_switch_app_update']?.attributes?.in_progress === true;
+
+        if (updating || s === 'running') return 'mdi:progress-clock';
+        if (s === 'error' || ['unknown','unavailable'].includes(s) || !s) return 'mdi:alert-circle';
+        if (s === 'success') return 'mdi:check-circle';
+        if (health === 'unavailable') return 'mdi:lan-disconnect';
+        if (Number.isFinite(problems) && problems > 0) return 'mdi:alert-circle';
+        if (upgrade) return 'mdi:package-up';
+        return 'mdi:light-switch';
       ]]]
     name: |
       [[[
-        const v = states['sensor.dh_aqara_switch_app_version']?.state;
-        const upd = states['update.digitalhouses_aqara_switch_app_update'];
-        const valid = value => typeof value === 'string' && /^\d+\.\d+\.\d+$/.test(value);
-        const installed = valid(v) ? v : upd?.attributes?.installed_version;
-        const latest = upd?.attributes?.latest_version;
-        const greater = (a,b) => {
-          const aa = a.split('.').map(Number), bb = b.split('.').map(Number);
-          for (let i=0; i<3; i++) if (aa[i] !== bb[i]) return aa[i] > bb[i];
-          return false;
-        };
-        const newer = upd?.state === 'on' && valid(installed) && valid(latest)
-          && greater(latest,installed);
-        return 'DH Aqara Switch' + (valid(installed)
-          ? ' · v' + installed + (newer ? ' → v' + latest : '') : '');
+        const installed = states['sensor.dh_aqara_switch_app_version']?.state;
+        const latest = states['sensor.dh_aqara_switch_app_latest_version']?.state;
+        const available =
+          states['binary_sensor.dh_aqara_switch_app_update_available']?.state === 'on';
+        const valid = (v) =>
+          typeof v === 'string'
+          && /^\d+\.\d+\.\d+$/.test(v);
+        const upgrade =
+          available && valid(installed) && valid(latest) && latest !== installed;
+
+        return 'Aqara Switch App' + (valid(installed)
+          ? ' · v' + installed + (upgrade ? ' → v' + latest : '')
+          : '');
       ]]]
     label: |
       [[[
         const item = states['sensor.dh_aqara_switch_app_card'];
-        const upd = states['update.digitalhouses_aqara_switch_app_update'];
-        const problems = states['sensor.dh_aqara_switch_app_problems'];
-        const count = problems?.attributes?.count;
-        const elapsed = since => {
-          const secs = Math.max(0, Math.floor((performance.now()-since)/1000));
-          return String(Math.floor(secs/60)).padStart(2,'0') + ':' +
-            String(secs%60).padStart(2,'0');
+        const health = states['sensor.dh_aqara_switch_app_problems']?.state;
+        const problems = Number(states['sensor.dh_aqara_switch_app_problems']?.attributes?.count ?? -1);
+        const supervisorUpdate = states['update.digitalhouses_aqara_switch_app_update'];
+
+        const elapsedText = (since) => {
+          const seconds = Math.max(
+            0,
+            Math.floor((performance.now() - since) / 1000)
+          );
+          const mm = String(Math.floor(seconds / 60)).padStart(2, '0');
+          const ss = String(seconds % 60).padStart(2, '0');
+          return mm + ':' + ss;
         };
-        const duration = val => typeof val === 'number' && Number.isFinite(val)
-          ? ' · ' + Math.round(Math.max(0,val)) + ' сек' : '';
-        if (upd?.attributes?.in_progress === true) {
-          if (this._dh_aqara_clock?.kind !== 'install')
-            this._dh_aqara_clock = {kind:'install',since:performance.now()};
-          const pct = upd.attributes.update_percentage;
-          return 'Установка версии… ' + (typeof pct === 'number' && Number.isFinite(pct)
-            ? Math.round(pct) + '% · ' : '') + elapsed(this._dh_aqara_clock.since);
+        const duration = (value) => {
+          if (typeof value !== 'number') return '—';
+          const seconds = Math.round(Math.max(0, value));
+          const minutes = Math.floor(seconds / 60);
+          return minutes
+            ? minutes + ' мин ' + String(seconds % 60).padStart(2, '0') + ' сек'
+            : seconds + ' сек';
+        };
+
+        if (supervisorUpdate?.attributes?.in_progress === true) {
+          if (this._dh_aqara_timer?.operation !== 'install') {
+            this._dh_aqara_timer = {
+              operation: 'install',
+              since: performance.now()
+            };
+          }
+          const pct = supervisorUpdate.attributes.update_percentage;
+          return 'Установка версии… '
+            + (typeof pct === 'number' ? Math.round(pct) + '% · ' : '')
+            + elapsedText(this._dh_aqara_timer.since);
         }
-        if (!item || ['unknown','unavailable'].includes(item.state)) {
-          this._dh_aqara_clock = null;
+
+        if (!item || ['unknown', 'unavailable'].includes(item.state)) {
           return 'Нет связи с приложением';
         }
+
         const a = item.attributes || {};
+        const operation = a.operation;
+        const names = {
+          refresh: 'Обновление данных',
+          check: 'Проверка версии'
+        };
+
         if (item.state === 'running') {
-          const key = String(a.operation || '') + '|' + String(a.started_at || '');
-          if (this._dh_aqara_clock?.key !== key)
-            this._dh_aqara_clock = {kind:'scan',key,since:performance.now()};
-          return 'Сканирование… ' + elapsed(this._dh_aqara_clock.since);
+          const key = String(operation) + '|' + String(a.started_at || '');
+          if (this._dh_aqara_timer?.key !== key) {
+            this._dh_aqara_timer = {
+              key: key,
+              operation: operation,
+              since: performance.now()
+            };
+          }
+          return (names[operation] || 'Операция') + '… '
+            + elapsedText(this._dh_aqara_timer.since);
         }
-        this._dh_aqara_clock = null;
-        if (item.state === 'error') return 'Ошибка сканирования: ' + (a.error || 'операция не выполнена');
-        if (typeof count === 'number' && count > 0) {
-          return 'Проблемы выключателей: ' + count +
-            (item.state === 'success' ? ' · Сканирование завершено' + duration(a.duration_seconds) : '');
+
+        this._dh_aqara_timer = null;
+
+        if (item.state === 'error') {
+          return 'Ошибка: ' + (a.error || 'операция не выполнена');
         }
-        if (item.state === 'success') return 'Сканирование завершено' + duration(a.duration_seconds);
-        if (upd?.state === 'on') return 'Supervisor предлагает новую версию';
-        if (problems?.state !== 'ready') return 'Ожидание диагностики';
-        return 'Приложение работает · проблем не обнаружено';
+
+        if (item.state === 'success') {
+          let message = operation === 'refresh'
+            ? 'Данные обновлены'
+            : operation === 'check'
+              ? (
+                  states['binary_sensor.dh_aqara_switch_app_update_available']?.state === 'on'
+                    ? 'Доступна новая версия'
+                    : states['binary_sensor.dh_aqara_switch_app_update_available']?.state === 'off'
+                      ? 'Версия актуальна'
+                      : 'Проверка завершена'
+                )
+              : 'Готово';
+          return message + ' · ' + duration(a.duration_seconds);
+        }
+
+        if (health === 'unavailable') return 'Нет связи с приложением';
+        if (Number.isFinite(problems) && problems > 0) {
+          return 'Проблемы: ' + problems;
+        }
+        if (states['binary_sensor.dh_aqara_switch_app_update_available']?.state === 'on') {
+          return 'Доступна новая версия';
+        }
+        if (health === 'ready') return 'Работает штатно';
+        return 'Ожидание данных';
       ]]]
     styles:
       card:
@@ -108,19 +165,28 @@ cards:
         - color: |
             [[[
               const s = states['sensor.dh_aqara_switch_app_card']?.state;
-              const upd = states['update.digitalhouses_aqara_switch_app_update'];
-              const problems = states['sensor.dh_aqara_switch_app_problems'];
-              const count = problems?.attributes?.count;
-              if (upd?.attributes?.in_progress === true || s === 'running')
-                return 'var(--info-color, var(--primary-color))';
-              if (!s || ['unknown','unavailable'].includes(s))
-                return 'var(--secondary-text-color)';
-              if (s === 'error') return 'var(--error-color)';
-              if (typeof count === 'number' && count > 0) return 'var(--warning-color, orange)';
-              if (upd?.state === 'on') return 'var(--warning-color, orange)';
-              return problems?.state === 'ready'
-                ? 'var(--success-color, var(--primary-color))'
-                : 'var(--secondary-text-color)';
+              const health =
+                states['sensor.dh_aqara_switch_app_problems']?.state;
+              const problems =
+                Number(states['sensor.dh_aqara_switch_app_problems']?.attributes?.count ?? -1);
+              const upgrade =
+                states['binary_sensor.dh_aqara_switch_app_update_available']?.state === 'on';
+              const updating =
+                states['update.digitalhouses_aqara_switch_app_update']?.attributes?.in_progress === true;
+
+              return s === 'error' || ['unknown','unavailable'].includes(s) || !s || health === 'unavailable'
+                ? 'var(--error-color)'
+                : s === 'running' || updating
+                  ? 'var(--info-color, var(--primary-color))'
+                  : s === 'success'
+                    ? 'var(--success-color, var(--primary-color))'
+                    : Number.isFinite(problems) && problems > 0
+                      ? 'var(--warning-color, orange)'
+                      : upgrade
+                        ? 'var(--warning-color, orange)'
+                        : health === 'ready'
+                          ? 'var(--success-color, var(--primary-color))'
+                          : 'var(--secondary-text-color)';
             ]]]
       name:
         - justify-self: start
@@ -134,23 +200,28 @@ cards:
         - color: var(--secondary-text-color)
     tap_action:
       action: none
+
   - type: custom:mushroom-chips-card
     alignment: center
     chips:
       - type: template
-        content: Сканировать
-        icon: mdi:radar
+        icon: mdi:refresh
+        content: Обновить
         tap_action:
           action: perform-action
           perform_action: button.press
           target:
-            entity_id: button.dh_aqara_switch_app_scan
+            entity_id: button.dh_aqara_switch_app_refresh
+
       - type: template
+        icon: mdi:cloud-search
         content: Версия
-        icon: mdi:information-outline
         tap_action:
-          action: more-info
-          entity: sensor.dh_aqara_switch_app_version
+          action: perform-action
+          perform_action: button.press
+          target:
+            entity_id: button.dh_aqara_switch_app_check_updates
+
       - type: conditional
         conditions:
           - entity: update.digitalhouses_aqara_switch_app_update
@@ -169,11 +240,13 @@ cards:
               backup: true
             confirmation:
               text: >-
-                Обновить Aqara Switch App? Supervisor создаст резервную копию.
-                Управление назначенными светильниками будет временно недоступно.
+                Установить новую версию Aqara Switch App?
+                Перед обновлением Home Assistant создаст резервную копию App.
+                Управление освещением через приложение временно прервётся.
+
       - type: template
-        content: Перезапуск
         icon: mdi:restart
+        content: Перезапуск
         tap_action:
           action: perform-action
           perform_action: hassio.app_restart
@@ -182,7 +255,6 @@ cards:
           confirmation:
             text: >-
               Перезапустить Aqara Switch App?
-              Обработка нажатий и Mode Keeper временно остановятся.
-              Сам Home Assistant и Zigbee2MQTT не перезапускаются.
+              Управление освещением через приложение временно прервётся.
 grid_options:
   columns: 12

@@ -1,7 +1,8 @@
 const $ = (id) => document.getElementById(id);
 
-// Keep country details expanded when the dashboard refreshes.
-const expandedCountries = new Set();
+// Browser-provided ISO 3166 region names, always in English.
+const countryNames = typeof Intl.DisplayNames === "function"
+  ? new Intl.DisplayNames(["en"], { type: "region" }) : null;
 
 function escapeHtml(value) {
   return String(value).replace(/[&<>"']/g, (char) => ({
@@ -30,33 +31,54 @@ function tableRows(target, rows, render, colspan) {
   for (const row of rows) body.insertAdjacentHTML("beforeend", render(row));
 }
 
+function countryName(code) {
+  if (!code || ["XX", "ZZ"].includes(String(code).toUpperCase())) return "Unknown";
+  try {
+    return countryNames?.of(String(code).toUpperCase()) || String(code);
+  } catch {
+    return String(code);
+  }
+}
+
 function renderCountries(rows) {
   const body = $("countries");
   body.innerHTML = "";
+  let total = 0;
+
+  $("country-count").textContent = rows.length;
+  const newest = rows
+    .filter((row) => row.first_seen)
+    .reduce((latest, row) =>
+      !latest || new Date(row.first_seen) > new Date(latest.first_seen) ? row : latest,
+      null);
+  $("country-newest-name").textContent = newest ? countryName(newest.country) : "—";
+  $("country-newest-first-seen").textContent = newest
+    ? new Date(newest.first_seen).toLocaleString("en-GB", {
+        timeZone: "Asia/Almaty", day: "2-digit", month: "short",
+        year: "numeric", hour: "2-digit", minute: "2-digit", hour12: false
+      }).replace(",", " ·") + " (Almaty)"
+    : "—";
+
   if (!rows.length) {
-    body.innerHTML = '<tr><td class="empty" colspan="4">No data</td></tr>';
-    return;
+    body.innerHTML = '<tr><td class="empty" colspan="2">No data</td></tr>';
   }
 
   for (const country of rows) {
-    const code = escapeHtml(country.country);
-    const expanded = expandedCountries.has(country.country);
+    const count = Number(country.observed_installations) || 0;
+    total += count;
     body.insertAdjacentHTML("beforeend",
-      '<tr class="country-summary-row"><td class="product">' +
-      '<button type="button" class="country-toggle" aria-label="Toggle apps and agents for ' + code +
-      '" aria-expanded="' + expanded + '">' + code + '</button></td><td>' +
-      Number(country.observed_installations) + '</td><td>' + Number(country.active_7d) +
-      '</td><td>' + Number(country.active_30d) + '</td></tr>');
+      '<tr class="country-summary-row"><td class="country-name">' +
+      escapeHtml(countryName(country.country)) + '</td><td>' + count + '</td></tr>');
 
     for (const product of country.products || []) {
       body.insertAdjacentHTML("beforeend",
-        '<tr class="country-product-row"' + (expanded ? '' : ' hidden') +
-        '><td class="country-product-name">' + escapeHtml(product.name || product.product) +
-        '</td><td>' + Number(product.observed_installations) + '</td><td>' +
-        Number(product.active_7d) + '</td><td>' + Number(product.active_30d) +
-        '</td></tr>');
+        '<tr class="country-product-row"><td class="country-product-name">' +
+        escapeHtml(product.name || product.product) + '</td><td>' +
+        (Number(product.observed_installations) || 0) + '</td></tr>');
     }
   }
+
+  $("country-total").textContent = total;
 }
 
 function formatLastHeartbeat(value) {
@@ -96,61 +118,46 @@ function renderChart(points) {
   const chart = $("chart");
   chart.innerHTML = "";
 
-  const totalHeartbeats = points.reduce((sum, point) => sum + point.heartbeats, 0);
-  const activeDays = points.filter((point) => point.active_installations > 0).length;
-  const peakActive = Math.max(0, ...points.map((point) => point.active_installations));
-  const maxValue = Math.max(
-    1,
-    ...points.map((point) => Math.max(point.active_installations, point.heartbeats))
-  );
-  const labelEvery = Math.max(1, Math.ceil(points.length / 8));
+  if (!points.length) {
+    chart.textContent = "No data";
+    return;
+  }
 
-  $("period-heartbeats").textContent = totalHeartbeats;
-  $("period-active-days").textContent = activeDays;
-  $("period-peak").textContent = peakActive;
-
-  points.forEach((point, index) => {
-    const activePercent = (point.active_installations / maxValue) * 100;
-    const heartbeatPercent = (point.heartbeats / maxValue) * 100;
+  const maxTotal = Math.max(1, ...points.map((p) => Number(p.total_installations) || 0));
+  for (const point of points) {
+    const total = Number(point.total_installations) || 0;
+    const active = Math.min(total, Number(point.active_installations) || 0);
+    const inactive = Math.max(0, total - active);
 
     const day = document.createElement("div");
     day.className = "day-wrap";
-    day.title =
-      point.day +
-      " · " +
-      point.active_installations +
-      " active · " +
-      point.heartbeats +
-      " heartbeats";
+    day.title = point.day + " · Total: " + total + " · Inactive: " + inactive;
+    day.setAttribute("aria-label", day.title);
+    day.setAttribute("tabindex", "0");
 
     const bars = document.createElement("div");
-    bars.className = "bars";
+    bars.className = "bars comparison-bars";
 
-    const active = document.createElement("div");
-    active.className = "bar active-bar";
-    active.style.height = Math.max(point.active_installations ? 3 : 1, activePercent) + "%";
+    for (const [kind, count] of [["total", total], ["inactive", inactive]]) {
+      const column = document.createElement("div");
+      column.className = "comparison-column " + kind + "-column";
+      column.style.height = (count / maxTotal * 100) + "%";
 
-    const heartbeats = document.createElement("div");
-    heartbeats.className = "bar heartbeat-bar";
-    heartbeats.style.height = Math.max(point.heartbeats ? 3 : 1, heartbeatPercent) + "%";
+      const value = document.createElement("span");
+      value.className = "bar-value";
+      value.textContent = String(count);
+      column.appendChild(value);
+      bars.appendChild(column);
+    }
 
-    bars.appendChild(active);
-    bars.appendChild(heartbeats);
     day.appendChild(bars);
 
     const label = document.createElement("span");
     label.className = "day-label";
-    if (
-      index === 0 ||
-      index === points.length - 1 ||
-      index % labelEvery === 0
-    ) {
-      label.textContent = dayLabel(point.day);
-    }
+    label.textContent = dayLabel(point.day);
     day.appendChild(label);
-
     chart.appendChild(day);
-  });
+  }
 }
 
 async function load() {
@@ -158,13 +165,11 @@ async function load() {
   $("refresh").disabled = true;
 
   try {
-    const days = Number($("history-days").value);
-    const [summary, products, versions, countries, history] = await Promise.all([
+    const [summary, versions, countries, history] = await Promise.all([
       getJson("/api/summary"),
-      getJson("/api/products"),
       getJson("/api/versions"),
       getJson("/api/countries"),
-      getJson("/api/history?days=" + days)
+      getJson("/api/installation-history?days=7")
     ]);
 
     $("known").textContent = summary.observed_installations;
@@ -176,10 +181,6 @@ async function load() {
     const lastHeartbeat = formatLastHeartbeat(summary.last_heartbeat);
     $("last-heartbeat").textContent = lastHeartbeat.relative;
     $("last-heartbeat-exact").textContent = lastHeartbeat.exact;
-
-    tableRows("products", products, (r) =>
-      '<tr><td class="product">' + (r.name || r.product) + '</td><td>' + r.observed_installations +
-      '</td><td>' + r.active_24h + '</td><td>' + r.active_7d + '</td><td>' + r.active_30d + '</td></tr>', 5);
 
     tableRows("versions", versions, (r) =>
       '<tr><td class="product">' + (r.name || r.product) + '</td><td>' + r.version +
@@ -199,23 +200,5 @@ async function load() {
   }
 }
 
-$("countries").addEventListener("click", (event) => {
-  const toggle = event.target.closest(".country-toggle");
-  if (!toggle) return;
-
-  const country = toggle.textContent;
-  const expanded = toggle.getAttribute("aria-expanded") !== "true";
-  toggle.setAttribute("aria-expanded", String(expanded));
-  if (expanded) expandedCountries.add(country);
-  else expandedCountries.delete(country);
-
-  let row = toggle.closest("tr").nextElementSibling;
-  while (row && row.classList.contains("country-product-row")) {
-    row.hidden = !expanded;
-    row = row.nextElementSibling;
-  }
-});
-
 $("refresh").addEventListener("click", load);
-$("history-days").addEventListener("change", load);
 load();

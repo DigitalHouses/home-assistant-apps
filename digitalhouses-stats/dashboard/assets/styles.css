@@ -29,27 +29,46 @@ h1 { margin: 6px 0 3px; font-size: clamp(28px, 4vw, 44px); letter-spacing: -.04e
 .chart-panel { margin-bottom: 14px; }
 .panel-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 14px; margin-bottom: 18px; }
 .panel-head h2 { margin: 0 0 3px; font-size: 17px; }
+/* Compact counts in the country table heading. */
+.country-panel-head { flex-wrap: wrap; }
+.country-metrics { display: flex; align-items: flex-start; gap: 22px; margin-left: auto; }
+.country-metric { display: flex; flex-direction: column; min-width: 0; gap: 3px; }
+.country-metric > span { color: #8b94a0; font-size: 12px; }
+.country-metric > strong { color: #293341; font-size: 19px; line-height: 1.2; }
+.country-metric > small { color: #929aa5; font-size: 11px; white-space: nowrap; }
+@media (max-width: 560px) {
+  .country-metrics { width: 100%; margin-left: 0; justify-content: space-between; }
+}
 select { border: 1px solid #dce1e7; background: #fff; padding: 8px 10px; border-radius: 9px; color: #334; }
 
-.chart-meta { display: flex; align-items: center; gap: 26px; margin: -4px 0 15px; color: #8b94a0; font-size: 12px; }
-.chart-meta > div:not(.legend) { display: flex; align-items: baseline; gap: 6px; }
-.chart-meta strong { color: #2d3540; font-size: 17px; }
-.legend { margin-left: auto; display: flex; gap: 15px; align-items: center; color: #707987; }
-.legend span { display: inline-flex; align-items: center; gap: 6px; }
-.legend i { width: 9px; height: 9px; border-radius: 3px; display: inline-block; }
-.legend-active { background: #252b35; }
-.legend-heartbeats { background: #b8c0ca; }
+/* Two separate bars per UTC date: total registered and inactive. */
+.chart-legend { display: flex; align-items: center; gap: 18px; margin: -2px 0 12px; color: #707987; font-size: 12px; flex-wrap: wrap; }
+.chart-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.chart-legend i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+.legend-total { background: #3262a1; }
+.legend-inactive { background: #cb873d; }
+.chart-hint { margin-left: auto; color: #8995a4; }
 
-.chart { height: 250px; display: flex; align-items: stretch; gap: 3px; border-bottom: 1px solid #e9ecf0; padding-top: 10px; overflow: hidden; }
-.day-wrap { flex: 1 1 0; min-width: 3px; display: flex; flex-direction: column; position: relative; }
-.bars { flex: 1; display: flex; align-items: flex-end; justify-content: center; gap: 2px; min-height: 0; }
-.bar { width: min(46%, 12px); min-width: 1px; min-height: 1px; border-radius: 4px 4px 0 0; transition: height .2s ease, opacity .15s ease; }
-.active-bar { background: #252b35; opacity: .93; }
-.heartbeat-bar { background: #b8c0ca; opacity: .9; }
-.day-wrap:hover .bar { opacity: 1; }
-.day-label { height: 26px; padding-top: 7px; color: #9aa1ab; font-size: 10px; line-height: 1; white-space: nowrap; text-align: center; transform: translateX(-1px); }
+.chart { height: 265px; display: flex; align-items: stretch; gap: 12px; border-bottom: 1px solid #e9ecf0; padding-top: 22px; }
+.day-wrap { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; position: relative; outline-offset: 2px; }
+.bars { flex: 1; min-height: 0; display: flex; align-items: flex-end; justify-content: center; }
+.comparison-bars { gap: min(8px, 5%); }
+.comparison-column {
+  position: relative; width: min(38%, 65px);
+  min-height: 0; border-radius: 5px 5px 0 0;
+  transition: opacity .15s ease;
+}
+.total-column { background: #3262a1; }
+.inactive-column { background: #cb873d; }
+.day-wrap:hover .comparison-column, .day-wrap:focus-visible .comparison-column { opacity: .75; }
+.bar-value {
+  position: absolute; bottom: calc(100% + 3px); left: 50%;
+  transform: translateX(-50%); font-weight: 700; font-size: 11px; color: #334155;
+}
+.day-label { height: 26px; padding-top: 8px; color: #687384; font-size: 11px; line-height: 1; white-space: nowrap; text-align: center; }
+.day-wrap[title] { cursor: help; }
 
-.grid { display: grid; grid-template-columns: 1.2fr 1fr .8fr; gap: 14px; }
+.grid { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 14px; }
 .table-wrap { overflow-x: auto; }
 table { width: 100%; border-collapse: collapse; font-size: 13px; }
 th { color: #8b94a0; text-align: left; font-weight: 700; padding: 0 10px 10px 0; border-bottom: 1px solid #edf0f3; }
@@ -59,27 +78,26 @@ th:not(:first-child), td:not(:first-child) { text-align: right; }
 .product { font-weight: 700; }
 .muted { color: #929aa5; }
 
-/* Country drill-down uses the existing Known/7d/30d columns. */
-.country-toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  padding: 3px 0;
-  border: 0;
-  background: transparent;
-  color: inherit;
-  font: inherit;
-  font-weight: 700;
-  cursor: pointer;
+/* Country groups always show their App/Agent installation counts. */
+.country-summary-row td {
+  padding-top: 15px;
+  padding-bottom: 9px;
+  border-bottom: 0;
+  font-weight: 800;
 }
-.country-toggle::before { content: "▸"; color: #798494; font-size: 13px; }
-.country-toggle[aria-expanded="true"]::before { content: "▾"; }
-.country-toggle:hover { color: #3262a1; background: transparent; }
-.country-toggle:focus-visible { outline: 2px solid #3262a1; outline-offset: 3px; border-radius: 3px; }
+.country-summary-row:first-child td { padding-top: 11px; }
 .country-product-row { background: #f7f9fc; }
-.country-product-row[hidden] { display: none; }
 .country-product-row td { padding-top: 8px; padding-bottom: 8px; font-size: 12px; }
-.country-product-name { padding-left: 20px; color: #566477; }
+.country-product-name { padding-left: 24px; color: #566477; }
+.country-total-row th, .country-total-row td {
+  padding: 14px 10px 12px 0;
+  border-top: 2px solid #dce2ea;
+  border-bottom: 0;
+  color: #293341;
+  font-weight: 800;
+  font-size: 14px;
+}
+.country-total-row td { text-align: right; }
 
 footer { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 17px 3px 0; color: #8c95a0; font-size: 12px; }
 button { border: 1px solid #d9dee5; background: #fff; border-radius: 9px; padding: 8px 13px; cursor: pointer; color: #333b46; font-weight: 700; }
@@ -106,6 +124,7 @@ button:hover { background: #f7f8fa; }
   .card strong { font-size: 30px; }
   .card .time-value { font-size: 19px; }
   .panel { padding: 16px; }
-  .chart { height: 220px; gap: 2px; }
+  .chart { height: 220px; gap: 5px; }
+  .chart-hint { margin-left: 0; }
   .day-label { font-size: 9px; }
 }

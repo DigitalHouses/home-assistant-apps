@@ -24,7 +24,7 @@ def test_user_operation_runs_finishes_and_clears_after_five_seconds(tmp_path):
     clock = Clock()
     published = []
     card = AgentCard(
-        tmp_path / "card.json", lambda payload: published.append(payload.copy()) or True,
+        lambda payload: published.append(payload.copy()) or True,
         clock=clock.mono, now=clock.iso,
     )
     assert card.begin("refresh")
@@ -45,7 +45,7 @@ def test_user_operation_runs_finishes_and_clears_after_five_seconds(tmp_path):
 
 def test_error_remains_until_next_operation(tmp_path):
     clock = Clock()
-    card = AgentCard(tmp_path / "card.json", lambda p: True, clock=clock.mono, now=clock.iso)
+    card = AgentCard(lambda p: True, clock=clock.mono, now=clock.iso)
     card.begin("check")
     clock.advance(1.7)
     card.finish("check", error="GitHub unavailable")
@@ -60,7 +60,7 @@ def test_error_remains_until_next_operation(tmp_path):
 def test_background_collection_updates_freshness_not_foreground(tmp_path):
     clock = Clock()
     seen = []
-    card = AgentCard(tmp_path / "card.json", lambda p: seen.append(p.copy()) or True,
+    card = AgentCard(lambda p: seen.append(p.copy()) or True,
                      clock=clock.mono, now=clock.iso)
     card.collected(clock.iso())
     assert seen[-1]["last_collection_at"] == clock.iso()
@@ -72,29 +72,6 @@ def test_background_collection_updates_freshness_not_foreground(tmp_path):
     card.collected(clock.iso())
     assert len(seen) == 2
     assert card.state == "idle"
-
-
-def test_restart_handoff_requires_new_runtime_confirmation(tmp_path):
-    clock = Clock()
-    path = tmp_path / "card.json"
-    card = AgentCard(path, lambda p: True, clock=clock.mono, now=clock.iso)
-    card.begin("restart")
-    clock.advance(6.2)
-    recovered = AgentCard(path, lambda p: True, clock=clock.mono, now=clock.iso)
-    assert recovered.state == "running"
-    assert recovered.finish("restart")
-    assert recovered.state == "success"
-    assert recovered.duration_seconds == 6.2
-
-
-def test_interrupted_refresh_is_not_marked_success(tmp_path):
-    clock = Clock()
-    path = tmp_path / "card.json"
-    card = AgentCard(path, lambda p: True, clock=clock.mono, now=clock.iso)
-    card.begin("refresh")
-    clock.advance(5)
-    recovered = AgentCard(path, lambda p: True, clock=clock.mono, now=clock.iso)
-    assert recovered.state == "error"
 
 
 def test_discovery_card_is_same_mqtt_device():
@@ -176,47 +153,6 @@ def test_updates_card_visible_for_verified_new_release_or_active_install():
         assert "performance.now()" not in source
 
 
-def test_restart_duration_ignores_wall_clock_skew_between_processes(tmp_path):
-    """A two-second clock correction must not shorten a restarted operation."""
-    clock = Clock()
-    path = tmp_path / "card.json"
-    boot = lambda: "same-pve-boot"
-    first = AgentCard(path, lambda _: True, clock=clock.mono, now=clock.iso,
-                      boot_id=boot)
-    first.begin("restart")
-    clock.advance(10)
-    # The host wall clock moved backward by two seconds while restarting.
-    skewed_wall = lambda: (
-        clock.origin + timedelta(seconds=clock.seconds - 2)
-    ).isoformat()
-    second = AgentCard(path, lambda _: True, clock=clock.mono, now=skewed_wall,
-                       boot_id=boot)
-    assert second.state == "running"
-    assert second._started_monotonic == 0.0
-    assert second.finish("restart")
-    assert second.duration_seconds == 10.0  # old implementation: 8.0
-    assert "_started_monotonic" not in second.payload()
-    assert "_start_boot_id" not in second.payload()
-
-
-def test_install_cross_process_uses_monotonic_and_falls_back_across_host_reboot(tmp_path):
-    clock = Clock()
-    path = tmp_path / "card.json"
-    origin = AgentCard(path, lambda _: True, clock=clock.mono, now=clock.iso,
-                       boot_id=lambda: "old-boot")
-    origin.begin("install")
-    clock.advance(8)
-    # Different PVE boot ID means the monotonic tick has lost its origin.
-    new_boot = AgentCard(
-        path, lambda _: True, clock=lambda: 1.0, now=clock.iso,
-        boot_id=lambda: "new-boot",
-    )
-    assert new_boot.state == "running"
-    assert new_boot._started_monotonic is None
-    assert new_boot.finish("install")
-    assert new_boot.duration_seconds == 8.0
-
-
 def test_status_cards_use_native_ha_relative_time_without_javascript_timer():
     from pathlib import Path
     root = Path(__file__).parents[1]
@@ -227,113 +163,6 @@ def test_status_cards_use_native_ha_relative_time_without_javascript_timer():
         assert "performance.now()" not in source
         assert "this._dh_pve_timer" not in source
         assert "update_timer" not in source
-
-
-def test_installer_finishes_after_new_agent_started_and_automatic_check(tmp_path):
-    """A newer successful GitHub check must not conceal worker completion."""
-    from datetime import datetime, timedelta, timezone
-    from app.update_manager import UpdateManager
-    from app.agent_card import AgentCard
-
-    base = datetime(2026, 10, 9, 17, 0, tzinfo=timezone.utc)
-    instant = lambda delta: (base + timedelta(seconds=delta)).isoformat()
-    card_clock = Clock()
-    old = AgentCard(tmp_path / "agent_card.json", lambda _: True,
-                    clock=card_clock.mono, now=card_clock.iso,
-                    boot_id=lambda: "pve-boot")
-    assert old.begin("install")
-    # Align the test card with the updater transaction timeline.
-    old.started_at = instant(0)
-    old._persist()
-    updater = UpdateManager(tmp_path, "0.5.62")
-    updater.request.save({"version": "0.5.62", "requested_at": instant(1)})
-    updater.worker.save({"state": "verifying", "updated_at": instant(3)})
-    card_clock.advance(10)
-    recovered = AgentCard(tmp_path / "agent_card.json", lambda _: True,
-                          clock=card_clock.mono, now=card_clock.iso,
-                          boot_id=lambda: "pve-boot")
-    assert recovered.state == "running"
-    assert recovered.operation == "install"
-    assert updater.install_card_outcome(card_started_at=instant(0)) is None
-
-    updater.worker.save({"state": "completed", "updated_at": instant(13)})
-    # The aggregate status is IDLE after a fresher automatic GitHub check.
-    updater.known = True
-    updater.latest = "0.5.62"
-    updater.checked = instant(14)
-    assert updater._payload()["status"] == "idle"
-    assert updater.install_card_outcome(card_started_at=recovered.started_at) == (True, None)
-    assert recovered.finish("install")
-    assert recovered.state == "success"
-    assert recovered.duration_seconds == 10.0
-
-
-def test_install_card_reports_worker_error_after_restart(tmp_path):
-    from datetime import datetime, timedelta, timezone
-    from app.update_manager import UpdateManager
-
-    now = datetime(2026, 10, 9, 17, tzinfo=timezone.utc)
-    ts = lambda delta: (now + timedelta(seconds=delta)).isoformat()
-    updater = UpdateManager(tmp_path, "0.5.61")
-    updater.request.save({"version": "0.5.62", "requested_at": ts(1)})
-    updater.worker.save({"state": "error", "error": "Rollback completed",
-                        "updated_at": ts(12)})
-    updater.known = True
-    updater.latest = "0.5.62"
-    updater.checked = ts(14)  # masks old worker's terminal status
-    assert updater._payload()["status"] == "idle"
-    assert updater.install_card_outcome(card_started_at=ts(0)) == (
-        False, "Rollback completed"
-    )
-
-
-def test_install_card_does_not_accept_stale_worker_or_wrong_version(tmp_path):
-    from datetime import datetime, timedelta, timezone
-    from app.update_manager import UpdateManager
-
-    base = datetime(2026, 10, 9, 17, tzinfo=timezone.utc)
-    ts = lambda secs: (base + timedelta(seconds=secs)).isoformat()
-    updater = UpdateManager(tmp_path, "0.5.61")
-    updater.request.save({"version": "0.5.62", "requested_at": ts(1)})
-    updater.worker.save({"state": "completed", "updated_at": ts(12)})
-    result = updater.install_card_outcome(card_started_at=ts(0))
-    assert result[0] is False
-    assert "does not match" in result[1]
-    # A later manual upgrade may move beyond the originally requested version.
-    updater.version = "0.5.63"
-    assert updater.install_card_outcome(card_started_at=ts(0)) == (True, None)
-    # A stale transaction must still be rejected even if the version is newer.
-    stale = updater.install_card_outcome(card_started_at=ts(13))
-    assert stale is not None and stale[0] is False
-    assert "No matching installation transaction" in stale[1]
-    updater.worker.save({"state": "error", "error": "Old error",
-                        "updated_at": ts(0)})
-    stale = updater.install_card_outcome(card_started_at=ts(0))
-    assert stale is not None and stale[0] is False
-    assert "No matching installation transaction" in stale[1]
-
-
-def test_install_card_denied_by_ups_does_not_report_previous_success(tmp_path):
-    from datetime import datetime, timedelta, timezone
-    from app.update_manager import UpdateManager
-
-    base = datetime(2026, 10, 9, 17, tzinfo=timezone.utc)
-    ts = lambda secs: (base + timedelta(seconds=secs)).isoformat()
-    updater = UpdateManager(tmp_path, "0.5.62")
-    updater.request.save({"version": "0.5.62", "requested_at": ts(-20)})
-    updater.worker.save({"state": "completed", "updated_at": ts(-5)})
-    updater._status, updater._status_error = "error", "UPS on battery"
-    assert updater.install_card_outcome(card_started_at=ts(0)) == (
-        False, "UPS on battery"
-    )
-
-
-def test_main_install_completion_uses_transaction_not_aggregated_status():
-    from pathlib import Path
-    source = (Path(__file__).parents[1] / "app/main.py").read_text()
-    assert "update_manager.install_card_outcome(" in source
-    assert 'card.finish("install", error=str(result.get("error")' not in source
-
 
 
 def test_user_commands_are_acknowledged_before_blocking_background_work():
@@ -378,34 +207,86 @@ def test_status_cards_are_reused_in_dashboard_and_controls_preserved():
     assert "content: Перезапуск" in dashboard
 
 
-def test_finished_or_missing_update_cannot_leave_an_install_timer_running(tmp_path):
+
+
+def test_new_process_starts_clean_without_reading_old_ui_checkpoint(tmp_path):
+    old = tmp_path / "agent_card.json"
+    old.write_text('{"state":"error","operation":"install","error":"No matching installation transaction"}')
+    card = AgentCard(lambda _: True)
+    assert card.state == "idle" and card.error is None
+    assert card.last_collection_at is None
+    for operation in ("refresh", "check", "install", "restart"):
+        assert card.begin(operation)
+        card = AgentCard(lambda _: True)
+        assert card.state == "idle" and card.operation is None
+    assert old.exists()  # no migration or cleanup necessary
+
+
+def test_successful_cli_update_with_reversed_or_missing_timestamps(tmp_path):
     from app.update_manager import UpdateManager
-    manager = UpdateManager(tmp_path, "0.5.92")
-    # Persisted UI card exists, but a CLI install completed before its start.
-    manager.request.save({"version": "0.5.92", "requested_at": "2026-11-17T01:00:00+00:00"})
-    manager.worker.save({"state": "completed", "updated_at": "2026-11-17T01:00:20+00:00"})
-    outcome = manager.install_card_outcome(card_started_at="2026-11-17T01:01:00+00:00")
-    assert outcome is not None and outcome[0] is False
-    assert "matching installation transaction" in outcome[1]
-    card = AgentCard(tmp_path / "card.json", lambda _: True)
-    assert card.begin("install")
-    assert card.finish("install", error=outcome[1])
-    assert card.state == "error"  # never a fabricated success or running forever
-    manager.worker.save({"state": "idle"})
-    assert manager.install_card_outcome(card_started_at=card.started_at) == (
-        False, "No installation transaction is active"
-    )
+    manager = UpdateManager(tmp_path, "0.5.104")
+    manager.request.save({"version": "0.5.104", "requested_at": "2026-11-25T19:42:38.818226+00:00"})
+    manager.worker.save({"state": "completed", "error": None, "updated_at": "2026-11-25T19:43:00.818212+00:00"})
+    card = AgentCard(lambda _: True, now=lambda: "2026-11-25T19:42:41.329736+00:00")
+    manager.sync_install_card(card, startup=True)
+    assert card.state == "idle" and card.error is None
+    manager.request.path.unlink()
+    manager.sync_install_card(card, startup=True)
+    assert card.state == "idle" and card.error is None
+
+
+def test_surviving_worker_is_observed_without_reconstructing_ui_transaction(tmp_path):
+    from app.update_manager import UpdateManager
+    manager = UpdateManager(tmp_path, "0.5.105")
     manager.worker.save({"state": "verifying"})
-    assert manager.install_card_outcome(card_started_at=card.started_at) is None
+    card = AgentCard(lambda _: True)
+    manager.sync_install_card(card, startup=True)
+    assert card.state == "running" and card.operation == "install"
+    assert card.started_at is None
+    manager.worker.save({"state": "completed"})
+    manager.sync_install_card(card)
+    assert card.state == "success" and card.duration_seconds is None
+    assert card.error is None
 
 
-def test_restart_card_finishes_after_mqtt_connection_even_if_startup_partly_failed():
+def test_real_update_failure_preserved_and_superseded_error_cleared(tmp_path):
+    from app.update_manager import UpdateManager
+    manager = UpdateManager(tmp_path, "0.5.104")
+    manager.request.save({"version": "0.5.105"})
+    manager.worker.save({"state": "error", "error": "Rollback completed"})
+    card = AgentCard(lambda _: True)
+    manager.sync_install_card(card, startup=True)
+    assert card.state == "error" and card.error == "Rollback completed"
+    manager.version = "0.5.105"
+    card = AgentCard(lambda _: True)
+    manager.sync_install_card(card, startup=True)
+    assert card.state == "idle" and card.error is None
+
+
+def test_denied_install_does_not_use_old_worker_success(tmp_path):
+    from app.update_manager import UpdateManager
+    manager = UpdateManager(tmp_path, "0.5.104")
+    manager.worker.save({"state": "completed"})
+    card = AgentCard(lambda _: True)
+    card.begin("install")
+    manager._status, manager._status_error = "error", "UPS on battery"
+    manager.sync_install_card(card, requested=True)
+    assert card.state == "error" and card.error == "UPS on battery"
+
+
+def test_missing_worker_state_clears_ui_without_fake_failure_or_success(tmp_path):
+    from app.update_manager import UpdateManager
+    manager = UpdateManager(tmp_path, "0.5.104")
+    card = AgentCard(lambda _: True)
+    card.begin("install")
+    manager.sync_install_card(card)
+    assert card.state == "idle" and card.error is None
+
+
+def test_main_uses_current_worker_and_no_persisted_card():
     from pathlib import Path
     main = (Path(__file__).parents[1] / "app/main.py").read_text()
-    startup_block = main.split("            if not initialized:", 1)[1].split("            if initialized:", 1)[0]
-    connected_block = main.split("            if initialized:", 1)[1]
-    assert 'card.finish("restart")' not in startup_block
-    assert 'bridge.connected.is_set()' in connected_block
-    assert 'card.finish("restart")' in connected_block
-    # The independent updater must not be confused with a restart completion.
-    assert 'card.operation == "restart"' in connected_block
+    assert "agent_card.json" not in main
+    assert "install_card_outcome" not in main
+    assert "update_manager.sync_install_card(card, startup=True)" in main
+    assert "update_manager.sync_install_card(card, requested=install_update)" in main

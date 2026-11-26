@@ -14,7 +14,7 @@ The UI must answer three questions without guessing:
 2. Did the last attempt fail?
 3. When useful, when did the last successful operation finish?
 
-The product runtime is the source of truth. Home Assistant renders that state; it does not synthesize progress with timers or delays.
+The product runtime is the source of truth. Home Assistant renders that state; it does not synthesize progress with timers or delays. Reuse the actual operation owner; do not add a separate persistent UI workflow, transaction matching or duplicate operation state. This rule applies to every App and Agent dashboard.
 
 ## 2. Canonical runtime contract
 
@@ -91,7 +91,7 @@ duration_seconds = measured duration
 error = concise diagnostic text
 ~~~
 
-An `error` state remains authoritative until the next operation begins.
+A verified `error` remains authoritative until the next attempt or authoritative recovery. Internal bookkeeping mismatches are logged rather than presented as operation failures.
 
 ## 4. Home Assistant action-card pattern
 
@@ -150,7 +150,7 @@ When runtime reports `error`:
 - secondary text shows the runtime error or a concise mapped explanation;
 - icon uses an error symbol;
 - error presentation is red/error-colored;
-- the error remains visible until the next attempt begins.
+- the verified error remains visible until the next attempt or authoritative recovery.
 
 Example:
 
@@ -245,10 +245,7 @@ Products do not need to expose state sensors for truly instantaneous local actio
 
 Retained `updating` must never leave the UI permanently stuck after an unclean process restart.
 
-At startup, the product reconciles impossible stale operation state deterministically:
-
-- if no operation is actually running, do not continue publishing stale `updating`;
-- publish a truthful final state according to the product recovery/error contract.
+At startup, discard stale UI-only operation bookkeeping and publish actual current state. If no operation is running, do not retain stale `updating`. A surviving installer or Supervisor operation is displayed from its native state; a verified failure remains visible when relevant. Do not infer failure from missing or reordered card timestamps or reconstruct past UI transactions. Preserve actual business-operation recovery and rollback independently of presentation.
 
 MQTT/Home Assistant reconnect republishes state. It does not start the operation.
 
@@ -308,11 +305,13 @@ Future implementations should copy the contract, not blindly copy PVE-specific Y
 request accepted -> updating published before work
 success -> idle with started_at/finished_at/duration
 failure -> error with diagnostic error
-error -> remains until next attempt
+verified error -> remains until next attempt or authoritative recovery
 next attempt -> error changes to updating
 duplicate press while updating -> no duplicate concurrent operation
 MQTT reconnect -> operation does not restart
-product restart -> no stale impossible updating state remains
+product restart -> no stale UI-only updating/error state remains
+successful installation with missing/reordered UI timestamps -> healthy current state
+verified failed installation -> actionable error
 unchanged idle/error payload -> not continuously republished
 UI idle -> normal action presentation
 UI updating -> neutral/grey in-progress presentation

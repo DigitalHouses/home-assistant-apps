@@ -53,4 +53,29 @@ uvicorn digitalhouses_stats.main:app --host 127.0.0.1 --port 8080
 
 See `docs/DEPLOYMENT_LXC.md` for the Debian 12 LXC deployment and `docs/LOCAL_DASHBOARD.md` for the LAN-only dashboard.
 
-The LAN dashboard Country rows expand to show known and active installations per agent/app. The breakdown uses only aggregated, latest-country counts and is not exposed by the public telemetry API.
+The LAN dashboard combines country and product counts in one table: full English country names, App/Agent counts below each country, and a grand total. The breakdown uses only aggregated, latest-country counts and is not exposed by the public telemetry API.
+
+## New-country notifications (MQTT)
+
+Stats can publish a one-time non-retained MQTT event when a **new country**
+first appears in received heartbeat history. The notifier runs from a systemd
+timer every minute, independently of ingestion.
+
+- Topic: `DigitalHouses/Global/digitalhouses_stats/event/new_country`
+- QoS 1, retain false; JSON fields: `schema`, `event_type`,
+  `country`, `country_name`, `country_count`, `first_seen`.
+- The `country_count` matches the current dashboard count (latest reported
+  country per installation). `first_seen` is the earliest stored heartbeat
+  timestamp in UTC; display time zone is handled in Home Assistant.
+- On the first run, the state file is initialized from all historically
+  observed countries. Existing countries do not produce notifications.
+- Published countries are saved after broker PUBACK. Failed sends retry at
+  the next run. A country change via VPN can count as a new country.
+- No Telegram bot is required on Stats. CORE HA (`192.168.11.242`) subscribes
+  to the MQTT event and sends directly to the configured group with
+  `notify.send_message`, `entity_id: notify.dh_core_group`. The legacy global
+  Telegram dispatcher and `write2admins` are not needed for Stats events.
+
+See `deploy/digitalhouses-stats-country-notifier.service`,
+`deploy/digitalhouses-stats-country-notifier.timer`, and
+`integrations/ha_country_notification_package.yaml`.

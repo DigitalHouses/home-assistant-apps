@@ -1,0 +1,17 @@
+# DigitalHouses PBS Agent — Home Assistant Recorder.
+# Managed by DH Sync; applicable to every local PBS datastore/installation.
+#
+# Record only the two numeric datastore capacity time series:
+# occupied GiB (30-day statistics-graph) and occupied % (tap more-info graph).
+# Do not record rich backup/task trees or MQTT events.
+# Recorder database settings (db_url, purge_keep_days, etc.) remain owned
+# by Home Assistant and existing configuration.
+#
+# After DH Sync installs this package, restart Home Assistant to apply
+# the Recorder entity filter. HA long-term statistics accumulate thereafter.
+dh_pbs_agent_recorder_package:
+  recorder:
+    include:
+      entity_globs:
+        - sensor.dh_pbs_agent_datastore_*_used_gib
+        - sensor.dh_pbs_agent_datastore_*_used_percent

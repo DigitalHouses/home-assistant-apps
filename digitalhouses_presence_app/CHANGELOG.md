@@ -1,5 +1,33 @@
 # Changelog
 
+## 0.1.42
+
+- Identify the HTTPS telemetry client to Cloudflare using `User-Agent: DigitalHouses-Telemetry/1`, matching the existing Internet App. The default Python urllib User-Agent was rejected by Cloudflare with 403 / error 1010, preventing Presence heartbeat delivery.
+- Add a transport regression test to verify the canonical User-Agent, HTTP method, HTTPS endpoint, and timeout. No change to opt-in behavior, payload, installation identity, GPS/Wi-Fi processing or notifications.
+- The separate DH Stats server route and product allowlist must also accept `digitalhouses_presence_app`; an accepted heartbeat is confirmed only by HTTP 204.
+
+## 0.1.41
+
+- Correct misleading Home Assistant settings text in Russian and English. The existing telemetry consent switch is active in the experimental Presence App; its default remains false and disabled statistics never stop presence.
+- Show the explicit HTTP 422 response code and product allowlist diagnostic if DH Stats rejects a heartbeat, rather than logging only a generic `HTTPError`. Verify this response and retry backoff in a regression test.
+- No changes to GPS/Wi-Fi decisions, notifications, MQTT, telemetry payload, consent semantics or the server. The installed DH Stats ingestion service must separately load its updated allowlist.
+
+## 0.1.40
+
+- Added **explicit opt-in telemetry** for DigitalHouses Stats using the existing `telemetry_enabled` option. A fresh or upgraded installation remains **disabled by default**; Presence GPS/Wi-Fi, MQTT events, household automations, and notifications continue when telemetry is off. Mandatory policy v2 activation is held pending repository legal review.
+- The independent best-effort background sender reports protocol schema 1 / telemetry policy 1 to `https://telemetry.digitalhouses.vip/v1/heartbeat`. Only product identity, released version and a random installation UUID are sent; names, GPS, MACs, local IPs, trackers, and household data are never transmitted.
+- Credentials remain private in `/data/telemetry.json` (0600), survive restart/upgrade/backup, and use 24h ± 30min cadence, bounded 5s HTTPS request and ≥1h failure retry. An authenticated deletion method rotates the local identity after successful erasure.
+- Admit only `digitalhouses_presence_app` in the Stats product allowlist; keep all other products untouched. Add tests for opt-in, privacy, persistence, network isolation, deletion and unchanged Presence privileges. No runtime or HA-entity migration.
+
+## 0.1.39
+
+- Enable official release delivery through the canonical version-pinned GHCR image, replacing local-only Supervisor builds; retain the experimental stage and existing privileges. No migration of App data or entity identities.
+- The existing Paho MQTT client publishes a retained QoS 1 `DigitalHouses/Global/digitalhouses_presence_app/sync` announcement on each successful connection and reconnection, using the runtime App version and the canonical GitHub product path. This does not change the existing operational `dh_presence_app` MQTT topics or discovery entities.
+- Publish the approved four-column Presence Lovelace View as `dashboards/ru/presence.yaml`, retaining stable `path: presence`, the established layout, and its documented Mushroom/Button Card/Auto Entities dependencies.
+- Preserve locally configured `script.write2log` notification YAML in `examples/packages/` only: these non-portable opt-in files are not installed by DH Sync. There is no new automation, Recorder migration, UI panel registration, availability gate, or compatibility/version check.
+- Add connect/reconnect declaration tests and canonical View consistency test; all other Presence behavior stays unchanged.
+
+
 ## HA package · удалено третье Wi-Fi уведомление (версия App не меняется)
 
 - Удалён устаревший `wifi_lost` из обоих пакетов автоматизаций: trigger, ветка `script.write2log`, вспомогательная переменная; больше нет уведомления «Wi-Fi не подтверждается».

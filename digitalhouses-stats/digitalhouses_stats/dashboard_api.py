@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from .config import get_settings
 from .db import get_db
 from .protocol import ALLOWED_PRODUCTS
-from .stats import countries, history, products, summary, versions
+from .stats import countries, history, installation_history, products, summary, versions
 
 
 settings = get_settings()
@@ -69,3 +69,11 @@ def stats_history(
     db: Session = Depends(get_db),
 ) -> list[dict[str, object]]:
     return history(db, days=days, product=_validate_product(product))
+
+
+@app.get("/v1/stats/installation-history")
+def stats_installation_history(
+    days: int = Query(default=7, ge=1, le=365),
+    db: Session = Depends(get_db),
+) -> list[dict[str, object]]:
+    return installation_history(db, days=days)
