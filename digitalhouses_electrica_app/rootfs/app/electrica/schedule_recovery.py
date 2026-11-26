@@ -91,6 +91,12 @@ class ScheduleRecovery:
     def candidates(self,kind,rows,old,start,now):
         latest={}
         uncertain={}
+        for r in rows.values():
+            if r["enabled"]:
+                for a in r["assignments"]:
+                    common=self.app.config.get("common_actions",{}).get(a["entity_id"])
+                    if common and common["enabled"]:
+                        for target in common["assignments"]:uncertain[target["entity_id"]]=now
         def fence(targets,until):
             for a in targets:uncertain[a["entity_id"]]=max(until,uncertain.get(a["entity_id"],start))
         for row in rows.values():

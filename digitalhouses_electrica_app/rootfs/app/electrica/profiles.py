@@ -131,7 +131,7 @@ def adaptation_targets(config):
             for a in row["assignments"]:
                 if a["entity_id"].startswith("light."):
                     kinds.setdefault(a["entity_id"],set()).add(a.get("data",{}).get("profile")=="current")
-    for row in config.get("schedules",{}).values():
+    for row in list(config.get("schedules",{}).values())+list(config.get("common_actions",{}).values()):
         if not row["enabled"]:continue
         for a in row["assignments"]:
             if (a["entity_id"].startswith("light.") and a["operation"]=="on") or (a["entity_id"].startswith("media_player.") and a["operation"]=="volume"):

@@ -160,3 +160,13 @@ clear.onclick();assert.equal(result,undefined);assert.equal(m.value,'');assert.e
         self.assertIn('for(const a of existing)assignedRow(action,a,main)',js)
         self.assertIn('api("save-schedule",{revision:draft.revision,config})',js)
         self.assertIn('api("delete-schedule",{revision:draft.revision,entity_id:draft.id})',js)
+
+    def test_common_action_editor_reuses_assignment_editor(self):
+        js=(WEB/"app.js").read_text()
+        html=(WEB/"index.html").read_text()
+        self.assertIn('id="common-nav"',html)
+        self.assertIn('function renderCommonList()',js)
+        self.assertIn('function appendCommonChoice(container,action)',js)
+        self.assertIn('api("run-common",{entity_id:common.entity_id})',js)
+        self.assertIn('api("save-common",{revision:draft.revision,config})',js)
+        self.assertIn('api("delete-common",{revision:draft.revision,entity_id:draft.id})',js)

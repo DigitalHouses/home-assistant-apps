@@ -76,6 +76,13 @@ def parse_rule(value: object) -> dict:
         entries = value["assignments"]
         if not isinstance(entries, list) or not 1 <= len(entries) <= 16:
             raise CatalogError("Each action needs 1..16 targets")
+        from .common_rules import is_common
+        if any(isinstance(e,Mapping) and is_common(e.get("entity_id")) for e in entries):
+            e=entries[0]
+            if len(entries)!=1 or set(e)-{"entity_id","operation","data"} or e.get("operation")!="run" or e.get("data",{})!={}:
+                raise CatalogError("Common action reference must be the only assignment")
+            eid=e["entity_id"]
+            return {"action":"mixed","targets":[eid],"data":{},"target_data":{eid:{}},"target_operations":{eid:"run"}}
         targets, operations, attributes, timers = [], {}, {}, {}
         for entry in entries:
             if not isinstance(entry, Mapping) or set(entry) - {"entity_id", "operation", "data", "off_delay_seconds"}:

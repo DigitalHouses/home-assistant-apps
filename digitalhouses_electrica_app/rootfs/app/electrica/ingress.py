@@ -7,7 +7,7 @@ from pathlib import Path
 from urllib.parse import urlsplit, parse_qs
 
 from .catalog import CatalogError
-from . import climate_rules, media_rules, profiles, sensor_rules, schedule_rules
+from . import climate_rules, media_rules, profiles, sensor_rules, schedule_rules, common_rules
 from .binding_store import binding_document, validate_document, decode_json
 from .entity_options import parse_rows, render_rows, project
 from .ingress_catalog import normalize, supported_actions, required_keep
@@ -57,7 +57,7 @@ def snapshot(app):
         global_mode = getattr(app,"_home_profile",None)
         auto_day_night = getattr(app,"globals",{}).get("auto_day_night",False)
     rows = parse_rows(app.options.read())
-    indexed = {r["entity_id"]:r for r in rows if not sensor_rules.is_source(r["entity_id"]) and not schedule_rules.is_schedule(r["entity_id"])}
+    indexed = {r["entity_id"]:r for r in rows if not sensor_rules.is_source(r["entity_id"]) and not schedule_rules.is_schedule(r["entity_id"]) and not common_rules.is_common(r["entity_id"])}
     sensor_rows={r["entity_id"]:r for r in rows if sensor_rules.is_source(r["entity_id"])}
     sensors=[]
     for eid in sorted(set(sensor_catalog)|set(sensor_rows)):
@@ -92,8 +92,14 @@ def snapshot(app):
                         "status":"missing","reason":"Не найден в каталоге","relay_timers":row.get("relay_timers",{}),
                         "enabled":row["enabled"],"disabled_actions":row.get("disabled_actions",[]),"actions":[],
                         "bindings":{k:normalize(v) for k,v in row["actions"].items()}})
-    return {"devices":devices,"sensors":sensors,"schedules":[r for r in rows if schedule_rules.is_schedule(r["entity_id"])],"schedule_timezone":schedule_timezone,"sensor_runtime_ready":sensor_runtime_ready,"sensor_deadlines":sensor_deadlines,"targets":list(targets.values()),"scan":scan,
+    return {"devices":devices,"sensors":sensors,"common_actions":[r for r in rows if common_rules.is_common(r["entity_id"])],"schedules":[r for r in rows if schedule_rules.is_schedule(r["entity_id"])],"schedule_timezone":schedule_timezone,"sensor_runtime_ready":sensor_runtime_ready,"sensor_deadlines":sensor_deadlines,"targets":list(targets.values()),"scan":scan,
             "report":report,"revision":revision(rows),"version":app.version,"maintenance_mode":maintenance,"home_mode":global_mode["mode"] if global_mode else None,"auto_day_night":auto_day_night,"home_profiles_ready":bool(global_mode and "day" in global_mode and "night" in global_mode)}
+
+def validate_reference(assignment,targets,common):
+    if common_rules.is_common(assignment.get("entity_id")):
+        parse_rule({"assignments":[assignment]})
+        if assignment["entity_id"] not in common:raise CatalogError("Общее действие не найдено")
+    else:validate_assignment(assignment,targets)
 
 def validate_assignment(assignment, targets):
     rule = parse_rule({"assignments":[assignment]})
@@ -192,7 +198,7 @@ def save_device(app, payload):
                 parse_rule(rule)
                 for assignment in assignments:
                     if assignment not in current.get(action,[]):
-                        validate_assignment(assignment,targets)
+                        validate_reference(assignment,targets,app.config.get("common_actions",{}))
                 if not explicit and action not in disabled:
                     keep = required_keep(sw,action,keep)
                 updated[action] = rule
@@ -251,10 +257,10 @@ def save_sensor(app,payload):
             app.config=projected
     finally:app._scan_lock.release()
 
-def save_schedule(app,payload):
+def save_schedule(app,payload,*,common=False):
     if not isinstance(payload,dict) or set(payload)!={"revision","config"}:
         raise CatalogError("Некорректное расписание")
-    row=schedule_rules.validate_row(payload["config"])
+    row=(common_rules if common else schedule_rules).validate_row(payload["config"])
     if not app._scan_lock.acquire(blocking=False):raise CatalogError("Идёт сканирование")
     try:
         options=app.options.read()
@@ -263,7 +269,7 @@ def save_schedule(app,payload):
         old=next((r for r in rows if r["entity_id"]==row["entity_id"]),{})
         with app._mutex:
             for a in row["assignments"]:
-                if a not in old.get("assignments",[]):validate_assignment(a,app.target_catalog)
+                if a not in old.get("assignments",[]):validate_reference(a,app.target_catalog,app.config.get("common_actions",{}))
             rows=[r for r in rows if r["entity_id"]!=row["entity_id"]]+[row]
             options["switches"]=render_rows(rows)
             cfg=project(app.config,options)
@@ -271,8 +277,8 @@ def save_schedule(app,payload):
             app.config=cfg
     finally:app._scan_lock.release()
 
-def delete_schedule(app,payload):
-    if not isinstance(payload,dict) or set(payload)!={"revision","entity_id"} or not schedule_rules.is_schedule(payload["entity_id"]):
+def delete_schedule(app,payload,*,common=False):
+    if not isinstance(payload,dict) or set(payload)!={"revision","entity_id"} or not (common_rules.is_common if common else schedule_rules.is_schedule)(payload["entity_id"]):
         raise CatalogError("Некорректное расписание")
     if not app._scan_lock.acquire(blocking=False):raise CatalogError("Идёт сканирование")
     try:
@@ -317,7 +323,7 @@ def import_bindings(app, payload):
                 if issue.get("category") in ("invalid_binding","invalid_keep_mode"):
                     raise CatalogError(issue["object_name"]+": "+issue["reason"])
             for row in rows:
-                if schedule_rules.is_schedule(row["entity_id"]):
+                if schedule_rules.is_schedule(row["entity_id"]) or common_rules.is_common(row["entity_id"]):
                     for a in row["assignments"]:
                         if a["entity_id"] in app.target_catalog:
                             check=deepcopy(a)
@@ -442,6 +448,16 @@ def start_ingress(app, port=8099):
                 elif path == "/api/browse-media":
                     self.reply(200,browse_media(app,payload))
                     return
+                elif path == "/api/run-common":
+                    if not isinstance(payload,dict) or set(payload)!={"entity_id"} or not common_rules.is_common(payload["entity_id"]):
+                        raise CatalogError("Некорректное общее действие")
+                    with app._mutex:rid=app.common_engine.enqueue(payload["entity_id"],{"kind":"ingress"})
+                    self.reply(200,{"ok":True,"id":rid})
+                    return
+                elif path == "/api/save-common":
+                    save_schedule(app,payload,common=True)
+                elif path == "/api/delete-common":
+                    delete_schedule(app,payload,common=True)
                 elif path == "/api/save-schedule":
                     save_schedule(app,payload)
                 elif path == "/api/delete-schedule":

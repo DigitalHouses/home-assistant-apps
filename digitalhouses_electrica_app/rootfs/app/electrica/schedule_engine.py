@@ -103,13 +103,22 @@ class ScheduleEngine:
         if not assignments:return
         calls=rules.commands({**row,"assignments":assignments})
         targets=[a["entity_id"] for a in assignments]
-        rid=self.app.event_log.press("ha",row["name"],"Восстановление расписания" if recovery else "Расписание",targets)
         token={"row":deepcopy(row),"generation":self.generation,"due":due,"queued_at":now,"occurrence":occurrence,
                "routes":{e:deepcopy(self.app.config.get("light_routes",{}).get(e)) for e in targets},
                "recovery":recovery}
         if recovery:
             token["identity"]=self.recovery.identity(self.rows())
             token["manual"]={eid:self.app.sensor_engine.manual.get(eid,0) for eid in targets}
+        from .common_rules import reference
+        common=reference(calls)
+        if common:
+            # Reference uses the parent schedule's deadline and generation.
+            try:self.app.common_engine.enqueue(common,{"kind":"schedule","token":token})
+            except ValueError as exc:
+                rid=self.app.event_log.press("ha",row["name"],"Расписание",targets)
+                self.app.event_log.finish(rid,str(exc),targets)
+            return
+        rid=self.app.event_log.press("ha",row["name"],"Восстановление расписания" if recovery else "Расписание",targets)
         try:self.app._jobs.put_nowait((None,token,row["name"],"SCHEDULE",calls,rid))
         except queue.Full:self.app.event_log.finish(rid,"Очередь заполнена",targets)
 

@@ -67,6 +67,12 @@ It is independent of any Home Assistant dashboard.
   skipped. Manual changes to one member cancel the group timer. Native HA
   groups remain excluded pending route verification. Hardware acceptance
   and readiness integration remain.
+- **Common actions (DEV):** named reusable explicit command sets in
+  the same JSON store. Ingress run, logical key reference, daily schedule
+  reference and non-retained MQTT invocation share the normal Engine.
+  No nested sets or relative operations; no automatic replay of named
+  sets. Existing route and window guard verification applies. Dynamic
+  all-lights OFF with exclusions and group deduplication is still pending.
 - **Schedules (DEV):** named daily point actions using HA local clock
   or sun.sun sunrise/sunset with signed minute offsets. Ingress reuses
   the assignment editor and JSON store; dispatch uses the existing queue

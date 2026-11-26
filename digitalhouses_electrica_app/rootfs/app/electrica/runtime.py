@@ -24,6 +24,8 @@ from .event_log import EventLog
 from .sensor_engine import SensorEngine
 from .relay_timers import RelayTimers
 from .schedule_engine import ScheduleEngine
+from .common_engine import CommonEngine, COMMAND_TOPIC as COMMON_COMMAND_TOPIC
+from . import common_rules
 from . import readiness
 from .control import HAClient, light_commands, verified_adopted_switch
 from .mqtt_lights import plan_batch
@@ -192,6 +194,7 @@ class Application:
         self.relay_timers = RelayTimers(self)
         self.readiness = readiness.Readiness()
         self.schedule_engine = ScheduleEngine(self,last_scan_path.with_name("schedule_history.json"))
+        self.common_engine = CommonEngine(self)
         self.device_details = []
         self._networks: dict[str, dict] = {}
         self._subscribed: set[str] = set()
@@ -363,6 +366,11 @@ class Application:
                 for action, rule in switch["bindings"].items():
                     rule["enabled"] = action in effective and switch.get("enabled",False)
                     for eid in rule.get("targets",[]):
+                        if common_rules.is_common(eid):
+                            common=config.get("common_actions",{}).get(eid)
+                            if not common or not common["enabled"]:
+                                problems.append({"object_name":eid,"category":"target_unavailable","reason":"Common action missing or disabled"})
+                            continue
                         target = target_catalog.get(eid, {})
                         state = target.get("state", "unknown")
                         route = routes.get(eid)
@@ -440,8 +448,9 @@ class Application:
             self.relay_timers.reset()
             self.readiness.reset()
             self.schedule_engine.recovery.disconnect()
+            self.common_engine.disconnect()
         for topic in (*_FILTERS, SCAN_REQUEST, ROOT + "/command/refresh",
-                      ROOT + "/command/check_updates", ROOT + "/command/delete_telemetry", "homeassistant/status", *profiles.TOPICS, *readiness.TOPICS):
+                      ROOT + "/command/check_updates", ROOT + "/command/delete_telemetry", "homeassistant/status", *profiles.TOPICS, *readiness.TOPICS, COMMON_COMMAND_TOPIC):
             self._subscribe(topic)
         self._publish(AVAILABILITY, "online")
         self._publish(SYNC_TOPIC, sync_payload(self.version))
@@ -468,9 +477,13 @@ class Application:
             self.relay_timers.reset()
             self.readiness.reset()
             self.schedule_engine.recovery.disconnect()
+            self.common_engine.disconnect()
 
     def _on_message(self, client, userdata, message):
         del client, userdata
+        if message.topic==COMMON_COMMAND_TOPIC:
+            with self._mutex:self.common_engine.receive(bytes(message.payload),getattr(message,"retain",False))
+            return
         if message.topic in readiness.TOPICS:
             with self._mutex:
                 self.readiness.receive(message.topic,bytes(message.payload),getattr(message,"retain",False))
@@ -737,6 +750,13 @@ class Application:
                         rid = self.event_log.press(base,name,action)
                         self.event_log.finish(rid,"Нет активной привязки")
                     continue
+                common=common_rules.reference(commands)
+                if common:
+                    try:self.common_engine.enqueue(common,{"kind":"key","base":base,"name":name,"coordinator":coordinator,"press":action})
+                    except CatalogError as exc:
+                        rid=self.event_log.press(base,name,action,[common])
+                        self.event_log.finish(rid,str(exc),[common])
+                    continue
                 targets = [eid for command in commands for eid in command["target"]["entity_id"]]
                 self.sensor_engine.manual_control(targets)
                 target_label = ", ".join(targets)
@@ -998,8 +1018,8 @@ class Application:
                         state = self._ha_client.read_domain_state(eid)
                         op,data,desired = rules.plan(operation,call.get("data",{}),state,unit)
                     with self._mutex:
-                        if base is None and action=="SCHEDULE":
-                            if (not self.schedule_engine.allowed(coordinator,eid)
+                        if base is None and action in ("SCHEDULE","COMMON"):
+                            if (not self.named_action_allowed(action,coordinator,eid)
                                 or self.event_log.active_target(eid,exclude=rid)
                                 or (is_cover and cover_rules.guard_ids(self.config,eid)!=guard_ids)):
                                 raise ActionError("Schedule, target or guard changed")
@@ -1030,6 +1050,9 @@ class Application:
                     skipped.append({"light":eid,"reason":str(exc)[:160]})
         return sent, skipped
 
+    def named_action_allowed(self,action,token,eid=None):
+        return (self.common_engine if action=="COMMON" else self.schedule_engine).allowed(token,eid)
+
     def _run_actions(self):
         """Dispatch verified Z2M lights via MQTT and HA-native lights via REST."""
         while not self._stop.is_set():
@@ -1049,7 +1072,7 @@ class Application:
                 continue
             targets = [eid for cmd in commands for eid in cmd["target"]["entity_id"]]
             sensor_job = base is None and action in ("SENSOR_ON","SENSOR_OFF")
-            schedule_job = base is None and action=="SCHEDULE"
+            schedule_job = base is None and action in ("SCHEDULE","COMMON")
             key_token=job[6] if base is not None and len(job)>6 else None
             try:
                 if base is None and action=="RELAY_OFF":
@@ -1120,8 +1143,8 @@ class Application:
                             self._publish_action(state="skipped",switch=name,action=action,target="",error="Sensor state, ownership or binding changed")
                             continue
                     elif schedule_job:
-                        if not self.schedule_engine.allowed(coordinator):
-                            self.event_log.finish(rid,"Расписание изменилось или время пропущено",targets)
+                        if not self.named_action_allowed(action,coordinator):
+                            self.event_log.finish(rid,"Назначение изменилось или время пропущено",targets)
                             self._publish_action(state="skipped",switch=name,action=action,target="",error="Schedule expired or changed")
                             continue
                     elif is_test:
@@ -1188,7 +1211,7 @@ class Application:
                     for plan in plans:
                         if schedule_job:
                             eid=plan["light"]
-                            if (not self.schedule_engine.allowed(coordinator,eid)
+                            if (not self.named_action_allowed(action,coordinator,eid)
                                 or self.observed_target_state(eid,verify_route=True) not in ("on","off")
                                 or self.event_log.active_target(eid,exclude=rid)):
                                 skipped.append({"light":eid,"reason":"Schedule target unavailable or changed"})
@@ -1266,7 +1289,7 @@ class Application:
                                 call={**call,"target":{"entity_id":ids}}
                                 authorized=True
                             elif schedule_job:
-                                valid_ids=[eid for eid in ids if self.schedule_engine.allowed(coordinator,eid)
+                                valid_ids=[eid for eid in ids if self.named_action_allowed(action,coordinator,eid)
                                     and eid not in self.config.get("light_routes",{})
                                     and lab_state_cache.get(eid,(False,None))[0]
                                     and lab_state_cache[eid][1] in ("on","off")
@@ -1366,7 +1389,7 @@ class Application:
                                             or (action=="SENSOR_OFF" and not self.sensor_engine.live_owned(eid,live_off))):
                                         raise ActionError("Sensor state or ownership changed")
                                 elif schedule_job:
-                                    if not self.schedule_engine.allowed(coordinator,eid) or self.event_log.active_target(eid,exclude=rid):
+                                    if not self.named_action_allowed(action,coordinator,eid) or self.event_log.active_target(eid,exclude=rid):
                                         raise ActionError("Schedule target unavailable or changed")
                                 else:
                                     sw = next((x for room in self.config["rooms"] for x in room["switches"]

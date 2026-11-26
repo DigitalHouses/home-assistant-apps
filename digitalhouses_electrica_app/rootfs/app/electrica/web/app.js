@@ -37,10 +37,13 @@ function targetIcon(t,id){
 }
 function stat(d){return {same:["●",""],disabled:["Ⅱ","muted"],missing:["✖","danger"],offline:["⚠","problem"],unknown:["?","muted"]}[d.status]||["⚠","problem"]}
 function knownState(state){return typeof state==="string"&&!["unknown","unavailable",""].includes(state)}
-function targetLabel(id,t){return t?.name&&t.name!==id?id+" - "+t.name:id}
-function targetNode(id){const t=model.targets.find(x=>x.entity_id===id);const n=el("span",undefined,"target");n.dataset.entity=id;n.append(targetIcon(t,id),el("span",targetLabel(id,t),"target-label"));if(!t||!knownState(t.state)){const w=el("span","⚠","problem");w.title=t?"Сущность недоступна":"Сущность не найдена";n.append(w)}return n}
+function targetLabel(id,t){if(id.startsWith("common_action."))return (model?.common_actions||[]).find(a=>a.entity_id===id)?.name||id;return t?.name&&t.name!==id?id+" - "+t.name:id}
+function targetNode(id){if(id.startsWith("common_action.")){
+  const a=(model.common_actions||[]).find(r=>r.entity_id===id);
+  return el("span","↪ "+(a?.name||id)+(a?.enabled?"":" ⚠"),"target");
+}const t=model.targets.find(x=>x.entity_id===id);const n=el("span",undefined,"target");n.dataset.entity=id;n.append(targetIcon(t,id),el("span",targetLabel(id,t),"target-label"));if(!t||!knownState(t.state)){const w=el("span","⚠","problem");w.title=t?"Сущность недоступна":"Сущность не найдена";n.append(w)}return n}
 async function api(path,data,raw=false){const r=await fetch("api/"+path,data===undefined?{}:{method:"POST",headers:{"Content-Type":"application/json"},body:raw?data:JSON.stringify(data)});const v=await r.json();if(!r.ok)throw Error(v.error||"Ошибка");return v}
-async function load(){try{model=await api("state");document.querySelector("#app-version").textContent="v"+model.version;document.querySelector("#summary").textContent=section==="schedules"?"Расписания ("+(model.schedules||[]).length+")":section==="sensors"?"Датчики ("+(model.sensors||[]).length+")":"Клавиши · устройства ("+model.devices.length+") · Сети Z2M ("+new Set(model.devices.map(d=>d.network).filter(n=>n!=="—")).size+")";notice.classList.toggle("error",!!model.scan.error);scan.disabled=model.scan.state==="updating"||busy;scan.textContent=model.scan.state==="updating"?"Сканирование…":"⟳ Сканировать";if(!editing)renderList();if(!editing&&!busy){if(model.scan.error)notice.textContent=model.scan.error;else if(model.scan.state==="updating")notice.textContent="Сканирование…";else if(model.report){const p=model.report.problems||[];notice.textContent="Последний Scan: "+(model.report.scanned??0)+" устройств · "+p.length+" проблем";notice.title=p.map(x=>x.name+": "+x.reason).join("\n")}}}catch(e){notice.textContent=e.message}}
+async function load(){try{model=await api("state");document.querySelector("#app-version").textContent="v"+model.version;document.querySelector("#summary").textContent=section==="common"?"Общие действия ("+(model.common_actions||[]).length+")":section==="schedules"?"Расписания ("+(model.schedules||[]).length+")":section==="sensors"?"Датчики ("+(model.sensors||[]).length+")":"Клавиши · устройства ("+model.devices.length+") · Сети Z2M ("+new Set(model.devices.map(d=>d.network).filter(n=>n!=="—")).size+")";notice.classList.toggle("error",!!model.scan.error);scan.disabled=model.scan.state==="updating"||busy;scan.textContent=model.scan.state==="updating"?"Сканирование…":"⟳ Сканировать";if(!editing)renderList();if(!editing&&!busy){if(model.scan.error)notice.textContent=model.scan.error;else if(model.scan.state==="updating")notice.textContent="Сканирование…";else if(model.report){const p=model.report.problems||[];notice.textContent="Последний Scan: "+(model.report.scanned??0)+" устройств · "+p.length+" проблем";notice.title=p.map(x=>x.name+": "+x.reason).join("\n")}}}catch(e){notice.textContent=e.message}}
 const keyNames={main:"Основная",left:"Левая",right:"Правая",center:"Центральная"};
 const modeNames={"":"Не настроена",control_relay:"Физическая",decoupled:"Логическая","decoupled/ON":"Логическая · ON","decoupled/OFF":"Логическая · OFF"};
 const logicalPolicy=p=>["decoupled","decoupled/ON","decoupled/OFF"].includes(p);
@@ -131,6 +134,7 @@ function modeControls(){
 }
 function deviceTitle(d){return d.ha_name&&d.ha_name!==d.name?d.name+" - "+d.ha_name:d.name}
 function renderList(){
+if(section==="common"){renderCommonList();return}
 if(section==="schedules"){renderSchedules();return}
 if(section==="sensors"){renderSensors();return}
 const focused=main.contains(document.activeElement)?document.activeElement.dataset.deviceId:null;
@@ -344,11 +348,18 @@ if(a.operation!=="off"){if(t.brightness)addParam(p,t,a,"brightness_pct","Ярк�
 function scheduleOperations(a,t){
   return assignmentOperations(a,t).filter(([op])=>!["toggle","play_pause","next","previous"].includes(op));
 }
-function assignedRow(action,a,container){const t=model.targets.find(t=>t.entity_id===a.entity_id),row=el("div",undefined,"assigned");row.append(targetIcon(t,a.entity_id),el("strong",(t?.name||a.entity_id)+" · "+a.entity_id));const op=el("select");for(const [v,n] of (editing?.sensor?[["on","ON"]]:editing?.schedule?scheduleOperations(a,t):assignmentOperations(a,t))){const o=el("option",n);o.value=v;op.append(o)}op.value=a.operation;op.onchange=()=>{a.operation=op.value;
+function assignedRow(action,a,container){
+if(a.entity_id.startsWith("common_action.")){
+  const row=el("div",undefined,"assigned");row.append(targetNode(a.entity_id),button("Удалить",()=>{
+    delete draft.bindings[action];draft.disabled_actions=draft.disabled_actions.filter(x=>x!==action);
+    update();renderEdit(action);
+  }));container.append(row);return;
+}
+const t=model.targets.find(t=>t.entity_id===a.entity_id),row=el("div",undefined,"assigned");row.append(targetIcon(t,a.entity_id),el("strong",(t?.name||a.entity_id)+" · "+a.entity_id));const op=el("select");for(const [v,n] of (editing?.sensor?[["on","ON"]]:(editing?.schedule||editing?.common)?scheduleOperations(a,t):assignmentOperations(a,t))){const o=el("option",n);o.value=v;op.append(o)}op.value=a.operation;op.onchange=()=>{a.operation=op.value;
 if(a.entity_id.startsWith("cover.")){if(op.value==="position")a.data.position=50;else delete a.data.position}
 else if(/^(climate|media_player)\./.test(a.entity_id))a.data=DHElectricaEntityPicker.initialData(op.value,t);
 if(op.value==="off"){delete a.off_delay_seconds;for(const k of Object.keys(a.data))if(k!=="transition")delete a.data[k];}update();renderEdit(action)};const test=lightTestControl(t,a.entity_id);if(test)row.append(test);row.append(op,button("Удалить",()=>{draft.bindings[action]=draft.bindings[action].filter(x=>x.entity_id!==a.entity_id);if(!draft.bindings[action].length){delete draft.bindings[action];draft.disabled_actions=draft.disabled_actions.filter(x=>x!==action)}update();renderEdit(action)}));if(!t){row.append(el("span","⚠ Сущность отсутствует","problem"));container.append(row);return}if(a.entity_id.startsWith("cover."))coverControls(action,a,t,row);if(a.entity_id.startsWith("climate."))climateControls(a,t,row);if(a.entity_id.startsWith("media_player."))mediaControls(a,t,row,action);if(a.entity_id.startsWith("light."))lightProfileControls(a,t,row,action);
-if(!editing?.schedule&&(editing?.sensor||(/^(light|switch)\./.test(a.entity_id)&&["on","toggle"].includes(a.operation)))){
+if(!editing?.schedule&&!editing?.common&&(editing?.sensor||(/^(light|switch)\./.test(a.entity_id)&&["on","toggle"].includes(a.operation)))){
   const p=el("div",undefined,"params");
   p.append(durationControl(editing?.sensor?"Авто-OFF после отсутствия":"Авто-OFF после включения",a.off_delay_seconds,editing?.sensor?0:1,total=>{
     if(total===undefined)delete a.off_delay_seconds;else a.off_delay_seconds=total;
@@ -357,7 +368,7 @@ if(!editing?.schedule&&(editing?.sensor||(/^(light|switch)\./.test(a.entity_id)&
 }
 container.append(row)}
 function actionGroup(action){const p=action.match(/_(left|right|center|plus|minus|both|[0-9]+)$/)||action.match(/^(button_[0-9]+)_/);return p?p[1]:"Нажатия"}
-function renderEdit(expand){if(editing?.schedule){renderScheduleEdit();return}if(editing?.sensor){renderSensorEdit();return}main.replaceChildren();const h=el("div",undefined,"head");h.append(button("← Клавиши",goBack),el("h2",deviceTitle(draft)+" · "+draft.room),button("Сохранить",save,"save"));main.append(h);const enabled=el("input");enabled.type="checkbox";enabled.checked=draft.enabled;enabled.onchange=()=>{draft.enabled=enabled.checked;update()};const l=el("label");l.append(enabled,document.createTextNode("Включено"));const controls=el("div",undefined,"editor-controls");controls.append(l);main.append(controls);
+function renderEdit(expand){if(editing?.common){renderScheduleEdit();return}if(editing?.schedule){renderScheduleEdit();return}if(editing?.sensor){renderSensorEdit();return}main.replaceChildren();const h=el("div",undefined,"head");h.append(button("← Клавиши",goBack),el("h2",deviceTitle(draft)+" · "+draft.room),button("Сохранить",save,"save"));main.append(h);const enabled=el("input");enabled.type="checkbox";enabled.checked=draft.enabled;enabled.onchange=()=>{draft.enabled=enabled.checked;update()};const l=el("label");l.append(enabled,document.createTextNode("Включено"));const controls=el("div",undefined,"editor-controls");controls.append(l);main.append(controls);
 if(Object.keys(draft.key_modes||{}).length)main.append(modeControls());
 const possible=Object.keys(draft.key_modes||{}).length?Object.keys(draft.key_actions):draft.actions;
 let group=null;const ordered=[...new Set([...possible.filter(a=>actionAllowed(draft,a)),...Object.keys(draft.bindings)])].sort((a,b)=>actionGroup(a).localeCompare(actionGroup(b))||a.localeCompare(b));for(const action of ordered){const next=actionGroup(action);if(next!==group){main.append(el("h2",next==="Нажатия"?next:"Клавиша "+next));group=next;}if(physicalAction(draft,action)){
@@ -368,6 +379,8 @@ let group=null;const ordered=[...new Set([...possible.filter(a=>actionAllowed(dr
 }
 const allowed=actionAllowed(draft,action),detail=el("details",undefined,"action");detail.open=action===expand||(!expand&&!!draft.bindings[action]);detail.append(el("summary",action+" · "+(draft.bindings[action]||[]).map(a=>targetLabel(a.entity_id,model.targets.find(t=>t.entity_id===a.entity_id))).join(", ")+(allowed?"":" ⚠")));if(draft.bindings[action]){const c=el("input");c.type="checkbox";c.checked=!draft.disabled_actions.includes(action);c.onchange=()=>{draft.disabled_actions=c.checked?draft.disabled_actions.filter(x=>x!==action):[...draft.disabled_actions,action];update()};const l=el("label");l.append(c,document.createTextNode("Назначение активно"));detail.append(l)}for(const a of draft.bindings[action]||[])assignedRow(action,a,detail);if(allowed){
   const existing=draft.bindings[action]||[];
+  if(!existing.length)appendCommonChoice(detail,action);
+  if(existing.some(a=>a.entity_id.startsWith("common_action."))){main.append(detail);continue}
   detail.append(button(existing.length?"Изменить выбор сущностей":"+ Выбрать сущности",()=>{
     const usage={};
     for(const device of model.devices)for(const [press,assignments] of Object.entries(device.bindings))
@@ -385,6 +398,11 @@ const allowed=actionAllowed(draft,action),detail=el("details",undefined,"action"
 async function save(){try{
   const invalid=main.querySelector(".duration-control input:invalid");
   if(invalid){invalid.reportValidity();return}
+  if(editing?.common){
+    const config={entity_id:draft.id,name:draft.name.trim(),enabled:draft.enabled,assignments:draft.bindings.schedule||[]};
+    await api("save-common",{revision:draft.revision,config});
+    editing=null;draft=null;dirty=false;notice.textContent="Сохранено";await load();return;
+  }
   if(editing?.schedule){
     const config={entity_id:draft.id,name:draft.name.trim(),enabled:draft.enabled,trigger:draft.trigger,catch_up:!!draft.catch_up,assignments:draft.bindings.schedule||[]};
     await api("save-schedule",{revision:draft.revision,config});
@@ -407,11 +425,55 @@ function selectSection(next){
   document.querySelector("#devices-nav").classList.toggle("active",next==="keys");
   document.querySelector("#sensors-nav").classList.toggle("active",next==="sensors");
   document.querySelector("#schedules-nav").classList.toggle("active",next==="schedules");
+  document.querySelector("#common-nav").classList.toggle("active",next==="common");
   if(model)renderList();load();
 }
 document.querySelector("#devices-nav").onclick=()=>selectSection("keys");
 document.querySelector("#sensors-nav").onclick=()=>selectSection("sensors");
 document.querySelector("#schedules-nav").onclick=()=>selectSection("schedules");
+document.querySelector("#common-nav").onclick=()=>selectSection("common");
+function appendCommonChoice(container,action){
+  const choices=(model.common_actions||[]).filter(a=>a.enabled);
+  if(!choices.length)return;
+  const select=selectOptions([["","Выбрать общее действие"],...choices.map(a=>[a.entity_id,a.name])],"","Общее действие");
+  select.onchange=()=>{
+    if(!select.value)return;
+    draft.bindings[action]=[{entity_id:select.value,operation:"run",data:{}}];
+    if(editing?.schedule)draft.catch_up=false;else draft.enabled=true;
+    update();renderEdit(action);
+  };
+  container.append(select);
+}
+function renderCommonList(){
+  main.replaceChildren();
+  main.append(button("+ Добавить общее действие",()=>{
+    const id="common_action."+Array.from(crypto.getRandomValues(new Uint8Array(12)),b=>b.toString(16).padStart(2,"0")).join("");
+    openCommon({entity_id:id,name:"",enabled:false,assignments:[]},true);
+  }));
+  for(const common of model.common_actions||[]){
+    const card=el("article",undefined,"device-card");
+    const head=el("div",undefined,"head");
+    const edit=button((common.enabled?"● ":"Ⅱ ")+common.name,()=>openCommon(common));
+    const run=button("Выполнить",async()=>{
+      run.disabled=true;
+      try{await api("run-common",{entity_id:common.entity_id});notice.textContent="Передано в Engine"}
+      catch(e){notice.textContent=e.message}
+      finally{run.disabled=!common.enabled||model.maintenance_mode}
+    });
+    run.disabled=!common.enabled||model.maintenance_mode;
+    head.append(edit,run);card.append(head);
+    const targets=el("div",undefined,"bindings");
+    for(const a of common.assignments){const line=el("div",undefined,"binding");line.append(targetNode(a.entity_id),el("span",a.operation,"muted"));targets.append(line)}
+    card.append(targets);main.append(card);
+  }
+  if(!(model.common_actions||[]).length)main.append(el("p","Нет общих действий","muted"));
+  applyLiveState();
+}
+function openCommon(common,isNew=false){
+  editing={...common,common:true,isNew};
+  draft={id:common.entity_id,name:common.name,enabled:common.enabled,bindings:{schedule:structuredClone(common.assignments).map(a=>({...a,data:a.data||{}}))},revision:model.revision,disabled_actions:[]};
+  dirty=false;renderScheduleEdit();
+}
 function triggerLabel(trigger){
   if(trigger.kind==="time")return trigger.time;
   const n=trigger.offset_minutes;
@@ -450,18 +512,20 @@ function openSchedule(schedule,isNew=false){
 }
 function renderScheduleEdit(){
   main.replaceChildren();
-  const h=el("div",undefined,"head");h.append(button("← Расписания",goBack),el("h2","Расписание"),button("Сохранить",save,"save"));
+  const h=el("div",undefined,"head");h.append(button(editing.common?"← Общие действия":"← Расписания",goBack),el("h2",editing.common?"Общее действие":"Расписание"),button("Сохранить",save,"save"));
   if(!editing.isNew)h.append(button("Удалить",async()=>{
-    if(!confirm("Удалить расписание "+editing.name+"?"))return;
-    try{await api("delete-schedule",{revision:draft.revision,entity_id:draft.id});editing=null;draft=null;dirty=false;await load()}catch(e){notice.textContent=e.message}
+    if(!confirm("Удалить "+editing.name+"?"))return;
+    try{if(editing.common)await api("delete-common",{revision:draft.revision,entity_id:draft.id});else await api("delete-schedule",{revision:draft.revision,entity_id:draft.id});editing=null;draft=null;dirty=false;await load()}catch(e){notice.textContent=e.message}
   }));
   main.append(h);
-  const name=el("input");name.type="text";name.maxLength=100;name.value=draft.name;name.placeholder="Например: Шторы утром";
+  const name=el("input");name.type="text";name.maxLength=100;name.value=draft.name;name.placeholder=editing.common?"Например: Уход из дома":"Например: Шторы утром";
   name.oninput=()=>{draft.name=name.value;update()};
   const nl=el("label","Название");nl.append(name);
   const enabled=el("input");enabled.type="checkbox";enabled.checked=draft.enabled;enabled.onchange=()=>{draft.enabled=enabled.checked;update()};
   const en=el("label");en.append(enabled,document.createTextNode("Включено"));
   const settings=el("div",undefined,"schedule-settings");settings.append(nl,en);
+  if(editing.common)settings.append(el("span",draft.id,"muted"));
+  if(!editing.common){
   const trigger=selectOptions([["time","Время"],["sunrise","Рассвет"],["sunset","Закат"]],draft.trigger.kind,"Ежедневно");
   trigger.onchange=()=>{draft.trigger=trigger.value==="time"?{kind:"time",time:"08:00"}:{kind:trigger.value,offset_minutes:0};update();renderScheduleEdit()};
   const tl=el("label","Ежедневно");tl.append(trigger);settings.append(tl);
@@ -480,9 +544,12 @@ function renderScheduleEdit(){
   const recoveryLabel=el("label");recoveryLabel.append(recovery,document.createTextNode("Выполнять пропущенное при перезапуске HAOS"));
   settings.append(recoveryLabel,el("span",incompatible?"Компенсация доступна только для Light/Switch ON/OFF.":"Однократно после готовности системы; только последнее актуальное событие за 24 ч.","muted"));
   settings.append(el("span",model.schedule_timezone?"Часовой пояс HA: "+model.schedule_timezone:"Часовой пояс HA недоступен","muted"));
+  }
   main.append(settings,el("h2","Действия"));
   const action="schedule",existing=draft.bindings[action]||[];
   for(const a of existing)assignedRow(action,a,main);
+  if(editing.schedule&&!existing.length&&!draft.catch_up)appendCommonChoice(main,action);
+  if(existing.some(a=>a.entity_id.startsWith("common_action.")))return;
   main.append(button(existing.length?"Изменить выбор сущностей":"+ Выбрать сущности",()=>{
     const eligible=t=>/^(light|switch)\./.test(t.entity_id)||(!draft.catch_up&&/^(cover|climate|media_player)\./.test(t.entity_id)&&(t.operations||[]).some(op=>!["toggle","play_pause","next","previous"].includes(op)));
     DHElectricaEntityPicker.open({items:model.targets.filter(t=>eligible(t)||existing.some(a=>a.entity_id===t.entity_id)),
