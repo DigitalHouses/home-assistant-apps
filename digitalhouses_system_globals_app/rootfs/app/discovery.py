@@ -53,13 +53,14 @@ def discovery(version):
             key = mode + "_" + field
             label = {"brightness":"Яркость", "volume":"Громкость", "display_brightness":"Яркость дисплеев", "indicator_brightness":"Яркость индикаторов", "transition_seconds":"Плавный переход"}[field]
             add(key, "number", name+" · "+label, state_topic=state_topic(key), command_topic=cmd_topic(key), min=lo, max=hi, step=step, unit_of_measurement=unit, mode="box", qos=1, retain=False)
-        # Atomic color edit: one field, one command, no persisted inactive value.
-        key=mode+"_color"
-        add(key,"text",name+" · Цвет (cct:4000 / rgb:#FF5000)",state_topic=state_topic(key),command_topic=cmd_topic(key), min=0,max=12, pattern=r"^(cct:[0-9]{4}|rgb:#[0-9a-fA-F]{6})?$", qos=1,retain=False)
+        key=mode+"_color_temp_kelvin"
+        add(key,"text",name+" · CCT, K",state_topic=state_topic(key),command_topic=cmd_topic(key),min=0,max=4,pattern=r"^(?:[2-5][0-9]{3}|6000)?$",qos=1,retain=False)
+        key=mode+"_rgb_color"
+        add(key,"text",name+" · RGB (#RRGGBB)",state_topic=state_topic(key),command_topic=cmd_topic(key),min=0,max=7,pattern=r"^(?:#[0-9a-fA-F]{6})?$",qos=1,retain=False)
         for field,label in (("voice_notifications_enabled","Голосовые уведомления"),("noncritical_sound_notifications_enabled","Некритические звуки")):
             key=mode+"_"+field
             add(key,"switch",name+" · "+label,state_topic=state_topic(key),command_topic=cmd_topic(key),**switch)
-    for key,label in (("brightness","Активная яркость"),("color_temp_kelvin","Активная температура"),("rgb_color","Активный RGB"),("volume","Активная громкость"),("color_mode","Активный цветовой режим")):
+    for key,label in (("brightness","Активная яркость"),("color_temp_kelvin","Активная температура"),("rgb_color","Активный RGB"),("volume","Активная громкость")):
         add("active_"+key,"sensor",label,state_topic=state_topic("active_"+key))
     for gate in GATES:
         # Live lease is deliberately not retained. HA never opens a gate from stale retained on.
@@ -94,12 +95,16 @@ def scalar(value):
     return value if isinstance(value,str) else json.dumps(value, separators=(",",":"))
 
 
-def color_text(p):
-    if p["color_mode"] == "cct":
-        return "cct:" + str(p["color_temp_kelvin"])
-    if p["color_mode"] == "rgb":
-        return "rgb:#" + "".join(f"{x:02X}" for x in p["rgb_color"])
-    return ""
+def rgb_text(value):
+    return "" if value is None else "#" + "".join(f"{x:02X}" for x in value)
+
+
+def retired_discovery(version):
+    """HA device discovery removal: platform-only entries then final config."""
+    payload = discovery(version)
+    for key, platform in (("day_color","text"),("night_color","text"),("active_color_mode","sensor")):
+        payload["components"][key] = {"platform":platform}
+    return payload
 
 
 def projections(state):
@@ -111,9 +116,10 @@ def projections(state):
     for mode,p in state["profiles"].items():
         for key in tuple(NUMBERS)+BOOLEANS:
             add(mode+"_"+key,p[key])
-        add(mode+"_color",color_text(p))
+        add(mode+"_color_temp_kelvin", "" if p["color_temp_kelvin"] is None else str(p["color_temp_kelvin"]))
+        add(mode+"_rgb_color",rgb_text(p["rgb_color"]))
     p=state["profiles"].get({"on":"night","off":"day"}.get(state["night_mode"]),{})
-    for key in ("brightness","color_temp_kelvin","rgb_color","volume","color_mode"):
+    for key in ("brightness","color_temp_kelvin","rgb_color","volume"):
         add("active_"+key,p.get(key))
     return out
 
@@ -131,15 +137,20 @@ def translate(topic, payload):
     mode,sep,field=key.partition("_")
     if not sep or mode not in ("day","night"):
         raise ContractError("Unknown profile entity")
-    if field=="color":
-        if re.fullmatch(r"cct:[0-9]{4}",payload):
-            patch={"color_mode":"cct","color_temp_kelvin":int(payload[4:])}
-        elif re.fullmatch(r"rgb:#[0-9a-fA-F]{6}",payload):
-            patch={"color_mode":"rgb","rgb_color":[int(payload[i:i+2],16) for i in (5,7,9)]}
-        elif payload=="":
-            patch={"color_mode":None,"color_temp_kelvin":None,"rgb_color":None}
+    if field=="color_temp_kelvin":
+        if payload=="":
+            patch={field:None}
+        elif re.fullmatch(r"[0-9]{4}",payload):
+            patch={field:int(payload)}
         else:
-            raise ContractError("Invalid color; use cct:4000 or rgb:#FF5000")
+            raise ContractError("Invalid CCT")
+    elif field=="rgb_color":
+        if payload=="":
+            patch={field:None}
+        elif re.fullmatch(r"#[0-9a-fA-F]{6}",payload):
+            patch={field:[int(payload[i:i+2],16) for i in (1,3,5)]}
+        else:
+            raise ContractError("Invalid RGB")
     elif field in NUMBERS:
         try:
             value=float(payload)

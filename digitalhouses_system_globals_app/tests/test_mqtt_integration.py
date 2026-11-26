@@ -75,8 +75,8 @@ class MqttIntegration(unittest.TestCase):
                 await_message(GLOBAL + "/event", lambda x: json.loads(x)["event_type"] == "night_mode_on", start)
                 self.assertEqual([x[0] for x in received[start:] if x[0] in (GLOBAL + "/state", GLOBAL + "/event")],
                                  [GLOBAL + "/state", GLOBAL + "/event"])
-                send(PRODUCT + "/profiles/set", {"night": {"color_mode": "rgb", "rgb_color": [255, 0, 0]}})
-                await_message(GLOBAL + "/profiles", lambda x: json.loads(x)["night"]["rgb_color"] == [255, 0, 0])
+                send(PRODUCT + "/profiles/set", {"night": {"color_temp_kelvin": 2700, "rgb_color": [255, 0, 0]}})
+                await_message(GLOBAL + "/profiles", lambda x: json.loads(x)["night"]["rgb_color"] == [255, 0, 0] and json.loads(x)["night"]["color_temp_kelvin"] == 2700)
                 start = len(received)
                 send(GLOBAL + "/set", "off", retain=True)
                 time.sleep(0.5)
