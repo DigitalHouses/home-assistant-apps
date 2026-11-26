@@ -22,7 +22,11 @@ def source_for(product, version, head):
     # Only commits on main's first-parent history can introduce a release.
     source = head
     for commit in git("log", "--first-parent", "--format=%H", head, "--", f"{product}/config.yaml").splitlines():
-        if version_at(commit, product) != version:
+        try:
+            commit_version = version_at(commit, product)
+        except subprocess.CalledProcessError:
+            raise ValueError("Cannot resolve product history")
+        if commit_version != version:
             break
         source = commit
     # No adoption if the actual Docker build context changed after the version bump.
