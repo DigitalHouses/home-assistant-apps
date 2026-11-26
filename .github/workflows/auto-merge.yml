@@ -7,6 +7,10 @@ on:
     types:
       - completed
 
+concurrency:
+  group: dh-validated-merge-release
+  queue: max
+
 permissions:
   actions: write
   contents: write
