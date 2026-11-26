@@ -8,17 +8,20 @@ on:
       - completed
 
 permissions:
+  actions: write
   contents: write
   pull-requests: write
   packages: write
 
 jobs:
   integrate:
-    name: Merge and release validated DigitalHouses PR
-    if: >
+    name: Merge or reconcile validated main
+    if: >-
       github.event.workflow_run.conclusion == 'success' &&
-      github.event.workflow_run.event == 'pull_request' &&
-      github.event.workflow_run.pull_requests[0].number != null
+      (github.event.workflow_run.event == 'pull_request' ||
+       github.event.workflow_run.event == 'workflow_dispatch' ||
+       github.event.workflow_run.event == 'push') &&
+      github.event.workflow_run.head_repository.full_name == github.repository
     runs-on: ubuntu-latest
     outputs:
       merged: ${{ steps.merge.outputs.merged }}
@@ -28,58 +31,103 @@ jobs:
       has_apps: ${{ steps.candidates.outputs.has_apps }}
 
     steps:
-      - name: Validate exact PR revision and merge
+      - name: Resolve exact validated PR or main commit
         id: merge
         env:
           GH_TOKEN: ${{ github.token }}
-          PR_NUMBER: ${{ github.event.workflow_run.pull_requests[0].number }}
+          VALIDATION_RUN_ID: ${{ github.event.workflow_run.id }}
+          VALIDATION_RUN_ATTEMPT: ${{ github.event.workflow_run.run_attempt }}
+          VALIDATION_EVENT: ${{ github.event.workflow_run.event }}
           VALIDATED_HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
-          VALIDATED_BASE_SHA: ${{ github.event.workflow_run.pull_requests[0].base.sha }}
+          VALIDATED_HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
         shell: bash
         run: |
           set -Eeuo pipefail
+          [[ "$VALIDATED_HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]
+          current_main="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq .object.sha)"
 
-          pr_json="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}")"
+          # A human-merged PR triggers normal main push CI. GITHUB_TOKEN merges
+          # do not trigger this CI; their successful PR workflow handles release.
+          if [ "$VALIDATION_EVENT" = push ]; then
+            if [ "$VALIDATED_HEAD_SHA" != "$current_main" ]; then
+              echo "Superseded main validation; a newer push will reconcile releases."
+              echo "merged=false" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            parent="$(gh api "repos/$GITHUB_REPOSITORY/git/commits/$current_main" --jq '.parents[0].sha')"
+            [[ "$parent" =~ ^[0-9a-f]{40}$ ]]
+            echo "merged=true" >> "$GITHUB_OUTPUT"
+            echo "merge_sha=$current_main" >> "$GITHUB_OUTPUT"
+            echo "release_base_sha=$parent" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
 
-          author="$(jq -r '.user.login' <<<"$pr_json")"
-          state="$(jq -r '.state' <<<"$pr_json")"
-          draft="$(jq -r '.draft' <<<"$pr_json")"
-          base_ref="$(jq -r '.base.ref' <<<"$pr_json")"
-          base_sha="$(jq -r '.base.sha' <<<"$pr_json")"
-          head_repo="$(jq -r '.head.repo.full_name' <<<"$pr_json")"
-          head_sha="$(jq -r '.head.sha' <<<"$pr_json")"
+          # workflow_run.pull_requests is often empty even for successful PR
+          # workflows. Recover the original event's immutable identity artifact.
+          workdir="$(mktemp -d)"
+          trap 'rm -rf "$workdir"' EXIT
+          gh run download "$VALIDATION_RUN_ID" --repo "$GITHUB_REPOSITORY" \
+            --name ci-provenance --dir "$workdir"
+          provenance="$workdir/ci-provenance.json"
+          test -f "$provenance"
+          PR_NUMBER="$(jq -er .pr "$provenance")"
+          VALIDATED_BASE_SHA="$(jq -er .base "$provenance")"
+          artifact_head="$(jq -er .head "$provenance")"
+          artifact_run="$(jq -er .run "$provenance")"
+          artifact_attempt="$(jq -er .attempt "$provenance")"
+          [[ "$PR_NUMBER" =~ ^[0-9]+$ ]]
+          [[ "$VALIDATED_BASE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          test "$artifact_head" = "$VALIDATED_HEAD_SHA"
+          test "$artifact_run" = "$VALIDATION_RUN_ID"
+          test "$artifact_attempt" = "$VALIDATION_RUN_ATTEMPT"
 
-          test "$author" = "DigitalHouses"
-          test "$base_ref" = "main"
+          # Do not trust a PR number from an artifact without cross-checking
+          # the exact commit-to-PR association against GitHub's API.
+          pr_matches="$(gh api "repos/$GITHUB_REPOSITORY/commits/$VALIDATED_HEAD_SHA/pulls")"
+          test "$(jq --argjson number "$PR_NUMBER" \
+            '[.[] | select(.number == $number)] | length' <<<"$pr_matches")" = 1
+
+          pr_json="$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER")"
+          author="$(jq -r .user.login <<<"$pr_json")"
+          state="$(jq -r .state <<<"$pr_json")"
+          draft="$(jq -r .draft <<<"$pr_json")"
+          base_ref="$(jq -r .base.ref <<<"$pr_json")"
+          base_sha="$(jq -r .base.sha <<<"$pr_json")"
+          head_repo="$(jq -r .head.repo.full_name <<<"$pr_json")"
+          head_ref="$(jq -r .head.ref <<<"$pr_json")"
+          head_sha="$(jq -r .head.sha <<<"$pr_json")"
+          test "$author" = DigitalHouses
+          test "$base_ref" = main
           test "$head_repo" = "$GITHUB_REPOSITORY"
+          test "$head_ref" = "$VALIDATED_HEAD_BRANCH"
 
-          if [ "$state" != "open" ] || [ "$draft" != "false" ] || [ "$head_sha" != "$VALIDATED_HEAD_SHA" ]; then
-            echo "PR closed, draft, or superseded; ignoring stale validation result."
+          if [ "$state" != open ] || [ "$draft" != false ] || [ "$head_sha" != "$VALIDATED_HEAD_SHA" ]; then
+            echo "PR closed, draft, or superseded; no merge."
             echo "merged=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
-          refresh_pr_branch() {
-            echo "main advanced after validation; requesting a fresh exact-base validation."
-            gh api --method PUT "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/update-branch" \
-              -f "expected_head_sha=${head_sha}"
+          revalidate_current_base() {
+            echo "main advanced since CI; dispatching exact-base validation without editing the PR branch."
+            gh api --method POST \
+              "repos/$GITHUB_REPOSITORY/actions/workflows/validate.yml/dispatches" \
+              -f "ref=$head_ref" \
+              -f "inputs[pr_number]=$PR_NUMBER" \
+              -f "inputs[expected_head_sha]=$head_sha" \
+              -f "inputs[expected_base_sha]=$current_main"
             echo "merged=false" >> "$GITHUB_OUTPUT"
           }
 
-          current_base_sha="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq .object.sha)"
-          if [ "$current_base_sha" != "$VALIDATED_BASE_SHA" ] || [ "$base_sha" != "$VALIDATED_BASE_SHA" ]; then
-            refresh_pr_branch
+          if [ "$current_main" != "$VALIDATED_BASE_SHA" ] || [ "$base_sha" != "$VALIDATED_BASE_SHA" ]; then
+            revalidate_current_base
             exit 0
           fi
 
           merge_attempts=12
           merge_delay_seconds=5
-
           for attempt in $(seq 1 "$merge_attempts"); do
             if merge_output="$(gh pr merge "$PR_NUMBER" \
-              --repo "$GITHUB_REPOSITORY" \
-              --merge \
-              --delete-branch \
+              --repo "$GITHUB_REPOSITORY" --merge \
               --match-head-commit "$VALIDATED_HEAD_SHA" 2>&1)"; then
               printf '%s\n' "$merge_output"
               break
@@ -87,46 +135,36 @@ jobs:
               merge_rc=$?
             fi
             printf '%s\n' "$merge_output" >&2
-
             if ! grep -Fq "base branch policy prohibits the merge" <<<"$merge_output"; then
               exit "$merge_rc"
             fi
-
             if [ "$attempt" -ge "$merge_attempts" ]; then
-              echo "Base branch policy still blocks the exact validated PR after $merge_attempts attempts." >&2
+              echo "Required checks or branch policy still block the exact validated PR." >&2
               exit "$merge_rc"
             fi
-
-            retry_pr_json="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}")"
-            if [ "$(jq -r '.state' <<<"$retry_pr_json")" != "open" ] ||
-               [ "$(jq -r '.draft' <<<"$retry_pr_json")" != "false" ] ||
-               [ "$(jq -r '.head.sha' <<<"$retry_pr_json")" != "$VALIDATED_HEAD_SHA" ]; then
-              echo "PR changed during merge retry; ignoring stale validation."
+            retry_pr_json="$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER")"
+            if [ "$(jq -r .state <<<"$retry_pr_json")" != open ] ||
+               [ "$(jq -r .draft <<<"$retry_pr_json")" != false ] ||
+               [ "$(jq -r .head.sha <<<"$retry_pr_json")" != "$VALIDATED_HEAD_SHA" ]; then
+              echo "PR changed during merge retry; ignoring stale CI."
               echo "merged=false" >> "$GITHUB_OUTPUT"
               exit 0
             fi
-            current_base_sha="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq .object.sha)"
-            if [ "$current_base_sha" != "$VALIDATED_BASE_SHA" ] ||
-               [ "$(jq -r '.base.sha' <<<"$retry_pr_json")" != "$VALIDATED_BASE_SHA" ]; then
-              refresh_pr_branch
+            current_main="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq .object.sha)"
+            if [ "$current_main" != "$VALIDATED_BASE_SHA" ] ||
+               [ "$(jq -r .base.sha <<<"$retry_pr_json")" != "$VALIDATED_BASE_SHA" ]; then
+              revalidate_current_base
               exit 0
             fi
-
-            echo "Base branch policy has not observed all completed checks yet; retrying merge in ${merge_delay_seconds}s (attempt ${attempt}/${merge_attempts})."
             sleep "$merge_delay_seconds"
           done
 
-          merged_json="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}")"
-          merged="$(jq -r '.merged' <<<"$merged_json")"
-          merge_sha="$(jq -r '.merge_commit_sha' <<<"$merged_json")"
-
-          test "$merged" = "true"
-          test -n "$merge_sha"
-          test "$merge_sha" != "null"
-
-          release_base_sha="$(gh api "repos/${GITHUB_REPOSITORY}/git/commits/${merge_sha}" --jq '.parents[0].sha')"
-          test -n "$release_base_sha"
-          test "$release_base_sha" != "null"
+          merged_json="$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER")"
+          merge_sha="$(jq -r .merge_commit_sha <<<"$merged_json")"
+          test "$(jq -r .merged <<<"$merged_json")" = true
+          [[ "$merge_sha" =~ ^[0-9a-f]{40}$ ]]
+          release_base_sha="$(gh api "repos/$GITHUB_REPOSITORY/git/commits/$merge_sha" --jq '.parents[0].sha')"
+          [[ "$release_base_sha" =~ ^[0-9a-f]{40}$ ]]
 
           echo "merged=true" >> "$GITHUB_OUTPUT"
           echo "release_base_sha=$release_base_sha" >> "$GITHUB_OUTPUT"
@@ -197,10 +235,9 @@ jobs:
           image="ghcr.io/digitalhouses/$product"
           release_ref="$image:$version"
           echo "$GH_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
-          if docker buildx imagetools inspect "$release_ref" >/dev/null 2>&1; then
-            echo "Refusing to overwrite existing immutable image: $release_ref" >&2
-            exit 1
-          fi
+          # Final immutable tags are never overwritten. A partial prior run
+          # may already have created the final manifest; individual architecture
+          # digests still must be checked before the release can be resumed.
           case "$arch" in
             amd64)
               platform="linux/amd64"
@@ -216,26 +253,39 @@ jobs:
 
           arch_ref="$image:$version-$arch"
           if docker buildx imagetools inspect "$arch_ref" >/dev/null 2>&1; then
-            echo "Refusing to overwrite existing immutable image: $arch_ref" >&2
-            exit 1
+            # Recover only a manifest carrying exact source and version
+            # provenance. Never replace or silently adopt a foreign tag.
+            existing="$(docker buildx imagetools inspect --raw "$arch_ref")"
+            jq -e --arg sha "$MERGE_SHA" --arg version "$version" \
+              '.annotations["org.opencontainers.image.revision"] == $sha and .annotations["org.opencontainers.image.version"] == $version' \
+              <<<"$existing" >/dev/null || {
+                echo "Immutable architecture tag exists without matching provenance: $arch_ref" >&2
+                exit 1
+              }
+            digest="$(docker buildx imagetools inspect "$arch_ref" | awk '/^Digest:/ {print $2; exit}')"
+            echo "Reusing verified immutable architecture artifact $arch_ref@$digest"
+          else
+            # Cache is mutable and deliberately separate from release tags.
+            cache_ref="$image:buildcache-$arch"
+            docker buildx build \
+              --cache-from "type=registry,ref=$cache_ref" \
+              --cache-to "type=registry,ref=$cache_ref,mode=max,ignore-error=true" \
+              --platform "$platform" \
+              --build-arg "BUILD_VERSION=$version" \
+              --build-arg "BUILD_ARCH=$arch" \
+              --label "org.opencontainers.image.revision=$MERGE_SHA" \
+              --label "org.opencontainers.image.version=$version" \
+              --label "org.opencontainers.image.source=https://github.com/$GITHUB_REPOSITORY" \
+              --annotation "manifest:org.opencontainers.image.revision=$MERGE_SHA" \
+              --annotation "manifest:org.opencontainers.image.version=$version" \
+              --annotation "index:org.opencontainers.image.revision=$MERGE_SHA" \
+              --annotation "index:org.opencontainers.image.version=$version" \
+              --tag "$arch_ref" \
+              --metadata-file build-metadata.json \
+              --push \
+              "$product"
+            digest="$(jq -er '."containerimage.digest"' build-metadata.json)"
           fi
-
-          # Mutable build cache is isolated from immutable release tags.
-          cache_ref="$image:buildcache-$arch"
-          docker buildx build \
-            --cache-from "type=registry,ref=$cache_ref" \
-            --cache-to "type=registry,ref=$cache_ref,mode=max,ignore-error=true" \
-            --platform "$platform" \
-            --build-arg "BUILD_VERSION=$version" \
-            --build-arg "BUILD_ARCH=$arch" \
-            --label "org.opencontainers.image.revision=$MERGE_SHA" \
-            --label "org.opencontainers.image.version=$version" \
-            --label "org.opencontainers.image.source=https://github.com/$GITHUB_REPOSITORY" \
-            --tag "$arch_ref" \
-            --metadata-file build-metadata.json \
-            --push \
-            "$product"
-          digest="$(jq -er '."containerimage.digest"' build-metadata.json)"
           [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]
           mkdir -p image-digests
           printf '%s\n' "$digest" > "image-digests/$product-$arch"
@@ -319,11 +369,8 @@ jobs:
 
             image="ghcr.io/digitalhouses/$product"
             release_ref="$image:$version"
-            if docker buildx imagetools inspect "$release_ref" >/dev/null 2>&1; then
-              echo "Refusing to overwrite existing immutable image: $release_ref" >&2
-              exit 1
-            fi
             refs=()
+            digests=()
             for arch in "${architectures[@]}"; do
               arch_ref="$image:$version-$arch"
               digest="$(cat "image-digests/$product-$arch")"
@@ -331,10 +378,31 @@ jobs:
               actual="$(docker buildx imagetools inspect "$arch_ref" | awk '/^Digest:/ {print $2; exit}')"
               test "$actual" = "$digest"
               refs+=("$image@$digest")
+              digests+=("$digest")
             done
-            docker buildx imagetools create \
-              --tag "$release_ref" \
-              "${refs[@]}"
+            source_digests="$(IFS=,; echo "${digests[*]}")"
+            if docker buildx imagetools inspect "$release_ref" >/dev/null 2>&1; then
+              # Resume a partially completed release only if the final tag
+              # proves exact source/version and the full ordered digest set.
+              existing="$(docker buildx imagetools inspect --raw "$release_ref")"
+              jq -e --arg sha "$MERGE_SHA" --arg version "$version" \
+                --arg digests "$source_digests" \
+                '.annotations["org.opencontainers.image.revision"] == $sha and
+                 .annotations["org.opencontainers.image.version"] == $version and
+                 .annotations["org.digitalhouses.source-digests"] == $digests' \
+                <<<"$existing" >/dev/null || {
+                  echo "Immutable final tag exists with mismatched provenance: $release_ref" >&2
+                  exit 1
+                }
+              echo "Reusing verified final manifest $release_ref"
+            else
+              docker buildx imagetools create \
+                --annotation "index:org.opencontainers.image.revision=$MERGE_SHA" \
+                --annotation "index:org.opencontainers.image.version=$version" \
+                --annotation "index:org.digitalhouses.source-digests=$source_digests" \
+                --tag "$release_ref" \
+                "${refs[@]}"
+            fi
 
             inspect_attempts=12
             inspect_delay_seconds=5
