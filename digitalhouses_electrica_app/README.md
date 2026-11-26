@@ -67,6 +67,13 @@ It is independent of any Home Assistant dashboard.
   skipped. Manual changes to one member cancel the group timer. Native HA
   groups remain excluded pending route verification. Hardware acceptance
   and readiness integration remain.
+- **Schedules (DEV):** named daily point actions using HA local clock
+  or sun.sun sunrise/sunset with signed minute offsets. Ingress reuses
+  the assignment editor and JSON store; dispatch uses the existing queue
+  and global cover window guards. No toggle, missed-event replay or
+  inferred past solar events. Unknown timezone/solar data blocks the
+  corresponding trigger. Explicit lighting interval restoration remains
+  a separate stage.
 - **Auto-OFF timers (DEV):** optional per-target off_delay_seconds for
   logical light/switch ON/Toggle, or per-channel relay_timers for a
   verified physical key. Logical deadlines start after observed OFF→ON

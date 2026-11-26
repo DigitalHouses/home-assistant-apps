@@ -23,6 +23,7 @@ from .actions import ActionError
 from .event_log import EventLog
 from .sensor_engine import SensorEngine
 from .relay_timers import RelayTimers
+from .schedule_engine import ScheduleEngine
 from .control import HAClient, light_commands, verified_adopted_switch
 from .mqtt_lights import plan_batch
 from .lab_lights import (LAB_LIGHTS, authorized_ha_light_ids,
@@ -188,6 +189,7 @@ class Application:
         self.sensor_catalog = {}
         self.sensor_engine = SensorEngine(self,last_scan_path.with_name("sensor_timers.json"))
         self.relay_timers = RelayTimers(self)
+        self.schedule_engine = ScheduleEngine(self)
         self.device_details = []
         self._networks: dict[str, dict] = {}
         self._subscribed: set[str] = set()
@@ -979,19 +981,25 @@ class Application:
                         state = self._ha_client.read_domain_state(eid)
                         op,data,desired = rules.plan(operation,call.get("data",{}),state,unit)
                     with self._mutex:
-                        sw = next((x for room in self.config["rooms"] for x in room["switches"]
-                                   if x["logical_name"]==name and x["base_topic"]==base
-                                   and x["coordinator_ieee"]==coordinator),None)
-                        net=self._networks.get(base,{})
-                        device=next((d for d in decode_bridge_devices(net["devices"])
-                                     if d.get("friendly_name")==name),None)
-                        if (not sw or not device or not sw.get("enabled",False)
-                                or maintained_switch(sw,self.globals)
-                                or light_commands(sw,action)!=all_commands
-                                or not verified_adopted_switch(sw,device,coordinator,base)
-                                or not self._input_mode_allowed(sw,action,net,device,False)
+                        if base is None and action=="SCHEDULE":
+                            if (not self.schedule_engine.allowed(coordinator,eid)
+                                or self.event_log.active_target(eid,exclude=rid)
                                 or (is_cover and cover_rules.guard_ids(self.config,eid)!=guard_ids)):
-                            raise ActionError("Input, binding or guard changed")
+                                raise ActionError("Schedule, target or guard changed")
+                        else:
+                            sw = next((x for room in self.config["rooms"] for x in room["switches"]
+                                       if x["logical_name"]==name and x["base_topic"]==base
+                                       and x["coordinator_ieee"]==coordinator),None)
+                            net=self._networks.get(base,{})
+                            device=next((d for d in decode_bridge_devices(net["devices"])
+                                         if d.get("friendly_name")==name),None)
+                            if (not sw or not device or not sw.get("enabled",False)
+                                    or maintained_switch(sw,self.globals)
+                                    or light_commands(sw,action)!=all_commands
+                                    or not verified_adopted_switch(sw,device,coordinator,base)
+                                    or not self._input_mode_allowed(sw,action,net,device,False)
+                                    or (is_cover and cover_rules.guard_ids(self.config,eid)!=guard_ids)):
+                                raise ActionError("Input, binding or guard changed")
                     dispatched_at=_iso_now()
                     if is_cover:
                         self._ha_client.execute_cover(eid,op,data)
@@ -1017,12 +1025,14 @@ class Application:
                     with self._mutex:
                         self.sensor_engine.tick()
                         self.relay_timers.tick()
+                        self.schedule_engine.tick()
                 except Exception:
                     LOG.exception("Sensor timer tick failed")
                     with self._mutex:self.sensor_engine.disconnect()
                 continue
             targets = [eid for cmd in commands for eid in cmd["target"]["entity_id"]]
             sensor_job = base is None and action in ("SENSOR_ON","SENSOR_OFF")
+            schedule_job = base is None and action=="SCHEDULE"
             key_token=job[6] if base is not None and len(job)>6 else None
             try:
                 if base is None and action=="RELAY_OFF":
@@ -1092,6 +1102,11 @@ class Application:
                             self.event_log.finish(rid,"Sensor state, ownership or binding changed",targets)
                             self._publish_action(state="skipped",switch=name,action=action,target="",error="Sensor state, ownership or binding changed")
                             continue
+                    elif schedule_job:
+                        if not self.schedule_engine.allowed(coordinator):
+                            self.event_log.finish(rid,"Расписание изменилось или время пропущено",targets)
+                            self._publish_action(state="skipped",switch=name,action=action,target="",error="Schedule expired or changed")
+                            continue
                     elif is_test:
                         if (len(targets) != 1 or not self._test_light_allowed(targets[0])
                                 or self.event_log.active_target(targets[0], exclude=rid)):
@@ -1154,6 +1169,14 @@ class Application:
                     skipped.extend(profile_skipped)
                     sent = []
                     for plan in plans:
+                        if schedule_job:
+                            eid=plan["light"]
+                            if (not self.schedule_engine.allowed(coordinator,eid)
+                                or self.observed_target_state(eid,verify_route=True) not in ("on","off")
+                                or self.event_log.active_target(eid,exclude=rid)):
+                                skipped.append({"light":eid,"reason":"Schedule target unavailable or changed"})
+                                continue
+                            self.sensor_engine.manual_control([eid])
                         if sensor_job:
                             eid=plan["light"]
                             group=self.config.get("light_routes",{}).get(eid,{}).get("kind")=="group"
@@ -1221,6 +1244,18 @@ class Application:
                                 ids=valid_ids
                                 if not ids:continue
                                 call={**call,"target":{"entity_id":ids}}
+                                authorized=True
+                            elif schedule_job:
+                                valid_ids=[eid for eid in ids if self.schedule_engine.allowed(coordinator,eid)
+                                    and eid not in self.config.get("light_routes",{})
+                                    and lab_state_cache.get(eid,(False,None))[0]
+                                    and lab_state_cache[eid][1] in ("on","off")
+                                    and not self.event_log.active_target(eid,exclude=rid)]
+                                skipped.extend({"light":eid,"reason":"Schedule target unavailable or changed"} for eid in ids if eid not in valid_ids)
+                                ids=valid_ids
+                                if not ids:continue
+                                call={**call,"target":{"entity_id":ids}}
+                                self.sensor_engine.manual_control(ids)
                                 authorized=True
                             elif is_test:
                                 authorized = (len(ids) == 1 and self._test_light_allowed(ids[0])
@@ -1305,6 +1340,10 @@ class Application:
                                             or state!=("off" if action=="SENSOR_ON" else "on")
                                             or (action=="SENSOR_OFF" and not self.sensor_engine.live_owned(eid,live_off))):
                                         raise ActionError("Sensor state or ownership changed")
+                                elif schedule_job:
+                                    if not self.schedule_engine.allowed(coordinator,eid) or self.event_log.active_target(eid,exclude=rid):
+                                        raise ActionError("Schedule target unavailable or changed")
+                                    self.sensor_engine.manual_control([eid])
                                 else:
                                     sw = next((x for room in self.config["rooms"] for x in room["switches"]
                                                if x["logical_name"] == name and x["base_topic"] == base
@@ -1360,6 +1399,7 @@ class Application:
                         if sensor_job:self.sensor_engine.finished(action,targets)
                         self.sensor_engine.tick()
                         self.relay_timers.tick()
+                        self.schedule_engine.tick()
                 except Exception:
                     LOG.exception("Sensor timer tick failed")
                     with self._mutex:self.sensor_engine.disconnect()
@@ -1487,6 +1527,13 @@ class Application:
                 self.event_log.set_timezone(self.registry.fetch_timezone())
             except Exception:
                 pass  # HA unavailable: keep UTC explicitly labelled in UI.
+        if self.config.get("schedules"):
+            try:zone=self.registry.fetch_timezone()
+            except Exception:zone=None
+            with self._mutex:
+                engine=self.schedule_engine
+                if zone!=getattr(engine.zone,"key",None) or (zone is not None and not engine.ready):
+                    engine.baseline(zone,next((s for s in states if s.get("entity_id")=="sun.sun"),None))
         with self._mutex:
             self._target_registries = registry
             self.target_catalog = target_catalog(registry, states, self.config, self._temperature_unit)
@@ -1496,16 +1543,24 @@ class Application:
     def _watch_sensor_states(self):
         def baseline(states):
             self.refresh_targets()
-            with self._mutex:self.sensor_engine.baseline(states)
+            try:zone=self.registry.fetch_timezone()
+            except Exception:zone=None
+            with self._mutex:
+                self.sensor_engine.baseline(states)
+                self.schedule_engine.baseline(zone,self.sensor_engine.states.get("sun.sun"))
         def changed(eid,state):
-            with self._mutex:self.sensor_engine.changed(eid,state)
+            with self._mutex:
+                self.sensor_engine.changed(eid,state)
+                if eid=="sun.sun":self.schedule_engine.observe_sun(state)
         while not self._stop.is_set():
             try:
                 self.registry.watch_states(self._stop,baseline,changed)
             except Exception as exc:
                 LOG.warning("HA sensor subscription unavailable: %s",exc)
             finally:
-                with self._mutex:self.sensor_engine.disconnect()
+                with self._mutex:
+                    self.sensor_engine.disconnect()
+                    self.schedule_engine.disconnect()
             self._stop.wait(5)
 
     def _observe_targets(self):
@@ -1516,6 +1571,7 @@ class Application:
                 with self._mutex:
                     for entry in (*self.target_catalog.values(),*self.sensor_catalog.values()):
                         entry["state"] = "unknown"
+                    self.schedule_engine.disconnect()
                 self._publish_details()
             self._stop.wait(15)
 

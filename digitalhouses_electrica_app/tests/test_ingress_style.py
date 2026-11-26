@@ -149,3 +149,14 @@ s.value='60';s.oninput();assert.equal(result,150);assert.ok(s.error);
 s.value='15';s.oninput();assert.equal(result,135);assert.equal(s.error,'');
 clear.onclick();assert.equal(result,undefined);assert.equal(m.value,'');assert.equal(s.value,'');
 """],check=True)
+
+    def test_schedule_editor_uses_existing_assignment_picker(self):
+        js=(WEB/"app.js").read_text()
+        html=(WEB/"index.html").read_text()
+        self.assertIn('id="schedules-nav"',html)
+        self.assertIn('function renderScheduleEdit()',js)
+        self.assertIn('["time","Время"],["sunrise","Рассвет"],["sunset","Закат"]',js)
+        self.assertIn('n.min=-720;n.max=720;n.step=1',js)
+        self.assertIn('for(const a of existing)assignedRow(action,a,main)',js)
+        self.assertIn('api("save-schedule",{revision:draft.revision,config})',js)
+        self.assertIn('api("delete-schedule",{revision:draft.revision,entity_id:draft.id})',js)

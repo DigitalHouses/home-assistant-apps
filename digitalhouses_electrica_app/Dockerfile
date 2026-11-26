@@ -11,6 +11,7 @@ LABEL io.hass.version="$BUILD_VERSION" \
 
 RUN apk add --no-cache \
         ca-certificates \
+        tzdata \
         python3 \
         py3-paho-mqtt \
         py3-websocket-client \

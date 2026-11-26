@@ -7,7 +7,7 @@ from pathlib import Path
 from urllib.parse import urlsplit, parse_qs
 
 from .catalog import CatalogError
-from . import climate_rules, media_rules, profiles, sensor_rules
+from . import climate_rules, media_rules, profiles, sensor_rules, schedule_rules
 from .binding_store import binding_document, validate_document, decode_json
 from .entity_options import parse_rows, render_rows, project
 from .ingress_catalog import normalize, supported_actions, required_keep
@@ -52,10 +52,12 @@ def snapshot(app):
                 parts=source.split(":",2)
                 if len(parts)==3:key_deadlines.setdefault(parts[1],{}).setdefault(parts[2],{})[eid]=r["deadline"]
             else:sensor_deadlines[eid]=r["deadline"]
+        scheduler=getattr(app,"schedule_engine",None)
+        schedule_timezone=getattr(scheduler.zone,"key",None) if scheduler and scheduler.ready else None
         global_mode = getattr(app,"_home_profile",None)
         auto_day_night = getattr(app,"globals",{}).get("auto_day_night",False)
     rows = parse_rows(app.options.read())
-    indexed = {r["entity_id"]:r for r in rows if not sensor_rules.is_source(r["entity_id"])}
+    indexed = {r["entity_id"]:r for r in rows if not sensor_rules.is_source(r["entity_id"]) and not schedule_rules.is_schedule(r["entity_id"])}
     sensor_rows={r["entity_id"]:r for r in rows if sensor_rules.is_source(r["entity_id"])}
     sensors=[]
     for eid in sorted(set(sensor_catalog)|set(sensor_rows)):
@@ -90,7 +92,7 @@ def snapshot(app):
                         "status":"missing","reason":"Не найден в каталоге","relay_timers":row.get("relay_timers",{}),
                         "enabled":row["enabled"],"disabled_actions":row.get("disabled_actions",[]),"actions":[],
                         "bindings":{k:normalize(v) for k,v in row["actions"].items()}})
-    return {"devices":devices,"sensors":sensors,"sensor_runtime_ready":sensor_runtime_ready,"sensor_deadlines":sensor_deadlines,"targets":list(targets.values()),"scan":scan,
+    return {"devices":devices,"sensors":sensors,"schedules":[r for r in rows if schedule_rules.is_schedule(r["entity_id"])],"schedule_timezone":schedule_timezone,"sensor_runtime_ready":sensor_runtime_ready,"sensor_deadlines":sensor_deadlines,"targets":list(targets.values()),"scan":scan,
             "report":report,"revision":revision(rows),"version":app.version,"maintenance_mode":maintenance,"home_mode":global_mode["mode"] if global_mode else None,"auto_day_night":auto_day_night,"home_profiles_ready":bool(global_mode and "day" in global_mode and "night" in global_mode)}
 
 def validate_assignment(assignment, targets):
@@ -249,6 +251,42 @@ def save_sensor(app,payload):
             app.config=projected
     finally:app._scan_lock.release()
 
+def save_schedule(app,payload):
+    if not isinstance(payload,dict) or set(payload)!={"revision","config"}:
+        raise CatalogError("Некорректное расписание")
+    row=schedule_rules.validate_row(payload["config"])
+    if not app._scan_lock.acquire(blocking=False):raise CatalogError("Идёт сканирование")
+    try:
+        options=app.options.read()
+        rows=parse_rows(options)
+        if payload["revision"]!=revision(rows):raise CatalogError("Настройки изменились — обновите страницу")
+        old=next((r for r in rows if r["entity_id"]==row["entity_id"]),{})
+        with app._mutex:
+            for a in row["assignments"]:
+                if a not in old.get("assignments",[]):validate_assignment(a,app.target_catalog)
+            rows=[r for r in rows if r["entity_id"]!=row["entity_id"]]+[row]
+            options["switches"]=render_rows(rows)
+            cfg=project(app.config,options)
+            app.options.write(options)
+            app.config=cfg
+    finally:app._scan_lock.release()
+
+def delete_schedule(app,payload):
+    if not isinstance(payload,dict) or set(payload)!={"revision","entity_id"} or not schedule_rules.is_schedule(payload["entity_id"]):
+        raise CatalogError("Некорректное расписание")
+    if not app._scan_lock.acquire(blocking=False):raise CatalogError("Идёт сканирование")
+    try:
+        options=app.options.read()
+        rows=parse_rows(options)
+        if payload["revision"]!=revision(rows):raise CatalogError("Настройки изменились — обновите страницу")
+        rows=[r for r in rows if r["entity_id"]!=payload["entity_id"]]
+        with app._mutex:
+            options["switches"]=render_rows(rows)
+            cfg=project(app.config,options)
+            app.options.write(options)
+            app.config=cfg
+    finally:app._scan_lock.release()
+
 def export_bindings(app):
     rows = parse_rows(app.options.read())
     return binding_document(rows)[0]
@@ -279,6 +317,15 @@ def import_bindings(app, payload):
                 if issue.get("category") in ("invalid_binding","invalid_keep_mode"):
                     raise CatalogError(issue["object_name"]+": "+issue["reason"])
             for row in rows:
+                if schedule_rules.is_schedule(row["entity_id"]):
+                    for a in row["assignments"]:
+                        if a["entity_id"] in app.target_catalog:
+                            check=deepcopy(a)
+                            if a["entity_id"].startswith("cover."):
+                                if "window_sensors" in check.get("data",{}):
+                                    check["data"]["window_sensors"]=[eid for eid in check["data"]["window_sensors"] if eid in app.target_catalog]
+                            validate_assignment(check,app.target_catalog)
+                    continue
                 if sensor_rules.is_source(row["entity_id"]):
                     # Preserve missing sources/targets on import, but validate
                     # all discovered capabilities; missing never authorizes ON.
@@ -395,6 +442,10 @@ def start_ingress(app, port=8099):
                 elif path == "/api/browse-media":
                     self.reply(200,browse_media(app,payload))
                     return
+                elif path == "/api/save-schedule":
+                    save_schedule(app,payload)
+                elif path == "/api/delete-schedule":
+                    delete_schedule(app,payload)
                 elif path == "/api/save-sensor":
                     save_sensor(app,payload)
                 elif path == "/api/save":
