@@ -44,25 +44,39 @@ class ReleaseSourceTests(unittest.TestCase):
             validate_manifest(doc, source, "0.2.0", "linux/arm64")
 
     def test_final_manifest_child_digest_integrity(self):
-        source = "a"*40
-        amd = "sha256:" + "1"*64
-        arm = "sha256:" + "2"*64
+        source = "a" * 40
+        amd_index = "sha256:" + "1" * 64
+        arm_index = "sha256:" + "2" * 64
+        amd_child = "sha256:" + "3" * 64
+        arm_child = "sha256:" + "4" * 64
+        source_indexes = amd_index + "," + arm_index
+        expected_children = amd_child + "," + arm_child
         doc = {
-            "annotations": {"org.opencontainers.image.revision": source,
-                            "org.opencontainers.image.version": "0.2.0",
-                            "org.digitalhouses.source-digests": amd + "," + arm},
+            "annotations": {
+                "org.opencontainers.image.revision": source,
+                "org.opencontainers.image.version": "0.2.0",
+                "org.digitalhouses.source-digests": source_indexes,
+            },
             "manifests": [
-                {"digest": amd, "platform": {"os": "linux", "architecture": "amd64"}},
-                {"digest": arm, "platform": {"os": "linux", "architecture": "arm64"}},
-                {"digest": "sha256:" + "3"*64,
-                 "platform": {"os": "unknown", "architecture": "unknown"}},
+                {"digest": amd_child, "platform": {"os": "linux", "architecture": "amd64"}},
+                {"digest": "sha256:" + "9" * 64, "platform": {"os": "unknown", "architecture": "unknown"}},
+                {"digest": arm_child, "platform": {"os": "linux", "architecture": "arm64"}},
             ],
         }
-        validate_manifest(doc, source, "0.2.0", "final", amd + "," + arm)
-        doc["manifests"][0]["digest"] = "sha256:" + "4"*64
+        validate_manifest(doc, source, "0.2.0", "final", source_indexes, expected_children)
+
+        # A genuine final index contains flattened image-manifest digests,
+        # not the (different) single-architecture OCI index digests.
         with self.assertRaisesRegex(ValueError, "child digest mismatch"):
-            validate_manifest(doc, source, "0.2.0", "final", amd + "," + arm)
-        doc["manifests"][0]["digest"] = amd
-        doc["manifests"][0], doc["manifests"][1] = doc["manifests"][1], doc["manifests"][0]
+            validate_manifest(doc, source, "0.2.0", "final", source_indexes, source_indexes)
+        with self.assertRaisesRegex(ValueError, "expected architecture manifest"):
+            validate_manifest(doc, source, "0.2.0", "final", source_indexes)
+
+        doc["manifests"][0]["digest"] = "sha256:" + "5" * 64
+        with self.assertRaisesRegex(ValueError, "child digest mismatch"):
+            validate_manifest(doc, source, "0.2.0", "final", source_indexes, expected_children)
+
+        doc["manifests"][0]["digest"] = amd_child
+        doc["manifests"][0], doc["manifests"][2] = doc["manifests"][2], doc["manifests"][0]
         with self.assertRaisesRegex(ValueError, "platforms"):
-            validate_manifest(doc, source, "0.2.0", "final", amd + "," + arm)
+            validate_manifest(doc, source, "0.2.0", "final", source_indexes, expected_children)
