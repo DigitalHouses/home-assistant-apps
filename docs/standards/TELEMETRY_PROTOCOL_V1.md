@@ -231,15 +231,17 @@ Recommended deterministic or random jitter:
 24h ± 30 min
 ```
 
-A client may additionally send one best-effort heartbeat:
+Each activated product process must attempt one best-effort heartbeat immediately
+on startup (including restart and upgrade), regardless of the previous process's
+daily interval or failure backoff. Keep the same persisted installation identity
+and token. An authenticated deletion with identity rotation permits a new
+immediate heartbeat.
 
-- on a fresh installation;
-- after a successful upgrade that changes the released product version;
-- after successful authenticated deletion and local identity rotation.
-
-The client must persist enough scheduling state to prevent restart-triggered heartbeat storms.
-
-After failure, use a reasonable backoff. Current implementation guidance recommends at least one hour before retry eligibility.
+During uninterrupted runtime, the next periodic attempt is due 24h ± 30 min
+after success, or one hour after a failed attempt. The startup exception is
+one attempt per process, not per MQTT reconnect, refresh or monitoring cycle.
+Persist identity and scheduling timestamps, and never restart a process to
+force retries. The wire schema and heartbeat payload are unchanged.
 
 ## 10. Client failure behavior
 

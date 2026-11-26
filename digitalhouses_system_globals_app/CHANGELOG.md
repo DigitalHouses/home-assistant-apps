@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.1.3
+- Send one immediate best-effort heartbeat at every activated process startup, including restart after HTTP failure and version upgrade. Preserve installation identity, daily jitter and hourly in-process failure backoff. Log each startup attempt.
+
 ## 0.1.2
 - Make MQTT and Home Assistant mandatory for System Ready without configuration switches. Keep only require_z2m as an optional readiness dependency; discover and monitor every Zigbee2MQTT namespace independently even when optional.
 - Invalidate a timed-out bridge health transaction immediately and preserve independent readiness diagnostics.
