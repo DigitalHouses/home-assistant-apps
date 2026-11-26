@@ -8,7 +8,7 @@ on:
     inputs:
       pr_number:
         description: "Exact same-repository owner PR to revalidate"
-        required: true
+        required: false
         type: string
       expected_head_sha:
         description: "Exact PR head SHA"
@@ -36,9 +36,9 @@ jobs:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
-          ref: ${{ github.event_name == 'workflow_dispatch' && format('refs/pull/{0}/merge', inputs.pr_number) || github.sha }}
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.pr_number && format('refs/pull/{0}/merge', inputs.pr_number) || github.sha }}
       - name: Validate dispatched PR identity and current main
-        if: github.event_name == 'workflow_dispatch'
+        if: github.event_name == 'workflow_dispatch' && inputs.pr_number
         env:
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ inputs.pr_number }}
@@ -63,6 +63,10 @@ jobs:
           test "$(jq -r .base.sha <<<"$pr")" = "$EXPECTED_BASE_SHA"
           test "$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq .object.sha)" = "$EXPECTED_BASE_SHA"
 
+      - name: Restrict main recovery validation
+        if: github.event_name == 'workflow_dispatch' && !inputs.pr_number
+        run: test "$GITHUB_REF" = refs/heads/main
+
       - name: Determine affected jobs
         id: scope
         env:
@@ -71,7 +75,7 @@ jobs:
         run: python3 scripts/ci_scope.py
 
       - name: Record exact validation provenance
-        if: github.event_name != 'push'
+        if: github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && inputs.pr_number)
         env:
           PR_NUMBER: ${{ github.event.pull_request.number || inputs.pr_number }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
@@ -88,7 +92,7 @@ jobs:
             > ci-provenance.json
 
       - name: Upload validated PR identity
-        if: github.event_name != 'push'
+        if: github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && inputs.pr_number)
         uses: actions/upload-artifact@v4
         with:
           name: ci-provenance
@@ -105,7 +109,7 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v6
         with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && format('refs/pull/{0}/merge', inputs.pr_number) || github.sha }}
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.pr_number && format('refs/pull/{0}/merge', inputs.pr_number) || github.sha }}
 
       - name: Set up Python
         uses: actions/setup-python@v6
@@ -131,7 +135,7 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v6
         with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && format('refs/pull/{0}/merge', inputs.pr_number) || github.sha }}
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.pr_number && format('refs/pull/{0}/merge', inputs.pr_number) || github.sha }}
 
       - name: Set up Python
         uses: actions/setup-python@v6
@@ -169,7 +173,7 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v6
         with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && format('refs/pull/{0}/merge', inputs.pr_number) || github.sha }}
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.pr_number && format('refs/pull/{0}/merge', inputs.pr_number) || github.sha }}
 
       - name: Set up Python
         uses: actions/setup-python@v6
@@ -213,7 +217,7 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v6
         with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && format('refs/pull/{0}/merge', inputs.pr_number) || github.sha }}
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.pr_number && format('refs/pull/{0}/merge', inputs.pr_number) || github.sha }}
 
       - name: Set up Python
         uses: actions/setup-python@v6
@@ -241,7 +245,7 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v6
         with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && format('refs/pull/{0}/merge', inputs.pr_number) || github.sha }}
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.pr_number && format('refs/pull/{0}/merge', inputs.pr_number) || github.sha }}
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
@@ -279,7 +283,7 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v6
         with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && format('refs/pull/{0}/merge', inputs.pr_number) || github.sha }}
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.pr_number && format('refs/pull/{0}/merge', inputs.pr_number) || github.sha }}
 
       - name: Set up Python
         uses: actions/setup-python@v6
@@ -318,7 +322,7 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v6
         with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && format('refs/pull/{0}/merge', inputs.pr_number) || github.sha }}
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.pr_number && format('refs/pull/{0}/merge', inputs.pr_number) || github.sha }}
 
       - name: Set up Python
         uses: actions/setup-python@v6
@@ -355,7 +359,7 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v6
         with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && format('refs/pull/{0}/merge', inputs.pr_number) || github.sha }}
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.pr_number && format('refs/pull/{0}/merge', inputs.pr_number) || github.sha }}
 
       - name: Set up Python
         uses: actions/setup-python@v6
@@ -396,7 +400,7 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v6
         with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && format('refs/pull/{0}/merge', inputs.pr_number) || github.sha }}
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.pr_number && format('refs/pull/{0}/merge', inputs.pr_number) || github.sha }}
 
       - name: Set up Python
         uses: actions/setup-python@v6
@@ -431,7 +435,7 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v6
         with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && format('refs/pull/{0}/merge', inputs.pr_number) || github.sha }}
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.pr_number && format('refs/pull/{0}/merge', inputs.pr_number) || github.sha }}
 
       - name: Set up Python
         uses: actions/setup-python@v6
@@ -486,7 +490,7 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v6
         with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && format('refs/pull/{0}/merge', inputs.pr_number) || github.sha }}
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.pr_number && format('refs/pull/{0}/merge', inputs.pr_number) || github.sha }}
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
@@ -520,7 +524,7 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v6
         with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && format('refs/pull/{0}/merge', inputs.pr_number) || github.sha }}
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.pr_number && format('refs/pull/{0}/merge', inputs.pr_number) || github.sha }}
 
       - name: Set up Python
         uses: actions/setup-python@v6
@@ -575,7 +579,7 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v6
         with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && format('refs/pull/{0}/merge', inputs.pr_number) || github.sha }}
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.pr_number && format('refs/pull/{0}/merge', inputs.pr_number) || github.sha }}
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
@@ -619,7 +623,7 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v6
         with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && format('refs/pull/{0}/merge', inputs.pr_number) || github.sha }}
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.pr_number && format('refs/pull/{0}/merge', inputs.pr_number) || github.sha }}
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
@@ -674,7 +678,7 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v6
         with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && format('refs/pull/{0}/merge', inputs.pr_number) || github.sha }}
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.pr_number && format('refs/pull/{0}/merge', inputs.pr_number) || github.sha }}
 
       - name: Set up Python
         uses: actions/setup-python@v6
@@ -705,7 +709,7 @@ jobs:
 
   release-readiness:
     name: Release readiness
-    if: github.event_name != 'push'
+    if: github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && inputs.pr_number)
     runs-on: ubuntu-latest
 
     steps:
