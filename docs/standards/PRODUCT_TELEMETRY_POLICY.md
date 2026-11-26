@@ -170,15 +170,19 @@ Recommended window:
 24h ± 30 min
 ```
 
-An immediate best-effort heartbeat is allowed:
+Every activated product process must attempt one best-effort heartbeat immediately
+on startup, including an ordinary restart, a fresh installation or a version
+upgrade. The previous process's daily interval or failure backoff must not
+suppress this single startup attempt. Preserve the installation identity and
+token across restarts and upgrades.
 
-- on a fresh installation;
-- after a successful product upgrade to a different released version;
-- after a successful authenticated telemetry deletion when a fresh local installation identity has been created.
-
-Clients must persist scheduling state sufficiently to avoid heartbeat storms after repeated restarts.
-
-Telemetry must not be sent on every application loop or monitoring cycle.
+During uninterrupted runtime, schedule the next heartbeat 24h ± 30 min after
+the last successful heartbeat, or retry one hour after a failed attempt.
+A successful authenticated deletion and identity rotation permits an immediate
+heartbeat for the new identity. The startup exception applies once per process;
+never repeat it on MQTT reconnects, refresh commands, or monitoring cycles.
+Do not implement a restart loop to force telemetry retries. Persist identity
+and scheduling timestamps; telemetry is never a reason to restart the product.
 
 ## 7. Failure isolation
 
@@ -200,7 +204,7 @@ Telemetry heartbeat failed; will retry later
 
 Do not use aggressive retry loops.
 
-Current retry guidance is at least one hour before retry eligibility.
+Retry eligibility during uninterrupted runtime begins one hour after failure. The single startup attempt described in section 6 is independent of the previous process's backoff.
 
 ## 8. Meaning of telemetry counts
 

@@ -60,33 +60,66 @@ class TelemetryTests(unittest.TestCase):
         interval = c._normal_interval()
         self.assertGreaterEqual(interval, NORMAL_INTERVAL_SECONDS-JITTER_SECONDS)
         self.assertLessEqual(interval, NORMAL_INTERVAL_SECONDS+JITTER_SECONDS)
-        self.now += interval-1
+        self.now += 1
         r = self.client()
         self.assertEqual((r.installation_id, r.installation_token),
                          (c.installation_id, c.installation_token))
+        self.assertTrue(r.tick())
+        self.assertFalse(r.tick())
+        self.now += interval-1
         self.assertFalse(r.tick())
         self.now += 1
         self.assertTrue(r.tick())
         self.now += 1
-        upgraded = self.client(version="0.1.1")
+        upgraded = self.client(version="0.1.3")
         self.assertEqual(upgraded.installation_id, c.installation_id)
         self.assertTrue(upgraded.tick())
+        self.assertFalse(upgraded.tick())
 
     def test_disabled_and_local_build_do_not_send(self):
         self.assertFalse(self.client(enabled=False).tick())
         self.assertFalse(self.client(version="0.1.0-local").tick())
         self.assertEqual(self.transport.calls, [])
 
-    def test_transport_failure_backoff_survives_restart(self):
+    def test_transport_failure_retries_hourly_in_same_process(self):
         c = self.client()
         self.transport.error = OSError("offline")
         self.assertFalse(c.tick())
         self.now += FAILURE_BACKOFF_SECONDS-1
-        self.assertFalse(self.client().tick())
+        self.assertFalse(c.tick())
         self.assertEqual(len(self.transport.calls), 1)
         self.transport.error = None
         self.now += 1
-        self.assertTrue(self.client().tick())
+        self.assertTrue(c.tick())
+        self.assertFalse(c.tick())
+
+    def test_restart_after_failed_422_tries_immediately(self):
+        c = self.client()
+        self.transport.status = 422
+        self.assertFalse(c.tick())
+        self.assertFalse(c.tick())
+        self.now += 60
+        self.transport.status = 204
+        r = self.client()
+        self.assertEqual(r.installation_id, c.installation_id)
+        self.assertEqual(r.installation_token, c.installation_token)
+        self.assertTrue(r.tick())
+        self.assertFalse(r.tick())
+        self.assertEqual(len(self.transport.calls), 2)
+
+    def test_failed_restart_after_success_still_backs_off(self):
+        c = self.client()
+        self.assertTrue(c.tick())
+        r = self.client()
+        self.transport.status = 503
+        self.assertFalse(r.tick())
+        self.assertFalse(r.tick())
+        self.now += FAILURE_BACKOFF_SECONDS-1
+        self.assertFalse(r.tick())
+        self.now += 1
+        self.transport.status = 204
+        self.assertTrue(r.tick())
+        self.assertEqual(len(self.transport.calls), 3)
 
     def test_delete_rotates_identity_and_retains_consent(self):
         c = self.client()

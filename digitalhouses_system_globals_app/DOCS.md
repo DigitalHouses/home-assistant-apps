@@ -44,3 +44,8 @@ before acceptance; transport failure does not block core runtime after acceptanc
 The payload is the product name, version and random installation identity
 plus protocol metadata; no profile, household, device or MQTT data.
 Public rollout of mandatory telemetry remains subject to the repository legal gate.
+
+One immediate best-effort heartbeat is attempted at each activated App startup.
+The same running process retries after one hour on failure, or sends its next
+periodic heartbeat 24h ± 30 min after success. Restarts preserve identity and
+credentials, but do not suppress the single startup attempt.

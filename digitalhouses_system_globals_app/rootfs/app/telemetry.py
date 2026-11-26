@@ -115,7 +115,8 @@ class TelemetryClient:
         self.now_epoch = now_epoch
         self.log = logging.getLogger(__name__)
         self._lock = threading.Lock()
-        self._enabled_heartbeat_pending = False
+        self._startup_pending = True
+        self._retry_after = None
         self._state = self._load_or_create_state()
 
     def _load_or_create_state(self) -> dict[str, Any]:
@@ -182,9 +183,6 @@ class TelemetryClient:
                 "telemetry.last_reported_version must be a non-empty string when present"
             )
 
-        self._enabled_heartbeat_pending = (
-            self.enabled and previous_enabled is False
-        )
         if previous_enabled is not self.enabled:
             state["telemetry_enabled"] = self.enabled
             self._save_state(state)
@@ -242,15 +240,9 @@ class TelemetryClient:
         return float(value)
 
     def _due(self, now: float) -> bool:
-        last_attempt = self._number(self._state.get("last_attempt_epoch"))
+        if self._retry_after is not None:
+            return now >= self._retry_after
         last_success = self._number(self._state.get("last_success_epoch"))
-        if (
-            last_attempt is not None
-            and (last_success is None or last_attempt > last_success)
-            and now - last_attempt < FAILURE_BACKOFF_SECONDS
-        ):
-            return False
-
         last_version = self._state.get("last_reported_version")
         if last_success is None or last_version != self.version:
             return True
@@ -264,10 +256,13 @@ class TelemetryClient:
 
         with self._lock:
             now = float(self.now_epoch())
-            enabled_heartbeat = self._enabled_heartbeat_pending
-            self._enabled_heartbeat_pending = False
-            if not enabled_heartbeat and not self._due(now):
+            startup = self._startup_pending
+            if not startup and not self._due(now):
                 return False
+            self._startup_pending = False
+            self._retry_after = now + FAILURE_BACKOFF_SECONDS
+            if startup:
+                self.log.info("Telemetry startup heartbeat: product=%s version=%s", PRODUCT, self.version)
 
             self._state["last_attempt_epoch"] = now
             self._save_state()
@@ -293,6 +288,7 @@ class TelemetryClient:
                 )
                 return False
 
+            self._retry_after = None
             self._state["last_success_epoch"] = now
             self._state["last_reported_version"] = self.version
             self._save_state()
@@ -336,6 +332,7 @@ class TelemetryClient:
             self._state.pop("last_success_epoch", None)
             self._state.pop("last_reported_version", None)
             self._state.pop("last_attempt_epoch", None)
+            self._retry_after = None
             self._save_state()
             return True
 
