@@ -232,7 +232,7 @@ class HAClient:
         return self.read_domain_state(entity_id)
 
     def read_domain_state(self, entity_id: str) -> dict:
-        if not isinstance(entity_id,str) or not re.fullmatch(r"(light|cover|binary_sensor|climate|media_player)\.[a-z0-9_]+",entity_id):
+        if not isinstance(entity_id,str) or not re.fullmatch(r"(light|switch|cover|binary_sensor|climate|media_player)\.[a-z0-9_]+",entity_id):
             raise ValueError("Expected cover, climate or window sensor")
         req = urllib.request.Request(self.url + "/states/" + entity_id,
                                      headers={"Authorization":"Bearer "+self.token})

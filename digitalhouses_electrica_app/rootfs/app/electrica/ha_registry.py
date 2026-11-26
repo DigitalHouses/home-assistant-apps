@@ -174,3 +174,52 @@ class HARegistryClient:
         if ref is not None:
             request.update(media_ref(ref))
         return browse_result(self._fetch((request,))[0])
+
+    def watch_states(self, stop, baseline, changed):
+        """Read-only HA subscription; reconnect establishes a silent baseline."""
+        import time
+        import websocket
+        ws = websocket.create_connection(self.url, timeout=self.timeout,
+                                         http_proxy_host=None)
+        try:
+            if json.loads(ws.recv()).get("type") != "auth_required":
+                raise CatalogError("HA WebSocket authentication unavailable")
+            ws.send(json.dumps({"type":"auth","access_token":self.token}))
+            if json.loads(ws.recv()).get("type") != "auth_ok":
+                raise CatalogError("HA WebSocket authorization failed")
+            ws.send(json.dumps({"id":1,"type":"subscribe_events","event_type":"state_changed"}))
+            ack = json.loads(ws.recv())
+            if ack.get("id") != 1 or ack.get("success") is not True:
+                raise CatalogError("HA state subscription failed")
+            ws.send(json.dumps({"id":2,"type":"get_states"}))
+            # Events before this result are represented by the baseline.
+            while not stop.is_set():
+                reply = json.loads(ws.recv())
+                if reply.get("id") == 2 and reply.get("type") == "result":
+                    if reply.get("success") is not True or not isinstance(reply.get("result"),list):
+                        raise CatalogError("HA baseline unavailable")
+                    baseline(reply["result"])
+                    break
+            ws.settimeout(1)
+            next_ping = time.monotonic()+15
+            ping_deadline = None
+            while not stop.is_set():
+                now = time.monotonic()
+                if ping_deadline is not None and now >= ping_deadline:
+                    raise CatalogError("HA state subscription heartbeat lost")
+                if now >= next_ping and ping_deadline is None:
+                    ws.send(json.dumps({"id":3,"type":"ping"}))
+                    ping_deadline = now+8
+                    next_ping = now+15
+                try:
+                    reply = json.loads(ws.recv())
+                except websocket.WebSocketTimeoutException:
+                    continue
+                if reply.get("id")==3 and reply.get("type")=="pong":
+                    ping_deadline = None
+                elif reply.get("id")==1 and reply.get("type")=="event":
+                    event = reply.get("event",{}).get("data",{})
+                    if isinstance(event.get("entity_id"),str):
+                        changed(event["entity_id"],event.get("new_state"))
+        finally:
+            ws.close()

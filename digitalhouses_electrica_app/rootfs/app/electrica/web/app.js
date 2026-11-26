@@ -343,14 +343,22 @@ document.querySelector("#devices-nav").onclick=()=>selectSection("keys");
 document.querySelector("#sensors-nav").onclick=()=>selectSection("sensors");
 function renderSensors(){
   main.replaceChildren();
-  main.append(el("p","DEV: настройка датчиков. Автоматическое исполнение пока не подключено.","muted"));
+  main.append(el("p",model.sensor_runtime_ready?"HA события: подключены":"HA события: ожидание подключения","muted"));
   for(const sensor of model.sensors||[]){
     const card=el("article",undefined,"device-card");
     card.tabIndex=0;card.setAttribute("role","button");
     const title=el("strong",(sensor.state==="on"?"● ":sensor.state==="off"?"○ ":"⚠ ")+targetLabel(sensor.entity_id,sensor));
     const info=el("div",[sensor.area,sensor.device_class,sensor.state].filter(Boolean).join(" · "),"muted");
     const targets=el("div",undefined,"bindings");
-    for(const a of sensor.config.assignments||[])targets.append(targetNode(a.entity_id));
+    for(const a of sensor.config.assignments||[]){
+      const line=el("div",undefined,"binding");line.append(targetNode(a.entity_id));
+      if(a.off_delay_seconds!=null)line.append(el("span","Авто-OFF: "+a.off_delay_seconds+" сек.","muted"));
+      const due=model.sensor_deadlines?.[a.entity_id];
+      if(due!=null)line.append(el("span","До OFF: "+Math.max(0,Math.ceil(due-Date.now()/1000))+" сек.","muted"));
+      const t=model.targets.find(x=>x.entity_id===a.entity_id);
+      if(t?.group||t?.integration==="group")line.append(el("span","⚠ Группа: автоисполнение пока недоступно","problem"));
+      targets.append(line);
+    }
     if(!targets.children.length)targets.append(el("span","Нет назначений","muted"));
     card.append(title,info,targets);
     card.onclick=()=>openSensor(sensor);
@@ -372,7 +380,7 @@ function renderSensorEdit(){
   main.replaceChildren();
   const h=el("div",undefined,"head");
   h.append(button("← Датчики",goBack),el("h2",targetLabel(editing.entity_id,editing)),button("Сохранить",save,"save"));main.append(h);
-  main.append(el("p","DEV: сохраняются назначения, автоматическое исполнение ещё не подключено.","muted"));
+  main.append(el("p","Автоматическое включение при обнаружении. Таймер запускается после отсутствия.","muted"));
   const enable=el("input");enable.type="checkbox";enable.checked=draft.enabled;enable.onchange=()=>{draft.enabled=enable.checked;update()};
   const l=el("label");l.append(enable,document.createTextNode("Включено"));main.append(l);
   const lux=editing.lux_sources||[];
@@ -395,7 +403,7 @@ function renderSensorEdit(){
   const action="presence",existing=draft.bindings[action]||[];
   for(const a of existing)assignedRow(action,a,main);
   main.append(button(existing.length?"Изменить выбор сущностей":"+ Выбрать сущности",()=>{
-    DHElectricaEntityPicker.open({items:model.targets,values:existing.map(a=>a.entity_id),domains:["light","switch"],
+    DHElectricaEntityPicker.open({items:model.targets.filter(t=>!t.group&&t.integration!=="group"||existing.some(a=>a.entity_id===t.entity_id)),values:existing.map(a=>a.entity_id),domains:["light","switch"],
       areaId:draft.area_id,areaHint:draft.room,renderIcon:targetIcon,renderTest:lightTestControl,
       onConfirm:ids=>{
         draft.bindings[action]=DHElectricaEntityPicker.mergeAssignments(existing,ids,model.targets).map(a=>({...a,operation:"on"}));

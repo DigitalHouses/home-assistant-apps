@@ -52,12 +52,18 @@ It is independent of any Home Assistant dashboard.
   fixed/dynamic overlaps, offline targets and groups without all members
   confirmed ON. No retained startup replay or playback start. HA light
   state-check and parameter call are not atomic; live hardware tests remain.
-- **Sensors (development configuration stage):** discover HA binary_sensor
+- **Sensors (DEV):** discover HA binary_sensor
   motion/occupancy/presence and same-device illuminance in lx. Sensor rows
   use the existing versioned JSON bindings store alongside legacy switch rows.
   Ingress configures explicit light/switch ON, per-target profiles and optional
   OFF delay after absence. Lux thresholds are validated; raw/foreign Lux is
-  not accepted. No sensor commands or timers are executed in this stage.
+  not accepted. Read-only HA state_changed events feed the existing execution
+  queue. Only observed OFF→ON presence may activate an observed-off target;
+  already-on lights remain untouched. Confirmed ownership and absence
+  deadlines are persisted and checked on reconnect/restart. Manual commands
+  cancel ownership; observable external changes cancel it as well. Group
+  targets are excluded until member-level ownership is implemented. Hardware
+  acceptance, key/physical relay timers and readiness integration remain.
 - **Cover:** select Toggle, Open, Close, Stop or Position according to the HA
   capability flags. Toggle resolves from a known settled state; moving or
   unknown state does not imply a direction. Optional window/door/opening

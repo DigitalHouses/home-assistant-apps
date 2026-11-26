@@ -31,6 +31,10 @@ def snapshot(app):
         report = deepcopy(app._previous)
         maintenance = getattr(app,"globals",{}).get("maintenance_mode",False)
         sensor_catalog=deepcopy(getattr(app,"sensor_catalog",{}))
+        engine=getattr(app,"sensor_engine",None)
+        sensor_runtime_ready=bool(engine and engine.ready)
+        sensor_deadlines={eid:r["deadline"] for eid,r in (engine.owners.items() if engine else [])
+                          if r.get("deadline") is not None}
         global_mode = getattr(app,"_home_profile",None)
         auto_day_night = getattr(app,"globals",{}).get("auto_day_night",False)
     rows = parse_rows(app.options.read())
@@ -69,7 +73,7 @@ def snapshot(app):
                         "status":"missing","reason":"Не найден в каталоге",
                         "enabled":row["enabled"],"disabled_actions":row.get("disabled_actions",[]),"actions":[],
                         "bindings":{k:normalize(v) for k,v in row["actions"].items()}})
-    return {"devices":devices,"sensors":sensors,"targets":list(targets.values()),"scan":scan,
+    return {"devices":devices,"sensors":sensors,"sensor_runtime_ready":sensor_runtime_ready,"sensor_deadlines":sensor_deadlines,"targets":list(targets.values()),"scan":scan,
             "report":report,"revision":revision(rows),"version":app.version,"maintenance_mode":maintenance,"home_mode":global_mode["mode"] if global_mode else None,"auto_day_night":auto_day_night,"home_profiles_ready":bool(global_mode and "day" in global_mode and "night" in global_mode)}
 
 def validate_assignment(assignment, targets):

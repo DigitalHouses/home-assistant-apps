@@ -126,6 +126,11 @@ def adaptation_targets(config):
                             (eid.startswith("media_player.") and op=="volume")):
                         data=rule.get("target_data",{}).get(eid,rule.get("data",{}))
                         kinds.setdefault(eid,set()).add(data.get("profile")=="current")
+    for row in config.get("sensor_bindings",{}).values():
+        if row.get("enabled"):
+            for a in row["assignments"]:
+                if a["entity_id"].startswith("light."):
+                    kinds.setdefault(a["entity_id"],set()).add(a.get("data",{}).get("profile")=="current")
     routes=config.get("light_routes",{})
     def physical_ids(eid):
         route=routes.get(eid)

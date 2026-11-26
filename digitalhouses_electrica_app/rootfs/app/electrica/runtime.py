@@ -21,6 +21,7 @@ from .catalog import (CatalogError, candidate_from_mqtt, decode_bridge_devices,
                       resolve_hardware, has_event_actions, has_device_power)
 from .actions import ActionError
 from .event_log import EventLog
+from .sensor_engine import SensorEngine
 from .control import HAClient, light_commands, verified_adopted_switch
 from .mqtt_lights import plan_batch
 from .lab_lights import (LAB_LIGHTS, authorized_ha_light_ids,
@@ -184,6 +185,7 @@ class Application:
         self._scan_lock = threading.Lock()
         self.target_catalog = {}
         self.sensor_catalog = {}
+        self.sensor_engine = SensorEngine(self,last_scan_path.with_name("sensor_timers.json"))
         self.device_details = []
         self._networks: dict[str, dict] = {}
         self._subscribed: set[str] = set()
@@ -704,6 +706,7 @@ class Application:
                         self.event_log.finish(rid,"Нет активной привязки")
                     continue
                 targets = [eid for command in commands for eid in command["target"]["entity_id"]]
+                self.sensor_engine.manual_control(targets)
                 target_label = ", ".join(targets)
                 rid = self.event_log.press(base,name,action,targets)
                 try:
@@ -796,6 +799,7 @@ class Application:
                 raise CatalogError("Светильник недоступен или Maintenance активен")
             if self.event_log.active_target(eid):
                 raise CatalogError("Ожидается результат предыдущей команды")
+            self.sensor_engine.manual_control([eid])
             rid = self.event_log.press("ingress", "Инженер", "TEST", [eid])
             try:
                 self._jobs.put_nowait((None, None, "Инженер", "TEST",
@@ -827,11 +831,16 @@ class Application:
         def eligible(eid):
             return (self._home_profile is snapshot and self.globals.get("auto_day_night")
                     and not self.globals["maintenance_mode"]
-                    and eid in profiles.adaptation_targets(self.config)[0]
+                    and (eid in profiles.adaptation_targets(self.config)[0] or self.sensor_engine.dynamic_owner(eid))
                     and not self.event_log.active_target(eid,exclude=rid))
         with self._mutex:
             if self._home_profile is not snapshot or not self.globals.get("auto_day_night") or self.globals["maintenance_mode"]:return
             candidates,conflicts=profiles.adaptation_targets(self.config)
+            # A confirmed sensor-owned dynamic ON resolves the otherwise
+            # ambiguous fixed/manual assignment to the same individual light.
+            owned=[eid for eid in conflicts if self.sensor_engine.dynamic_owner(eid)]
+            candidates+=owned
+            conflicts=[eid for eid in conflicts if eid not in owned]
             # Groups first; successful group command covers its member routes.
             candidates.sort(key=lambda eid:(self.config.get("light_routes",{}).get(eid,{}).get("kind")!="group",eid))
         handled=set()
@@ -864,7 +873,9 @@ class Application:
                         zero=data.get("brightness_pct")==0
                         payload=({"state":"OFF",**{k:v for k,v in plan["payload"].items() if k=="transition"}} if zero
                                  else {k:v for k,v in plan["payload"].items() if k!="state"})
+                        self.sensor_engine.expect_profile(eid,data)
                         if not payload or not self._publish(plan["topic"],payload,retain=False):
+                            self.sensor_engine.profile_changes.pop(eid,None)
                             raise ActionError("MQTT profile command rejected")
                         handled.update(members)
                         self.event_log.sent(rid,eid,("z2m",*ident),"on","off" if zero else "on",accepted_only=not zero)
@@ -892,6 +903,7 @@ class Application:
                         if (not eligible(eid) or eid in self.config.get("light_routes",{})
                                 or (shadow and time.monotonic()-shadow["at"]<=HA_SHADOW_SECONDS)):
                             raise ActionError("Light route or profile changed")
+                        self.sensor_engine.expect_profile(eid,data)
                     zero=data.get("brightness_pct")==0
                     at=_iso_now()
                     self._ha_client.execute({"service":"light.turn_off" if zero else "light.turn_on","target":{"entity_id":[eid]},"data":{k:v for k,v in data.items() if k=="transition"} if zero else data})
@@ -909,6 +921,7 @@ class Application:
                     self._ha_client.execute_media(eid,op,data)
                     self.event_log.sent_ha_domain(rid,eid,state,desired,at,operation=op)
             except Exception as exc:
+                with self._mutex:self.sensor_engine.profile_changes.pop(eid,None)
                 self.event_log.skip(rid,eid,str(exc))
             finally:self.event_log.finish(rid)
 
@@ -987,8 +1000,14 @@ class Application:
                 base, coordinator, name, action, commands = job[:5]
                 rid = job[5] if len(job)>5 else None
             except queue.Empty:
+                try:
+                    with self._mutex:self.sensor_engine.tick()
+                except Exception:
+                    LOG.exception("Sensor timer tick failed")
+                    with self._mutex:self.sensor_engine.disconnect()
                 continue
             targets = [eid for cmd in commands for eid in cmd["target"]["entity_id"]]
+            sensor_job = base is None and action in ("SENSOR_ON","SENSOR_OFF")
             try:
                 if base is None and action=="AUTO_PROFILE":
                     self._adapt_home_profile(job[6])
@@ -1044,7 +1063,12 @@ class Application:
                         time.monotonic(), allowed_lights=ha_approved)
 
                 with self._mutex:
-                    if is_test:
+                    if sensor_job:
+                        if not any(self.sensor_engine.allowed(name,action,coordinator,eid,rid) for eid in targets):
+                            self.event_log.finish(rid,"Sensor state, ownership or binding changed",targets)
+                            self._publish_action(state="skipped",switch=name,action=action,target="",error="Sensor state, ownership or binding changed")
+                            continue
+                    elif is_test:
                         if (len(targets) != 1 or not self._test_light_allowed(targets[0])
                                 or self.event_log.active_target(targets[0], exclude=rid)):
                             raise ActionError("Test target unavailable or command pending")
@@ -1106,6 +1130,12 @@ class Application:
                     skipped.extend(profile_skipped)
                     sent = []
                     for plan in plans:
+                        if sensor_job:
+                            eid=plan["light"]
+                            if (not self.sensor_engine.allowed(name,action,coordinator,eid,rid)
+                                    or self.observed_target_state(eid,verify_route=True)!=("off" if action=="SENSOR_ON" else "on")):
+                                skipped.append({"light":eid,"reason":"Sensor state or observed Zigbee target changed"})
+                                continue
                         if plan["state"]=="ON" and plan["light"] in unresolved_toggles:
                             skipped.append({"light":plan["light"],"reason":unresolved_toggles[plan["light"]]})
                             continue
@@ -1122,6 +1152,7 @@ class Application:
                                 accepted_only=plan["light"] in profile_lights and plan["state"]=="ON")
                             self._light_shadows[ident] = {
                                 "value": plan["state"], "at": time.monotonic()}
+                            if sensor_job:self.sensor_engine.dispatched(name,action,coordinator,plan["light"],plan["state"].lower())
                             sent.append(plan["light"])
                         else:
                             skipped.append({"light":plan["light"],
@@ -1146,8 +1177,23 @@ class Application:
                             ids=[eid for eid in ids if eid not in unresolved_toggles]
                             if not ids:continue
                             call={**call,"target":{"entity_id":ids}}
+                        live_off={}
+                        if sensor_job and action=="SENSOR_OFF":
+                            for eid in ids:
+                                try:live_off[eid]=self._ha_client.read_domain_state(eid)
+                                except Exception:pass
                         with self._mutex:
-                            if is_test:
+                            if sensor_job:
+                                valid_ids=[eid for eid in ids if self.sensor_engine.allowed(name,action,coordinator,eid,rid)
+                                    and eid not in self.config.get("light_routes",{})
+                                    and (action!="SENSOR_OFF" or self.sensor_engine.live_owned(eid,live_off.get(eid)))
+                                    and lab_state_cache.get(eid,(False,None))==(True,"off" if action=="SENSOR_ON" else "on")]
+                                skipped.extend({"light":eid,"reason":"Sensor state or target changed"} for eid in ids if eid not in valid_ids)
+                                ids=valid_ids
+                                if not ids:continue
+                                call={**call,"target":{"entity_id":ids}}
+                                authorized=True
+                            elif is_test:
                                 authorized = (len(ids) == 1 and self._test_light_allowed(ids[0])
                                               and ids[0] not in self.config.get("light_routes", {})
                                               and not self.event_log.active_target(ids[0], exclude=rid))
@@ -1194,6 +1240,7 @@ class Application:
                                     accepted_only=eid in profile_lights and value=="on")
                                 self._ha_shadows[eid] = {
                                     "state":value, "at": time.monotonic()}
+                                if sensor_job:self.sensor_engine.dispatched(name,action,coordinator,eid,value)
                         sent.extend(ids)
                 if switch_commands:
                     from .ingress_catalog import safe_switch_targets
@@ -1219,23 +1266,32 @@ class Application:
                                                  for _, c, st in pending_switches) else "off"
                     for eid, service, state in pending_switches:
                         try:
+                            live_off=self._ha_client.read_domain_state(eid) if sensor_job and action=="SENSOR_OFF" else None
                             with self._mutex:
-                                sw = next((x for room in self.config["rooms"] for x in room["switches"]
-                                           if x["logical_name"] == name and x["base_topic"] == base
-                                           and x["coordinator_ieee"] == coordinator), None)
-                                net = self._networks.get(base, {})
-                                device = next((d for d in decode_bridge_devices(net["devices"])
-                                               if d.get("friendly_name") == name), None)
-                                if (not sw or not device or not sw.get("enabled", False)
-                                    or maintained_switch(sw, self.globals)
-                                    or light_commands(sw, action) != all_commands
-                                    or not verified_adopted_switch(sw, device, coordinator, base)
-                                    or not self._input_mode_allowed(sw, action, net, device, False)):
-                                    raise ActionError("Input or binding changed")
+                                if sensor_job:
+                                    if (not self.sensor_engine.allowed(name,action,coordinator,eid,rid)
+                                            or state!=("off" if action=="SENSOR_ON" else "on")
+                                            or (action=="SENSOR_OFF" and not self.sensor_engine.live_owned(eid,live_off))):
+                                        raise ActionError("Sensor state or ownership changed")
+                                else:
+                                    sw = next((x for room in self.config["rooms"] for x in room["switches"]
+                                               if x["logical_name"] == name and x["base_topic"] == base
+                                               and x["coordinator_ieee"] == coordinator), None)
+                                    net = self._networks.get(base, {})
+                                    device = next((d for d in decode_bridge_devices(net["devices"])
+                                                   if d.get("friendly_name") == name), None)
+                                    if (not sw or not device or not sw.get("enabled", False)
+                                        or maintained_switch(sw, self.globals)
+                                        or light_commands(sw, action) != all_commands
+                                        or not verified_adopted_switch(sw, device, coordinator, base)
+                                        or not self._input_mode_allowed(sw, action, net, device, False)):
+                                        raise ActionError("Input or binding changed")
                             desired = switch_toggle if service == "switch.toggle" else service.rsplit("_", 1)[-1]
                             dispatched_at = _iso_now()
                             self._ha_client.execute_switch(eid, desired)
                             self.event_log.sent(rid,eid,("ha",eid),state,desired,sent_at=dispatched_at)
+                            if sensor_job:
+                                with self._mutex:self.sensor_engine.dispatched(name,action,coordinator,eid,desired)
                             sent.append(eid)
                         except Exception as exc:
                             skipped.append({"light":eid,"reason":str(exc)[:120]})
@@ -1264,7 +1320,14 @@ class Application:
                 self._publish_action(state="error", switch=name, action=action,
                                      target=", ".join(targets), error=str(exc)[:300])
             finally:
-                self._jobs.task_done()
+                try:
+                    with self._mutex:
+                        if sensor_job:self.sensor_engine.finished(action,targets)
+                        self.sensor_engine.tick()
+                except Exception:
+                    LOG.exception("Sensor timer tick failed")
+                    with self._mutex:self.sensor_engine.disconnect()
+                finally:self._jobs.task_done()
 
     def request_scan(self, foreground=True) -> bool:
         if not self._scan_lock.acquire(blocking=False):
@@ -1394,6 +1457,21 @@ class Application:
             self.sensor_catalog = sensor_rules.discover(registry,states)
         self._publish_details()
 
+    def _watch_sensor_states(self):
+        def baseline(states):
+            self.refresh_targets()
+            with self._mutex:self.sensor_engine.baseline(states)
+        def changed(eid,state):
+            with self._mutex:self.sensor_engine.changed(eid,state)
+        while not self._stop.is_set():
+            try:
+                self.registry.watch_states(self._stop,baseline,changed)
+            except Exception as exc:
+                LOG.warning("HA sensor subscription unavailable: %s",exc)
+            finally:
+                with self._mutex:self.sensor_engine.disconnect()
+            self._stop.wait(5)
+
     def _observe_targets(self):
         while not self._stop.is_set():
             try:
@@ -1459,6 +1537,8 @@ class Application:
                          name="dh-electrica-ingress").start()
         threading.Thread(target=self._scheduled_release_check, daemon=True,
                          name="dh-electrica-release-check").start()
+        threading.Thread(target=self._watch_sensor_states, daemon=True,
+                         name="dh-electrica-sensor-events").start()
         threading.Thread(target=self._observe_targets, daemon=True,
                          name="dh-electrica-target-observer").start()
         threading.Thread(target=self._auto_scan, daemon=True,
