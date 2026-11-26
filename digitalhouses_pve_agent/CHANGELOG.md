@@ -1,5 +1,52 @@
 # Changelog
 
+## 0.5.105
+
+- Simplify the aggregate status card: keep foreground presentation in memory, start clean after process restart, and observe the authoritative independent update worker without matching timestamps or restoring UI transactions. Existing checkpoint files are ignored; no manual cleanup required.
+- Preserve actionable installer failures and UPS preflight denials, clear superseded errors, and leave unavailable historical durations unknown. Preserve MQTT fields, card layout, Refresh/check/restart controls and installer safety/rollback.
+- Add regression coverage for the successful 0.5.104 CLI update with reordered timestamps, worker survival, actual rollback and missing UI history.
+
+## 0.5.104
+
+- Prevent software FSD during UPS calibration (`OB CAL`) only when fresh input voltage and frequency confirm healthy mains; absent, invalid or abnormal measurements and critical UPS flags retain the original protection. Preserve raw NUT status and native NUT handling.
+- Exclude verified calibration from line-power outage statistics and on-battery problem/events. Preserve the v0.5.103 UPS layout and existing calibration presentation.
+- Physical calibration acceptance remains required before stable deployment.
+
+## 0.5.103
+
+- Promote the guided USB UPS/NUT commissioning workflow and PVE shutdown history fixes from v0.5.100–0.5.102 into the regular stable PVE Agent release line. Keep the seven independent setup stages, USB identity reporting and retained HA MQTT setup diagnostics.
+- Preserve fixed-command NUT configuration operations, OL-only commissioning checks, file backup and rollback, network/SNMP read-only protection, and existing standalone NUT shutdown safety. Do not run FSD or a real shutdown during setup.
+- Carry forward shutdown-history parser v6 that excludes old manually stopped guests from reboot duration, automatically repairs prior v5 history from the previous boot journal, and maintains numeric VM/LXC ordering with actual-versus-planned totals.
+- Publish updated canonical DH Sync UPS view and Dashboard Preview v13. Field acceptance of the remaining shutdown scenarios continues after publication; automatic upgrades remain subject to the existing opt-in and UPS preflight policies.
+- Run UPS dashboard render/sort regressions in the existing repository validation job (with PyYAML and Jinja2), without changing shared workflows or installed agent dependencies.
+
+## 0.5.102
+
+- Fix prolonged host reboot history being recorded as many days: v6 journal parser recognizes systemd reboot start and PVE guest-service shutdown boundaries, excluding unrelated manual VM/LXC stops from earlier in the same boot.
+- On agent restart, automatically reconcile the most recent previous-boot history from journal when saved data uses parser v5 or earlier. The existing shutdown-history state is preserved and corrected in place; no new host shutdown is required.
+- Sort historical VM and LXC records together by numeric ID; sort the onboot shutdown table by numeric ID instead of shutdown order, keeping the separate chained shutdown order intact.
+- Split the table footer into real shutdown duration and configured shutdown budget. Mark the table as listing onboot guests, distinct from guest records in history.
+- Includes UPS Dashboard Preview v13 and canonical view updates within the PVE Agent project only. Existing NUT configuration, UPS safety policy, FSD flow and guest shutdown order unchanged.
+- Field test of v6 replay and UI pending. This GitHub prerelease is not a stable auto-update candidate.
+
+## 0.5.101
+
+- Fix USB UPS/NUT guided PRIMARY configuration failing immediately after a successful NUT Server restart while `upsc` still reconnects. After a service start/restart, wait up to 12 seconds for a fresh, verified `OL` UPS status; continue to reject an explicit `OB`, `LB`, `FSD`, overload or discharging status immediately.
+- Apply this bounded post-start readiness check only to NUT driver, Server and PRIMARY setup; preserve strict initial safety guards, shutdown activation conditions, backup and rollback.
+- Regression tests for transient missing responses, unsafe status and bounded timeout. USB commissioning still requires live physical acceptance. The GitHub release remains a prerelease excluded from stable auto-updates.
+
+## 0.5.100
+
+- Add independent USB UPS discovery before NUT installation, including USB Bus/Device, VID:PID, product and serial; preserve existing SNMP/NUT monitoring in read-only mode.
+- Add guided Home Assistant MQTT setup status, driver select and separate conditional actions: install NUT, configure driver, repair NUT Server, PRIMARY and Monitor, and activate PVE host shutdown. No combined setup-all action.
+- Apply configuration in a root-only systemd oneshot with explicit OL safety checks, local config backups and rollback; do not initiate FSD, guest shutdown or live UPS shutdown during provisioning.
+- Provide 4-column UPS Dashboard Preview v8 with mutually exclusive ready/repair cards and original PVE shutdown history, VM/LXC table and shutdown tree (planned fallback if history is empty).
+- This is a GitHub **prerelease** for supervised USB UPS testing; not a stable auto-update candidate. Field acceptance for driver, NUT services and rollback is pending.
+
+## 0.5.99
+
+- Add the existing `sensor.dh_pve_agent_process_cpu_usage` and `binary_sensor.dh_pve_agent_cpu_overload` to the canonical DH Sync PVE Recorder include list. This retains agent process load and overload transitions for comparison with native `vzdump` history; no new collectors, polling, alerts, or changes to other products.
+
 ## 0.5.98
 
 - Enrich existing QoS 1 `backup_job_failed` machine events with verified per-guest `name` and `error` plus task-level `error`. Preserve the UPID deduplication, no historical alert replay, successful event behavior, and the read-only backup observer.

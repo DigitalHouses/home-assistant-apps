@@ -62,6 +62,7 @@ from .ups_policy_preflight import (
 from .ups_policy_reload import FixedServiceReloadExecutor
 from .ups_runtime import UpsRuntime
 from .ups_scan import UpsScanner
+from .ups_setup_runtime import UpsSetupManager
 from .ups_shutdown_budget_reader import read_shutdown_budget
 from .ups_shutdown_executor import execute_fixed_ups_shutdown
 from .ups_shutdown_policy import read_shutdown_policy
@@ -358,7 +359,8 @@ def _restart_denial_reason(
     return None
 
 
-def run(config: AppConfig, *, state_dir: Path = DEFAULT_STATE_DIR) -> int:
+def run(config: AppConfig, *, state_dir: Path = DEFAULT_STATE_DIR,
+        config_path: Path = DEFAULT_CONFIG) -> int:
     log = logging.getLogger("digitalhouses_pve_agent")
     shutdown_history_tracker = _shutdown_tracker(state_dir)
     try:
@@ -390,9 +392,10 @@ def run(config: AppConfig, *, state_dir: Path = DEFAULT_STATE_DIR) -> int:
         shutdown_history_tracker=shutdown_history_tracker,
         ups_debug=ups_debug,
     )
+    setup_manager = UpsSetupManager(bridge, config_path=config_path, state_dir=state_dir)
     telemetry_runner = TelemetryRunner(_telemetry_client(config, state_dir))
     update_manager = UpdateManager(state_dir, _version())
-    card = AgentCard(state_dir / "agent_card.json", bridge.publish_agent_card)
+    card = AgentCard(bridge.publish_agent_card)
     runtime.collection_observer = card.collected
     # Separate read-only backup observer; never blocks UPS/NUT or the PVE scheduler.
     try:
@@ -514,11 +517,24 @@ def run(config: AppConfig, *, state_dir: Path = DEFAULT_STATE_DIR) -> int:
     if ups_runtime is not None:
         log.info("Найден сохраненный UPS %s", ups_runtime.config.name)
     bridge.start()
+    update_manager.sync_install_card(card, startup=True)
     # Subscribe before the startup inventory; events during the scan remain pending.
     guest_event_monitor.start()
 
     try:
         while not stop_event.is_set():
+            # Guided UPS setup is available before NUT is installed.
+            # Privileged changes run only in a separate fixed systemd oneshot.
+            if setup_manager.tick():
+                denied = _restart_denial_reason(
+                    ups_runtime, ups_startup_attempted=ups_startup_attempted
+                )
+                if denied:
+                    log.warning("UPS setup restart denied: %s", denied)
+                else:
+                    log.info("NUT setup complete: reload Agent/UPS configuration")
+                    restart_requested = True
+                    break
             process_now = time.monotonic()
             if process_now >= next_agent_cpu_sample:
                 next_agent_cpu_sample = process_now + FAST_SECONDS
@@ -539,6 +555,7 @@ def run(config: AppConfig, *, state_dir: Path = DEFAULT_STATE_DIR) -> int:
             ):
                 if bridge.publish_ups_debug_state(actual_debug):
                     debug_last_published = actual_debug
+            update_manager.sync_install_card(card)
             if bridge.restart_requested.is_set():
                 bridge.restart_requested.clear()
                 denied = (
@@ -590,23 +607,13 @@ def run(config: AppConfig, *, state_dir: Path = DEFAULT_STATE_DIR) -> int:
                 ),
             )
             if card.state == "running" and card.operation in {"check", "install"}:
-                result = update_manager._payload()
-                status = result.get("status")
+                status = update_manager._status
                 if card.operation == "check" and status in {"idle", "error"}:
                     card.finish(
                         "check",
-                        error=str(result.get("error") or "GitHub check failed") if status == "error" else None,
+                        error=str(update_manager._status_error or "GitHub check failed") if status == "error" else None,
                     )
-                elif card.operation == "install":
-                    outcome = update_manager.install_card_outcome(
-                        card_started_at=card.started_at,
-                    )
-                    if outcome is not None:
-                        success, error = outcome
-                        card.finish(
-                            "install",
-                            error=None if success else (error or "Update failed"),
-                        )
+            update_manager.sync_install_card(card, requested=install_update)
             card.tick()
 
             if ups_runtime is not None and not ups_startup_attempted:
@@ -663,12 +670,6 @@ def run(config: AppConfig, *, state_dir: Path = DEFAULT_STATE_DIR) -> int:
                 if bridge.reconnect_requested.is_set():
                     update_manager.publish(bridge)
                     card.publish()
-                # A restart is complete once this new agent process has
-                # initialized and MQTT is connected. It must not depend on
-                # every unrelated startup collector publishing successfully.
-                if (card.state == "running" and card.operation == "restart"
-                        and bridge.connected.is_set()):
-                    card.finish("restart")
                 memory_reconnected = bridge.reconnect_requested.is_set()
                 if card.state == "running" and card.operation in {"check", "install"}:
                     # Avoid starting an unrelated operation behind the active card.
@@ -876,6 +877,7 @@ def run(config: AppConfig, *, state_dir: Path = DEFAULT_STATE_DIR) -> int:
         backup_worker.shutdown(wait=False, cancel_futures=True)
         memory_worker.shutdown(wait=False, cancel_futures=True)
         nfs_worker.shutdown(wait=False, cancel_futures=True)
+        setup_manager.close()
         telemetry_runner.stop()
         ups_debug.close()
         bridge.stop()
@@ -936,7 +938,7 @@ def main() -> int:
         return 0 if report.ready else 2
 
     _configure_logging(config.general.log_level)
-    return run(config, state_dir=args.state_dir)
+    return run(config, state_dir=args.state_dir, config_path=args.config)
 
 
 if __name__ == "__main__":

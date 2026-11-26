@@ -74,3 +74,7 @@ def test_unavailable_journal_stream_keeps_fallback_possible(monkeypatch):
     monkeypatch.setattr(guest_events.subprocess, "Popen", unavailable)
     monitor._follow()
     assert monitor.healthy is False
+
+
+def test_scheduled_backup_with_empty_upid_id():
+    assert guest_events.event_kind("end task UPID:pve:1:2:3:4:vzdump::root@pam: OK") == "backup"

@@ -7,7 +7,7 @@ from enum import Enum
 from typing import Any
 
 from .state_store import StateStore, StateStoreError
-from .ups_nut import UpsSnapshot
+from .ups_nut import UpsSnapshot, calibration_with_healthy_input
 
 
 _SCHEMA_VERSION = 1
@@ -75,6 +75,8 @@ def line_power_state_from_snapshot(
 ) -> LinePowerState:
     if not nut_available or snapshot is None:
         return LinePowerState.UNKNOWN
+    if calibration_with_healthy_input(snapshot):
+        return LinePowerState.ONLINE
     tokens = set(snapshot.status_tokens)
     has_online = "OL" in tokens
     has_on_battery = "OB" in tokens

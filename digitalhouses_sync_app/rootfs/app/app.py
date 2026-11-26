@@ -4,16 +4,18 @@ from __future__ import annotations
 import json
 import logging
 import os
+import signal
 import threading
 import time
 from datetime import datetime, timezone
 import paho.mqtt.client as mqtt
 
 from catalog_web import make_server
-from discovery_contract import DiscoveryError, ProductSources
+from discovery_contract import DiscoveryError, ProductSources, parse_sync_topic
 from resource_preview import PreviewCatalog
 from local_audit import LocalAuditor
 from auto_sync import AutoSync
+from event_journal import EventJournal
 from dashboard_runtime import DashboardPublisher
 from ha_core import CoreAPI
 from telemetry import TelemetryClient, TelemetryRunner
@@ -22,7 +24,7 @@ PRODUCT_ID = "digitalhouses_sync_app"
 BASE = "DigitalHouses/Global/" + PRODUCT_ID
 DISCOVERY = "homeassistant/device/" + PRODUCT_ID + "/config"
 STARTED_AT = datetime.now(timezone.utc).isoformat()
-VERSION = os.environ.get("APP_VERSION", "0.6.4-local")
+VERSION = os.environ.get("APP_VERSION", "0.6.5-local")
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 LOG = logging.getLogger("dh_sync")
 
@@ -121,13 +123,15 @@ def main() -> None:
     sources = ProductSources()  # In-memory only; MQTT is the registry.
     # Publish YAML files and register the DigitalHouses panel over HA API.
     # No direct .storage edits, HA restart, or operator interaction.
-    auto = AutoSync()
-    auto.publisher = DashboardPublisher(auto.root, auto.data)
+    journal = EventJournal()
+    journal.record('app_started', VERSION)
+    auto = AutoSync(journal=journal)
+    auto.publisher = DashboardPublisher(auto.root, auto.data, journal=journal)
     auto.reloader = lambda: CoreAPI().reload_configuration()
     wake = threading.Event()
     ingress = make_server(
         sources, version=VERSION, port=8099, auto_status=auto.status,
-        auto_sync=lambda: auto.sync(sources.snapshot(), refresh=True),
+        auto_sync=lambda: auto.sync(sources.snapshot(), refresh=True), journal=journal,
     )
     threading.Thread(target=ingress.serve_forever, daemon=True,
                      name="dh-sync-ingress").start()
@@ -153,14 +157,32 @@ def main() -> None:
         client.username_pw_set(username, os.environ.get("MQTT_PASSWORD", ""))
     client.will_set(BASE + "/availability", "offline", qos=1, retain=True)
 
+    seen = {}
+
     def on_message(client, userdata, message):
         if message.topic.endswith("/sync"):
             try:
                 if sources.apply(message.topic, message.payload):
                     LOG.info("MQTT product registry changed: %s", message.topic)
+                    product, instance = parse_sync_topic(message.topic)
+                    identity = product + '/' + instance
+                    current = sources.snapshot().get(identity)
+                    previous = seen.get(identity)
+                    if current is None:
+                        seen.pop(identity, None)
+                        journal.record('product_removed', identity, product=product)
+                    elif previous != current:
+                        seen[identity] = current
+                        event = 'product_detected' if previous is None else 'product_changed'
+                        detail = identity + ' · ' + str(current.get('version', ''))
+                        if previous and previous.get('version') != current.get('version'):
+                            event = 'product_version_changed'
+                            detail = identity + ' · ' + str(previous.get('version')) + ' → ' + str(current.get('version'))
+                        journal.record(event, detail, product=product)
                     wake.set()
             except DiscoveryError as exc:
                 LOG.warning("Rejected MQTT source (%s): %s", message.topic, exc)
+                journal.record("mqtt_rejected", str(exc), level="warning")
             return
     def subscribed(client, userdata, flags, reason_code, properties=None):
         if reason_code == 0:
@@ -168,7 +190,13 @@ def main() -> None:
             sources.reset()
             wake.set()
         on_connect(client, userdata, flags, reason_code, properties)
+        journal.record('mqtt_connected' if reason_code == 0 else 'mqtt_connect_failed',
+                       str(reason_code), level='info' if reason_code == 0 else 'error')
 
+    def disconnected(client, userdata, *args):
+        journal.record('mqtt_disconnected', level='warning')
+
+    client.on_disconnect = disconnected
     client.on_connect = subscribed
     client.on_message = on_message
     client.connect_async(
@@ -176,10 +204,16 @@ def main() -> None:
         int(os.environ.get("MQTT_PORT", "1883")),
         keepalive=60,
     )
+    def stop(signum, frame):
+        raise SystemExit(0)
+
+    signal.signal(signal.SIGTERM, stop)
+    signal.signal(signal.SIGINT, stop)
     telemetry_runner.start()
     try:
         client.loop_forever(retry_first_connection=True)
     finally:
+        journal.record('app_stopped', VERSION)
         telemetry_runner.stop()
 
 

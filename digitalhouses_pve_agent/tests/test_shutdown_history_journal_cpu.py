@@ -57,6 +57,9 @@ def test_journal_filter_preserves_unscoped_failure_and_simple_end():
         "pve pvedaemon[1]: VM 110 task ended",
         "pve pvedaemon[1]: CT 111 task ended",
         "pve systemd[1]: System is powering down.",
+        "pve systemd-logind[1]: The system will reboot now!",
+        "pve systemd-logind[1]: System is rebooting.",
+        "pve systemd[1]: Stopping pve-guests.service - PVE guests...",
         "pve systemd[1]: Reached target system power off.",
         "pve systemd-shutdown[1]: Syncing filesystems and block devices.",
     ]

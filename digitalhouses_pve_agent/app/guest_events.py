@@ -15,7 +15,7 @@ _TASK = (
     r"\bend task UPID:.*?:(?P<kind>qmstart|qmstop|qmshutdown|qmreboot|"
     r"qmreset|qmsuspend|qmresume|qmcreate|qmclone|qmdestroy|qmigrate|"
     r"vzstart|vzstop|vzshutdown|vzreboot|vzsuspend|vzresume|"
-    r"vzcreate|vzclone|vzdestroy|vzmigrate|vzdump):\d+:"
+    r"vzcreate|vzclone|vzdestroy|vzmigrate|vzdump):[^:]*:"
 )
 _TASK_RE = re.compile(_TASK, re.IGNORECASE)
 _QEMU_EXIT_RE = re.compile(r"\bFinished cleanup for\s+\d+\b", re.IGNORECASE)

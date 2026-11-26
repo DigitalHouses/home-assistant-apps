@@ -83,13 +83,15 @@ class EntityOptionTests(unittest.TestCase):
             self.assertEqual(len(updated["rooms"][0]["switches"]),1)
             self.assertEqual(_read_profiles(path),merged)
 
-    def test_schema_contains_short_text_not_ieee_bindings(self):
+    def test_schema_contains_auto_scan_not_yaml_bindings(self):
         config=yaml.safe_load((Path(__file__).resolve().parents[1]/"config.yaml").read_text())
-        self.assertEqual(config["version"], "0.1.19")
-        self.assertEqual(config["schema"]["switches"],"str")
+        self.assertEqual(config["version"], "0.2.3")
+        self.assertNotIn("switches",config["schema"])
+        self.assertTrue(config["ingress"])
+        self.assertEqual(config["options"]["auto_scan_interval"],60)
         self.assertNotIn("bindings",config["schema"])
         self.assertNotIn("configuration_yaml",config["schema"])
-        self.assertEqual(config["options"]["switches"].strip(),"[]")
+        self.assertNotIn("switches",config["options"])
 
 
 if __name__=="__main__":

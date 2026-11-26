@@ -6,7 +6,7 @@ Skip offline, unknown, unverified and unconfirmed lamps; no queued replay.
 from __future__ import annotations
 import colorsys
 from collections.abc import Mapping
-from .light_routes import current_route
+from .light_routes import current_route, group_observed_state
 from .actions import ActionError
 
 SHADOW_SECONDS = 5.0
@@ -106,14 +106,15 @@ def plan_batch(commands: list[dict], routes: Mapping, networks: Mapping,
             if not isinstance(observed, Mapping):
                 observed={}
             shadow=shadows.get(ident)
-            state=observed.get("state")
+            is_group=route.get("kind")=="group"
+            state=group_observed_state(route,net,fresh_fields) if is_group else observed.get("state")
             if shadow is not None:
                 if now-shadow["at"] <= SHADOW_SECONDS:
                     state=shadow["value"]  # in-flight command takes priority
                 elif observed_at.get(ident,-1) <= shadow["at"]:
                     state=None  # no fresh feedback: fail closed
             if service == "light.toggle":
-                if ident not in fresh_fields and (base,name,"state") not in fresh_fields:
+                if not is_group and ident not in fresh_fields and (base,name,"state") not in fresh_fields:
                     # Runtime carries a tuple-based fresh field set.
                     skipped.append({"light":entity,"reason":"No fresh Z2M state"})
                     continue

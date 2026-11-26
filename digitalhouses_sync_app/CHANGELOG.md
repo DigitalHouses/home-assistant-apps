@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.5
+
+- Persistent local SQLite operational journal in admin Ingress with product/event filters, JSONL export and explicit clear.
+- Configurable retention (30 days / 10,000 rows / 100 displayed by default), enforced on write/read and at startup; no external database.
+- Logs lifecycle, MQTT registry changes, sync runs, package transactions, panel/view updates and errors without changing sync eligibility or HA restart policy.
+
 ## 0.6.4
 
 - Emergency rollback of the unauthorized cross-project changes introduced in v0.6.3 (PR #608).

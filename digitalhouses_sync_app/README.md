@@ -38,3 +38,7 @@ server history and rotates the local installation identity, but continued use re
 unplanned automatic upgrade stops DH Sync until the operator explicitly sets
 `telemetry_enabled: true` and restarts the App. Jurisdiction-specific legal/privacy
 review of mandatory public rollout remains a separate responsibility.
+
+### Operational journal
+
+The admin Ingress shows the local SQLite history (`/data/dh_sync.db`). Defaults: 30 days, 10,000 records, 100 visible; configurable in the journal. Old entries are removed automatically. Filter by product/event, export JSONL, or explicitly clear history. UTC timestamps are stored and rendered in the container system timezone. The journal is diagnostic only and never a registry or sync prerequisite.
