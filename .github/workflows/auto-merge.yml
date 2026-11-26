@@ -421,7 +421,7 @@ jobs:
           done
       - name: Publish product releases
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ secrets.DH_RELEASE_TOKEN }}
           MERGE_SHA: ${{ needs.integrate.outputs.merge_sha }}
         shell: bash
         run: |
@@ -433,6 +433,7 @@ jobs:
             exit 0
           fi
 
+          : "${GH_TOKEN:?DH_RELEASE_TOKEN is required to publish releases}"
           workdir="$(mktemp -d)"
           trap 'rm -rf "$workdir"' EXIT
 
