@@ -344,6 +344,46 @@ The implementation may order publication steps transactionally to avoid partial 
 
 Manual `workflow_dispatch` release is not part of the normal repository workflow. Manual creation of new-format release tags is reserved for explicit recovery work.
 
+### 10.3 CI provenance, revalidation and recovery
+
+A successful `Validate repository` run records its originating PR number, exact PR
+head, tested base of `main`, and Actions run/attempt in a short-lived Actions
+artifact. The privileged integration workflow verifies that artifact against
+the completed workflow run, the GitHub commit-to-PR association, the PR owner,
+repository, branch, and exact refs before considering a merge. It does **not**
+rely on `workflow_run.pull_requests`, which GitHub may return empty.
+
+If `main` advances during PR validation, integration **does not** update the PR
+branch with `GITHUB_TOKEN` (which can lead to an approval-required Actions run).
+Instead it dispatches `Validate repository` against the exact new base via
+`workflow_dispatch`, a supported GitHub Actions token exception. Every
+validation job tests the synthetic `refs/pull/<number>/merge` revision, and the
+dispatched run checks that its first parent is the expected `main` SHA and its
+second parent is the expected PR head. Integration refuses a stale base, an
+unexpected head, a draft PR, or an unresolved branch policy/check failure. No
+checks or branch protections are bypassed.
+
+A human-merged PR triggers a normal `main` push validation. Its successful
+`workflow_run` reconciles any new release candidates from the exact validated
+`main` commit; this covers a manual merge without relying on the PR integration
+job. If a newer `main` commit supersedes that run, it cannot publish from a
+stale validation. GitHub-token-initiated PR merges are handled by their
+privileged integration run because ordinary `push` workflows are suppressed by
+GitHub's event-recursion rules.
+
+Partial Docker builds can be retried without overwriting already published
+architecture tags: an existing tag is reusable only with matching immutable
+source/version OCI annotations. The final manifest is created only after all
+architecture digests have been checked; existing final manifests are reusable
+only when their source, version and complete input digest set match. Any
+unverifiable or mismatched immutable artifact is a hard failure, never a
+reason to replace its tag.
+
+The automatic path uses standard public-repository runners and the repository
+`GITHUB_TOKEN`. No PAT, external GitHub App, paid runner, branch bypass, or
+weakened required check is needed for the normal owner-PR flow. This is not a
+license to auto-merge draft, external, or protected feature PRs.
+
 ## 11. Policy enforcement
 
 This document is the normative repository release policy.
