@@ -375,9 +375,15 @@ Partial Docker builds can be retried without overwriting already published
 architecture tags: an existing tag is reusable only with matching immutable
 source/version OCI annotations. The final manifest is created only after all
 architecture digests have been checked; existing final manifests are reusable
-only when their source, version and complete input digest set match. Any
+only when their source, version, ordered digest annotation, actual OCI child
+manifest descriptor digests, and platforms all match. Any
 unverifiable or mismatched immutable artifact is a hard failure, never a
 reason to replace its tag.
+
+Privileged workflow runs use native GitHub Actions concurrency with `queue: max`
+(up to 100 pending runs) to serialize merge and release publication without
+canceling pending runs. AMD64 and ARM64 builds remain parallel within each
+workflow run. The platform queue limit of 100 still applies.
 
 The automatic path uses standard public-repository runners and the repository
 `GITHUB_TOKEN` for validation, merge, dispatch, GHCR publication and verification.
