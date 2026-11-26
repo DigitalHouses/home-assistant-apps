@@ -50,7 +50,7 @@ def tick(app, now: float) -> None:
                 needed = {}
                 for key in sw["keep_mode"]:
                     mode, relay = features[key]
-                    for field in ((mode, relay) if not maintenance and held_relay(sw["keep_mode"][key]) else (mode,)):
+                    for field in ((mode, relay) if not maintenance and (held_relay(sw["keep_mode"][key]) or key in sw.get("relay_timers",{})) else (mode,)):
                         if (base, name, field) not in app._fresh_fields:
                             needed[field] = ""
                 if needed:

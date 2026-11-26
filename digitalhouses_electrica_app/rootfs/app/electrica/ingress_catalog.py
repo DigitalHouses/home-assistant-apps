@@ -85,7 +85,8 @@ def supported_actions(sw, policy=None):
 def normalize(rule):
     parsed = parse_rule(rule)
     return [{"entity_id":eid,"operation":parsed.get("target_operations",{}).get(eid,parsed["action"]),
-             "data":parsed["target_data"].get(eid, parsed["data"])}
+             "data":parsed["target_data"].get(eid, parsed["data"]),
+             **({"off_delay_seconds":parsed["target_timers"][eid]} if eid in parsed.get("target_timers",{}) else {})}
             for eid in parsed["targets"]]
 
 def required_keep(sw, action, existing):

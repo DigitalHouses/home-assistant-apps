@@ -68,6 +68,7 @@ function modeControls(){
     select.onchange=()=>{
       draft.keep_mode??={};
       draft.keep_mode[key]=select.value;
+      if(select.value!=="control_relay"&&draft.relay_timers)delete draft.relay_timers[key];
       draft.enabled=true;update();renderEdit();
     };
     row.append(el("strong",keyNames[key]||key),select);
@@ -76,6 +77,12 @@ function modeControls(){
         policy.includes("/")?policy.split("/")[1]:"","Удерживать реле "+(keyNames[key]||key));
       hold.onchange=()=>{draft.keep_mode[key]="decoupled/"+hold.value;update();renderEdit()};
       const label=el("label");label.append(document.createTextNode("Удерживать"),hold);row.append(label);
+    }
+    if(policy==="control_relay"){
+      const label=el("label","Авто-OFF после включения, сек.");
+      const n=el("input");n.type="number";n.min=1;n.max=86400;n.step=1;n.placeholder="Не задано";n.value=draft.relay_timers?.[key]??"";
+      n.onchange=()=>{draft.relay_timers??={};if(n.value==="")delete draft.relay_timers[key];else draft.relay_timers[key]=Number(n.value);update()};
+      label.append(n);row.append(label);
     }
     panel.append(row);
   }
@@ -88,11 +95,20 @@ const focused=main.contains(document.activeElement)?document.activeElement.datas
 main.replaceChildren();for(const d of model.devices){const a=el("article"),h=el("div",undefined,"head"),info=el("div",undefined,"device-info"),[sym,cls]=stat(d),status=el("span",sym+" ", "status "+cls);status.title=d.reason||d.status;const name=el("strong",undefined,"device-name");name.append(status,document.createTextNode(d.name));
 if(d.ha_name&&d.ha_name!==d.name)name.append(el("span"," - "+d.ha_name,"ha-device-name"));info.append(name,el("div",d.model+" · "+d.room+" · "+d.network,"muted"));
 if(d.power_meter)info.append(el("span",Number.isFinite(d.power_w)?d.power_w+" W":"— W","muted"));
-for(const [key,mode] of Object.entries(d.key_modes||{}))info.append(el("span",(keyNames[key]||key)+": "+modeNames[mode],"key-summary muted"));const gear=el("span","⚙","settings");gear.setAttribute("aria-hidden","true");h.append(info,gear);
+for(const [key,mode] of Object.entries(d.key_modes||{})){
+  const seconds=d.relay_timers?.[key],remaining=d.relay_remaining?.[key];
+  info.append(el("span",(keyNames[key]||key)+": "+modeNames[mode]+(seconds?" · Авто-OFF "+seconds+" сек.":"")+(remaining!=null?" · Осталось "+remaining+" сек.":""),"key-summary muted"));
+}const gear=el("span","⚙","settings");gear.setAttribute("aria-hidden","true");h.append(info,gear);
 a.classList.add("device-card");a.tabIndex=0;a.setAttribute("role","button");
 a.setAttribute("aria-label","Настроить "+deviceTitle(d));a.dataset.deviceId=d.id;
 a.onclick=()=>open(d);
-a.onkeydown=e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();open(d)}};a.append(h);const b=el("div",undefined,"bindings");for(const [action,targets] of Object.entries(d.bindings)){const x=el("span",undefined,"binding");x.dataset.device=d.name;x.dataset.network=d.network;x.dataset.action=action;x.append(el("span",action+" →"));for(const t of targets)x.append(targetNode(t.entity_id));if(d.disabled_actions?.includes(action))x.append(el("span","Ⅱ","muted"));if(!actionAllowed(d,action))x.append(el("span","⚠","problem"));b.append(x)}if(!b.children.length)b.append(el("span","Нет привязок","muted"));a.append(b);main.append(a);if(focused===d.id)a.focus({preventScroll:true})}applyLiveState()}
+a.onkeydown=e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();open(d)}};a.append(h);const b=el("div",undefined,"bindings");for(const [action,targets] of Object.entries(d.bindings)){const x=el("span",undefined,"binding");x.dataset.device=d.name;x.dataset.network=d.network;x.dataset.action=action;x.append(el("span",action+" →"));for(const t of targets){
+  x.append(targetNode(t.entity_id));
+  if(t.off_delay_seconds!=null){
+    const due=d.key_deadlines?.[action]?.[t.entity_id];
+    x.append(el("span","Авто-OFF "+t.off_delay_seconds+" сек."+(due!=null?" · Осталось "+Math.max(0,Math.ceil(due-Date.now()/1000))+" сек.":""),"muted"));
+  }
+}if(d.disabled_actions?.includes(action))x.append(el("span","Ⅱ","muted"));if(!actionAllowed(d,action))x.append(el("span","⚠","problem"));b.append(x)}if(!b.children.length)b.append(el("span","Нет привязок","muted"));a.append(b);main.append(a);if(focused===d.id)a.focus({preventScroll:true})}applyLiveState()}
 function open(d){editing=d;draft=structuredClone(d);draft.disabled_actions??=[];draft.revision=model.revision;dirty=false;renderEdit()}
 function goBack(){if(dirty&&!confirm("Отменить несохранённые изменения?"))return;editing=null;draft=null;dirty=false;renderList();load()}
 function update(){dirty=true}
@@ -286,10 +302,10 @@ if(a.operation!=="off"){if(t.brightness)addParam(p,t,a,"brightness_pct","Ярк�
 function assignedRow(action,a,container){const t=model.targets.find(t=>t.entity_id===a.entity_id),row=el("div",undefined,"assigned");row.append(targetIcon(t,a.entity_id),el("strong",(t?.name||a.entity_id)+" · "+a.entity_id));const op=el("select");for(const [v,n] of (editing?.sensor?[["on","ON"]]:assignmentOperations(a,t))){const o=el("option",n);o.value=v;op.append(o)}op.value=a.operation;op.onchange=()=>{a.operation=op.value;
 if(a.entity_id.startsWith("cover.")){if(op.value==="position")a.data.position=50;else delete a.data.position}
 else if(/^(climate|media_player)\./.test(a.entity_id))a.data=DHElectricaEntityPicker.initialData(op.value,t);
-if(op.value==="off")for(const k of Object.keys(a.data))if(k!=="transition")delete a.data[k];update();renderEdit(action)};const test=lightTestControl(t,a.entity_id);if(test)row.append(test);row.append(op,button("Удалить",()=>{draft.bindings[action]=draft.bindings[action].filter(x=>x.entity_id!==a.entity_id);if(!draft.bindings[action].length){delete draft.bindings[action];draft.disabled_actions=draft.disabled_actions.filter(x=>x!==action)}update();renderEdit(action)}));if(!t){row.append(el("span","⚠ Сущность отсутствует","problem"));container.append(row);return}if(a.entity_id.startsWith("cover."))coverControls(action,a,t,row);if(a.entity_id.startsWith("climate."))climateControls(a,t,row);if(a.entity_id.startsWith("media_player."))mediaControls(a,t,row,action);if(a.entity_id.startsWith("light."))lightProfileControls(a,t,row,action);
-if(editing?.sensor){
-  const p=el("div",undefined,"params"),l=el("label","Авто-OFF после отсутствия, сек.");
-  const n=el("input");n.type="number";n.min=0;n.max=86400;n.step=1;n.placeholder="Не задано";n.value=a.off_delay_seconds??"";
+if(op.value==="off"){delete a.off_delay_seconds;for(const k of Object.keys(a.data))if(k!=="transition")delete a.data[k];}update();renderEdit(action)};const test=lightTestControl(t,a.entity_id);if(test)row.append(test);row.append(op,button("Удалить",()=>{draft.bindings[action]=draft.bindings[action].filter(x=>x.entity_id!==a.entity_id);if(!draft.bindings[action].length){delete draft.bindings[action];draft.disabled_actions=draft.disabled_actions.filter(x=>x!==action)}update();renderEdit(action)}));if(!t){row.append(el("span","⚠ Сущность отсутствует","problem"));container.append(row);return}if(a.entity_id.startsWith("cover."))coverControls(action,a,t,row);if(a.entity_id.startsWith("climate."))climateControls(a,t,row);if(a.entity_id.startsWith("media_player."))mediaControls(a,t,row,action);if(a.entity_id.startsWith("light."))lightProfileControls(a,t,row,action);
+if(editing?.sensor||(/^(light|switch)\./.test(a.entity_id)&&["on","toggle"].includes(a.operation))){
+  const p=el("div",undefined,"params"),l=el("label",editing?.sensor?"Авто-OFF после отсутствия, сек.":"Авто-OFF после включения, сек.");
+  const n=el("input");n.type="number";n.min=editing?.sensor?0:1;n.max=86400;n.step=1;n.placeholder="Не задано";n.value=a.off_delay_seconds??"";
   n.onchange=()=>{if(n.value==="")delete a.off_delay_seconds;else a.off_delay_seconds=Number(n.value);update()};
   l.append(n);p.append(l);row.append(p);
 }
@@ -330,7 +346,7 @@ async function save(){try{
   for(const [key,policy] of Object.entries(draft.keep_mode||{}))
     if(policy==="decoupled"&&editing.keep_mode?.[key]!=="decoupled")
       throw Error("Выберите, удерживать ON или OFF: "+(keyNames[key]||key));
-  await api("save",{id:draft.id,revision:draft.revision,enabled:draft.enabled,bindings:draft.bindings,disabled_actions:draft.disabled_actions,...(Object.keys(draft.key_modes||{}).length?{keep_mode:draft.keep_mode||{}}:{})});dirty=false;editing=null;notice.textContent="Сохранено";await load()}catch(e){notice.textContent=e.message}}
+  await api("save",{id:draft.id,revision:draft.revision,enabled:draft.enabled,bindings:draft.bindings,disabled_actions:draft.disabled_actions,...(Object.keys(draft.key_modes||{}).length?{keep_mode:draft.keep_mode||{},relay_timers:draft.relay_timers||{}}:{})});dirty=false;editing=null;notice.textContent="Сохранено";await load()}catch(e){notice.textContent=e.message}}
 scan.onclick=async()=>{busy=true;scan.disabled=true;try{await api("scan",{});notice.textContent="Сканирование запущено"}catch(e){notice.textContent=e.message}finally{busy=false;await load()}};
 function selectSection(next){
   if(dirty&&!confirm("Отменить несохранённые изменения?"))return;

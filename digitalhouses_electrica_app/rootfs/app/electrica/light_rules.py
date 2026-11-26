@@ -76,15 +76,20 @@ def parse_rule(value: object) -> dict:
         entries = value["assignments"]
         if not isinstance(entries, list) or not 1 <= len(entries) <= 16:
             raise CatalogError("Each action needs 1..16 targets")
-        targets, operations, attributes = [], {}, {}
+        targets, operations, attributes, timers = [], {}, {}, {}
         for entry in entries:
-            if not isinstance(entry, Mapping) or set(entry) - {"entity_id", "operation", "data"}:
+            if not isinstance(entry, Mapping) or set(entry) - {"entity_id", "operation", "data", "off_delay_seconds"}:
                 raise CatalogError("Invalid target assignment")
             eid, operation = entry.get("entity_id"), entry.get("operation")
             if not isinstance(eid, str) or not re.fullmatch(r"(light|switch|cover|climate|media_player)\.[a-z0-9_]+", eid):
                 raise CatalogError("Expected supported target domain")
             if eid in targets or not isinstance(operation,str):
                 raise CatalogError("Invalid or duplicate target operation")
+            if "off_delay_seconds" in entry:
+                if not eid.startswith(("light.","switch.")) or operation not in ("on","toggle"):
+                    raise CatalogError("Auto-OFF requires light/switch ON or Toggle")
+                _integer(entry["off_delay_seconds"],1,86400,"off_delay_seconds")
+                timers[eid]=entry["off_delay_seconds"]
             data = entry.get("data", {})
             if isinstance(data, Mapping) and "profile" in data:
                 profiles.source(data)
@@ -108,7 +113,8 @@ def parse_rule(value: object) -> dict:
             operations[eid] = operation
             attributes[eid] = dict(data)
         return {"action": "mixed", "targets": targets, "data": {},
-                "target_data": attributes, "target_operations": operations}
+                "target_data": attributes, "target_operations": operations,
+                **({"target_timers":timers} if timers else {})}
     if isinstance(value, list):
         entries, service, data = value, "light.toggle", {}
     elif isinstance(value, Mapping):

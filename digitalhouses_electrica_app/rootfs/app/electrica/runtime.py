@@ -22,6 +22,7 @@ from .catalog import (CatalogError, candidate_from_mqtt, decode_bridge_devices,
 from .actions import ActionError
 from .event_log import EventLog
 from .sensor_engine import SensorEngine
+from .relay_timers import RelayTimers
 from .control import HAClient, light_commands, verified_adopted_switch
 from .mqtt_lights import plan_batch
 from .lab_lights import (LAB_LIGHTS, authorized_ha_light_ids,
@@ -186,6 +187,7 @@ class Application:
         self.target_catalog = {}
         self.sensor_catalog = {}
         self.sensor_engine = SensorEngine(self,last_scan_path.with_name("sensor_timers.json"))
+        self.relay_timers = RelayTimers(self)
         self.device_details = []
         self._networks: dict[str, dict] = {}
         self._subscribed: set[str] = set()
@@ -431,6 +433,7 @@ class Application:
             self._home_profile = None
             self._global_mode = None
             self._global_profiles = None
+            self.relay_timers.reset()
         for topic in (*_FILTERS, SCAN_REQUEST, ROOT + "/command/refresh",
                       ROOT + "/command/check_updates", ROOT + "/command/delete_telemetry", "homeassistant/status", *profiles.TOPICS):
             self._subscribe(topic)
@@ -456,6 +459,7 @@ class Application:
             self._home_profile = None
             self._global_mode = None
             self._global_profiles = None
+            self.relay_timers.reset()
 
     def _on_message(self, client, userdata, message):
         del client, userdata
@@ -514,6 +518,7 @@ class Application:
                         if value != "online":
                             self._fresh_fields.difference_update(
                                 {field for field in self._fresh_fields if field[:2] == (base,name)})
+                            self.relay_timers.invalidate(base,name)
                     except (KeyError,CatalogError,ValueError,TypeError,UnicodeError):
                         self._input_availability[(base,name)] = "unknown"
                 for route in self.config.get("light_routes", {}).values():
@@ -558,6 +563,7 @@ class Application:
                                 self._light_availability.pop(ident, None)
                                 self._light_shadows.pop(ident, None)
                                 self._fresh_fields.discard((base, ident[1], "state"))
+                        self.relay_timers.invalidate(base)
                     return
                 if suffix=="groups":
                     if node.get("groups")!=bytes(message.payload):
@@ -632,6 +638,13 @@ class Application:
                             if shadow and shadow["value"] == data["state"]:
                                 self._light_shadows.pop(ident, None)
                     if device is not None and not getattr(message, "retain", False) and not getattr(message, "dup", False):
+                        self.relay_timers.observe(base,name,device,data)
+                        for _,relay in capabilities(device).values():
+                            if data.get(relay) in ("ON","OFF"):
+                                self.event_log.observe(("relay",base,name,relay),data[relay])
+                        if any(sw.get("relay_timers") and sw["base_topic"]==base and sw["logical_name"]==name
+                               for room in self.config["rooms"] for sw in room["switches"]):
+                            self.relay_timers.tick(enqueue=False)
                         self._process_adopted_event(base, net, device, data)
                 except (KeyError, CatalogError, ValueError, UnicodeDecodeError, TypeError) as exc:
                     LOG.warning("Invalid Z2M state %s: %s", message.topic, exc)
@@ -710,7 +723,7 @@ class Application:
                 target_label = ", ".join(targets)
                 rid = self.event_log.press(base,name,action,targets)
                 try:
-                    self._jobs.put_nowait((base, coordinator, name, action, commands, rid))
+                    self._jobs.put_nowait((base, coordinator, name, action, commands, rid,self.sensor_engine.key_token(saved,action,targets)))
                     self._publish_action(state="queued", switch=name, action=action,
                                          target=target_label)
                 except queue.Full:
@@ -1001,14 +1014,21 @@ class Application:
                 rid = job[5] if len(job)>5 else None
             except queue.Empty:
                 try:
-                    with self._mutex:self.sensor_engine.tick()
+                    with self._mutex:
+                        self.sensor_engine.tick()
+                        self.relay_timers.tick()
                 except Exception:
                     LOG.exception("Sensor timer tick failed")
                     with self._mutex:self.sensor_engine.disconnect()
                 continue
             targets = [eid for cmd in commands for eid in cmd["target"]["entity_id"]]
             sensor_job = base is None and action in ("SENSOR_ON","SENSOR_OFF")
+            key_token=job[6] if base is not None and len(job)>6 else None
             try:
+                if base is None and action=="RELAY_OFF":
+                    with self._mutex:sent_relay=self.relay_timers.dispatch(job[6],rid)
+                    self._publish_action(state="sent" if sent_relay else "skipped",switch=name,action=action,target=job[6][0][0])
+                    continue
                 if base is None and action=="AUTO_PROFILE":
                     self._adapt_home_profile(job[6])
                     continue
@@ -1147,6 +1167,7 @@ class Application:
                             continue
                         if plan["state"]=="ON" and plan["light"] in zero_profile_lights:
                             plan={**plan,"state":"OFF","payload":{"state":"OFF",**{k:v for k,v in plan["payload"].items() if k=="transition"}}}
+                        key_arm=self.sensor_engine.key_can_start(key_token,plan["light"])
                         if self._publish(plan["topic"], plan["payload"],
                                          retain=False):
                             ident = plan["ident"]
@@ -1159,6 +1180,8 @@ class Application:
                             self._light_shadows[ident] = {
                                 "value": plan["state"], "at": time.monotonic()}
                             if sensor_job:self.sensor_engine.dispatched(name,action,coordinator,plan["light"],plan["state"].lower())
+                            elif key_arm:
+                                self.sensor_engine.key_dispatched(key_token,plan["light"],plan["state"].lower(),str(previous).lower())
                             sent.append(plan["light"])
                         else:
                             skipped.append({"light":plan["light"],
@@ -1230,6 +1253,8 @@ class Application:
                                             "reason":"Test target changed or unavailable" if is_test else "Aqara key or Maintenance changed"}
                                            for eid in ids)
                             continue
+                        with self._mutex:
+                            key_arms={eid for eid in ids if self.sensor_engine.key_can_start(key_token,eid)}
                         dispatched_at = _iso_now()
                         try:
                             self._ha_client.execute(call)
@@ -1247,6 +1272,7 @@ class Application:
                                 self._ha_shadows[eid] = {
                                     "state":value, "at": time.monotonic()}
                                 if sensor_job:self.sensor_engine.dispatched(name,action,coordinator,eid,value)
+                                elif eid in key_arms:self.sensor_engine.key_dispatched(key_token,eid,value,lab_state_cache.get(eid,(False,None))[1])
                         sent.extend(ids)
                 if switch_commands:
                     from .ingress_catalog import safe_switch_targets
@@ -1292,12 +1318,15 @@ class Application:
                                         or not verified_adopted_switch(sw, device, coordinator, base)
                                         or not self._input_mode_allowed(sw, action, net, device, False)):
                                         raise ActionError("Input or binding changed")
+                            with self._mutex:key_arm=self.sensor_engine.key_can_start(key_token,eid)
                             desired = switch_toggle if service == "switch.toggle" else service.rsplit("_", 1)[-1]
                             dispatched_at = _iso_now()
                             self._ha_client.execute_switch(eid, desired)
                             self.event_log.sent(rid,eid,("ha",eid),state,desired,sent_at=dispatched_at)
                             if sensor_job:
                                 with self._mutex:self.sensor_engine.dispatched(name,action,coordinator,eid,desired)
+                            elif key_arm:
+                                with self._mutex:self.sensor_engine.key_dispatched(key_token,eid,desired,state)
                             sent.append(eid)
                         except Exception as exc:
                             skipped.append({"light":eid,"reason":str(exc)[:120]})
@@ -1330,6 +1359,7 @@ class Application:
                     with self._mutex:
                         if sensor_job:self.sensor_engine.finished(action,targets)
                         self.sensor_engine.tick()
+                        self.relay_timers.tick()
                 except Exception:
                     LOG.exception("Sensor timer tick failed")
                     with self._mutex:self.sensor_engine.disconnect()

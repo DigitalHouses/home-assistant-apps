@@ -9,6 +9,7 @@ import queue
 import time
 from . import sensor_rules
 from .light_routes import current_route
+from .mode_keeper import maintained_switch
 
 LOG = logging.getLogger(__name__)
 CONFIRM_SECONDS = 30
@@ -74,6 +75,19 @@ class SensorEngine:
         return self.app.config.get("sensor_bindings",{})
 
     def row(self, source):
+        if source.startswith("key:"):
+            parts=source.split(":",2)
+            if len(parts)!=3:return None
+            _,eid,press=parts
+            sw=next((x for r in self.app.config["rooms"] for x in r["switches"] if x["entity_id"]==eid),None)
+            if not sw or not sw.get("enabled") or maintained_switch(sw,self.app.globals):return None
+            rule=sw.get("bindings",{}).get(press,{})
+            timers=rule.get("target_timers",{})
+            if not timers:return None
+            return {"entity_id":source,"enabled":True,"assignments":[
+                {"entity_id":target,"operation":"on","data":rule["target_data"].get(target,{}),"off_delay_seconds":delay}
+                for target,delay in timers.items()],"identity":{k:sw[k] for k in ("ieee","base_topic","coordinator_ieee","logical_name","fingerprint")},
+                "rule":deepcopy(rule),"keep_mode":deepcopy(sw.get("keep_mode",{}))}
         row = self.rows().get(source)
         cap = self.app.sensor_catalog.get(source)
         if not row or not row["enabled"] or not cap:
@@ -184,7 +198,9 @@ class SensorEngine:
             if r.get("kind")=="group":return {(r["base_topic"],m["ieee"]) for m in r["members"]}
             return {(r["base_topic"],r.get("ieee",r["friendly_name"]))}
         touched = set().union(*(members(eid) for eid in ids))
-        tracked = set(self.owners)|set(self.pending)|{a["entity_id"] for r in self.rows().values() for a in r["assignments"]}
+        tracked = set(self.owners)|set(self.pending)|set(ids)|{a["entity_id"] for r in self.rows().values() for a in r["assignments"]}
+        tracked.update(eid for room in self.app.config["rooms"] for sw in room["switches"]
+                       for rule in sw.get("bindings",{}).values() for eid in rule.get("target_timers",{}))
         for eid in tracked:
             if touched & members(eid):
                 self.manual[eid]=self.manual.get(eid,0)+1
@@ -206,11 +222,35 @@ class SensorEngine:
         # Retain a deadline only when the confirmed ON and source configuration
         # still match. Restart never synthesizes a motion event.
         for eid,r in list(self.owners.items()):
-            if r["row"] != self.rows().get(r["source"]) or self.state(eid)!="on" or not r["signature"].get("last_changed") or self.target_signature(eid)!=r["signature"]:
+            if r["row"] != self.row(r["source"]) or self.state(eid)!="on" or not r["signature"].get("last_changed") or self.target_signature(eid)!=r["signature"]:
                 self.drop(eid)
-            elif not self.absent(eid) or r.get("absence")!=self.absence_signature(eid):
+            elif not r["source"].startswith("key:") and (not self.absent(eid) or r.get("absence")!=self.absence_signature(eid)):
                 r["deadline"]=None
         self.reconcile(time.time())
+
+    def key_token(self,sw,action,targets):
+        source="key:"+sw["entity_id"]+":"+action
+        row=self.row(source)
+        if not row:return None
+        return {"source":source,"row":row,"generation":self.generation,
+                "manual":{eid:self.manual.get(eid,0) for eid in targets},
+                "routes":{eid:deepcopy(self.app.config.get("light_routes",{}).get(eid)) for eid in targets}}
+
+    def key_can_start(self,token,eid):
+        return bool(token and self.ready and token["generation"]==self.generation
+                    and token["manual"].get(eid)==self.manual.get(eid,0)
+                    and token["row"]==self.row(token["source"])
+                    and any(a["entity_id"]==eid for a in token["row"]["assignments"])
+                    and self.target_ok(eid) and self.state(eid)=="off" and self.group_ready(eid,"off"))
+
+    def key_dispatched(self,token,eid,desired,before):
+        if not token or desired!="on" or before!="off" or not self.ready:return
+        if not any(a["entity_id"]==eid for a in token["row"]["assignments"]):return
+        if token["routes"].get(eid)!=self.app.config.get("light_routes",{}).get(eid) or not self.target_ok(eid):return
+        # The key itself may actuate without a timer when the target is
+        # not observed OFF in the event subscription. Never claim a pre-existing ON.
+        if self.state(eid) not in ("off","on"):return
+        self.dispatched(token["source"],"KEY_ON",token,eid,desired)
 
     def enqueue(self,source,operation,ids):
         row = self.row(source)
@@ -230,7 +270,7 @@ class SensorEngine:
 
     def dynamic_owner(self,eid):
         record=self.owners.get(eid)
-        if not record or self.row(record["source"])!=record["row"] or self.group_overlap(eid):return False
+        if not record or self.row(record["source"])!=record["row"] or (not record["source"].startswith("key:") and self.group_overlap(eid)):return False
         return any(a["entity_id"]==eid and a.get("data",{}).get("profile")=="current"
                    for a in record["row"]["assignments"])
 
@@ -314,11 +354,15 @@ class SensorEngine:
     def reconcile(self,now):
         for eid,r in list(self.owners.items()):
             row=self.row(r["source"])
-            if not row or row != r["row"] or self.state(eid)!="on" or not self.target_ok(eid) or self.group_overlap(eid) or self.target_signature(eid)!=r["signature"]:
+            if not row or row != r["row"] or self.state(eid)!="on" or not self.target_ok(eid) or (not r["source"].startswith("key:") and self.group_overlap(eid)) or self.target_signature(eid)!=r["signature"]:
                 self.drop(eid)
                 continue
             a=next((a for a in row["assignments"] if a["entity_id"]==eid),{})
             delay=a.get("off_delay_seconds")
+            if r["source"].startswith("key:"):
+                if delay is None:self.drop(eid)
+                elif r["deadline"] is None:r["deadline"]=now+delay
+                continue
             if delay is None:
                 r["deadline"]=None
                 r.pop("absence",None)
@@ -347,7 +391,7 @@ class SensorEngine:
     def allowed(self,source,action,token,eid,rid=None):
         if (not self.ready or self.app.globals["maintenance_mode"] or token["generation"]!=self.generation
                 or token["row"]!=self.row(source) or token["manual"].get(eid)!=self.manual.get(eid,0)
-                or not self.target_ok(eid) or self.group_overlap(eid)
+                or not self.target_ok(eid) or (not source.startswith("key:") and self.group_overlap(eid))
                 or token.get("routes",{}).get(eid)!=self.app.config.get("light_routes",{}).get(eid)):
             return False
         if action=="SENSOR_ON":
@@ -355,8 +399,8 @@ class SensorEngine:
             return self.presence(source)=="on" and token["epoch"]==self.epoch.get(source,0) and self.state(eid)=="off" and eid not in self.pending and self.group_ready(eid,"off")
         r=self.owners.get(eid)
         return bool(r and r["source"]==source and r["deadline"] is not None
-                    and r["deadline"]<=time.time() and self.absent(eid) and self.state(eid)=="on" and eid not in self.profile_changes
-                    and self.group_ready(eid,"on") and self.target_signature(eid)==r["signature"] and r.get("absence")==self.absence_signature(eid))
+                    and r["deadline"]<=time.time() and (source.startswith("key:") or self.absent(eid)) and self.state(eid)=="on" and eid not in self.profile_changes
+                    and self.group_ready(eid,"on") and self.target_signature(eid)==r["signature"] and (source.startswith("key:") or r.get("absence")==self.absence_signature(eid)))
 
     def dispatched(self,source,action,token,eid,desired):
         if action=="SENSOR_OFF" or desired!="on" or not self.ready or token["generation"]!=self.generation:
@@ -391,5 +435,6 @@ class SensorEngine:
             for eid in ids:
                 if eid in self.queued:
                     self.queued.discard(eid)
-                    if self.absent(eid) and eid not in self.profile_changes:self.drop(eid)
+                    r=self.owners.get(eid,{})
+                    if (r.get("source","").startswith("key:") or self.absent(eid)) and eid not in self.profile_changes:self.drop(eid)
             self.save()

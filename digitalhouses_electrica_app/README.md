@@ -65,8 +65,16 @@ It is independent of any Home Assistant dashboard.
   groups use one multicast command with all-member OFF/ON checks and persistent
   member-level ownership; mixed, unverified or overlapping target sets are
   skipped. Manual changes to one member cancel the group timer. Native HA
-  groups remain excluded pending route verification. Hardware
-  acceptance, key/physical relay timers and readiness integration remain.
+  groups remain excluded pending route verification. Hardware acceptance
+  and readiness integration remain.
+- **Auto-OFF timers (DEV):** optional per-target off_delay_seconds for
+  logical light/switch ON/Toggle, or per-channel relay_timers for a
+  verified physical key. Logical deadlines start after observed OFF→ON
+  and persist with the sensor ownership records; manual override cancels
+  them. Physical relay OFF requires fresh online control_relay and the
+  exact channel. After reconnect/restart a physical timer starts a new
+  full interval on fresh ON, since continuity of relay power cannot be
+  proven from retained state. The timer is not hardware protection.
 - **Cover:** select Toggle, Open, Close, Stop or Position according to the HA
   capability flags. Toggle resolves from a known settled state; moving or
   unknown state does not imply a direction. Optional window/door/opening

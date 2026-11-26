@@ -37,8 +37,21 @@ def snapshot(app):
                 if target.get("group") or target.get("integration")=="group":
                     target["sensor_group_supported"]=bool(engine.group_members(eid))
         sensor_runtime_ready=bool(engine and engine.ready)
-        sensor_deadlines={eid:r["deadline"] for eid,r in (engine.owners.items() if engine else [])
-                          if r.get("deadline") is not None}
+        relay_runtime=getattr(app,"relay_timers",None)
+        import time
+        relay_deadlines={}
+        if relay_runtime:
+            for (eid,key),rec in relay_runtime.records.items():
+                if not rec["sent"]:relay_deadlines.setdefault(eid,{})[key]=max(0,round(rec["deadline"]-time.monotonic()))
+        sensor_deadlines={}
+        key_deadlines={}
+        for eid,r in (engine.owners.items() if engine else []):
+            if r.get("deadline") is None:continue
+            source=r["source"]
+            if source.startswith("key:"):
+                parts=source.split(":",2)
+                if len(parts)==3:key_deadlines.setdefault(parts[1],{}).setdefault(parts[2],{})[eid]=r["deadline"]
+            else:sensor_deadlines[eid]=r["deadline"]
         global_mode = getattr(app,"_home_profile",None)
         auto_day_night = getattr(app,"globals",{}).get("auto_day_night",False)
     rows = parse_rows(app.options.read())
@@ -68,13 +81,13 @@ def snapshot(app):
                             "enabled":row["enabled"],"disabled_actions":row.get("disabled_actions",[]),
                             "actions":supported_actions(sw, keep) if channels else supported_actions(sw),
                             "key_modes":key_modes,"key_actions":key_actions,
-                            "keep_mode":keep,
+                            "keep_mode":keep,"relay_timers":row.get("relay_timers",{}),"relay_remaining":relay_deadlines.get(key,{}),"key_deadlines":key_deadlines.get(key,{}),
                             "power_meter":sw.get("power_meter",False),
                             "power_w":sw.get("power_w"),
                             "bindings":{k:normalize(v) for k,v in row["actions"].items()}})
     for key,row in indexed.items():
         devices.append({"id":key,"name":key,"model":"—","room":"—","network":"—",
-                        "status":"missing","reason":"Не найден в каталоге",
+                        "status":"missing","reason":"Не найден в каталоге","relay_timers":row.get("relay_timers",{}),
                         "enabled":row["enabled"],"disabled_actions":row.get("disabled_actions",[]),"actions":[],
                         "bindings":{k:normalize(v) for k,v in row["actions"].items()}})
     return {"devices":devices,"sensors":sensors,"sensor_runtime_ready":sensor_runtime_ready,"sensor_deadlines":sensor_deadlines,"targets":list(targets.values()),"scan":scan,
@@ -185,6 +198,11 @@ def save_device(app, payload):
             row["disabled_actions"] = disabled
             if keep or "keep_mode" in row:
                 row["keep_mode"] = keep
+            if "relay_timers" in payload:
+                timers=payload["relay_timers"]
+                if not isinstance(timers,dict) or any(keep.get(k)!=PHYSICAL or type(v) is not int or not 1<=v<=86400 for k,v in timers.items()):
+                    raise CatalogError("Таймер физической клавиши: 1..86400 секунд")
+                if timers or "relay_timers" in row:row["relay_timers"]=timers
             row["enabled"] = payload["enabled"]
             options["switches"] = render_rows(rows)
             projected = project(app.config,options)

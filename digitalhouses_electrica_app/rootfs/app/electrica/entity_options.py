@@ -69,7 +69,7 @@ def validate_rows(rows: object) -> list[dict]:
         unique.add(entity_id)
         if (not isinstance(value, Mapping) or
                 not {"enabled", "actions"} <= set(value) or
-                set(value) - {"enabled", "actions", "keep_mode", "maintenance_mode", "disabled_actions"}):
+                set(value) - {"enabled", "actions", "keep_mode", "maintenance_mode", "disabled_actions", "relay_timers"}):
             raise CatalogError("Switch requires enabled and actions, optionally keep_mode/maintenance_mode")
         if "maintenance_mode" in value and type(value["maintenance_mode"]) is not bool:
             raise CatalogError("Local maintenance_mode must be boolean")
@@ -98,6 +98,11 @@ def validate_rows(rows: object) -> list[dict]:
             item["maintenance_mode"] = value["maintenance_mode"]
         if "keep_mode" in value:
             item["keep_mode"] = dict(keep)
+        if "relay_timers" in value:
+            timers=value["relay_timers"]
+            if not isinstance(timers,Mapping) or any(keep.get(k)!=PHYSICAL or type(v) is not int or not 1<=v<=86400 for k,v in timers.items()):
+                raise CatalogError("Relay timer requires explicit physical key and 1..86400 seconds")
+            item["relay_timers"]=dict(timers)
         if "disabled_actions" in value:
             disabled = value["disabled_actions"]
             if (not isinstance(disabled, list) or any(not isinstance(a,str) or a not in actions for a in disabled)
@@ -110,7 +115,7 @@ def validate_rows(rows: object) -> list[dict]:
 
 def render_rows(rows: list[dict]) -> str:
     return yaml.safe_dump([
-        {row["entity_id"]: {key: row[key] for key in ("enabled", "maintenance_mode", "keep_mode", "actions", "disabled_actions", "assignments", "lux_entity_id", "lux_threshold") if key in row}}
+        {row["entity_id"]: {key: row[key] for key in ("enabled", "maintenance_mode", "keep_mode", "actions", "disabled_actions", "assignments", "lux_entity_id", "lux_threshold", "relay_timers") if key in row}}
         for row in rows], allow_unicode=True, sort_keys=False,
         default_flow_style=False)
 
@@ -137,6 +142,7 @@ def project(profiles: Mapping, options: Mapping) -> dict:
             item["enabled"] = False
             item["maintenance_mode"] = False
             item["keep_mode"] = {}
+            item.pop("relay_timers",None)
     issues = []
     tolerant = options.get("_bindings_store") is True
     for row in rows:
@@ -159,6 +165,7 @@ def project(profiles: Mapping, options: Mapping) -> dict:
             issues.append({"object_name": row["entity_id"], "category": "invalid_keep_mode",
                            "reason": str(exc)})
             continue
+        if row.get("relay_timers"):item["relay_timers"]=dict(row["relay_timers"])
         item["maintenance_mode"] = row.get("maintenance_mode", False)
         supported = item.get("fingerprint", {}).get("actions", [])
         hardware = {key for key, (mode, _) in MODE_TO_RELAY.items()

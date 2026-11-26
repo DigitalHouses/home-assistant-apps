@@ -73,7 +73,7 @@ class IngressStyleTests(TestCase):
         import subprocess
         js=(WEB/"app.js").read_text()
         self.assertIn('el("span",targetLabel(id,t),"target-label")',js)
-        self.assertIn('for(const t of targets)x.append(targetNode(t.entity_id))',js)
+        self.assertRegex(js,r'for\(const t of targets\)\s*\{?\s*x\.append\(targetNode\(t\.entity_id\)\)')
         self.assertIn('const state=target?(liveStates[n.dataset.entity]??target.state):undefined',js)
         if shutil.which("node"):
             source=next(line for line in js.splitlines() if line.startswith("function targetLabel("))
