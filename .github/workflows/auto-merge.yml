@@ -214,6 +214,7 @@ jobs:
         with:
           ref: ${{ needs.integrate.outputs.merge_sha }}
           persist-credentials: false
+          fetch-depth: 0
       - uses: docker/setup-buildx-action@v3
       - name: Build immutable architecture image
         env:
@@ -251,30 +252,16 @@ jobs:
               ;;
           esac
 
+          source_sha="$(python scripts/release_source.py "$product" "$version" "$MERGE_SHA")"
           arch_ref="$image:$version-$arch"
           if docker buildx imagetools inspect "$arch_ref" >/dev/null 2>&1; then
-            # Recover only a manifest carrying exact source and version
-            # provenance. Never replace or silently adopt a foreign tag.
             existing="$(docker buildx imagetools inspect --raw "$arch_ref")"
-            # When a production release was first built from an earlier main
-            # commit and resumed after a subsequent CI-only merge, its source
-            # revision remains that original ancestor. Never claim a rebuild
-            # against the latest unrelated merge.
-            existing_sha="$(jq -er '.annotations["org.opencontainers.image.revision"]' <<<"$existing")"
-            existing_version="$(jq -er '.annotations["org.opencontainers.image.version"]' <<<"$existing")"
-            test "$existing_version" = "$version"
-            [[ "$existing_sha" =~ ^[0-9a-f]{40}$ ]]
-            git merge-base --is-ancestor "$existing_sha" "$MERGE_SHA"
-            test "$(git show "$existing_sha:$product/config.yaml" | awk '$1 == "version:" {print $2; exit}')" = "$version"
-            jq -e --arg sha "$existing_sha" --arg version "$version" \
-              '.annotations["org.opencontainers.image.revision"] == $sha and .annotations["org.opencontainers.image.version"] == $version' \
-              <<<"$existing" >/dev/null || {
-                echo "Immutable architecture tag exists without matching provenance: $arch_ref" >&2
-                exit 1
-              }
-            digest="$(docker buildx imagetools inspect --raw "$arch_ref" | sha256sum | awk '{print "sha256:" $1}')"
+            python scripts/release_source.py "$product" "$version" "$MERGE_SHA" "$source_sha" "$platform" <<<"$existing"
+            digest="$(python scripts/registry_manifest.py "$arch_ref" digest)"
             echo "Reusing verified immutable architecture artifact $arch_ref@$digest"
           else
+            # Only an authenticated registry 404 permits creation.
+            python scripts/registry_manifest.py "$arch_ref" absent
             # Cache is mutable and deliberately separate from release tags.
             cache_ref="$image:buildcache-$arch"
             docker buildx build \
@@ -283,12 +270,12 @@ jobs:
               --platform "$platform" \
               --build-arg "BUILD_VERSION=$version" \
               --build-arg "BUILD_ARCH=$arch" \
-              --label "org.opencontainers.image.revision=$MERGE_SHA" \
+              --label "org.opencontainers.image.revision=$source_sha" \
               --label "org.opencontainers.image.version=$version" \
               --label "org.opencontainers.image.source=https://github.com/$GITHUB_REPOSITORY" \
-              --annotation "manifest:org.opencontainers.image.revision=$MERGE_SHA" \
+              --annotation "manifest:org.opencontainers.image.revision=$source_sha" \
               --annotation "manifest:org.opencontainers.image.version=$version" \
-              --annotation "index:org.opencontainers.image.revision=$MERGE_SHA" \
+              --annotation "index:org.opencontainers.image.revision=$source_sha" \
               --annotation "index:org.opencontainers.image.version=$version" \
               --tag "$arch_ref" \
               --metadata-file build-metadata.json \
@@ -297,6 +284,8 @@ jobs:
             digest="$(jq -er '."containerimage.digest"' build-metadata.json)"
           fi
           [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]
+          test "$(python scripts/registry_manifest.py "$arch_ref" digest)" = "$digest"
+          python scripts/release_source.py "$product" "$version" "$MERGE_SHA" "$source_sha" "$platform" < <(python scripts/registry_manifest.py "$arch_ref" raw)
           mkdir -p image-digests
           printf '%s\n' "$digest" > "image-digests/$product-$arch"
       - uses: actions/upload-artifact@v4
@@ -379,6 +368,7 @@ jobs:
 
             image="ghcr.io/digitalhouses/$product"
             release_ref="$image:$version"
+            source_sha="$(python scripts/release_source.py "$product" "$version" "$MERGE_SHA")"
             refs=()
             digests=()
             for arch in "${architectures[@]}"; do
@@ -387,7 +377,13 @@ jobs:
               [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]
               # Resolve OCI manifest index bytes verbatim: digest = sha256(bytes).
               # `imagetools inspect` text output omits Digest under some registries.
-              actual="$(docker buildx imagetools inspect --raw "$arch_ref" | sha256sum | awk '{print "sha256:" $1}')"
+              actual="$(python scripts/registry_manifest.py "$arch_ref" digest)"
+              case "$arch" in
+                amd64) platform=linux/amd64 ;;
+                aarch64) platform=linux/arm64 ;;
+                *) exit 1 ;;
+              esac
+              python scripts/release_source.py "$product" "$version" "$MERGE_SHA" "$source_sha" "$platform" < <(python scripts/registry_manifest.py "$arch_ref" raw)
               echo "Expected $arch digest: $digest; manifest body: $actual"
               test "$actual" = "$digest"
               refs+=("$image@$digest")
@@ -398,7 +394,7 @@ jobs:
               # Resume a partially completed release only if the final tag
               # proves exact source/version and the full ordered digest set.
               existing="$(docker buildx imagetools inspect --raw "$release_ref")"
-              jq -e --arg sha "$MERGE_SHA" --arg version "$version" \
+              jq -e --arg sha "$source_sha" --arg version "$version" \
                 --arg digests "$source_digests" \
                 '.annotations["org.opencontainers.image.revision"] == $sha and
                  .annotations["org.opencontainers.image.version"] == $version and
@@ -409,41 +405,19 @@ jobs:
                 }
               echo "Reusing verified final manifest $release_ref"
             else
+              python scripts/registry_manifest.py "$release_ref" absent
               docker buildx imagetools create \
-                --annotation "index:org.opencontainers.image.revision=$MERGE_SHA" \
+                --annotation "index:org.opencontainers.image.revision=$source_sha" \
                 --annotation "index:org.opencontainers.image.version=$version" \
                 --annotation "index:org.digitalhouses.source-digests=$source_digests" \
                 --tag "$release_ref" \
                 "${refs[@]}"
             fi
 
-            inspect_attempts=12
-            inspect_delay_seconds=5
-            digest=""
-
-            for attempt in $(seq 1 "$inspect_attempts"); do
-              inspect_output=""
-              inspect_rc=0
-              inspect_output="$(docker buildx imagetools inspect "$release_ref" 2>&1)" || inspect_rc=$?
-
-              if [ "$inspect_rc" -eq 0 ]; then
-                digest="$(awk '/^Digest:/ {print $2; exit}' <<<"$inspect_output")"
-                if [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]; then
-                  break
-                fi
-              fi
-
-              if [ "$attempt" -ge "$inspect_attempts" ]; then
-                printf '%s\n' "$inspect_output" >&2
-                echo "Unable to resolve immutable image digest for $release_ref after $inspect_attempts attempts" >&2
-                exit 1
-              fi
-
-              echo "Immutable image is not readable yet; retrying digest inspection in ${inspect_delay_seconds}s (attempt ${attempt}/${inspect_attempts})."
-              sleep "$inspect_delay_seconds"
-            done
-
-            printf '%s\t%s\t%s\t%s\n' "$product" "$version" "$release_ref" "$digest" >> app-release-artifacts.tsv
+            digest="$(python scripts/registry_manifest.py "$release_ref" digest)"
+            python scripts/registry_manifest.py "$release_ref" raw > final-manifest.json
+            python scripts/release_source.py "$product" "$version" "$MERGE_SHA" "$source_sha" final "$source_digests" < final-manifest.json
+            printf '%s\t%s\t%s\t%s\t%s\n' "$product" "$version" "$release_ref" "$digest" "$source_sha" >> app-release-artifacts.tsv
           done
       - name: Publish product releases
         env:
@@ -475,15 +449,18 @@ jobs:
               --github-output "$output_file"
             image_ref="$(awk -F '\t' -v product="$product" '$1 == product {print $3; exit}' app-release-artifacts.tsv)"
             image_digest="$(awk -F '\t' -v product="$product" '$1 == product {print $4; exit}' app-release-artifacts.tsv)"
+            source_sha="$MERGE_SHA"
             if [ -n "$image_ref" ]; then
               test -n "$image_digest"
+              source_sha="$(awk -F '\t' -v product="$product" '$1 == product {print $5; exit}' app-release-artifacts.tsv)"
+              [[ "$source_sha" =~ ^[0-9a-f]{40}$ ]]
               {
                 echo
                 echo "## Artifact provenance"
                 echo
                 echo "- Image: \`$image_ref\`"
                 echo "- Image digest: \`$image_digest\`"
-                echo "- Commit: \`$MERGE_SHA\`"
+                echo "- Commit: \`$source_sha\`"
               } >> "$notes_file"
             fi
 
@@ -497,7 +474,7 @@ jobs:
             args=(
               release create "$tag"
               --repo "$GITHUB_REPOSITORY"
-              --target "$MERGE_SHA"
+              --target "$source_sha"
               --title "$title"
               --notes-file "$notes_file"
             )
@@ -527,9 +504,10 @@ jobs:
             version="$(jq -r ".[$index].version" release-candidates.json)"
             tag="${product}-v${version}"
 
-            git fetch origin "refs/tags/${tag}:refs/tags/${tag}" --force
+            git fetch origin "refs/tags/${tag}:refs/tags/${tag}"
             actual="$(git rev-list -n 1 "$tag")"
-            test "$actual" = "$MERGE_SHA"
+            source_sha="$(awk -F '\t' -v product="$product" '$1 == product {print $5; exit}' app-release-artifacts.tsv)"
+            test "$actual" = "${source_sha:-$MERGE_SHA}"
 
             gh release view "$tag" \
               --repo "$GITHUB_REPOSITORY" \
