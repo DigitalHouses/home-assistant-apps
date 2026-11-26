@@ -80,7 +80,7 @@ class Service:
         self.clock=clock
         self.ha_fn=ha_fn
         self.release_fn=release_fn
-        self.gates=Gates(require_ha=opts["require_ha"],require_z2m=opts["require_z2m"],ttl=TTL)
+        self.gates=Gates(require_z2m=opts["require_z2m"],ttl=TTL)
         self.z=Z2MRegistry(TTL,PROBE_TIMEOUT)
         self.life=Lifecycle()
         self.executor=ThreadPoolExecutor(max_workers=2,thread_name_prefix="dh-probe")
@@ -429,7 +429,7 @@ class Service:
 def main():
     logging.basicConfig(level=logging.INFO,format="%(asctime)s %(levelname)s %(message)s")
     opts=json.loads(Path("/data/options.json").read_text())
-    for key in ("require_ha","require_z2m","telemetry_enabled"):
+    for key in ("require_z2m","telemetry_enabled"):
         if type(opts.get(key)) is not bool:
             raise ContractError("Invalid option "+key)
     if opts["telemetry_enabled"] is not True:

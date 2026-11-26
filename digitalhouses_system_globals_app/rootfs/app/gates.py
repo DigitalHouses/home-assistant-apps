@@ -8,10 +8,8 @@ GATE_KEYS = ("mqtt_ready", "ha_ready", "zigbee_ready")
 
 
 class Gates:
-    def __init__(self, *, require_ha, require_z2m, ttl):
-        self.required = {"mqtt_ready"}
-        if require_ha:
-            self.required.add("ha_ready")
+    def __init__(self, *, require_z2m, ttl):
+        self.required = {"mqtt_ready", "ha_ready"}
         if require_z2m:
             self.required.add("zigbee_ready")
         self.ttl = ttl
@@ -153,11 +151,15 @@ class Z2MRegistry:
             self.evidence.pop(base, None)
         return True
 
-    def requests(self, now, nonce_fn):
+    def expire(self, now):
         for base, z in self.bridges.items():
             if z.transaction is not None and now > self.deadlines.get(base, -1):
                 z.transaction = None
                 self.evidence.pop(base, None)
+
+    def requests(self, now, nonce_fn):
+        self.expire(now)
+        for base, z in self.bridges.items():
             if z.online and z.transaction is None:
                 nonce = nonce_fn()
                 z.begin(nonce)
@@ -165,6 +167,7 @@ class Z2MRegistry:
                 yield base + "/bridge/request/health_check", nonce
 
     def update_gate(self, gates, now):
+        self.expire(now)
         if not self.bridges:
             gates.invalidate("zigbee_ready", "no_bridges_discovered")
         elif not all(base in self.evidence and 0 <= now-self.evidence[base] < self.ttl
