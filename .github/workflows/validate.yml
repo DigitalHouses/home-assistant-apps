@@ -349,6 +349,8 @@ jobs:
         uses: actions/setup-python@v6
         with:
           python-version: "3.13"
+          cache: pip
+          cache-dependency-path: digitalhouses_plex_agent/requirements.txt
 
       - name: Install test and runtime dependencies
         run: |
@@ -399,6 +401,8 @@ jobs:
         uses: actions/setup-python@v6
         with:
           python-version: "3.13"
+          cache: pip
+          cache-dependency-path: digitalhouses_pbs_agent/requirements.txt
       - name: Install PBS Agent dependencies
         run: python -m pip install --disable-pip-version-check -r digitalhouses_pbs_agent/requirements.txt
       - name: Compile source
@@ -430,6 +434,8 @@ jobs:
         uses: actions/setup-python@v6
         with:
           python-version: "3.13"
+          cache: pip
+          cache-dependency-path: digitalhouses_pve_agent/requirements.txt
 
       - name: Install test and runtime dependencies
         run: |
@@ -522,6 +528,8 @@ jobs:
         uses: actions/setup-python@v6
         with:
           python-version: "3.13"
+          cache: pip
+          cache-dependency-path: digitalhouses_system_globals_app/requirements.txt
       - name: Install isolated test dependencies
         run: |
           python -m pip install --disable-pip-version-check -r digitalhouses_system_globals_app/requirements.txt PyYAML
@@ -574,6 +582,8 @@ jobs:
         uses: actions/setup-python@v6
         with:
           python-version: "3.13"
+          cache: pip
+          cache-dependency-path: digitalhouses-stats/pyproject.toml
 
       - name: Install Stats Server
         working-directory: digitalhouses-stats

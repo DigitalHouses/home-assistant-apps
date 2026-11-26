@@ -18,7 +18,7 @@ class AutoMergeWorkflowTests(unittest.TestCase):
             text,
         )
         self.assertIn(
-            'if [ "$current_base_sha" != "$VALIDATED_BASE_SHA" ]; then',
+            'if [ "$current_base_sha" != "$VALIDATED_BASE_SHA" ] || [ "$base_sha" != "$VALIDATED_BASE_SHA" ]; then',
             text,
         )
         self.assertIn(
@@ -28,9 +28,18 @@ class AutoMergeWorkflowTests(unittest.TestCase):
         self.assertIn('-f "expected_head_sha=${head_sha}"', text)
         self.assertIn('echo "merged=false" >> "$GITHUB_OUTPUT"', text)
         self.assertLess(
-            text.index('if [ "$current_base_sha" != "$VALIDATED_BASE_SHA" ]; then'),
+            text.index('if [ "$current_base_sha" != "$VALIDATED_BASE_SHA" ] || [ "$base_sha" != "$VALIDATED_BASE_SHA" ]; then'),
             text.index('gh pr merge "$PR_NUMBER"'),
         )
+
+    def test_stale_base_guard_calls_refresh_before_merge(self):
+        text = self._text()
+        guard = text.index('if [ "$current_base_sha" != "$VALIDATED_BASE_SHA" ] || [ "$base_sha" != "$VALIDATED_BASE_SHA" ]; then')
+        merge = text.index('gh pr merge "$PR_NUMBER"')
+        self.assertIn("refresh_pr_branch\n            exit 0", text[guard:merge])
+        self.assertNotIn('test "$base_sha" = "$VALIDATED_BASE_SHA"', text[:guard])
+        self.assertIn("else\n              merge_rc=$?\n            fi", text[merge:])
+        self.assertIn("refresh_pr_branch\n              exit 0", text[merge:])
 
     def test_release_detection_uses_actual_first_parent_of_merge_commit(self):
         text = self._text()
