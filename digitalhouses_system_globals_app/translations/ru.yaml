@@ -7,7 +7,4 @@ configuration:
     description: Включать подтвержденную готовность MQTT-интеграции HA в System Ready.
   require_z2m:
     name: Учитывать Zigbee2MQTT
-    description: Включать подтвержденную готовность Zigbee2MQTT в System Ready.
-  z2m_base:
-    name: Базовый топик Zigbee2MQTT
-    description: Точный MQTT-префикс локальной Zigbee2MQTT сети.
+    description: Требовать подтвержденную готовность всех автоматически обнаруженных экземпляров Zigbee2MQTT.

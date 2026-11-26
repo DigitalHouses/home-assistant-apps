@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.1.1
+- Remove manual Zigbee2MQTT base-topic configuration. Discover arbitrary-depth bridge namespaces on the connected broker, track independent health transactions, and require fresh evidence from all discovered bridges.
+
 ## 0.1.0
 - Initial experimental System Globals App: autonomous day/night schedule, manual commands, durable validated profiles, mutually exclusive CCT/RGB and retained MQTT contracts.
 - Add dynamic MQTT/HA/Z2M readiness checks, session-scoped live lease, transient machine events, observed HA lifecycle diagnostics, Ingress and MQTT Discovery.

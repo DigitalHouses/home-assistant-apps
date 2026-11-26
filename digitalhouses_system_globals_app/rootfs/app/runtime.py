@@ -11,6 +11,7 @@ import time
 import paho.mqtt.client as mqtt
 
 from core import ContractError, Engine, GLOBAL, PRODUCT, Store
+from gates import bridge_topic
 
 LOG = logging.getLogger("system_globals")
 COMMANDS = (GLOBAL + "/set", PRODUCT + "/config/set", PRODUCT + "/profiles/set")
@@ -22,9 +23,10 @@ class TransportError(RuntimeError):
 
 class Session:
     """One MQTT connection; never reconnect an old client with queued events."""
-    def __init__(self, host, port, username, password, *, commands=COMMANDS, observations=(), availability=None):
+    def __init__(self, host, port, username, password, *, commands=COMMANDS, observations=(), availability=None, discover_bridges=False):
         self.host, self.port = host, port
         self.commands, self.observations = commands, observations
+        self.discover_bridges = discover_bridges
         self.client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2,
                                   protocol=mqtt.MQTTv5, reconnect_on_failure=False)
         self.client.connect_timeout = 5.0
@@ -47,7 +49,7 @@ class Session:
         if reason.is_failure:
             self.failed = True
             return
-        for topic in self.commands + self.observations:
+        for topic in (("#",) if self.discover_bridges else self.commands + self.observations):
             # MQTT5 preserves the sender's retain flag and skips old retained commands.
             rc, mid = client.subscribe(topic, options=mqtt.SubscribeOptions(
                 qos=1, retainAsPublished=True, retainHandling=2 if topic in self.commands else 0))
@@ -69,6 +71,15 @@ class Session:
         self.publish_results[mid] = reason
 
     def on_message(self, client, userdata, message):
+        if self.discover_bridges and not (
+            bridge_topic(message.topic) or message.topic in self.observations
+            or any(mqtt.topic_matches_sub(pattern, message.topic) for pattern in self.commands)
+        ):
+            return
+        if self.discover_bridges and message.retain and any(
+            mqtt.topic_matches_sub(pattern, message.topic) for pattern in self.commands
+        ):
+            return
         if len(self.messages) >= 256:
             self.failed = True
             return

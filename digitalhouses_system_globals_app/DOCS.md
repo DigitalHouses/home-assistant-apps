@@ -14,7 +14,11 @@ the App schedule. A complete HAOS restart does.
 
 Readiness uses an MQTT roundtrip, an actual HA MQTT sensor update checked through
 the read-only Core API, and live correlated Zigbee2MQTT health response plus bridge
-inventory. Optional components can be excluded from System Ready in App options.
+inventory for every automatically discovered Zigbee2MQTT bridge on the connected
+MQTT broker, including nested base topics. No base-topic setting is required.
+All discovered bridges must be healthy; if none are discovered, Zigbee Ready is off.
+Retire a bridge by clearing its retained state/info/devices topics. The Ingress lists
+discovered bridge names and readiness. Optional components can be excluded from System Ready in App options.
 Readiness is not proof that every individual device is available.
 When MQTT or producer is lost, gates must be treated as closed. The public retained
 gate states are accompanied by a non-retained lease at

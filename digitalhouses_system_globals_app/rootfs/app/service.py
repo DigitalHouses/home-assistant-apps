@@ -19,7 +19,7 @@ from core import Engine, Store, Publication, GLOBAL, PRODUCT, ContractError
 from runtime import Session, TransportError, COMMANDS
 from discovery import (ID, PREFIX, AVAIL, LEASE, PROBE, LOOP, DISCOVERY, HA_STATUS, GATE_EVENT,
                        CTRL, FIELD, OPS, GATES, state_topic, discovery, sync, projections, translate, scalar)
-from gates import Gates, Z2MProbe, ha_probe
+from gates import Gates, Z2MRegistry, ha_probe
 from lifecycle import Lifecycle
 from ingress import serve
 
@@ -81,15 +81,13 @@ class Service:
         self.ha_fn=ha_fn
         self.release_fn=release_fn
         self.gates=Gates(require_ha=opts["require_ha"],require_z2m=opts["require_z2m"],ttl=TTL)
-        self.z2m=opts["z2m_base"].strip("/")+"/bridge/"
-        self.z=Z2MProbe()
+        self.z=Z2MRegistry(TTL,PROBE_TIMEOUT)
         self.life=Lifecycle()
         self.executor=ThreadPoolExecutor(max_workers=2,thread_name_prefix="dh-probe")
         self.session=None
         self.session_id=None
         self.loop_nonce=None
         self.loop_deadline=0
-        self.z_deadline=0
         self.ha_future=None
         self.ha_generation=0
         self.ha_deadline=0
@@ -122,7 +120,7 @@ class Service:
     def update_view(self):
         with self.view_lock:
             self._view={"state":self.engine.state,"gates":self.gates.states(self.clock()),
-                        "diagnostics":self.gates.diagnostics(self.clock()),"lifecycle":self.life.values(utcnow()),
+                        "diagnostics":self.gates.diagnostics(self.clock()),"zigbee_bridges":self.z.diagnostics(self.clock()),"lifecycle":self.life.values(utcnow()),
                         "card":deepcopy(self.card),"version":self.version,"latest_version":self.latest,
                         "mqtt_connected":self.session is not None}
 
@@ -180,13 +178,13 @@ class Service:
     def connect(self,host,port,user,password):
         self.session_id=str(uuid.uuid4())
         self.gates.reset()
-        self.z=Z2MProbe()
+        self.z=Z2MRegistry(TTL,PROBE_TIMEOUT)
         self.loop_nonce=None
         self.ha_generation+=1
         self.prev_gates=None
         self.next_probe=self.next_lease=0
         s=Session(host,port,user,password,commands=COMMANDS+(FIELD+"+/set",CTRL+"+"),
-                  observations=(LOOP,HA_STATUS,self.z2m+"state",self.z2m+"info",self.z2m+"devices",self.z2m+"response/health_check"),
+                  observations=(LOOP,HA_STATUS),discover_bridges=True,
                   availability=AVAIL)
         try:
             s.open()
@@ -247,6 +245,7 @@ class Service:
             self.session.close(abort=not graceful)
             self.session=None
         self.gates.reset()
+        self.z=Z2MRegistry(TTL,PROBE_TIMEOUT)
         self.update_view()
 
     def message(self,topic,raw,retained):
@@ -265,19 +264,8 @@ class Service:
                     if value=="online":
                         self.send([Publication(DISCOVERY,discovery(self.version))])
                 return
-            if topic.startswith(self.z2m):
-                sub=topic[len(self.z2m):]
-                if sub=="response/health_check" and (retained or self.clock()>self.z_deadline):
-                    return
-                try:
-                    obj=json.loads(value)
-                except ValueError:
-                    obj=value
-                result=self.z.observe(sub,obj)
-                if result is True:
-                    self.gates.prove("zigbee_ready",self.clock())
-                elif result is False:
-                    self.gates.invalidate("zigbee_ready","bridge_not_ready")
+            if self.z.observe(topic,value,retained,self.clock()):
+                self.z.update_gate(self.gates,self.clock())
                 return
             if retained:
                 raise ContractError("Retained command")
@@ -304,9 +292,7 @@ class Service:
         if self.loop_nonce and t>self.loop_deadline:
             self.loop_nonce=None
             self.gates.invalidate("mqtt_ready","roundtrip_timeout")
-        if self.z.transaction is not None and t>self.z_deadline:
-            self.z.transaction=None
-            self.gates.invalidate("zigbee_ready","health_timeout")
+        self.z.update_gate(self.gates,t)
         if self.ha_future and t>self.ha_deadline:
             self.gates.invalidate("ha_ready","ha_probe_timeout")
         if t<self.next_probe:
@@ -316,11 +302,9 @@ class Service:
             self.loop_nonce=uuid.uuid4().hex
             self.loop_deadline=t+PROBE_TIMEOUT
             self.send([Publication(LOOP,self.loop_nonce,False)])
-        if self.z.online and self.z.transaction is None:
-            nonce=secrets.randbelow(2**31)
-            self.z.begin(nonce)
-            self.z_deadline=t+PROBE_TIMEOUT
-            self.send([Publication(self.z2m+"request/health_check",{"transaction":nonce},False)])
+        for topic,nonce in self.z.requests(t,lambda:secrets.randbelow(2**31)):
+            self.send([Publication(topic,{"transaction":nonce},False)])
+        self.z.update_gate(self.gates,t)
         if self.ha_future is None:
             nonce=uuid.uuid4().hex
             self.send([Publication(PROBE,nonce,False)])
@@ -451,9 +435,6 @@ def main():
     if opts["telemetry_enabled"] is not True:
         LOG.error("Telemetry terms have not been accepted; official App activation is disabled")
         return
-    z=opts.get("z2m_base")
-    if not isinstance(z,str) or not z or any(c in z for c in "+#\x00"):
-        raise ContractError("Invalid Z2M base topic")
     opts.update(ha_url="http://supervisor/core/api",ha_token=os.environ.get("SUPERVISOR_TOKEN"))
     engine=Engine(Store("/data/state.json"))
     if engine.state["config"]["timezone"] is None and os.environ.get("TZ"):
