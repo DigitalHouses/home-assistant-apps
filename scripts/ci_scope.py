@@ -5,7 +5,6 @@ import subprocess
 
 PRODUCT_JOBS = {
     "digitalhouses_aqara_switch_app": "aqara-switch-app",
-    "digitalhouses_electrica_app": "aqara-switch-app",
     "digitalhouses_zigbee_monitor_app": "zigbee-monitor-app",
     "digitalhouses_speedtest_app": "speedtest-app",
     "digitalhouses_network_app": "network-app",
