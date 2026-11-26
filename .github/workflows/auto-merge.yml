@@ -48,7 +48,7 @@ jobs:
 
           # A human-merged PR triggers normal main push CI. GITHUB_TOKEN merges
           # do not trigger this CI; their successful PR workflow handles release.
-          if [ "$VALIDATION_EVENT" = push ]; then
+          if [ "$VALIDATION_EVENT" = push ] || { [ "$VALIDATION_EVENT" = workflow_dispatch ] && [ "$VALIDATED_HEAD_BRANCH" = main ]; }; then
             if [ "$VALIDATED_HEAD_SHA" != "$current_main" ]; then
               echo "Superseded main validation; a newer push will reconcile releases."
               echo "merged=false" >> "$GITHUB_OUTPUT"
