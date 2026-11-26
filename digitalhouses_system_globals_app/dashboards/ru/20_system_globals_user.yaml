@@ -1,0 +1,58 @@
+# Owner controls; no administrative operations.
+title: System Globals
+path: system-globals-user
+icon: mdi:theme-light-dark
+type: sections
+max_columns: 2
+sections:
+- type: grid
+  cards:
+  - type: heading
+    heading_style: title
+    heading: День / Ночь
+  - type: entities
+    title: День / Ночь
+    entities:
+    - switch.dh_system_globals_app_night_mode
+    - switch.dh_system_globals_app_auto_switch
+    - text.dh_system_globals_app_night_start
+    - text.dh_system_globals_app_night_end
+    - sensor.dh_system_globals_app_timezone
+  - type: history-graph
+    title: История ночного режима
+    hours_to_show: 24
+    entities:
+    - entity: switch.dh_system_globals_app_night_mode
+      name: Ночной режим
+  - type: entities
+    title: Активные параметры
+    entities:
+    - sensor.dh_system_globals_app_active_brightness
+    - sensor.dh_system_globals_app_active_color_temp_kelvin
+    - sensor.dh_system_globals_app_active_rgb_color
+    - sensor.dh_system_globals_app_active_volume
+- type: grid
+  cards:
+  - type: heading
+    heading_style: title
+    heading: Глобальные профили
+  - type: entities
+    title: День
+    entities:
+    - number.dh_system_globals_app_day_brightness
+    - number.dh_system_globals_app_day_volume
+    - number.dh_system_globals_app_day_transition_seconds
+    - text.dh_system_globals_app_day_color_temp_kelvin
+    - text.dh_system_globals_app_day_rgb_color
+    - switch.dh_system_globals_app_day_voice_notifications_enabled
+    - switch.dh_system_globals_app_day_noncritical_sound_notifications_enabled
+  - type: entities
+    title: Ночь
+    entities:
+    - number.dh_system_globals_app_night_brightness
+    - number.dh_system_globals_app_night_volume
+    - number.dh_system_globals_app_night_transition_seconds
+    - text.dh_system_globals_app_night_color_temp_kelvin
+    - text.dh_system_globals_app_night_rgb_color
+    - switch.dh_system_globals_app_night_voice_notifications_enabled
+    - switch.dh_system_globals_app_night_noncritical_sound_notifications_enabled
