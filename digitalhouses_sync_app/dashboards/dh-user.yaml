@@ -1,0 +1,11 @@
+# Owner panel; view-list order is HA tab order.
+title: DH User
+icon: mdi:account-cog
+show_in_sidebar: true
+require_admin: false
+views:
+  - product: digitalhouses_system_globals_app
+    path: system-globals-user
+    title: System Globals
+    icon: mdi:theme-light-dark
+    show_icon_and_title: true

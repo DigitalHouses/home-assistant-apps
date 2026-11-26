@@ -35,8 +35,11 @@ consumers require current publisher availability and a fresh session lease.
 MQTT connection failure cannot send a new state through that same failed broker.
 Lifecycle reports observed states only; lost API is not proof of a shutdown.
 
-The owner View is published at dashboards/ru/10_system_globals.yaml, path
-system-globals. Placement in a non-admin panel is configured by DH Sync, not this App.
+The full administrative View is published at dashboards/ru/10_system_globals.yaml,
+path system-globals. The owner View is dashboards/ru/20_system_globals_user.yaml,
+path system-globals-user; it contains only mode, schedule, active settings, history
+and profile controls. DH Sync places the owner View in the non-admin DH User panel.
+This is UI separation, not a replacement for Home Assistant permissions.
 The Recorder package in packages/common/dh_system_globals_app.yaml includes
 the authoritative night-mode switch (off = day, on = night). The View displays
 its native 24-hour history graph; no additional sensor or automation is needed.
