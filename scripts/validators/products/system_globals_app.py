@@ -20,7 +20,7 @@ def validate_system_globals(root, app, context):
                   "rootfs/app/gates.py","rootfs/app/discovery.py","rootfs/app/index.html",
                   "rootfs/app/ingress.py","rootfs/app/lifecycle.py","rootfs/app/telemetry.py",
                   "tests/test_core.py","tests/test_gates.py","tests/test_mqtt_integration.py",
-                  "tests/test_service.py","dashboards/ru/10_system_globals.yaml",
+                  "tests/test_service.py","tests/test_telemetry.py","dashboards/ru/10_system_globals.yaml",
                   "packages/common/dh_system_globals_app.yaml","examples/lovelace/system_globals_card_ru.yaml",
                   "icon.png","logo.png")])
     for language in ("en","ru"):

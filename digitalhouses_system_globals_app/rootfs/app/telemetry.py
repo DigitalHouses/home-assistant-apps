@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import hashlib
+import os
+import tempfile
 import json
 import logging
 import re
@@ -8,6 +10,7 @@ import secrets
 import threading
 import time
 import urllib.request
+import urllib.error
 import uuid
 from pathlib import Path
 from typing import Any, Callable, Mapping, Protocol
@@ -86,8 +89,13 @@ class UrllibTelemetryTransport:
                 "User-Agent": "DigitalHouses-Telemetry/1",
             },
         )
-        with urllib.request.urlopen(request, timeout=timeout_seconds) as response:
-            return int(response.status)
+        try:
+            with urllib.request.urlopen(request, timeout=timeout_seconds) as response:
+                return int(response.status)
+        except urllib.error.HTTPError as exc:
+            # urllib raises on 404; return the status for idempotent deletion.
+            with exc:
+                return int(exc.code)
 
 
 class TelemetryClient:
@@ -186,21 +194,23 @@ class TelemetryClient:
         if state is None:
             state = self._state
         self.state_file.parent.mkdir(parents=True, exist_ok=True)
-        tmp = self.state_file.with_suffix(".tmp")
-        tmp.write_text(
-            json.dumps(
-                state,
-                ensure_ascii=False,
-                separators=(",", ":"),
-                sort_keys=True,
-            ),
-            encoding="utf-8",
-        )
-        tmp.replace(self.state_file)
+        # Never put credentials in a world-readable temporary file.
+        fd, filename = tempfile.mkstemp(prefix=".telemetry-", dir=self.state_file.parent)
         try:
-            self.state_file.chmod(0o600)
-        except OSError:
-            pass
+            with os.fdopen(fd, "w", encoding="utf-8") as stream:
+                json.dump(state, stream, ensure_ascii=False, separators=(",", ":"),
+                          sort_keys=True, allow_nan=False)
+                stream.flush()
+                os.fsync(stream.fileno())
+            os.replace(filename, self.state_file)
+            directory = os.open(self.state_file.parent, os.O_RDONLY | os.O_DIRECTORY)
+            try:
+                os.fsync(directory)
+            finally:
+                os.close(directory)
+        finally:
+            if os.path.exists(filename):
+                os.unlink(filename)
 
     @property
     def installation_id(self) -> str:
