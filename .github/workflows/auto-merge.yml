@@ -124,14 +124,8 @@ jobs:
         with:
           python-version: "3.13"
 
-      - name: Set up QEMU
-        if: steps.merge.outputs.merged == 'true'
-        uses: docker/setup-qemu-action@v3
-
-      - name: Set up Docker Buildx
-        if: steps.merge.outputs.merged == 'true'
-        uses: docker/setup-buildx-action@v3
       - name: Detect and validate releases
+        id: candidates
         if: steps.merge.outputs.merged == 'true'
         env:
           BASE_SHA: ${{ steps.merge.outputs.release_base_sha }}
@@ -145,6 +139,16 @@ jobs:
             --json-output release-candidates.json
 
           cat release-candidates.json
+          has_apps="$(jq -r --slurpfile registry digitalhouses-stats/digitalhouses_stats/product_registry.json '[.[].product as $id | $registry[0].products[] | select(.id == $id and .type == "app")] | length > 0' release-candidates.json)"
+          echo "has_apps=$has_apps" >> "$GITHUB_OUTPUT"
+
+      - name: Set up QEMU
+        if: steps.candidates.outputs.has_apps == 'true'
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        if: steps.candidates.outputs.has_apps == 'true'
+        uses: docker/setup-buildx-action@v3
 
       - name: Build and publish immutable Home Assistant App images
         if: steps.merge.outputs.merged == 'true'
@@ -162,7 +166,9 @@ jobs:
             exit 0
           fi
 
-          echo "$GH_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+          if [ "${{ steps.candidates.outputs.has_apps }}" = "true" ]; then
+            echo "$GH_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+          fi
 
           for index in $(seq 0 $((count - 1))); do
             product="$(jq -r ".[${index}].product" release-candidates.json)"
@@ -224,7 +230,11 @@ jobs:
                 exit 1
               fi
 
+              # Mutable build cache is isolated from immutable release tags.
+              cache_ref="$image:buildcache-$arch"
               docker buildx build \
+                --cache-from "type=registry,ref=$cache_ref" \
+                --cache-to "type=registry,ref=$cache_ref,mode=max,ignore-error=true" \
                 --platform "$platform" \
                 --build-arg "BUILD_VERSION=$version" \
                 --build-arg "BUILD_ARCH=$arch" \
