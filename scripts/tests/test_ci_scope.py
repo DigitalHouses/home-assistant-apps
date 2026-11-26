@@ -19,7 +19,6 @@ class ScopeTests(unittest.TestCase):
 
     def test_shared_day_night(self):
         for directory in ("digitalhouses_aqara_switch_app",
-                          "digitalhouses_electrica_app",
                           "digitalhouses_system_globals_app"):
             self.assertEqual(select_jobs([directory + "/config.yaml"]),
                              {"aqara-switch-app", "system-globals-app",
@@ -29,6 +28,7 @@ class ScopeTests(unittest.TestCase):
         for path in (".github/workflows/validate.yml",
                      "scripts/ci_scope.py", "README.md",
                      "digitalhouses_new_app/config.yaml",
+                     "digitalhouses_electrica_app/config.yaml",
                      "digitalhouses-stats/digitalhouses_stats/product_registry.json"):
             self.assertEqual(select_jobs([path]), ALL_JOBS)
         self.assertEqual(select_jobs([]), ALL_JOBS)
@@ -41,6 +41,16 @@ class ScopeTests(unittest.TestCase):
     def test_every_job_mapped(self):
         for directory, job in PRODUCT_JOBS.items():
             self.assertIn(job, select_jobs([directory + "/example"]))
+
+    def test_workflow_scope_matches_mapping(self):
+        import yaml
+        workflow = Path(__file__).resolve().parents[2] / ".github/workflows/validate.yml"
+        jobs = yaml.safe_load(workflow.read_text(encoding="utf-8"))["jobs"]
+        scoped = {name for name, job in jobs.items()
+                  if job.get("needs") == "validation-scope"}
+        self.assertEqual(scoped, ALL_JOBS)
+        for name in scoped:
+            self.assertIn(f"\'{name}\'", jobs[name]["if"])
 
     def test_rename_counts_both_paths(self):
         with patch("ci_scope.subprocess.run") as ancestry, patch(
