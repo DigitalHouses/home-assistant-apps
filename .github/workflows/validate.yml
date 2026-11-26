@@ -13,6 +13,22 @@ permissions:
   contents: read
 
 jobs:
+  validation-scope:
+    name: Validation scope
+    runs-on: ubuntu-latest
+    outputs:
+      jobs: ${{ steps.scope.outputs.jobs }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - name: Determine affected jobs
+        id: scope
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          HEAD_SHA: ${{ github.sha }}
+        run: python3 scripts/ci_scope.py
+
   repository-contract:
     name: Repository contract
     runs-on: ubuntu-latest
@@ -37,6 +53,8 @@ jobs:
 
   aqara-switch-app:
     name: Aqara Switch App
+    needs: validation-scope
+    if: ${{ contains(fromJSON(needs.validation-scope.outputs.jobs), 'aqara-switch-app') }}
     runs-on: ubuntu-latest
 
     steps:
@@ -71,6 +89,8 @@ jobs:
 
   zigbee-monitor-app:
     name: Zigbee Monitor App
+    needs: validation-scope
+    if: ${{ contains(fromJSON(needs.validation-scope.outputs.jobs), 'zigbee-monitor-app') }}
     runs-on: ubuntu-latest
 
     steps:
@@ -111,6 +131,8 @@ jobs:
 
   speedtest-app:
     name: Speedtest App
+    needs: validation-scope
+    if: ${{ contains(fromJSON(needs.validation-scope.outputs.jobs), 'speedtest-app') }}
     runs-on: ubuntu-latest
 
     steps:
@@ -136,6 +158,8 @@ jobs:
 
   network-app:
     name: Network App
+    needs: validation-scope
+    if: ${{ contains(fromJSON(needs.validation-scope.outputs.jobs), 'network-app') }}
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
@@ -169,6 +193,8 @@ jobs:
 
   internet-app:
     name: Internet App
+    needs: validation-scope
+    if: ${{ contains(fromJSON(needs.validation-scope.outputs.jobs), 'internet-app') }}
     runs-on: ubuntu-latest
 
     steps:
@@ -204,6 +230,8 @@ jobs:
 
   presence-app:
     name: Presence App
+    needs: validation-scope
+    if: ${{ contains(fromJSON(needs.validation-scope.outputs.jobs), 'presence-app') }}
     runs-on: ubuntu-latest
 
     steps:
@@ -237,6 +265,8 @@ jobs:
 
   recorder-app:
     name: Recorder App
+    needs: validation-scope
+    if: ${{ contains(fromJSON(needs.validation-scope.outputs.jobs), 'recorder-app') }}
     runs-on: ubuntu-latest
 
     steps:
@@ -274,6 +304,8 @@ jobs:
 
   backblaze-app:
     name: Backblaze App
+    needs: validation-scope
+    if: ${{ contains(fromJSON(needs.validation-scope.outputs.jobs), 'backblaze-app') }}
     runs-on: ubuntu-latest
 
     steps:
@@ -305,6 +337,8 @@ jobs:
 
   plex-agent:
     name: Plex Agent
+    needs: validation-scope
+    if: ${{ contains(fromJSON(needs.validation-scope.outputs.jobs), 'plex-agent') }}
     runs-on: ubuntu-latest
 
     steps:
@@ -355,6 +389,8 @@ jobs:
 
   pbs-agent:
     name: PBS Agent
+    needs: validation-scope
+    if: ${{ contains(fromJSON(needs.validation-scope.outputs.jobs), 'pbs-agent') }}
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
@@ -382,6 +418,8 @@ jobs:
 
   pve-agent:
     name: PVE Agent
+    needs: validation-scope
+    if: ${{ contains(fromJSON(needs.validation-scope.outputs.jobs), 'pve-agent') }}
     runs-on: ubuntu-latest
 
     steps:
@@ -432,6 +470,8 @@ jobs:
 
   sync-app:
     name: DH Sync App
+    needs: validation-scope
+    if: ${{ contains(fromJSON(needs.validation-scope.outputs.jobs), 'sync-app') }}
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
@@ -472,6 +512,8 @@ jobs:
 
   system-globals-app:
     name: System Globals App
+    needs: validation-scope
+    if: ${{ contains(fromJSON(needs.validation-scope.outputs.jobs), 'system-globals-app') }}
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
@@ -502,6 +544,8 @@ jobs:
 
   stats-server:
     name: Stats Server
+    needs: validation-scope
+    if: ${{ contains(fromJSON(needs.validation-scope.outputs.jobs), 'stats-server') }}
     runs-on: ubuntu-latest
 
     services:
