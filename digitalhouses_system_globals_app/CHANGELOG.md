@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.2
+- Make MQTT and Home Assistant mandatory for System Ready without configuration switches. Keep only require_z2m as an optional readiness dependency; discover and monitor every Zigbee2MQTT namespace independently even when optional.
+- Invalidate a timed-out bridge health transaction immediately and preserve independent readiness diagnostics.
+
 ## 0.1.1
 - Remove manual Zigbee2MQTT base-topic configuration. Discover arbitrary-depth bridge namespaces on the connected broker, track independent health transactions, and require fresh evidence from all discovered bridges.
 

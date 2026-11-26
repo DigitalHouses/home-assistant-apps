@@ -18,7 +18,10 @@ inventory for every automatically discovered Zigbee2MQTT bridge on the connected
 MQTT broker, including nested base topics. No base-topic setting is required.
 All discovered bridges must be healthy; if none are discovered, Zigbee Ready is off.
 Retire a bridge by clearing its retained state/info/devices topics. The Ingress lists
-discovered bridge names and readiness. Optional components can be excluded from System Ready in App options.
+discovered bridge names and readiness. MQTT and Home Assistant are always required
+for System Ready. Only Zigbee2MQTT is optional via require_z2m (default true).
+When false, discovery and health monitoring still run, but Zigbee Ready does not
+block System Ready. Core schedule and profiles remain independent of HA readiness.
 Readiness is not proof that every individual device is available.
 When MQTT or producer is lost, gates must be treated as closed. The public retained
 gate states are accompanied by a non-retained lease at

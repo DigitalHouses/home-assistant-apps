@@ -128,7 +128,7 @@ class TelemetryTests(unittest.TestCase):
     def test_service_denied_consent_does_not_initialize_runtime(self):
         import service
         with patch.object(service.Path, "read_text", return_value=json.dumps({
-                "require_ha": True, "require_z2m": True, "telemetry_enabled": False
+                "require_z2m": True, "telemetry_enabled": False
                 })), patch.object(service, "Engine") as engine, patch.object(service, "serve") as serve:
             service.main()
             engine.assert_not_called()

@@ -135,7 +135,7 @@ class LiveService(unittest.TestCase):
             h=ThreadingHTTPServer(("127.0.0.1",0),H)
             threading.Thread(target=h.serve_forever,daemon=True).start()
             self.addCleanup(h.server_close);self.addCleanup(h.shutdown)
-            svc=Service(Engine(Store(root/"state.json")),"0.1.0",{"require_ha":True,"require_z2m":True,"ha_url":f"http://127.0.0.1:{h.server_port}","ha_token":"test"},release_fn=lambda:"0.2.0")
+            svc=Service(Engine(Store(root/"state.json")),"0.1.0",{"require_z2m":True,"ha_url":f"http://127.0.0.1:{h.server_port}","ha_token":"test"},release_fn=lambda:"0.2.0")
             stop=threading.Event()
             errors=[]
             def run():

@@ -4,7 +4,7 @@ from gates import Gates, Z2MProbe, Z2MRegistry, bridge_topic
 
 class GateTests(unittest.TestCase):
     def test_fresh_evidence_required_and_expiry(self):
-        g = Gates(require_ha=True, require_z2m=True, ttl=15)
+        g = Gates(require_z2m=True, ttl=15)
         self.assertFalse(g.states(0)["system_ready"])
         g.prove("mqtt_ready", 0)
         g.prove("ha_ready", 1)
@@ -14,11 +14,15 @@ class GateTests(unittest.TestCase):
         g.reset()
         self.assertFalse(any(g.states(0).values()))
 
-    def test_optional_components_do_not_block(self):
-        g = Gates(require_ha=False, require_z2m=False, ttl=15)
+    def test_ha_and_mqtt_always_required_zigbee_optional(self):
+        g = Gates(require_z2m=False, ttl=15)
         g.prove("mqtt_ready", 0)
-        self.assertTrue(g.states(1)["system_ready"])
+        self.assertFalse(g.states(1)["system_ready"])
         self.assertFalse(g.states(1)["ha_ready"])
+        g.prove("ha_ready", 1)
+        self.assertTrue(g.states(1)["system_ready"])
+        self.assertFalse(g.states(1)["zigbee_ready"])
+        self.assertEqual(g.required, {"mqtt_ready", "ha_ready"})
         g.invalidate("mqtt_ready", "disconnected")
         self.assertFalse(g.states(1)["system_ready"])
 
@@ -44,7 +48,7 @@ class GateTests(unittest.TestCase):
 
     def test_multiple_arbitrary_namespaces_and_independent_freshness(self):
         registry = Z2MRegistry(20, 10)
-        g = Gates(require_ha=False, require_z2m=True, ttl=20)
+        g = Gates(require_z2m=True, ttl=20)
         a, b = "zigbee-east", "building/floor/zigbee-west"
         def observe(base, field, value, t=0, retained=True):
             registry.observe(base+"/bridge/"+field, json.dumps(value), retained, t)
@@ -83,6 +87,33 @@ class GateTests(unittest.TestCase):
         discover("late/new",24)
         self.assertFalse(g.states(24)["zigbee_ready"])
         self.assertIsNone(bridge_topic("anything/bridge/logging"))
+
+    def test_bridge_timeout_and_optional_aggregation(self):
+        registry = Z2MRegistry(20, 10)
+        required = Gates(require_z2m=True, ttl=20)
+        optional = Gates(require_z2m=False, ttl=20)
+        for g in (required, optional):
+            g.prove("mqtt_ready", 0)
+            g.prove("ha_ready", 0)
+        for base in ("home/zigbee-a", "zigbee-b"):
+            for field, value in (("state", {"state":"online"}), ("info", {"version":"2.0"}), ("devices", [])):
+                registry.observe(base+"/bridge/"+field, json.dumps(value), True, 0)
+        nonces = iter([1,2,3,4])
+        for topic, nonce in registry.requests(0, lambda:next(nonces)):
+            registry.observe(topic.replace("/request/", "/response/"), json.dumps({"transaction":nonce,"status":"ok","data":{"healthy":True}}), False, 1)
+        for g in (required, optional):
+            registry.update_gate(g,1)
+            self.assertTrue(g.states(1)["system_ready"])
+        for topic, nonce in registry.requests(5, lambda:next(nonces)):
+            if topic.startswith("home/"):
+                registry.observe(topic.replace("/request/", "/response/"), json.dumps({"transaction":nonce,"status":"ok","data":{"healthy":True}}), False, 6)
+        for g in (required, optional):
+            registry.update_gate(g,16)
+            self.assertFalse(g.states(16)["zigbee_ready"])
+        self.assertFalse(required.states(16)["system_ready"])
+        self.assertTrue(optional.states(16)["system_ready"])
+        self.assertTrue(registry.diagnostics(16)["home/zigbee-a"]["ready"])
+        self.assertFalse(registry.diagnostics(16)["zigbee-b"]["ready"])
 
 if __name__ == "__main__":
     unittest.main()
