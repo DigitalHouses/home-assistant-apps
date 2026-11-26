@@ -43,4 +43,6 @@ def build_matrix(root, candidates):
 
 if __name__ == "__main__":
     candidates = json.loads(Path(sys.argv[1]).read_text())
-    print("matrix=" + json.dumps(build_matrix(ROOT, candidates), separators=(",", ":")))
+    matrix = build_matrix(ROOT, candidates)
+    print("has_apps=" + ("true" if matrix["include"] else "false"))
+    print("matrix=" + json.dumps(matrix, separators=(",", ":")))
