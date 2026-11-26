@@ -160,8 +160,6 @@ jobs:
             --json-output release-candidates.json
 
           cat release-candidates.json
-          has_apps="$(jq -r --slurpfile registry digitalhouses-stats/digitalhouses_stats/product_registry.json '[.[].product as $id | $registry[0].products[] | select(.id == $id and .type == "app")] | length > 0' release-candidates.json)"
-          echo "has_apps=$has_apps" >> "$GITHUB_OUTPUT"
           echo "candidates=$(jq -c . release-candidates.json)" >> "$GITHUB_OUTPUT"
           python scripts/release_build_matrix.py release-candidates.json >> "$GITHUB_OUTPUT"
 
@@ -192,6 +190,10 @@ jobs:
           product="$PRODUCT"
           version="$VERSION"
           arch="$ARCH"
+          case "$arch:$(uname -m)" in
+            amd64:x86_64|aarch64:aarch64) ;;
+            *) echo "Native runner architecture mismatch" >&2; exit 1 ;;
+          esac
           image="ghcr.io/digitalhouses/$product"
           release_ref="$image:$version"
           echo "$GH_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
@@ -230,9 +232,18 @@ jobs:
             --label "org.opencontainers.image.version=$version" \
             --label "org.opencontainers.image.source=https://github.com/$GITHUB_REPOSITORY" \
             --tag "$arch_ref" \
+            --metadata-file build-metadata.json \
             --push \
             "$product"
-
+          digest="$(jq -er '."containerimage.digest"' build-metadata.json)"
+          [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]
+          mkdir -p image-digests
+          printf '%s\n' "$digest" > "image-digests/$product-$arch"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: image-digest-${{ matrix.product }}-${{ matrix.arch }}
+          path: image-digests/
+          if-no-files-found: error
 
   publish:
     name: Publish verified product releases
@@ -261,6 +272,12 @@ jobs:
       - name: Set up release Buildx
         if: needs.integrate.outputs.has_apps == 'true'
         uses: docker/setup-buildx-action@v3
+      - uses: actions/download-artifact@v4
+        if: needs.integrate.outputs.has_apps == 'true'
+        with:
+          pattern: image-digest-*
+          path: image-digests
+          merge-multiple: true
       - name: Publish multi-architecture manifests
         env:
           GH_TOKEN: ${{ github.token }}
@@ -309,8 +326,10 @@ jobs:
             refs=()
             for arch in "${architectures[@]}"; do
               arch_ref="$image:$version-$arch"
-              digest="$(docker buildx imagetools inspect "$arch_ref" | awk '/^Digest:/ {print $2; exit}')"
+              digest="$(cat "image-digests/$product-$arch")"
               [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]
+              actual="$(docker buildx imagetools inspect "$arch_ref" | awk '/^Digest:/ {print $2; exit}')"
+              test "$actual" = "$digest"
               refs+=("$image@$digest")
             done
             docker buildx imagetools create \
