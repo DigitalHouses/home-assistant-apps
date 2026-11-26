@@ -371,11 +371,15 @@ jobs:
             release_ref="$image:$version"
             refs=()
             digests=()
+            echo "Checking published architecture digests for $release_ref"
             for arch in "${architectures[@]}"; do
               arch_ref="$image:$version-$arch"
               digest="$(cat "image-digests/$product-$arch")"
               [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]
+              # OCI digest is the sha256 of canonical manifest bytes; use
+              # registry's digest rather than re-serializing raw JSON.
               actual="$(docker buildx imagetools inspect "$arch_ref" | awk '/^Digest:/ {print $2; exit}')"
+              echo "Expected $arch digest: $digest; registry: $actual"
               test "$actual" = "$digest"
               refs+=("$image@$digest")
               digests+=("$digest")
