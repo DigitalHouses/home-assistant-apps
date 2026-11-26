@@ -333,8 +333,8 @@ After merge, the workflow:
 1. checks out the exact merge commit on `main`;
 2. determines the release candidates introduced by that merge;
 3. re-validates all candidates before publication;
-4. creates each canonical tag and GitHub Release from that exact merge commit;
-5. verifies that every published tag resolves back to the merge commit.
+4. creates each canonical tag and GitHub Release from the verified release source (the exact merge commit for a new version, or its verified earlier introduction commit for a pending App release);
+5. verifies that every published tag resolves back to that release source.
 
 For products that already have canonical release history, the integration workflow may also reconcile a newer current source version that predates adoption of automatic release. This is limited to products with an existing canonical `<release_identifier>-v*` tag so enabling automation cannot unexpectedly create a first release for an unadopted product.
 
@@ -342,7 +342,7 @@ For Home Assistant Apps, the release mechanism must additionally build and publi
 
 The implementation may order publication steps transactionally to avoid partial releases, but it must not represent a release as complete until every artifact and provenance check required for that product type has passed.
 
-Manual `workflow_dispatch` release is not part of the normal repository workflow. Manual creation of new-format release tags is reserved for explicit recovery work.
+Normal release publication is automatic. An explicit `Validate repository` dispatch on `main` may reconcile pending releases after full validation. Manual creation of new-format release tags is reserved for explicit recovery work.
 
 ### 10.3 CI provenance, revalidation and recovery
 
@@ -380,9 +380,20 @@ unverifiable or mismatched immutable artifact is a hard failure, never a
 reason to replace its tag.
 
 The automatic path uses standard public-repository runners and the repository
-`GITHUB_TOKEN`. No PAT, external GitHub App, paid runner, branch bypass, or
-weakened required check is needed for the normal owner-PR flow. This is not a
-license to auto-merge draft, external, or protected feature PRs.
+`GITHUB_TOKEN` for validation, merge, dispatch, GHCR publication and verification.
+The final GitHub Release creation step alone uses the repository secret
+`DH_RELEASE_TOKEN`, a fine-grained credential restricted to this repository
+with Contents and Workflows read/write permissions. This allows canonical tags
+at validated historical main commits even when workflow files have changed.
+Keep the credential out of logs and PR validation; rotate it before expiry.
+No paid runner, branch bypass or weakened required check is permitted.
+
+For a pending App release, resolve the version-introduction commit on the
+first-parent main history and require an identical product tree. Reuse only
+verified source/version/platform OCI indexes whose digest is confirmed by
+GHCR. The canonical release tag and notes must identify that same source,
+not a later unrelated merge. Explicit main-branch validation may reconcile
+pending releases after an infrastructure failure.
 
 ## 11. Policy enforcement
 

@@ -70,6 +70,16 @@ class AutoMergeWorkflowTests(unittest.TestCase):
         self.assertIn('refs+=("$image@$digest")', text)
         self.assertIn('--cache-to', text)
 
+    def test_release_credential_is_confined_to_final_publication(self):
+        text = self._text()
+        self.assertEqual(text.count("secrets.DH_RELEASE_TOKEN"), 1)
+        publish = text.split("      - name: Publish product releases", 1)[1]
+        publish, verify = publish.split("      - name: Verify published releases", 1)
+        self.assertIn("secrets.DH_RELEASE_TOKEN", publish)
+        self.assertIn('GH_TOKEN:?DH_RELEASE_TOKEN', publish)
+        self.assertIn('--target "$source_sha"', publish)
+        self.assertIn("github.token", verify)
+
 
 if __name__ == "__main__":
     unittest.main()
