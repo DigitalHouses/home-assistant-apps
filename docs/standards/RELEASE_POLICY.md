@@ -301,7 +301,13 @@ A shared commit does not create a shared product version.
 
 ## 10. Supported release mechanism
 
-New releases are published automatically by the repository integration workflow after a pull request has passed the complete repository validation and release-readiness checks.
+New releases are published automatically by the repository integration workflow after a pull request has passed repository-wide contract validation, all affected product checks, and release-readiness checks.
+
+### 10.1 Dependency-aware validation
+
+The CI scope is determined from the exact tested Git revision and its base. Repository contract and release readiness checks remain mandatory for PRs. Existing product check names are preserved; unrelated product jobs may be skipped only when the complete diff is confined to explicitly mapped product directories. Changes to shared files, the product registry, CI tooling, unknown paths, or an unverifiable/empty diff trigger the full suite. Product changes also validate DH Sync and Stats consumer contracts; Electrica and System Globals are validated together. Renames include both old and new paths. No release provenance, exact revision, or artifact checks are relaxed.
+
+### 10.2 Release candidate validation
 
 Release-readiness compares the pull request base and head revisions and identifies products whose canonical version source changed:
 
