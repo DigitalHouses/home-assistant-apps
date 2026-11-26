@@ -12,4 +12,3 @@ dh_system_globals_app_package:
       - sensor.dh_system_globals_app_active_color_temp_kelvin
       - sensor.dh_system_globals_app_active_rgb_color
       - sensor.dh_system_globals_app_active_volume
-      - sensor.dh_system_globals_app_active_color_mode

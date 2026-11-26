@@ -22,7 +22,7 @@ from ingress import serve
 NOW=datetime(2026,11,26,12,tzinfo=timezone.utc)
 
 class ContractTests(unittest.TestCase):
-    def test_discovery_and_atomic_color(self):
+    def test_discovery_and_independent_colors(self):
         cfg=discovery("0.1.0")
         self.assertEqual(cfg["device"]["sw_version"],"0.1.0")
         self.assertEqual(cfg["components"]["night_mode"]["command_topic"],GLOBAL+"/set")
@@ -31,21 +31,29 @@ class ContractTests(unittest.TestCase):
         self.assertEqual(cfg["components"]["night_mode_event"]["event_types"],["night_mode_on","night_mode_off"])
         for k,c in cfg["components"].items():
             self.assertEqual(c["default_entity_id"],c["platform"]+"."+PREFIX+"_"+k)
-        topic,p=translate(FIELD+"night_color/set","rgb:#0000FF")
+        topic,p=translate(FIELD+"night_rgb_color/set","#0000FF")
         self.assertEqual(topic,PRODUCT+"/profiles/set")
-        self.assertEqual(p,{"night":{"color_mode":"rgb","rgb_color":[0,0,255]}})
+        self.assertEqual(p,{"night":{"rgb_color":[0,0,255]}})
         with tempfile.TemporaryDirectory() as t:
             e=Engine(Store(Path(t)/"state.json"))
             e.command(topic,p,NOW)
             out=e.state
             self.assertIsNone(out["profiles"]["night"]["color_temp_kelvin"])
-            q=translate(FIELD+"night_color/set","cct:3000")
+            q=translate(FIELD+"night_color_temp_kelvin/set","3000")
             e.command(*q,NOW)
-            self.assertIsNone(e.state["profiles"]["night"]["rgb_color"])
-            self.assertIn("cct:3000",[m.payload for m in projections(e.state)])
+            self.assertEqual(e.state["profiles"]["night"]["rgb_color"],[0,0,255])
+            self.assertEqual(e.state["profiles"]["night"]["color_temp_kelvin"],3000)
+            self.assertIn("3000",[m.payload for m in projections(e.state)])
+            self.assertIn("#0000FF",[m.payload for m in projections(e.state)])
+            e.command(GLOBAL+"/set","on",NOW)
+            active={m.topic:m.payload for m in projections(e.state)}
+            self.assertEqual(active[state_topic("active_color_temp_kelvin")],"3000")
+            self.assertEqual(active[state_topic("active_rgb_color")],"[0,0,255]")
+            e.command(*translate(FIELD+"night_rgb_color/set",""),NOW)
+            self.assertEqual(e.state["profiles"]["night"]["color_temp_kelvin"],3000)
             before=e.state
             broken=e.state
-            broken["profiles"]["night"]["rgb_color"]=[1,2,3]
+            broken["profiles"]["night"]["rgb_color"]=[1,2,300]
             value={k:broken[k] for k in ("night_mode","config","profiles")}
             with self.assertRaises(ContractError):
                 e.import_settings(value,NOW)

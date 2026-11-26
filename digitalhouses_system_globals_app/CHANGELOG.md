@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.1.4
+- Store independent CCT and RGB values simultaneously in both day/night profiles. Remove the global color-mode selector, migrate existing state and imports, and expose independent Ingress and MQTT Discovery controls. Update MQTT contract and dashboard; consumers choose a supported color mode per device.
+
 ## 0.1.3
 - Send one immediate best-effort heartbeat at every activated process startup, including restart after HTTP failure and version upgrade. Preserve installation identity, daily jitter and hourly in-process failure backoff. Log each startup attempt.
 

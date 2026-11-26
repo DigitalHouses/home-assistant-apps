@@ -14,7 +14,7 @@ GLOBAL = "DigitalHouses/Global/night_mode"
 PRODUCT = "DigitalHouses/digitalhouses_system_globals_app"
 UTC = timezone.utc
 PROFILE_FIELDS = (
-    "brightness", "color_mode", "color_temp_kelvin", "rgb_color", "volume",
+    "brightness", "color_temp_kelvin", "rgb_color", "volume",
     "display_brightness", "indicator_brightness", "transition_seconds",
     "voice_notifications_enabled", "noncritical_sound_notifications_enabled",
 )
@@ -49,24 +49,26 @@ def validate_profile(p):
         require(p[k] is None or type(p[k]) is bool, "Invalid " + k)
     t = p["transition_seconds"]
     require(t is None or (type(t) in (int, float) and 0 <= t <= float("1.7976931348623157e308") and math.isfinite(t)), "Invalid transition_seconds")
-    m, k, rgb = p["color_mode"], p["color_temp_kelvin"], p["rgb_color"]
-    require(m in (None, "cct", "rgb"), "Invalid color_mode")
+    k, rgb = p["color_temp_kelvin"], p["rgb_color"]
     require(k is None or integer(k, 2000, 6000), "Invalid color_temp_kelvin")
     require(rgb is None or (isinstance(rgb, list) and len(rgb) == 3 and all(integer(v, 0, 255) for v in rgb)), "Invalid rgb_color")
-    require(
-        (m is None and k is None and rgb is None)
-        or (m == "cct" and k is not None and rgb is None)
-        or (m == "rgb" and k is None and rgb is not None),
-        "Color mode requires exactly its corresponding color value",
-    )
+
+
+def migrate_profiles(profiles):
+    """Preserve all existing values when removing the obsolete profile selector."""
+    mapping(profiles, ("day", "night"), exact=True)
+    result = deepcopy(profiles)
+    for p in result.values():
+        require(isinstance(p, dict), "Expected profile object")
+        if "color_mode" in p:
+            require(p.pop("color_mode") in (None, "cct", "rgb"), "Invalid legacy color_mode")
+        validate_profile(p)
+    return result
 
 
 def update_profile(old, patch):
     mapping(patch, PROFILE_FIELDS)
-    require(not (patch.get("color_temp_kelvin") is not None and patch.get("rgb_color") is not None), "Conflicting colors")
     new = deepcopy(old)
-    if "color_mode" in patch and patch["color_mode"] != old["color_mode"]:
-        new["color_temp_kelvin"] = new["rgb_color"] = None
     new.update(deepcopy(patch))
     validate_profile(new)
     return new
@@ -108,7 +110,7 @@ def decode_instant(value):
 
 def empty_state():
     return {
-        "schema_version": 1, "night_mode": None,
+        "schema_version": 2, "night_mode": None,
         "config": dict.fromkeys(CONFIG_FIELDS),
         "profiles": {k: dict.fromkeys(PROFILE_FIELDS) for k in ("day", "night")},
         "schedule_cursor": None,
@@ -117,7 +119,7 @@ def empty_state():
 
 def validate_state(s):
     mapping(s, empty_state(), exact=True)
-    require(type(s["schema_version"]) is int and s["schema_version"] == 1, "Unsupported state schema")
+    require(type(s["schema_version"]) is int and s["schema_version"] == 2, "Unsupported state schema")
     require(s["night_mode"] in (None, "on", "off"), "Invalid night_mode")
     validate_config(s["config"])
     mapping(s["profiles"], ("day", "night"), exact=True)
@@ -139,6 +141,12 @@ class Store:
             return empty_state()
         try:
             state = json.loads(raw)
+            if isinstance(state, dict) and type(state.get("schema_version")) is int and state["schema_version"] == 1:
+                mapping(state, empty_state(), exact=True)
+                state["profiles"] = migrate_profiles(state["profiles"])
+                state["schema_version"] = 2
+                validate_state(state)
+                self.save(state)
             validate_state(state)
         except (ValueError, TypeError) as e:
             raise ContractError("Invalid persisted state") from e
@@ -274,6 +282,7 @@ class Engine:
         now = instant(now)
         new = self.state
         new.update(deepcopy(value))
+        new["profiles"] = migrate_profiles(new["profiles"])
         mode = new["night_mode"]
         require(mode in (None, "on", "off"), "Invalid imported mode")
         self._advance_cursor(new, now)

@@ -18,7 +18,7 @@ import uuid
 from core import Engine, Store, Publication, GLOBAL, PRODUCT, ContractError
 from runtime import Session, TransportError, COMMANDS
 from discovery import (ID, PREFIX, AVAIL, LEASE, PROBE, LOOP, DISCOVERY, HA_STATUS, GATE_EVENT,
-                       CTRL, FIELD, OPS, GATES, state_topic, discovery, sync, projections, translate, scalar)
+                       CTRL, FIELD, OPS, GATES, state_topic, discovery, retired_discovery, sync, projections, translate, scalar)
 from gates import Gates, Z2MRegistry, ha_probe
 from lifecycle import Lifecycle
 from ingress import serve
@@ -202,7 +202,9 @@ class Service:
         LOG.info("MQTT connected; readiness requires new session probes")
 
     def publish_snapshot(self):
-        self.send([Publication(DISCOVERY,discovery(self.version)),sync(self.version)])
+        self.send([Publication(DISCOVERY,retired_discovery(self.version)),
+                   Publication(DISCOVERY,discovery(self.version)),sync(self.version)])
+        self.send([Publication(state_topic(k),"") for k in ("day_color","night_color","active_color_mode")])
         self.send(self.engine.snapshot()+projections(self.engine.state))
         self.send([self.entity("version",self.version),self.entity("started_at",self.started_at),
                    self.entity("latest_version",self.latest),self.entity("update_available",None if self.latest is None else version_tuple(self.latest)>version_tuple(self.version)),

@@ -1,4 +1,4 @@
-# Development and release readiness — 0.1.0
+# Development and release readiness — 0.1.4
 
 The implementation is an experimental candidate. Do not connect to a production
 broker while the legacy Night Mode publisher is active. First start is manual to
@@ -29,8 +29,11 @@ On reconnect a fresh client is used; missed transient events are not replayed.
 
 ## Decisions and limitations
 
-- The HA Dashboard's atomic color command is a single text field (cct:4000 or
-  rgb:#FF5000). Ingress has separate conditional CCT/RGB controls and a color picker.
+- Day/night profiles store independent CCT and RGB values. HA exposes two text
+  controls (kelvin and #RRGGBB), Ingress exposes temperature and RGB picker.
+  Consumers choose the supported mode per device, not per global profile.
+  Storage schema 1 migrates to schema 2 automatically; restore a pre-upgrade
+  backup before downgrading to 0.1.3.
 - A live non-retained readiness lease is published every 5 s with a 20 s expiry.
   Direct consumers must use this and producer availability, not stale retained on.
   Positive HA evidence requires an actual MQTT probe value observed through the

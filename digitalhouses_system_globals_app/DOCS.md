@@ -7,9 +7,11 @@ Never run two publishers concurrently. The App starts manually on a new installa
 to permit this migration. It is not a replacement for DH Presence.
 
 The Ingress administrator sets the mode, local schedule and independent day/night
-profiles. Unconfigured values are unset. Select CCT or RGB and set exactly one color.
-The MQTT HA owner controls use the same store; the atomic color text is
-cct:4000 or rgb:#FF5000 (empty clears the color). HA Core restart does not stop
+profiles. Unconfigured values are unset. Set CCT and RGB independently in each profile. Both can coexist.
+The MQTT HA owner controls use the same store; separate text entities accept
+CCT in kelvin and RGB as #RRGGBB (empty clears only that value). Consumers
+select the applicable device color mode. Existing profile values are migrated
+without loss from storage schema 1 to 2; old exports can also be imported. HA Core restart does not stop
 the App schedule. A complete HAOS restart does.
 
 Readiness uses an MQTT roundtrip, an actual HA MQTT sensor update checked through
