@@ -37,7 +37,7 @@ def source_for(product, version, head):
         raise ValueError("Product changed without version bump; refusing mixed release source")
     return source
 
-def validate_manifest(doc, source, version, platform, digests=None):
+def validate_manifest(doc, source, version, platform, digests=None, child_digests=None):
     annotations = doc.get("annotations", {})
     if annotations.get("org.opencontainers.image.revision") != source or annotations.get("org.opencontainers.image.version") != version:
         raise ValueError("Immutable architecture tag exists without matching provenance")
@@ -53,7 +53,13 @@ def validate_manifest(doc, source, version, platform, digests=None):
         expected_platforms = [("linux", "amd64"), ("linux", "arm64")]
         if len(actual) != len(expected) or len(set(platforms)) != len(expected) or platforms != expected_platforms:
             raise ValueError("Invalid final index platforms")
-        if [d.get("digest") for d in actual] != expected:
+        # Buildx flattens architecture indexes into image manifests when composing
+        # a multi-platform index. Index digests in provenance therefore differ
+        # from the child image manifest digests in the final index.
+        children = child_digests.split(",") if child_digests else []
+        if len(children) != len(expected) or any(not re.fullmatch(r"sha256:[0-9a-f]{64}", d) for d in children):
+            raise ValueError("Invalid expected architecture manifest digests")
+        if [d.get("digest") for d in actual] != children:
             raise ValueError("Final index child digest mismatch")
     elif platforms != [tuple(platform.split("/"))]:
         raise ValueError("Architecture index platform mismatch")
@@ -67,7 +73,9 @@ def main():
     expected, platform, *digests = extra
     if expected != source:
         raise ValueError("Source mismatch")
-    validate_manifest(json.load(sys.stdin), source, version, platform, digests[0] if digests else None)
+    validate_manifest(json.load(sys.stdin), source, version, platform,
+                      digests[0] if digests else None,
+                      digests[1] if len(digests) > 1 else None)
 
 if __name__ == "__main__":
     main()

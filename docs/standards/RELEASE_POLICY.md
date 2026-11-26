@@ -375,8 +375,10 @@ Partial Docker builds can be retried without overwriting already published
 architecture tags: an existing tag is reusable only with matching immutable
 source/version OCI annotations. The final manifest is created only after all
 architecture digests have been checked; existing final manifests are reusable
-only when their source, version, ordered digest annotation, actual OCI child
-manifest descriptor digests, and platforms all match. Any
+only when their source, version, ordered source architecture-index digest
+annotation, flattened native image-manifest child digests resolved from those
+architecture indexes, and platforms all match. OCI index digests and their
+child image-manifest digests are distinct and must not be compared directly. Any
 unverifiable or mismatched immutable artifact is a hard failure, never a
 reason to replace its tag.
 
