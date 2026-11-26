@@ -107,10 +107,10 @@ class LiveService(unittest.TestCase):
                 received.append((msg.topic,value))
                 if msg.topic==PROBE and observed["accept_nonce"]:
                     observed["nonce"]=value
-                if msg.topic=="zigbee2mqtt/bridge/request/health_check":
+                if msg.topic.endswith("/bridge/request/health_check"):
                     q=json.loads(value)
                     r={"transaction":q["transaction"],"status":"ok","data":{"healthy":observed["healthy"]}}
-                    client.publish("zigbee2mqtt/bridge/response/health_check",json.dumps(r),qos=1)
+                    client.publish(msg.topic.replace("/request/","/response/"),json.dumps(r),qos=1)
             actor.on_message=onmsg
             actor.connect("127.0.0.1",port);actor.subscribe("#",qos=1);actor.loop_start()
             self.addCleanup(actor.loop_stop);self.addCleanup(actor.disconnect)
@@ -121,6 +121,9 @@ class LiveService(unittest.TestCase):
             pub("zigbee2mqtt/bridge/state",{"state":"online"},True)
             pub("zigbee2mqtt/bridge/info",{"version":"2.8.0"},True)
             pub("zigbee2mqtt/bridge/devices",[],True)
+            pub("floor/second/zigbee/bridge/state",{"state":"online"},True)
+            pub("floor/second/zigbee/bridge/info",{"version":"2.8.0"},True)
+            pub("floor/second/zigbee/bridge/devices",[],True)
             pub("homeassistant/status","online",True)
             class H(BaseHTTPRequestHandler):
                 def do_GET(self):
@@ -132,7 +135,7 @@ class LiveService(unittest.TestCase):
             h=ThreadingHTTPServer(("127.0.0.1",0),H)
             threading.Thread(target=h.serve_forever,daemon=True).start()
             self.addCleanup(h.server_close);self.addCleanup(h.shutdown)
-            svc=Service(Engine(Store(root/"state.json")),"0.1.0",{"require_ha":True,"require_z2m":True,"z2m_base":"zigbee2mqtt","ha_url":f"http://127.0.0.1:{h.server_port}","ha_token":"test"},release_fn=lambda:"0.2.0")
+            svc=Service(Engine(Store(root/"state.json")),"0.1.0",{"require_ha":True,"require_z2m":True,"ha_url":f"http://127.0.0.1:{h.server_port}","ha_token":"test"},release_fn=lambda:"0.2.0")
             stop=threading.Event()
             errors=[]
             def run():
@@ -154,19 +157,20 @@ class LiveService(unittest.TestCase):
             self.assertFalse(svc.view()["gates"]["ha_ready"])
             observed["healthy"]=True;observed["accept_nonce"]=True
             self.wait(lambda:svc.view()["gates"]["system_ready"])
+            self.assertEqual(set(svc.view()["zigbee_bridges"]),{"zigbee2mqtt","floor/second/zigbee"})
             self.assertTrue(any(t==SYNC for t,v in received))
             self.assertTrue(any(t==DISCOVERY for t,v in received))
             cmd(GLOBAL+"/set","on")
             pub(GLOBAL+"/set","off")
             self.wait(lambda:svc.view()["state"]["night_mode"]=="off")
-            pub("zigbee2mqtt/bridge/state",{"state":"offline"},True)
+            pub("floor/second/zigbee/bridge/state",{"state":"offline"},True)
             self.wait(lambda:not svc.view()["gates"]["zigbee_ready"])
             self.assertFalse(svc.view()["gates"]["system_ready"])
             cmd(GLOBAL+"/set","on")
             self.assertEqual(svc.view()["state"]["night_mode"],"on")
-            pub("zigbee2mqtt/bridge/state",{"state":"online"},True)
-            pub("zigbee2mqtt/bridge/info",{"version":"2.8.0"},True)
-            pub("zigbee2mqtt/bridge/devices",[],True)
+            pub("floor/second/zigbee/bridge/state",{"state":"online"},True)
+            pub("floor/second/zigbee/bridge/info",{"version":"2.8.0"},True)
+            pub("floor/second/zigbee/bridge/devices",[],True)
             self.wait(lambda:svc.view()["gates"]["system_ready"])
             observed["ha"]=False
             pub("homeassistant/status","offline",True)

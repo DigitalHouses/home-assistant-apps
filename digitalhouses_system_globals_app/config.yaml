@@ -1,5 +1,5 @@
 name: DigitalHouses System Globals App
-version: 0.1.0
+version: 0.1.1
 slug: digitalhouses_system_globals_app
 description: Global day/night modes, shared profiles, and dynamic system readiness.
 url: https://github.com/DigitalHouses/home-assistant-apps/tree/main/digitalhouses_system_globals_app
@@ -26,9 +26,7 @@ options:
   telemetry_enabled: false
   require_ha: true
   require_z2m: true
-  z2m_base: zigbee2mqtt
 schema:
   telemetry_enabled: bool
   require_ha: bool
   require_z2m: bool
-  z2m_base: str

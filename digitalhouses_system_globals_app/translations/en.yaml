@@ -7,7 +7,4 @@ configuration:
     description: Include verified HA MQTT readiness in System Ready.
   require_z2m:
     name: Require Zigbee2MQTT
-    description: Include verified Zigbee2MQTT readiness in System Ready.
-  z2m_base:
-    name: Zigbee2MQTT base topic
-    description: Exact MQTT topic prefix of the local Zigbee2MQTT network.
+    description: Require fresh health confirmation from every automatically discovered Zigbee2MQTT bridge.
