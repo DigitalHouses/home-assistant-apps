@@ -256,13 +256,23 @@ jobs:
             # Recover only a manifest carrying exact source and version
             # provenance. Never replace or silently adopt a foreign tag.
             existing="$(docker buildx imagetools inspect --raw "$arch_ref")"
-            jq -e --arg sha "$MERGE_SHA" --arg version "$version" \
+            # When a production release was first built from an earlier main
+            # commit and resumed after a subsequent CI-only merge, its source
+            # revision remains that original ancestor. Never claim a rebuild
+            # against the latest unrelated merge.
+            existing_sha="$(jq -er '.annotations["org.opencontainers.image.revision"]' <<<"$existing")"
+            existing_version="$(jq -er '.annotations["org.opencontainers.image.version"]' <<<"$existing")"
+            test "$existing_version" = "$version"
+            [[ "$existing_sha" =~ ^[0-9a-f]{40}$ ]]
+            git merge-base --is-ancestor "$existing_sha" "$MERGE_SHA"
+            test "$(git show "$existing_sha:$product/config.yaml" | awk '$1 == "version:" {print $2; exit}')" = "$version"
+            jq -e --arg sha "$existing_sha" --arg version "$version" \
               '.annotations["org.opencontainers.image.revision"] == $sha and .annotations["org.opencontainers.image.version"] == $version' \
               <<<"$existing" >/dev/null || {
                 echo "Immutable architecture tag exists without matching provenance: $arch_ref" >&2
                 exit 1
               }
-            digest="$(docker buildx imagetools inspect "$arch_ref" | awk '/^Digest:/ {print $2; exit}')"
+            digest="$(docker buildx imagetools inspect --raw "$arch_ref" | sha256sum | awk '{print "sha256:" $1}')"
             echo "Reusing verified immutable architecture artifact $arch_ref@$digest"
           else
             # Cache is mutable and deliberately separate from release tags.
