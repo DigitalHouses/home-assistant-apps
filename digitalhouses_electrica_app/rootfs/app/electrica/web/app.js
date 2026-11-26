@@ -58,6 +58,47 @@ function selectOptions(choices,value,label){
   for(const [v,name] of choices){const option=el("option",name);option.value=v;option.disabled=v==="";select.append(option)}
   select.value=value;return select;
 }
+function formatDuration(seconds){
+  return Math.floor(seconds/60)+" мин. "+seconds%60+" сек.";
+}
+function splitDuration(value){
+  return value==null?["",""]:[String(Math.floor(value/60)),String(value%60)];
+}
+function joinDuration(minutes,seconds,minimum){
+  if(minutes===""&&seconds==="")return undefined;
+  if(!/^\d*$/.test(minutes)||!/^\d*$/.test(seconds))throw Error("Введите целое число минут и секунд");
+  const m=Number(minutes),s=Number(seconds),total=m*60+s;
+  if(!Number.isInteger(total)||m>1440||s>59||total<minimum||total>86400)throw Error("Допустимо от "+formatDuration(minimum)+" до 1440 мин. 0 сек.");
+  return total;
+}
+function durationControl(title,value,minimum,onChange){
+  const box=el("div",undefined,"duration-control"),caption=el("span",title);
+  const [m,s]=splitDuration(value);
+  const minutes=el("input"),seconds=el("input");
+  for(const [n,label,max,v] of [[minutes,"мин.",1440,m],[seconds,"сек.",59,s]]){
+    n.type="number";n.min=0;n.max=max;n.step=1;n.placeholder="—";n.value=v;
+    n.setAttribute("aria-label",title+" — "+label);
+  }
+  const error=el("span","","duration-error problem");
+  function changed(){
+    update();
+    try{
+      if(minutes.validity.badInput||seconds.validity.badInput)throw Error("Введите целое число минут и секунд");
+      const total=joinDuration(minutes.value,seconds.value,minimum);
+      error.textContent="";minutes.setCustomValidity("");seconds.setCustomValidity("");
+      onChange(total);
+    }catch(e){
+      error.textContent=e.message;minutes.setCustomValidity(e.message);seconds.setCustomValidity(e.message);
+    }
+  }
+  minutes.oninput=seconds.oninput=changed;
+  const ml=el("label"),sl=el("label");
+  ml.append(minutes,document.createTextNode("мин."));sl.append(seconds,document.createTextNode("сек."));
+  const clear=button("×",()=>{minutes.value=seconds.value="";changed()},"duration-clear");
+  clear.type="button";clear.title="Отключить таймер";clear.setAttribute("aria-label","Отключить таймер");
+  box.append(caption,ml,sl,clear,error);
+  return box;
+}
 function modeControls(){
   const panel=el("div",undefined,"key-modes");
   for(const key of Object.keys(draft.key_modes||{})){
@@ -79,10 +120,10 @@ function modeControls(){
       const label=el("label");label.append(document.createTextNode("Удерживать"),hold);row.append(label);
     }
     if(policy==="control_relay"){
-      const label=el("label","Авто-OFF после включения, сек.");
-      const n=el("input");n.type="number";n.min=1;n.max=86400;n.step=1;n.placeholder="Не задано";n.value=draft.relay_timers?.[key]??"";
-      n.onchange=()=>{draft.relay_timers??={};if(n.value==="")delete draft.relay_timers[key];else draft.relay_timers[key]=Number(n.value);update()};
-      label.append(n);row.append(label);
+      row.append(durationControl("Авто-OFF после включения",draft.relay_timers?.[key],1,total=>{
+        draft.relay_timers??={};
+        if(total===undefined)delete draft.relay_timers[key];else draft.relay_timers[key]=total;
+      }));
     }
     panel.append(row);
   }
@@ -97,7 +138,7 @@ if(d.ha_name&&d.ha_name!==d.name)name.append(el("span"," - "+d.ha_name,"ha-devic
 if(d.power_meter)info.append(el("span",Number.isFinite(d.power_w)?d.power_w+" W":"— W","muted"));
 for(const [key,mode] of Object.entries(d.key_modes||{})){
   const seconds=d.relay_timers?.[key],remaining=d.relay_remaining?.[key];
-  info.append(el("span",(keyNames[key]||key)+": "+modeNames[mode]+(seconds?" · Авто-OFF "+seconds+" сек.":"")+(remaining!=null?" · Осталось "+remaining+" сек.":""),"key-summary muted"));
+  info.append(el("span",(keyNames[key]||key)+": "+modeNames[mode]+(seconds?" · Авто-OFF "+formatDuration(seconds):"")+(remaining!=null?" · Осталось "+formatDuration(remaining):""),"key-summary muted"));
 }const gear=el("span","⚙","settings");gear.setAttribute("aria-hidden","true");h.append(info,gear);
 a.classList.add("device-card");a.tabIndex=0;a.setAttribute("role","button");
 a.setAttribute("aria-label","Настроить "+deviceTitle(d));a.dataset.deviceId=d.id;
@@ -106,7 +147,7 @@ a.onkeydown=e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();open(d)}};a.
   x.append(targetNode(t.entity_id));
   if(t.off_delay_seconds!=null){
     const due=d.key_deadlines?.[action]?.[t.entity_id];
-    x.append(el("span","Авто-OFF "+t.off_delay_seconds+" сек."+(due!=null?" · Осталось "+Math.max(0,Math.ceil(due-Date.now()/1000))+" сек.":""),"muted"));
+    x.append(el("span","Авто-OFF "+formatDuration(t.off_delay_seconds)+(due!=null?" · Осталось "+formatDuration(Math.max(0,Math.ceil(due-Date.now()/1000))):""),"muted"));
   }
 }if(d.disabled_actions?.includes(action))x.append(el("span","Ⅱ","muted"));if(!actionAllowed(d,action))x.append(el("span","⚠","problem"));b.append(x)}if(!b.children.length)b.append(el("span","Нет привязок","muted"));a.append(b);main.append(a);if(focused===d.id)a.focus({preventScroll:true})}applyLiveState()}
 function open(d){editing=d;draft=structuredClone(d);draft.disabled_actions??=[];draft.revision=model.revision;dirty=false;renderEdit()}
@@ -304,10 +345,11 @@ if(a.entity_id.startsWith("cover.")){if(op.value==="position")a.data.position=50
 else if(/^(climate|media_player)\./.test(a.entity_id))a.data=DHElectricaEntityPicker.initialData(op.value,t);
 if(op.value==="off"){delete a.off_delay_seconds;for(const k of Object.keys(a.data))if(k!=="transition")delete a.data[k];}update();renderEdit(action)};const test=lightTestControl(t,a.entity_id);if(test)row.append(test);row.append(op,button("Удалить",()=>{draft.bindings[action]=draft.bindings[action].filter(x=>x.entity_id!==a.entity_id);if(!draft.bindings[action].length){delete draft.bindings[action];draft.disabled_actions=draft.disabled_actions.filter(x=>x!==action)}update();renderEdit(action)}));if(!t){row.append(el("span","⚠ Сущность отсутствует","problem"));container.append(row);return}if(a.entity_id.startsWith("cover."))coverControls(action,a,t,row);if(a.entity_id.startsWith("climate."))climateControls(a,t,row);if(a.entity_id.startsWith("media_player."))mediaControls(a,t,row,action);if(a.entity_id.startsWith("light."))lightProfileControls(a,t,row,action);
 if(editing?.sensor||(/^(light|switch)\./.test(a.entity_id)&&["on","toggle"].includes(a.operation))){
-  const p=el("div",undefined,"params"),l=el("label",editing?.sensor?"Авто-OFF после отсутствия, сек.":"Авто-OFF после включения, сек.");
-  const n=el("input");n.type="number";n.min=editing?.sensor?0:1;n.max=86400;n.step=1;n.placeholder="Не задано";n.value=a.off_delay_seconds??"";
-  n.onchange=()=>{if(n.value==="")delete a.off_delay_seconds;else a.off_delay_seconds=Number(n.value);update()};
-  l.append(n);p.append(l);row.append(p);
+  const p=el("div",undefined,"params");
+  p.append(durationControl(editing?.sensor?"Авто-OFF после отсутствия":"Авто-OFF после включения",a.off_delay_seconds,editing?.sensor?0:1,total=>{
+    if(total===undefined)delete a.off_delay_seconds;else a.off_delay_seconds=total;
+  }));
+  row.append(p);
 }
 container.append(row)}
 function actionGroup(action){const p=action.match(/_(left|right|center|plus|minus|both|[0-9]+)$/)||action.match(/^(button_[0-9]+)_/);return p?p[1]:"Нажатия"}
@@ -337,6 +379,8 @@ const allowed=actionAllowed(draft,action),detail=el("details",undefined,"action"
   }));
 }main.append(detail)}}
 async function save(){try{
+  const invalid=main.querySelector(".duration-control input:invalid");
+  if(invalid){invalid.reportValidity();return}
   if(editing?.sensor){
     const config={entity_id:draft.id,enabled:draft.enabled,assignments:draft.bindings.presence||[]};
     if(draft.lux_entity_id){config.lux_entity_id=draft.lux_entity_id;config.lux_threshold=draft.lux_threshold??null}
@@ -368,9 +412,9 @@ function renderSensors(){
     const targets=el("div",undefined,"bindings");
     for(const a of sensor.config.assignments||[]){
       const line=el("div",undefined,"binding");line.append(targetNode(a.entity_id));
-      if(a.off_delay_seconds!=null)line.append(el("span","Авто-OFF: "+a.off_delay_seconds+" сек.","muted"));
+      if(a.off_delay_seconds!=null)line.append(el("span","Авто-OFF: "+formatDuration(a.off_delay_seconds),"muted"));
       const due=model.sensor_deadlines?.[a.entity_id];
-      if(due!=null)line.append(el("span","До OFF: "+Math.max(0,Math.ceil(due-Date.now()/1000))+" сек.","muted"));
+      if(due!=null)line.append(el("span","До OFF: "+formatDuration(Math.max(0,Math.ceil(due-Date.now()/1000))),"muted"));
       const t=model.targets.find(x=>x.entity_id===a.entity_id);
       if((t?.group||t?.integration==="group")&&!t.sensor_group_supported)line.append(el("span","⚠ Состав группы не подтверждён","problem"));
       targets.append(line);

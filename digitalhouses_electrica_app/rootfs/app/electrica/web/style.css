@@ -143,3 +143,11 @@ label{display:inline-flex;align-items:center;gap:7px;flex-wrap:wrap;color:#ccd8e
 
 .target-label{min-width:0;overflow-wrap:anywhere}
 .binding .target+.target{margin-left:6px}
+
+/* One duration editor for physical keys, logical assignments and sensors. */
+.duration-control{display:flex;align-items:center;flex-wrap:wrap;gap:6px 10px;color:#ccd8e4}
+.duration-control input[type=number],.params .duration-control input[type=number]{width:72px}
+.duration-control .duration-clear{padding:4px 9px}
+.duration-error:empty{display:none}
+.duration-error{flex-basis:100%;font-size:12px}
+.key-mode{flex-wrap:wrap}

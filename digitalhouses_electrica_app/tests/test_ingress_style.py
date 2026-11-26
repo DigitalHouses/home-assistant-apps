@@ -104,3 +104,48 @@ for(const domain of ['light','switch','cover','climate','media_player','future_d
         self.assertIn('if(profileSelect(a,t,p,action))',js)
         self.assertIn('if(!(t.brightness||t.cct||t.rgb)&&!Object.keys(a.data).length)return',js)
         self.assertIn('if(a.operation==="volume"&&profileSelect(a,t,p,action,true))',js)
+
+    def test_minutes_seconds_duration_controls(self):
+        import shutil
+        import subprocess
+        js=(WEB/"app.js").read_text()
+        self.assertIn('durationControl("Авто-OFF после включения",draft.relay_timers?.[key],1',js)
+        self.assertIn('durationControl(editing?.sensor?"Авто-OFF после отсутствия":"Авто-OFF после включения",a.off_delay_seconds,editing?.sensor?0:1',js)
+        self.assertIn('formatDuration(t.off_delay_seconds)',js)
+        self.assertIn('formatDuration(a.off_delay_seconds)',js)
+        self.assertIn('formatDuration(remaining)',js)
+        self.assertIn('main.querySelector(".duration-control input:invalid")',js)
+        if not shutil.which("node"):
+            self.skipTest("Node unavailable")
+        source=js[js.index("function formatDuration("):js.index("function modeControls(")]
+        subprocess.run(["node","-e",source+"""
+const assert=require('node:assert/strict');
+for(const n of [0,1,59,60,61,90,1800,1830,86399,86400]){
+  const [m,s]=splitDuration(n);
+  assert.equal(joinDuration(m,s,0),n);
+}
+assert.deepEqual(splitDuration(undefined),['','']);
+assert.equal(joinDuration('','',1),undefined);
+assert.equal(joinDuration('30','',1),1800);
+assert.equal(joinDuration('','45',1),45);
+assert.equal(joinDuration('0','0',0),0);
+assert.equal(formatDuration(1830),'30 мин. 30 сек.');
+for(const args of [['0','0',1],['1','60',0],['1440','1',0],['-1','0',0],['1.5','0',0],['1e2','0',0],['','-1',0]]){
+  assert.throws(()=>joinDuration(...args));
+}
+function el(tag,text,cls){
+  return {tag,textContent:text,className:cls,value:'',children:[],validity:{badInput:false},
+    append(...c){this.children.push(...c)},setAttribute(){},setCustomValidity(v){this.error=v}};
+}
+function button(text,fn,cls){const b=el('button',text,cls);b.onclick=fn;return b}
+function update(){}
+const document={createTextNode:v=>v};
+let result=1830;
+const control=durationControl('Авто-OFF',result,1,v=>result=v);
+const m=control.children[1].children[0],s=control.children[2].children[0],clear=control.children[3];
+assert.equal(m.value,'30');assert.equal(s.value,'30');
+m.value='2';m.oninput();assert.equal(result,150);
+s.value='60';s.oninput();assert.equal(result,150);assert.ok(s.error);
+s.value='15';s.oninput();assert.equal(result,135);assert.equal(s.error,'');
+clear.onclick();assert.equal(result,undefined);assert.equal(m.value,'');assert.equal(s.value,'');
+"""],check=True)
