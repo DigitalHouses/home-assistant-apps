@@ -44,10 +44,17 @@ def validate_manifest(doc, source, version, platform, digests=None):
     descriptors = doc.get("manifests", [])
     platforms = [(d.get("platform", {}).get("os"), d.get("platform", {}).get("architecture")) for d in descriptors if d.get("platform", {}).get("os") != "unknown"]
     if platform == "final":
+        expected = digests.split(",") if digests else []
+        if len(expected) != 2 or any(not re.fullmatch(r"sha256:[0-9a-f]{64}", digest) for digest in expected):
+            raise ValueError("Invalid final source digests")
         if annotations.get("org.digitalhouses.source-digests") != digests:
             raise ValueError("Final index source digest mismatch")
-        if len(platforms) != len(digests.split(",")) or len(platforms) != len(set(platforms)) or any(p not in [("linux", "amd64"), ("linux", "arm64")] for p in platforms):
+        actual = [d for d in descriptors if d.get("platform", {}).get("os") != "unknown"]
+        expected_platforms = [("linux", "amd64"), ("linux", "arm64")]
+        if len(actual) != len(expected) or len(set(platforms)) != len(expected) or platforms != expected_platforms:
             raise ValueError("Invalid final index platforms")
+        if [d.get("digest") for d in actual] != expected:
+            raise ValueError("Final index child digest mismatch")
     elif platforms != [tuple(platform.split("/"))]:
         raise ValueError("Architecture index platform mismatch")
 
