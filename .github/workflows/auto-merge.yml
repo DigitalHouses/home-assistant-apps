@@ -44,19 +44,25 @@ jobs:
           head_sha="$(jq -r '.head.sha' <<<"$pr_json")"
 
           test "$author" = "DigitalHouses"
-          test "$state" = "open"
-          test "$draft" = "false"
           test "$base_ref" = "main"
           test "$head_repo" = "$GITHUB_REPOSITORY"
-          test "$head_sha" = "$VALIDATED_HEAD_SHA"
-          test "$base_sha" = "$VALIDATED_BASE_SHA"
 
-          current_base_sha="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq .object.sha)"
-          if [ "$current_base_sha" != "$VALIDATED_BASE_SHA" ]; then
-            echo "main advanced after this PR revision was validated; updating the PR branch and waiting for fresh validation"
+          if [ "$state" != "open" ] || [ "$draft" != "false" ] || [ "$head_sha" != "$VALIDATED_HEAD_SHA" ]; then
+            echo "PR closed, draft, or superseded; ignoring stale validation result."
+            echo "merged=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          refresh_pr_branch() {
+            echo "main advanced after validation; requesting a fresh exact-base validation."
             gh api --method PUT "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/update-branch" \
               -f "expected_head_sha=${head_sha}"
             echo "merged=false" >> "$GITHUB_OUTPUT"
+          }
+
+          current_base_sha="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq .object.sha)"
+          if [ "$current_base_sha" != "$VALIDATED_BASE_SHA" ] || [ "$base_sha" != "$VALIDATED_BASE_SHA" ]; then
+            refresh_pr_branch
             exit 0
           fi
 
@@ -71,9 +77,9 @@ jobs:
               --match-head-commit "$VALIDATED_HEAD_SHA" 2>&1)"; then
               printf '%s\n' "$merge_output"
               break
+            else
+              merge_rc=$?
             fi
-
-            merge_rc=$?
             printf '%s\n' "$merge_output" >&2
 
             if ! grep -Fq "base branch policy prohibits the merge" <<<"$merge_output"; then
@@ -86,10 +92,19 @@ jobs:
             fi
 
             retry_pr_json="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}")"
-            test "$(jq -r '.state' <<<"$retry_pr_json")" = "open"
-            test "$(jq -r '.draft' <<<"$retry_pr_json")" = "false"
-            test "$(jq -r '.base.sha' <<<"$retry_pr_json")" = "$VALIDATED_BASE_SHA"
-            test "$(jq -r '.head.sha' <<<"$retry_pr_json")" = "$VALIDATED_HEAD_SHA"
+            if [ "$(jq -r '.state' <<<"$retry_pr_json")" != "open" ] ||
+               [ "$(jq -r '.draft' <<<"$retry_pr_json")" != "false" ] ||
+               [ "$(jq -r '.head.sha' <<<"$retry_pr_json")" != "$VALIDATED_HEAD_SHA" ]; then
+              echo "PR changed during merge retry; ignoring stale validation."
+              echo "merged=false" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            current_base_sha="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq .object.sha)"
+            if [ "$current_base_sha" != "$VALIDATED_BASE_SHA" ] ||
+               [ "$(jq -r '.base.sha' <<<"$retry_pr_json")" != "$VALIDATED_BASE_SHA" ]; then
+              refresh_pr_branch
+              exit 0
+            fi
 
             echo "Base branch policy has not observed all completed checks yet; retrying merge in ${merge_delay_seconds}s (attempt ${attempt}/${merge_attempts})."
             sleep "$merge_delay_seconds"
