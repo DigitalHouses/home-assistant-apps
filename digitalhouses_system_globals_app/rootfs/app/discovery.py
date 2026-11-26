@@ -20,7 +20,6 @@ OPS = ("refresh", "check_updates")
 GATES = ("mqtt_ready", "ha_ready", "zigbee_ready", "system_ready")
 NUMBERS = {
     "brightness": (0, 100, 1, "%"), "volume": (0, 100, 1, "%"),
-    "display_brightness": (0, 100, 1, "%"), "indicator_brightness": (0, 100, 1, "%"),
     "transition_seconds": (0, 300, 0.1, "s"),
 }
 BOOLEANS = ("voice_notifications_enabled", "noncritical_sound_notifications_enabled")
@@ -51,7 +50,7 @@ def discovery(version):
     for mode, name in (("day", "День"), ("night", "Ночь")):
         for field, (lo, hi, step, unit) in NUMBERS.items():
             key = mode + "_" + field
-            label = {"brightness":"Яркость", "volume":"Громкость", "display_brightness":"Яркость дисплеев", "indicator_brightness":"Яркость индикаторов", "transition_seconds":"Плавный переход"}[field]
+            label = {"brightness":"Яркость", "volume":"Громкость", "transition_seconds":"Плавный переход"}[field]
             add(key, "number", name+" · "+label, state_topic=state_topic(key), command_topic=cmd_topic(key), min=lo, max=hi, step=step, unit_of_measurement=unit, mode="box", qos=1, retain=False)
         key=mode+"_color_temp_kelvin"
         add(key,"text",name+" · CCT, K",state_topic=state_topic(key),command_topic=cmd_topic(key),min=0,max=4,pattern=r"^(?:[2-5][0-9]{3}|6000)?$",qos=1,retain=False)
@@ -99,10 +98,17 @@ def rgb_text(value):
     return "" if value is None else "#" + "".join(f"{x:02X}" for x in value)
 
 
+RETIRED_ENTITIES = (
+    ("day_color","text"), ("night_color","text"), ("active_color_mode","sensor"),
+    ("day_display_brightness","number"), ("night_display_brightness","number"),
+    ("day_indicator_brightness","number"), ("night_indicator_brightness","number"),
+)
+
+
 def retired_discovery(version):
     """HA device discovery removal: platform-only entries then final config."""
     payload = discovery(version)
-    for key, platform in (("day_color","text"),("night_color","text"),("active_color_mode","sensor")):
+    for key, platform in RETIRED_ENTITIES:
         payload["components"][key] = {"platform":platform}
     return payload
 

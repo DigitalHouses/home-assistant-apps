@@ -93,11 +93,11 @@ class CoreTests(unittest.TestCase):
         self.configure()
         old=self.engine.state
         old["schema_version"]=1
-        old["profiles"]["day"].update(color_mode="cct",color_temp_kelvin=4000,brightness=65)
-        old["profiles"]["night"].update(color_mode="rgb",rgb_color=[0,0,255],volume=12)
+        old["profiles"]["day"].update(color_mode="cct",color_temp_kelvin=4000,brightness=65,display_brightness=90,indicator_brightness=85)
+        old["profiles"]["night"].update(color_mode="rgb",rgb_color=[0,0,255],volume=12,display_brightness=30,indicator_brightness=45)
         self.path.write_text(json.dumps(old))
         e=Engine(Store(self.path))
-        self.assertEqual(e.state["schema_version"],2)
+        self.assertEqual(e.state["schema_version"],3)
         self.assertEqual(e.state["config"],old["config"])
         self.assertEqual(e.state["schedule_cursor"],old["schedule_cursor"])
         self.assertEqual(e.state["night_mode"],old["night_mode"])
@@ -108,6 +108,23 @@ class CoreTests(unittest.TestCase):
         exported={k:old[k] for k in ("night_mode","config","profiles")}
         e.import_settings(exported,self.t)
         self.assertEqual(e.state["profiles"]["night"]["volume"],12)
+
+    def test_migrate_v2_removes_only_obsolete_fields(self):
+        self.configure()
+        self.engine.command(PRODUCT+"/profiles/set",{"day":{"color_temp_kelvin":4000,"rgb_color":[255,255,255],"brightness":100,"volume":80},"night":{"color_temp_kelvin":2700,"rgb_color":[43,0,255],"brightness":40,"volume":30}},self.t)
+        expected=self.engine.state
+        old=self.engine.state
+        old["schema_version"]=2
+        for profile in old["profiles"].values():
+            profile.update(display_brightness=90,indicator_brightness=85)
+        self.path.write_text(json.dumps(old))
+        e=Engine(Store(self.path))
+        self.assertEqual(e.state,expected)
+        self.assertEqual(json.loads(self.path.read_text()),expected)
+        self.assertEqual(e.snapshot()[1].payload,expected["profiles"])
+        for field in ("display_brightness","indicator_brightness"):
+            with self.assertRaises(ContractError):
+                e.command(PRODUCT+"/profiles/set",{"day":{field:10}},self.t)
 
     def test_profile_validation(self):
         p = PRODUCT + "/profiles/set"

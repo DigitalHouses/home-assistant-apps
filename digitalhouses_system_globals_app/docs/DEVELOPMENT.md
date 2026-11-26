@@ -1,4 +1,4 @@
-# Development and release readiness — 0.1.4
+# Development and release readiness — 0.1.5
 
 The implementation is an experimental candidate. Do not connect to a production
 broker while the legacy Night Mode publisher is active. First start is manual to
@@ -32,8 +32,9 @@ On reconnect a fresh client is used; missed transient events are not replayed.
 - Day/night profiles store independent CCT and RGB values. HA exposes two text
   controls (kelvin and #RRGGBB), Ingress exposes temperature and RGB picker.
   Consumers choose the supported mode per device, not per global profile.
-  Storage schema 1 migrates to schema 2 automatically; restore a pre-upgrade
-  backup before downgrading to 0.1.3.
+  Storage schemas 1 and 2 migrate to schema 3 automatically, dropping only
+  obsolete selectors and display/indicator brightness fields. Restore a
+  pre-upgrade backup before downgrading. Ingress uses a color picker with clear action.
 - A live non-retained readiness lease is published every 5 s with a 20 s expiry.
   Direct consumers must use this and producer availability, not stale retained on.
   Positive HA evidence requires an actual MQTT probe value observed through the

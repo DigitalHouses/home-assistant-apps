@@ -278,8 +278,6 @@ sections:
     entities:
     - number.dh_system_globals_app_day_brightness
     - number.dh_system_globals_app_day_volume
-    - number.dh_system_globals_app_day_display_brightness
-    - number.dh_system_globals_app_day_indicator_brightness
     - number.dh_system_globals_app_day_transition_seconds
     - text.dh_system_globals_app_day_color_temp_kelvin
     - text.dh_system_globals_app_day_rgb_color
@@ -290,8 +288,6 @@ sections:
     entities:
     - number.dh_system_globals_app_night_brightness
     - number.dh_system_globals_app_night_volume
-    - number.dh_system_globals_app_night_display_brightness
-    - number.dh_system_globals_app_night_indicator_brightness
     - number.dh_system_globals_app_night_transition_seconds
     - text.dh_system_globals_app_night_color_temp_kelvin
     - text.dh_system_globals_app_night_rgb_color

@@ -15,7 +15,7 @@ PRODUCT = "DigitalHouses/digitalhouses_system_globals_app"
 UTC = timezone.utc
 PROFILE_FIELDS = (
     "brightness", "color_temp_kelvin", "rgb_color", "volume",
-    "display_brightness", "indicator_brightness", "transition_seconds",
+    "transition_seconds",
     "voice_notifications_enabled", "noncritical_sound_notifications_enabled",
 )
 CONFIG_FIELDS = ("auto_switch", "night_start", "night_end", "timezone")
@@ -43,7 +43,7 @@ def integer(value, low, high):
 
 def validate_profile(p):
     mapping(p, PROFILE_FIELDS, exact=True)
-    for k in ("brightness", "volume", "display_brightness", "indicator_brightness"):
+    for k in ("brightness", "volume"):
         require(p[k] is None or integer(p[k], 0, 100), "Invalid " + k)
     for k in ("voice_notifications_enabled", "noncritical_sound_notifications_enabled"):
         require(p[k] is None or type(p[k]) is bool, "Invalid " + k)
@@ -62,6 +62,8 @@ def migrate_profiles(profiles):
         require(isinstance(p, dict), "Expected profile object")
         if "color_mode" in p:
             require(p.pop("color_mode") in (None, "cct", "rgb"), "Invalid legacy color_mode")
+        p.pop("display_brightness", None)
+        p.pop("indicator_brightness", None)
         validate_profile(p)
     return result
 
@@ -110,7 +112,7 @@ def decode_instant(value):
 
 def empty_state():
     return {
-        "schema_version": 2, "night_mode": None,
+        "schema_version": 3, "night_mode": None,
         "config": dict.fromkeys(CONFIG_FIELDS),
         "profiles": {k: dict.fromkeys(PROFILE_FIELDS) for k in ("day", "night")},
         "schedule_cursor": None,
@@ -119,7 +121,7 @@ def empty_state():
 
 def validate_state(s):
     mapping(s, empty_state(), exact=True)
-    require(type(s["schema_version"]) is int and s["schema_version"] == 2, "Unsupported state schema")
+    require(type(s["schema_version"]) is int and s["schema_version"] == 3, "Unsupported state schema")
     require(s["night_mode"] in (None, "on", "off"), "Invalid night_mode")
     validate_config(s["config"])
     mapping(s["profiles"], ("day", "night"), exact=True)
@@ -141,10 +143,10 @@ class Store:
             return empty_state()
         try:
             state = json.loads(raw)
-            if isinstance(state, dict) and type(state.get("schema_version")) is int and state["schema_version"] == 1:
+            if isinstance(state, dict) and type(state.get("schema_version")) is int and state["schema_version"] in (1, 2):
                 mapping(state, empty_state(), exact=True)
                 state["profiles"] = migrate_profiles(state["profiles"])
-                state["schema_version"] = 2
+                state["schema_version"] = 3
                 validate_state(state)
                 self.save(state)
             validate_state(state)
