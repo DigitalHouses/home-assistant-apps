@@ -8,6 +8,7 @@ import os
 import queue
 import time
 from . import sensor_rules
+from .light_routes import current_route
 
 LOG = logging.getLogger(__name__)
 CONFIRM_SECONDS = 30
@@ -84,8 +85,53 @@ class SensorEngine:
             return None
         return row
 
+    def group_members(self,eid):
+        """One existing individual HA entity per verified Z2M member."""
+        routes=self.app.config.get("light_routes",{})
+        route=routes.get(eid,{})
+        if route.get("kind")!="group":return None
+        members=[]
+        for member in route["members"]:
+            ids=[key for key,r in routes.items() if r.get("kind")!="group"
+                 and r.get("base_topic")==route["base_topic"]
+                 and r.get("coordinator_ieee")==route["coordinator_ieee"]
+                 and r.get("ieee")==member["ieee"]
+                 and r.get("friendly_name")==member["friendly_name"]]
+            if len(ids)!=1 or ids[0] not in self.app.target_catalog:return []
+            members.append(ids[0])
+        return sorted(members) if len(set(members))==len(members) else []
+
     def state(self,eid):
-        return self.states.get(eid,{}).get("state")
+        members=self.group_members(eid)
+        if members is None:return self.states.get(eid,{}).get("state")
+        values={self.states.get(m,{}).get("state") for m in members}
+        if not members or not values <= {"on","off"}:return None
+        return next(iter(values)) if len(values)==1 else "mixed"
+
+    def target_signature(self,eid):
+        members=self.group_members(eid)
+        if members is None:return signature(self.states.get(eid,{}))
+        if not members:return {}
+        records={m:signature(self.states.get(m,{})) for m in members}
+        # Membership and identity changes invalidate ownership even after restart.
+        route=self.app.config["light_routes"][eid]
+        return {"state":self.state(eid),"last_changed":max(v["last_changed"] for v in records.values()) if all(isinstance(v["last_changed"],str) and v["last_changed"] for v in records.values()) else None,
+                "members":records,"route":deepcopy(route)}
+
+    def group_ready(self,eid,desired):
+        members=self.group_members(eid)
+        if members is None:return True
+        if not members:return False
+        routes=self.app.config["light_routes"]
+        route=routes[eid]
+        net=self.app._networks.get(route["base_topic"],{})
+        if net.get("bridge_state")!="online" or not current_route(route,net):return False
+        if self.app._light_availability.get((route["base_topic"],route["friendly_name"]))!="online":return False
+        if (route["base_topic"],route["friendly_name"]) in self.app._light_shadows:return False
+        return all(current_route(routes[m],net)
+                   and self.app.observed_target_state(m,verify_route=True)==desired
+                   and (routes[m]["base_topic"],routes[m]["friendly_name"]) not in self.app._light_shadows
+                   for m in members)
 
     def presence(self,eid):
         state = self.states.get(eid,{})
@@ -93,14 +139,28 @@ class SensorEngine:
 
     def target_ok(self,eid):
         t = self.app.target_catalog.get(eid)
-        route = self.app.config.get("light_routes",{}).get(eid,{})
+        members=self.group_members(eid)
+        if members is not None:return bool(t and members)
         state = self.states.get(eid,{})
         return bool(t and not t.get("group") and t.get("integration")!="group"
-                    and route.get("kind")!="group" and not state.get("attributes",{}).get("entity_id"))
+                    and not state.get("attributes",{}).get("entity_id"))
+
+    def leaves(self,eid):
+        members=self.group_members(eid)
+        return set(members) if members is not None else {eid}
 
     def related(self,eid):
+        leaves=self.leaves(eid)
         return [s for s,row in self.rows().items() if row["enabled"]
-                   and any(a["entity_id"]==eid for a in row["assignments"])]
+                and any(leaves & self.leaves(a["entity_id"]) for a in row["assignments"])]
+
+    def group_overlap(self,eid):
+        # Different target sets cannot simultaneously own the same lamp.
+        # A group assigned to multiple sensors is fine (same exact target).
+        leaves=self.leaves(eid)
+        return any(a["entity_id"]!=eid and leaves & self.leaves(a["entity_id"])
+                   for row in self.rows().values() if row["enabled"] for a in row["assignments"])
+
     def absent(self,eid):
         sources=self.related(eid)
         return bool(sources) and all(self.row(s) and self.presence(s)=="off" for s in sources)
@@ -146,7 +206,7 @@ class SensorEngine:
         # Retain a deadline only when the confirmed ON and source configuration
         # still match. Restart never synthesizes a motion event.
         for eid,r in list(self.owners.items()):
-            if r["row"] != self.rows().get(r["source"]) or self.state(eid)!="on" or not r["signature"].get("last_changed") or signature(self.states[eid])!=r["signature"]:
+            if r["row"] != self.rows().get(r["source"]) or self.state(eid)!="on" or not r["signature"].get("last_changed") or self.target_signature(eid)!=r["signature"]:
                 self.drop(eid)
             elif not self.absent(eid) or r.get("absence")!=self.absence_signature(eid):
                 r["deadline"]=None
@@ -157,7 +217,8 @@ class SensorEngine:
         if not row or not ids:return False
         action = "SENSOR_ON" if operation=="on" else "SENSOR_OFF"
         token = {"generation":self.generation,"epoch":self.epoch.get(source,0),
-                 "row":deepcopy(row),"manual":{eid:self.manual.get(eid,0) for eid in ids}}
+                 "row":deepcopy(row),"manual":{eid:self.manual.get(eid,0) for eid in ids},
+                 "routes":{eid:deepcopy(self.app.config.get("light_routes",{}).get(eid)) for eid in ids}}
         calls = sensor_rules.commands(row,set(ids),operation)
         rid = self.app.event_log.press("ha",source,"Присутствие" if operation=="on" else "Авто-OFF",ids)
         try:
@@ -169,7 +230,7 @@ class SensorEngine:
 
     def dynamic_owner(self,eid):
         record=self.owners.get(eid)
-        if not record or self.row(record["source"])!=record["row"]:return False
+        if not record or self.row(record["source"])!=record["row"] or self.group_overlap(eid):return False
         return any(a["entity_id"]==eid and a.get("data",{}).get("profile")=="current"
                    for a in record["row"]["assignments"])
 
@@ -177,38 +238,60 @@ class SensorEngine:
         if self.dynamic_owner(eid):
             self.profile_changes[eid]={"data":deepcopy(data),"until":time.time()+CONFIRM_SECONDS+data.get("transition",0)}
 
-    def profile_matches(self,eid,state,now):
+    def profile_matches(self,eid,observed,now):
         change=self.profile_changes.get(eid)
-        if not change or now>change["until"] or state.get("state")!="on":return False
+        if not change or now>change["until"] or observed.get("state")!="on":return False
         previous=self.owners[eid]["signature"]
-        if state.get("last_changed")!=previous["last_changed"]:return False
-        attrs=state.get("attributes",{})
         data=change["data"]
-        try:
-            if "brightness_pct" in data and abs(attrs["brightness"]/255*100-data["brightness_pct"])>1:return False
-            if "color_temp_kelvin" in data and abs(attrs["color_temp_kelvin"]-data["color_temp_kelvin"])>50:return False
-            if "rgb_color" in data and (len(attrs["rgb_color"])!=3 or any(abs(a-b)>3 for a,b in zip(attrs["rgb_color"],data["rgb_color"]))):return False
-        except (KeyError,TypeError,ValueError):return False
-        return True
+        def matches(old,new,allow_unchanged=True):
+            if old.get("last_changed")!=new.get("last_changed"):return False
+            if allow_unchanged and old==new:return True
+            attrs=new.get("params",{})
+            try:
+                if "brightness_pct" in data and abs(attrs["brightness"]/255*100-data["brightness_pct"])>1:return False
+                if "color_temp_kelvin" in data and abs(attrs["color_temp_kelvin"]-data["color_temp_kelvin"])>50:return False
+                if "rgb_color" in data and (len(attrs["rgb_color"])!=3 or any(abs(a-b)>3 for a,b in zip(attrs["rgb_color"],data["rgb_color"]))):return False
+            except (KeyError,TypeError,ValueError):return False
+            return True
+        if "members" in previous:
+            if previous.get("route")!=observed.get("route") or previous["members"].keys()!=observed.get("members",{}).keys():return False
+            matched=all(matches(old,observed["members"][member]) for member,old in previous["members"].items())
+            if matched and all(matches(old,observed["members"][member],False) for member,old in previous["members"].items()):
+                self.profile_changes.pop(eid,None)
+            return matched
+        return matches(previous,observed)
 
     def changed(self,eid,state):
         old = self.states.get(eid,{})
         state = state if isinstance(state,dict) and state.get("entity_id")==eid else {}
         self.states[eid]=state
         now=time.time()
-        pending=self.pending.get(eid)
-        if pending and state.get("state")=="on" and old.get("state")=="off" and now<=pending["expires"] and pending["row"]==self.row(pending["source"]):
-            self.pending.pop(eid,None)
-            self.owners[eid]={"source":pending["source"],"row":pending["row"],
-                              "signature":signature(state),"deadline":None}
-        elif pending and state.get("state") not in ("on","off"):
-            self.pending.pop(eid,None)
-        elif eid in self.owners and signature(state)!=self.owners[eid]["signature"]:
-            if self.profile_matches(eid,state,now):
-                self.owners[eid]["signature"]=signature(state)
-                self.profile_changes.pop(eid,None)
-            else:
-                self.drop(eid)
+        # A group report alone never proves ownership. Re-evaluate the
+        # individual members on each HA state event.
+        affected={eid}|{target for target in set(self.owners)|set(self.pending)
+                        if eid in (self.group_members(target) or [])}
+        for target in affected:
+            pending=self.pending.get(target)
+            observed=self.target_signature(target)
+            current=self.state(target)
+            if pending and (pending.get("route")!=self.app.config.get("light_routes",{}).get(target)
+                            or pending.get("members")!=self.group_members(target)):
+                self.pending.pop(target,None)
+                continue
+            if pending and current=="on" and observed.get("last_changed") and now<=pending["expires"] and pending["row"]==self.row(pending["source"]):
+                if target!=eid or self.group_members(target) is not None or old.get("state")=="off":
+                    self.pending.pop(target,None)
+                    self.owners[target]={"source":pending["source"],"row":pending["row"],
+                                         "signature":observed,"deadline":None}
+            elif pending and current not in ("on","off","mixed"):
+                self.pending.pop(target,None)
+            elif target in self.owners and observed!=self.owners[target]["signature"]:
+                if self.profile_matches(target,observed,now):
+                    self.owners[target]["signature"]=observed
+                    # Group members may report the new profile one at a time.
+                    if self.group_members(target) is None:self.profile_changes.pop(target,None)
+                else:
+                    self.drop(target)
         if eid in self.rows():
             before = old.get("state") if sensor_rules.is_presence(old) else None
             after = self.presence(eid)
@@ -218,6 +301,8 @@ class SensorEngine:
                 if self.ready and row and before=="off" and after=="on" and not self.app.globals["maintenance_mode"]:
                     ids=[a["entity_id"] for a in row["assignments"] if self.target_ok(a["entity_id"])
                          and self.state(a["entity_id"])=="off"
+                         and not self.group_overlap(a["entity_id"])
+                         and self.group_ready(a["entity_id"],"off")
                          and not self.app.event_log.active_target(a["entity_id"])]
                     if sensor_rules.lux_allows(row,self.states):
                         self.enqueue(eid,"on",ids)
@@ -229,7 +314,7 @@ class SensorEngine:
     def reconcile(self,now):
         for eid,r in list(self.owners.items()):
             row=self.row(r["source"])
-            if not row or row != r["row"] or self.state(eid)!="on" or not self.target_ok(eid):
+            if not row or row != r["row"] or self.state(eid)!="on" or not self.target_ok(eid) or self.group_overlap(eid) or self.target_signature(eid)!=r["signature"]:
                 self.drop(eid)
                 continue
             a=next((a for a in row["assignments"] if a["entity_id"]==eid),{})
@@ -247,6 +332,13 @@ class SensorEngine:
                 r["absence"]=self.absence_signature(eid)
         self.save()
 
+    def live_group_owned(self,eid,states):
+        record=self.owners.get(eid)
+        members=self.group_members(eid)
+        if not record or not members:return False
+        observed={s.get("entity_id"):s for s in states if isinstance(s,dict)}
+        return record["signature"].get("members")=={m:signature(observed.get(m,{})) for m in members}
+
     def live_owned(self,eid,state):
         record=self.owners.get(eid)
         return bool(record and isinstance(state,dict) and state.get("entity_id")==eid
@@ -255,15 +347,16 @@ class SensorEngine:
     def allowed(self,source,action,token,eid,rid=None):
         if (not self.ready or self.app.globals["maintenance_mode"] or token["generation"]!=self.generation
                 or token["row"]!=self.row(source) or token["manual"].get(eid)!=self.manual.get(eid,0)
-                or not self.target_ok(eid)):
+                or not self.target_ok(eid) or self.group_overlap(eid)
+                or token.get("routes",{}).get(eid)!=self.app.config.get("light_routes",{}).get(eid)):
             return False
         if action=="SENSOR_ON":
             if rid is not None and self.app.event_log.active_target(eid,exclude=rid):return False
-            return self.presence(source)=="on" and token["epoch"]==self.epoch.get(source,0) and self.state(eid)=="off" and eid not in self.pending
+            return self.presence(source)=="on" and token["epoch"]==self.epoch.get(source,0) and self.state(eid)=="off" and eid not in self.pending and self.group_ready(eid,"off")
         r=self.owners.get(eid)
         return bool(r and r["source"]==source and r["deadline"] is not None
                     and r["deadline"]<=time.time() and self.absent(eid) and self.state(eid)=="on" and eid not in self.profile_changes
-                    and signature(self.states[eid])==r["signature"] and r.get("absence")==self.absence_signature(eid))
+                    and self.group_ready(eid,"on") and self.target_signature(eid)==r["signature"] and r.get("absence")==self.absence_signature(eid))
 
     def dispatched(self,source,action,token,eid,desired):
         if action=="SENSOR_OFF" or desired!="on" or not self.ready or token["generation"]!=self.generation:
@@ -271,11 +364,13 @@ class SensorEngine:
         elif token["manual"].get(eid)==self.manual.get(eid,0) and token["row"]==self.row(source):
             a=next((a for a in token["row"]["assignments"] if a["entity_id"]==eid),{})
             if a.get("off_delay_seconds") is not None or a.get("data",{}).get("profile")=="current":
-                if self.state(eid)=="on":
+                if self.state(eid)=="on" and self.target_signature(eid).get("last_changed"):
                     self.owners[eid]={"source":source,"row":deepcopy(token["row"]),
-                                      "signature":signature(self.states[eid]),"deadline":None}
+                                      "signature":self.target_signature(eid),"deadline":None}
                 else:
-                    self.pending[eid]={"source":source,"row":deepcopy(token["row"]),"expires":time.time()+CONFIRM_SECONDS}
+                    self.pending[eid]={"source":source,"row":deepcopy(token["row"]),"expires":time.time()+CONFIRM_SECONDS,
+                                       "route":deepcopy(self.app.config.get("light_routes",{}).get(eid)),
+                                       "members":self.group_members(eid)}
         self.reconcile(time.time())
 
     def tick(self):

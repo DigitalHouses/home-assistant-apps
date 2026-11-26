@@ -61,8 +61,11 @@ It is independent of any Home Assistant dashboard.
   queue. Only observed OFF→ON presence may activate an observed-off target;
   already-on lights remain untouched. Confirmed ownership and absence
   deadlines are persisted and checked on reconnect/restart. Manual commands
-  cancel ownership; observable external changes cancel it as well. Group
-  targets are excluded until member-level ownership is implemented. Hardware
+  cancel ownership; observable external changes cancel it as well. Verified Z2M
+  groups use one multicast command with all-member OFF/ON checks and persistent
+  member-level ownership; mixed, unverified or overlapping target sets are
+  skipped. Manual changes to one member cancel the group timer. Native HA
+  groups remain excluded pending route verification. Hardware
   acceptance, key/physical relay timers and readiness integration remain.
 - **Cover:** select Toggle, Open, Close, Stop or Position according to the HA
   capability flags. Toggle resolves from a known settled state; moving or

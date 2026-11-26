@@ -356,7 +356,7 @@ function renderSensors(){
       const due=model.sensor_deadlines?.[a.entity_id];
       if(due!=null)line.append(el("span","До OFF: "+Math.max(0,Math.ceil(due-Date.now()/1000))+" сек.","muted"));
       const t=model.targets.find(x=>x.entity_id===a.entity_id);
-      if(t?.group||t?.integration==="group")line.append(el("span","⚠ Группа: автоисполнение пока недоступно","problem"));
+      if((t?.group||t?.integration==="group")&&!t.sensor_group_supported)line.append(el("span","⚠ Состав группы не подтверждён","problem"));
       targets.append(line);
     }
     if(!targets.children.length)targets.append(el("span","Нет назначений","muted"));
@@ -403,7 +403,7 @@ function renderSensorEdit(){
   const action="presence",existing=draft.bindings[action]||[];
   for(const a of existing)assignedRow(action,a,main);
   main.append(button(existing.length?"Изменить выбор сущностей":"+ Выбрать сущности",()=>{
-    DHElectricaEntityPicker.open({items:model.targets.filter(t=>!t.group&&t.integration!=="group"||existing.some(a=>a.entity_id===t.entity_id)),values:existing.map(a=>a.entity_id),domains:["light","switch"],
+    DHElectricaEntityPicker.open({items:model.targets.filter(t=>(!t.group&&t.integration!=="group")||t.sensor_group_supported||existing.some(a=>a.entity_id===t.entity_id)),values:existing.map(a=>a.entity_id),domains:["light","switch"],
       areaId:draft.area_id,areaHint:draft.room,renderIcon:targetIcon,renderTest:lightTestControl,
       onConfirm:ids=>{
         draft.bindings[action]=DHElectricaEntityPicker.mergeAssignments(existing,ids,model.targets).map(a=>({...a,operation:"on"}));

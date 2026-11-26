@@ -32,6 +32,10 @@ def snapshot(app):
         maintenance = getattr(app,"globals",{}).get("maintenance_mode",False)
         sensor_catalog=deepcopy(getattr(app,"sensor_catalog",{}))
         engine=getattr(app,"sensor_engine",None)
+        if engine:
+            for eid,target in targets.items():
+                if target.get("group") or target.get("integration")=="group":
+                    target["sensor_group_supported"]=bool(engine.group_members(eid))
         sensor_runtime_ready=bool(engine and engine.ready)
         sensor_deadlines={eid:r["deadline"] for eid,r in (engine.owners.items() if engine else [])
                           if r.get("deadline") is not None}

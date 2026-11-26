@@ -1062,6 +1062,10 @@ class Application:
                         read_lab_once, self._ha_shadows,
                         time.monotonic(), allowed_lights=ha_approved)
 
+                group_live=[]
+                if sensor_job and action=="SENSOR_OFF" and any(routes.get(eid,{}).get("kind")=="group" for eid in targets):
+                    try:group_live=self.registry.fetch_states()
+                    except Exception:pass
                 with self._mutex:
                     if sensor_job:
                         if not any(self.sensor_engine.allowed(name,action,coordinator,eid,rid) for eid in targets):
@@ -1132,8 +1136,10 @@ class Application:
                     for plan in plans:
                         if sensor_job:
                             eid=plan["light"]
+                            group=self.config.get("light_routes",{}).get(eid,{}).get("kind")=="group"
                             if (not self.sensor_engine.allowed(name,action,coordinator,eid,rid)
-                                    or self.observed_target_state(eid,verify_route=True)!=("off" if action=="SENSOR_ON" else "on")):
+                                    or (group and action=="SENSOR_OFF" and not self.sensor_engine.live_group_owned(eid,group_live))
+                                    or (not group and self.observed_target_state(eid,verify_route=True)!=("off" if action=="SENSOR_ON" else "on"))):
                                 skipped.append({"light":eid,"reason":"Sensor state or observed Zigbee target changed"})
                                 continue
                         if plan["state"]=="ON" and plan["light"] in unresolved_toggles:
