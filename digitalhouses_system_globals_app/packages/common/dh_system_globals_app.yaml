@@ -2,6 +2,7 @@ dh_system_globals_app_package:
   recorder:
     include:
       entities:
+      # Authoritative Day/Night state: off = day, on = night.
       - switch.dh_system_globals_app_night_mode
       - switch.dh_system_globals_app_auto_switch
       - binary_sensor.dh_system_globals_app_mqtt_ready
