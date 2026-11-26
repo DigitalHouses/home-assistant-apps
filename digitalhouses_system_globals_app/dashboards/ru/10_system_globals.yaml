@@ -258,9 +258,11 @@ sections:
     - text.dh_system_globals_app_night_end
     - sensor.dh_system_globals_app_timezone
   - type: history-graph
-    title: История режима
+    title: История ночного режима
+    hours_to_show: 24
     entities:
-    - switch.dh_system_globals_app_night_mode
+    - entity: switch.dh_system_globals_app_night_mode
+      name: Ночной режим
   - type: entities
     title: Активные параметры
     entities:
