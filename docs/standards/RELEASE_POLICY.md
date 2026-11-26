@@ -219,6 +219,8 @@ The resolved SHA is verification metadata. The release tag remains the canonical
 
 ### 7.2 Home Assistant Apps
 
+The release pipeline derives a native runner matrix from the validated App architecture list. AMD64 uses `ubuntu-latest`; AArch64 uses `ubuntu-24.04-arm`. Builds run in parallel with separate product/architecture registry caches. QEMU is not used. Each build records its pushed digest; the publication job verifies the architecture tags against these digests and creates the final manifest from digest references only after every required build succeeds. Agent-only releases skip the image build matrix. Standard public-repository runners are used; paid runners are not required.
+
 The production delivery contract for a Home Assistant App is an immutable container artifact built from the exact released source.
 
 The required provenance chain is:
