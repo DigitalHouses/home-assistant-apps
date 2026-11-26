@@ -66,14 +66,23 @@ class AutoMergeWorkflowTests(unittest.TestCase):
             "Check out exact merged main revision",
             "Set up Python",
             "Detect and validate releases",
-            "Publish product releases",
-            "Verify published releases",
         ):
             marker = f"- name: {step_name}"
             start = text.index(marker)
             end = text.find("\n      - name:", start + len(marker))
             block = text[start:] if end == -1 else text[start:end]
             self.assertIn("if: steps.merge.outputs.merged == 'true'", block)
+
+    def test_native_build_and_publish_gates(self):
+        text = self._text()
+        self.assertNotIn("setup-qemu-action", text)
+        self.assertIn("runs-on: ${{ matrix.runner }}", text)
+        self.assertIn("needs: [integrate, build-native]", text)
+        self.assertIn("needs.build-native.result == 'success'", text)
+        self.assertIn("needs.build-native.result == 'skipped'", text)
+        self.assertIn("needs.integrate.outputs.merged == 'true'", text)
+        self.assertIn("refs+=(\"$image@$digest\")", text)
+        self.assertIn("--cache-to", text)
 
 
 if __name__ == "__main__":
