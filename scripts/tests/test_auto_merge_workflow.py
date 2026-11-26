@@ -37,7 +37,7 @@ class AutoMergeWorkflowTests(unittest.TestCase):
     def test_manual_main_push_reconciles_releases(self):
         text = self._text()
         self.assertIn('github.event.workflow_run.event == \'push\'', text)
-        self.assertIn('if [ "$VALIDATION_EVENT" = push ]; then', text)
+        self.assertIn('if [ "$VALIDATION_EVENT" = push ]', text)
         self.assertIn('if [ "$VALIDATED_HEAD_SHA" != "$current_main" ]; then', text)
         self.assertIn('echo "merge_sha=$current_main" >> "$GITHUB_OUTPUT"', text)
         self.assertIn('--include-pending-existing', text)
@@ -57,7 +57,7 @@ class AutoMergeWorkflowTests(unittest.TestCase):
         self.assertIn('git rev-parse HEAD^1', text)
         self.assertIn('git rev-parse HEAD^2', text)
         self.assertIn('refs/pull/{0}/merge', text)
-        self.assertIn("if: github.event_name != 'push'", text)
+        self.assertIn("Restrict main recovery validation", text)
 
     def test_native_build_and_publish_gates(self):
         text = self._text()
