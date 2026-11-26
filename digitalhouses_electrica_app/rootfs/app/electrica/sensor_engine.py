@@ -201,6 +201,8 @@ class SensorEngine:
         tracked = set(self.owners)|set(self.pending)|set(ids)|{a["entity_id"] for r in self.rows().values() for a in r["assignments"]}
         tracked.update(eid for room in self.app.config["rooms"] for sw in room["switches"]
                        for rule in sw.get("bindings",{}).values() for eid in rule.get("target_timers",{}))
+        tracked.update(a["entity_id"] for r in self.app.config.get("schedules",{}).values()
+                       if r.get("catch_up") for a in r["assignments"])
         for eid in tracked:
             if touched & members(eid):
                 self.manual[eid]=self.manual.get(eid,0)+1

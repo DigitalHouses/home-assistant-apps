@@ -24,6 +24,7 @@ from .event_log import EventLog
 from .sensor_engine import SensorEngine
 from .relay_timers import RelayTimers
 from .schedule_engine import ScheduleEngine
+from . import readiness
 from .control import HAClient, light_commands, verified_adopted_switch
 from .mqtt_lights import plan_batch
 from .lab_lights import (LAB_LIGHTS, authorized_ha_light_ids,
@@ -189,7 +190,8 @@ class Application:
         self.sensor_catalog = {}
         self.sensor_engine = SensorEngine(self,last_scan_path.with_name("sensor_timers.json"))
         self.relay_timers = RelayTimers(self)
-        self.schedule_engine = ScheduleEngine(self)
+        self.readiness = readiness.Readiness()
+        self.schedule_engine = ScheduleEngine(self,last_scan_path.with_name("schedule_history.json"))
         self.device_details = []
         self._networks: dict[str, dict] = {}
         self._subscribed: set[str] = set()
@@ -436,8 +438,10 @@ class Application:
             self._global_mode = None
             self._global_profiles = None
             self.relay_timers.reset()
+            self.readiness.reset()
+            self.schedule_engine.recovery.disconnect()
         for topic in (*_FILTERS, SCAN_REQUEST, ROOT + "/command/refresh",
-                      ROOT + "/command/check_updates", ROOT + "/command/delete_telemetry", "homeassistant/status", *profiles.TOPICS):
+                      ROOT + "/command/check_updates", ROOT + "/command/delete_telemetry", "homeassistant/status", *profiles.TOPICS, *readiness.TOPICS):
             self._subscribe(topic)
         self._publish(AVAILABILITY, "online")
         self._publish(SYNC_TOPIC, sync_payload(self.version))
@@ -462,9 +466,18 @@ class Application:
             self._global_mode = None
             self._global_profiles = None
             self.relay_timers.reset()
+            self.readiness.reset()
+            self.schedule_engine.recovery.disconnect()
 
     def _on_message(self, client, userdata, message):
         del client, userdata
+        if message.topic in readiness.TOPICS:
+            with self._mutex:
+                self.readiness.receive(message.topic,bytes(message.payload),getattr(message,"retain",False))
+                for kind in self.schedule_engine.recovery.closed:
+                    if not self.readiness.ready(kind=="zigbee"):
+                        self.schedule_engine.recovery.closed[kind]=True
+            return
         if message.topic in profiles.TOPICS:
             from .binding_store import decode_json
             raw=bytes(message.payload)
@@ -499,6 +512,10 @@ class Application:
                 self.request_scan()
             return
         if message.topic == "homeassistant/status":
+            if bytes(message.payload)==b"offline":
+                with self._mutex:
+                    self.readiness.values={}
+                    self.schedule_engine.disconnect()
             if bytes(message.payload) == b"online":
                 self._publish_all()
             return
@@ -1176,7 +1193,6 @@ class Application:
                                 or self.event_log.active_target(eid,exclude=rid)):
                                 skipped.append({"light":eid,"reason":"Schedule target unavailable or changed"})
                                 continue
-                            self.sensor_engine.manual_control([eid])
                         if sensor_job:
                             eid=plan["light"]
                             group=self.config.get("light_routes",{}).get(eid,{}).get("kind")=="group"
@@ -1190,6 +1206,10 @@ class Application:
                             continue
                         if plan["state"]=="ON" and plan["light"] in zero_profile_lights:
                             plan={**plan,"state":"OFF","payload":{"state":"OFF",**{k:v for k,v in plan["payload"].items() if k=="transition"}}}
+                        if schedule_job and coordinator.get("recovery") and self.schedule_engine.already_zigbee(plan["light"],plan["state"].lower()):
+                            skipped.append({"light":plan["light"],"reason":"Уже в требуемом состоянии"})
+                            continue
+                        if schedule_job:self.sensor_engine.manual_control([plan["light"]])
                         key_arm=self.sensor_engine.key_can_start(key_token,plan["light"])
                         if self._publish(plan["topic"], plan["payload"],
                                          retain=False):
@@ -1252,6 +1272,11 @@ class Application:
                                     and lab_state_cache[eid][1] in ("on","off")
                                     and not self.event_log.active_target(eid,exclude=rid)]
                                 skipped.extend({"light":eid,"reason":"Schedule target unavailable or changed"} for eid in ids if eid not in valid_ids)
+                                if coordinator.get("recovery"):
+                                    desired="on" if call["service"]=="light.turn_on" else "off"
+                                    same=[eid for eid in valid_ids if lab_state_cache[eid][1]==desired]
+                                    skipped.extend({"light":eid,"reason":"Уже в требуемом состоянии"} for eid in same)
+                                    valid_ids=[eid for eid in valid_ids if eid not in same]
                                 ids=valid_ids
                                 if not ids:continue
                                 call={**call,"target":{"entity_id":ids}}
@@ -1343,7 +1368,6 @@ class Application:
                                 elif schedule_job:
                                     if not self.schedule_engine.allowed(coordinator,eid) or self.event_log.active_target(eid,exclude=rid):
                                         raise ActionError("Schedule target unavailable or changed")
-                                    self.sensor_engine.manual_control([eid])
                                 else:
                                     sw = next((x for room in self.config["rooms"] for x in room["switches"]
                                                if x["logical_name"] == name and x["base_topic"] == base
@@ -1359,6 +1383,11 @@ class Application:
                                         raise ActionError("Input or binding changed")
                             with self._mutex:key_arm=self.sensor_engine.key_can_start(key_token,eid)
                             desired = switch_toggle if service == "switch.toggle" else service.rsplit("_", 1)[-1]
+                            if schedule_job and coordinator.get("recovery") and state==desired:
+                                skipped.append({"light":eid,"reason":"Уже в требуемом состоянии"})
+                                continue
+                            if schedule_job:
+                                with self._mutex:self.sensor_engine.manual_control([eid])
                             dispatched_at = _iso_now()
                             self._ha_client.execute_switch(eid, desired)
                             self.event_log.sent(rid,eid,("ha",eid),state,desired,sent_at=dispatched_at)

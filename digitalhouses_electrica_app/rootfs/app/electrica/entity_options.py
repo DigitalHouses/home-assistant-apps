@@ -120,7 +120,7 @@ def validate_rows(rows: object) -> list[dict]:
 
 def render_rows(rows: list[dict]) -> str:
     return yaml.safe_dump([
-        {row["entity_id"]: {key: row[key] for key in ("enabled", "maintenance_mode", "keep_mode", "actions", "disabled_actions", "assignments", "lux_entity_id", "lux_threshold", "relay_timers", "name", "trigger") if key in row}}
+        {row["entity_id"]: {key: row[key] for key in ("enabled", "maintenance_mode", "keep_mode", "actions", "disabled_actions", "assignments", "lux_entity_id", "lux_threshold", "relay_timers", "name", "trigger", "catch_up") if key in row}}
         for row in rows], allow_unicode=True, sort_keys=False,
         default_flow_style=False)
 

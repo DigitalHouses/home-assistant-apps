@@ -12,10 +12,11 @@ def is_schedule(eid):
     return isinstance(eid,str) and re.fullmatch(r"schedule\.[a-z0-9_]{1,64}",eid) is not None
 
 def validate_row(row):
-    if not isinstance(row,dict) or set(row)!={"entity_id","name","enabled","trigger","assignments"} or not is_schedule(row["entity_id"]):
+    if not isinstance(row,dict) or not {"entity_id","name","enabled","trigger","assignments"}<=set(row) or set(row)-{"entity_id","name","enabled","trigger","assignments","catch_up"} or not is_schedule(row["entity_id"]):
         raise CatalogError("Invalid schedule row")
     if not isinstance(row["name"],str) or not row["name"].strip() or len(row["name"])>100 or type(row["enabled"]) is not bool:
         raise CatalogError("Invalid schedule name or enabled")
+    if "catch_up" in row and type(row["catch_up"]) is not bool:raise CatalogError("catch_up must be boolean")
     trigger=row["trigger"]
     if not isinstance(trigger,dict) or trigger.get("kind") not in KINDS:
         raise CatalogError("Invalid schedule trigger")
@@ -32,6 +33,8 @@ def validate_row(row):
         # Daily events express explicit desired actions, not toggles or timer chains.
         if parsed.get("target_timers") or any(a["operation"] in ("toggle","play_pause","next","previous") or "brightness_step_pct" in a.get("data",{}) for a in row["assignments"]):
             raise CatalogError("Schedule requires explicit operation without toggle, relative step or Auto-OFF")
+    if row.get("catch_up") and any(not a["entity_id"].startswith(("light.","switch.")) or a["operation"] not in ("on","off") for a in row["assignments"]):
+        raise CatalogError("Catch-up supports explicit Light/Switch ON/OFF only")
     return deepcopy(row)
 
 def clock_occurrences(trigger,zone,start,end):

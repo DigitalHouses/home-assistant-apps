@@ -72,8 +72,13 @@ It is independent of any Home Assistant dashboard.
   the assignment editor and JSON store; dispatch uses the existing queue
   and global cover window guards. No toggle, missed-event replay or
   inferred past solar events. Unknown timezone/solar data blocks the
-  corresponding trigger. Explicit lighting interval restoration remains
-  a separate stage.
+  corresponding trigger. Optional catch_up for explicit light/switch
+  ON/OFF recovers only the latest eligible missed event after live System
+  Globals readiness, up to 24 hours; later non-opted-in schedules supersede
+  earlier ones. Persistent checkpoints fence configuration and solar data.
+  No interval enforcement or replay of cover/climate/media commands.
+  Checkpoint before enqueue gives one-shot recovery rather than guaranteed
+  delivery across a crash between checkpoint and dispatch.
 - **Auto-OFF timers (DEV):** optional per-target off_delay_seconds for
   logical light/switch ON/Toggle, or per-channel relay_timers for a
   verified physical key. Logical deadlines start after observed OFF→ON

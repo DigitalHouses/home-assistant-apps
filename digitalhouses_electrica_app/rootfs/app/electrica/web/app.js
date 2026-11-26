@@ -386,7 +386,7 @@ async function save(){try{
   const invalid=main.querySelector(".duration-control input:invalid");
   if(invalid){invalid.reportValidity();return}
   if(editing?.schedule){
-    const config={entity_id:draft.id,name:draft.name.trim(),enabled:draft.enabled,trigger:draft.trigger,assignments:draft.bindings.schedule||[]};
+    const config={entity_id:draft.id,name:draft.name.trim(),enabled:draft.enabled,trigger:draft.trigger,catch_up:!!draft.catch_up,assignments:draft.bindings.schedule||[]};
     await api("save-schedule",{revision:draft.revision,config});
     editing=null;draft=null;dirty=false;notice.textContent="Сохранено";await load();return;
   }
@@ -428,7 +428,7 @@ function renderSchedules(){
   main.append(header);
   for(const schedule of model.schedules||[]){
     const card=el("article",undefined,"device-card");card.tabIndex=0;card.setAttribute("role","button");
-    card.append(el("strong",(schedule.enabled?"● ":"Ⅱ ")+schedule.name),el("div","Ежедневно · "+triggerLabel(schedule.trigger),"muted"));
+    card.append(el("strong",(schedule.enabled?"● ":"Ⅱ ")+schedule.name),el("div","Ежедневно · "+triggerLabel(schedule.trigger)+(schedule.catch_up?" · С учётом перезапуска":""),"muted"));
     const targets=el("div",undefined,"bindings");
     for(const a of schedule.assignments){
       const line=el("div",undefined,"binding");
@@ -444,7 +444,7 @@ function renderSchedules(){
 }
 function openSchedule(schedule,isNew=false){
   editing={...schedule,schedule:true,isNew};
-  draft={id:schedule.entity_id,name:schedule.name,enabled:schedule.enabled,trigger:structuredClone(schedule.trigger),
+  draft={id:schedule.entity_id,name:schedule.name,enabled:schedule.enabled,catch_up:!!schedule.catch_up,trigger:structuredClone(schedule.trigger),
          bindings:{schedule:structuredClone(schedule.assignments).map(a=>({...a,data:a.data||{}}))},revision:model.revision,disabled_actions:[]};
   dirty=false;renderScheduleEdit();
 }
@@ -473,12 +473,18 @@ function renderScheduleEdit(){
     n.oninput=()=>{draft.trigger.offset_minutes=n.value===""?null:Number(n.value);update()};
     const label=el("label","Смещение, мин.");label.append(n);settings.append(label,el("span","− раньше, + позже","muted"));
   }
+  const recovery=el("input");recovery.type="checkbox";recovery.checked=draft.catch_up;
+  const incompatible=(draft.bindings.schedule||[]).some(a=>! /^(light|switch)\./.test(a.entity_id)||!["on","off"].includes(a.operation));
+  recovery.disabled=incompatible&&!draft.catch_up;
+  recovery.onchange=()=>{draft.catch_up=recovery.checked;update();renderScheduleEdit()};
+  const recoveryLabel=el("label");recoveryLabel.append(recovery,document.createTextNode("Выполнять пропущенное при перезапуске HAOS"));
+  settings.append(recoveryLabel,el("span",incompatible?"Компенсация доступна только для Light/Switch ON/OFF.":"Однократно после готовности системы; только последнее актуальное событие за 24 ч.","muted"));
   settings.append(el("span",model.schedule_timezone?"Часовой пояс HA: "+model.schedule_timezone:"Часовой пояс HA недоступен","muted"));
   main.append(settings,el("h2","Действия"));
   const action="schedule",existing=draft.bindings[action]||[];
   for(const a of existing)assignedRow(action,a,main);
   main.append(button(existing.length?"Изменить выбор сущностей":"+ Выбрать сущности",()=>{
-    const eligible=t=>/^(light|switch)\./.test(t.entity_id)||(/^(cover|climate|media_player)\./.test(t.entity_id)&&(t.operations||[]).some(op=>!["toggle","play_pause","next","previous"].includes(op)));
+    const eligible=t=>/^(light|switch)\./.test(t.entity_id)||(!draft.catch_up&&/^(cover|climate|media_player)\./.test(t.entity_id)&&(t.operations||[]).some(op=>!["toggle","play_pause","next","previous"].includes(op)));
     DHElectricaEntityPicker.open({items:model.targets.filter(t=>eligible(t)||existing.some(a=>a.entity_id===t.entity_id)),
       values:existing.map(a=>a.entity_id),renderIcon:targetIcon,renderTest:lightTestControl,onConfirm:ids=>{
         const old=new Set(existing.map(a=>a.entity_id));
