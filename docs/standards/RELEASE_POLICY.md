@@ -356,10 +356,12 @@ rely on `workflow_run.pull_requests`, which GitHub may return empty.
 If `main` advances during PR validation, integration **does not** update the PR
 branch with `GITHUB_TOKEN` (which can lead to an approval-required Actions run).
 Instead it dispatches `Validate repository` against the exact new base via
-`workflow_dispatch`, a supported GitHub Actions token exception. Every
-validation job tests the synthetic `refs/pull/<number>/merge` revision, and the
-dispatched run checks that its first parent is the expected `main` SHA and its
-second parent is the expected PR head. Integration refuses a stale base, an
+`workflow_dispatch`, a supported GitHub Actions token exception. The validation-scope job resolves the synthetic `refs/pull/<number>/merge`
+revision exactly once, and the dispatched run checks that its first parent is
+the expected `main` SHA and its second parent is the expected PR head. It
+exports the resolved immutable merge commit SHA to every dependent validation
+job; each job checks out that exact SHA, not a moving PR merge ref.
+Release readiness checks the exact PR head SHA. Integration refuses a stale base, an
 unexpected head, a draft PR, or an unresolved branch policy/check failure. No
 checks or branch protections are bypassed.
 

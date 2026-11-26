@@ -47,7 +47,8 @@ class ScopeTests(unittest.TestCase):
         workflow = Path(__file__).resolve().parents[2] / ".github/workflows/validate.yml"
         jobs = yaml.safe_load(workflow.read_text(encoding="utf-8"))["jobs"]
         scoped = {name for name, job in jobs.items()
-                  if job.get("needs") == "validation-scope"}
+                  if job.get("needs") == "validation-scope" and
+                  name not in ("repository-contract", "release-readiness")}
         self.assertEqual(scoped, ALL_JOBS)
         for name in scoped:
             self.assertIn(f"\'{name}\'", jobs[name]["if"])
