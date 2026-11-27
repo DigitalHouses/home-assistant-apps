@@ -152,7 +152,8 @@ Collection cadence is App-owned and does not accelerate because a resource becom
 
 - `FAST` — 10 s: CPU, temperature/frequency, RAM, Swap, fans;
 - `UPS` — 10 s: NUT runtime data;
-- `SLOW` — 60 s: storage usage, disk temperature, GPU inventory/temperature, VM/LXC runtime, host runtime diagnostics and `/etc/pve/.version` check;
+- `SLOW` — 60 s: storage usage, disk temperature, GPU inventory/temperature, host runtime diagnostics and `/etc/pve/.version` check;
+- `GUESTS` — startup inventory, lifecycle journal events and a 5 s follow-up; 300 s reconciliation while the journal follower is healthy, 60 s fallback otherwise. This does not change the independent UPS shutdown-budget refresh cadence;
 - `HEALTH` — 1 h: full SMART/wear and genuinely heavy health diagnostics;
 - `BACKUP` — 60 s: local-node `vzdump` task list and only newly discovered or active task logs, asynchronously;
 - `STATIC` — startup and detected PVE configuration-version changes. Manual Refresh is the explicit full refresh path: it rebuilds topology, rescans QGA-backed passthrough storage, and sequentially refreshes every PVE collector, including guests, host, CPU, memory, storage, fans, SMART/health, disk temperature and GPU inventory/temperature. If UPS is configured, the same main Refresh request also refreshes UPS state; the dedicated UPS Refresh remains available for UPS-only refresh.
