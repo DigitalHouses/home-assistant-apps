@@ -2,6 +2,12 @@
 
 Historical releases below were published as DigitalHouses Aqara Switch App; their identifiers are retained.
 
+## 0.3.10
+
+- Replace the presence assignment editor's asymmetric Always/Day/Night condition and night override with two symmetric per-target Day and Night blocks: active, ON/OFF or global profile for that mode or custom light parameters, and independent Auto-OFF after absence. Disabled blocks preserve their saved settings.
+- Keep pre-0.3.10 bindings readable without rewriting at startup. Ingress projects them into both blocks and saves the new modes contract on explicit Save. Legacy global references are preserved.
+- Select the corresponding block on detection; update the selected timer mode on an actual auto-enabled Day/Night transition while presence owns the target, without resetting an already-running absence deadline. Continue to respect exclusive ownership, manual priority, availability and no waking off targets on a mode transition.
+
 ## 0.3.9
 
 - Add per-target presence conditions (Always / Day / Night) and optional separate night light parameters, including custom brightness independent of System Globals. Existing assignments default to Always. Unknown mode blocks only mode-dependent ON; queued mode-dependent commands are rechecked.

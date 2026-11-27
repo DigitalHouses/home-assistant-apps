@@ -320,6 +320,30 @@ function mediaControls(a,t,row,action){
 const customDrafts=new WeakSet();
 function profileSelect(a,t,p,action,volume=false){
   const saved=a.data.profile;
+  if(a.sensorMode){
+    const mode=a.sensorMode,title=mode==="day"?"дня":"ночи";
+    const legacy=saved&&saved!=="current"&&saved!==mode;
+    const kind=saved?(legacy?"legacy":"global"):(Object.keys(a.data).length||customDrafts.has(a)?"custom":"simple");
+    const selector=selectOptions([["simple","ON/OFF"],["global","Глобальные параметры "+title],["custom","Свои параметры"],
+      ...(legacy?[["legacy","Сохранённый профиль: "+(saved==="day"?"День":"Ночь")]]:[])],kind,"Источник параметров");
+    selector.onchange=()=>{
+      const color=a.data.color_source;
+      customDrafts.delete(a);
+      if(selector.value==="custom")customDrafts.add(a);
+      a.data=selector.value==="global"?{profile:mode,...(color?{color_source:color}:{})}:{};
+      update();renderEdit(action);
+    };
+    p.append(selector);
+    if(!saved)return kind==="custom";
+    if(t.cct&&t.rgb){
+      const label=el("label","Источник цвета"),color=selectOptions([["","Выберите CCT или RGB"],["cct","CCT — температура"],["rgb","RGB — цвет"]],a.data.color_source||"","Источник цвета");
+      color.required=true;
+      color.onchange=()=>{if(color.value)a.data.color_source=color.value;else delete a.data.color_source;update();renderEdit(action)};
+      label.append(color);p.append(label);
+    }
+    p.append(el("span",model.home_profiles_ready?"Глобальные параметры дома":"Глобальные параметры недоступны","muted"));
+    return false;
+  }
   const kind=saved==="current"?"current":saved||Object.keys(a.data).length||customDrafts.has(a)?"fixed":"simple";
   const mode=el("select");
   for(const [value,title] of [...(volume?[]:[["simple","ON/OFF"]]),["fixed","Фиксированные"],["current","День/Ночь"]]){
@@ -381,49 +405,54 @@ if(a.operation!=="off"){if(t.brightness)addParam(p,t,a,"brightness_pct","Ярк�
 function scheduleOperations(a,t){
   return assignmentOperations(a,t).filter(([op])=>!["toggle","play_pause","next","previous"].includes(op));
 }
-const nightEditors=new WeakMap();
-const sensorWhenNames={always:"Всегда",day:"День",night:"Ночь"};
-function sensorModeControls(action,a,t,row){
-  const p=el("div",undefined,"params"),label=el("label","Включать");
-  const when=selectOptions(Object.entries(sensorWhenNames),a.when||"always","Режим включения");
-  when.onchange=()=>{
-    if(when.value==="always")delete a.when;else a.when=when.value;
-    if(when.value!=="always"){delete a.night_data;nightEditors.delete(a)}
-    update();renderEdit(action);
-  };
-  label.append(when);p.append(label);
-  if(a.entity_id.startsWith("light.")&&(t.brightness||t.cct||t.rgb)&&(a.when||"always")==="always"){
-    const separate=el("input");separate.type="checkbox";separate.checked=Object.hasOwn(a,"night_data");
-    const text=el("label");text.append(separate,document.createTextNode("Отдельные параметры ночью"));
-    separate.onchange=()=>{
-      if(separate.checked)a.night_data=structuredClone(a.data);
-      else{delete a.night_data;nightEditors.delete(a)}
-      update();renderEdit(action);
-    };
-    p.append(text);
-  }
-  row.append(p);
+function sensorModeBlocks(a){
+  if(a.modes)return a.modes;
+  const when=a.when||"always";
+  return Object.fromEntries(["day","night"].map(mode=>[mode,{
+    enabled:when==="always"||when===mode,
+    data:structuredClone(mode==="night"&&Object.hasOwn(a,"night_data")?a.night_data:a.data||{}),
+    ...(a.off_delay_seconds!=null?{off_delay_seconds:a.off_delay_seconds}:{})
+  }]));
 }
-function sensorLightControls(a,t,row,action){
-  if(!Object.hasOwn(a,"night_data")){lightProfileControls(a,t,row,action);return}
-  const day=el("div",undefined,"sensor-profile"),night=el("div",undefined,"sensor-profile");
-  day.append(el("strong","День"));lightProfileControls(a,t,day,action);
-  let editor=nightEditors.get(a);
-  if(!editor){
-    editor={entity_id:a.entity_id,operation:"on",get data(){return a.night_data},set data(value){a.night_data=value}};
-    nightEditors.set(a,editor);
+function sensorAssignment(a){
+  return {entity_id:a.entity_id,operation:"on",modes:sensorModeBlocks(a)};
+}
+const modeEditors=new WeakMap();
+function sensorModeControls(action,a,t,row){
+  if(!a.modes)Object.assign(a,sensorAssignment(a));
+  for(const mode of ["day","night"]){
+    const block=a.modes[mode],name=mode==="day"?"День":"Ночь";
+    const panel=el("div",undefined,"sensor-profile"),heading=el("div",undefined,"head");
+    const enabled=el("input");enabled.type="checkbox";enabled.checked=block.enabled;
+    const label=el("label");label.append(enabled,document.createTextNode("Активно"));
+    enabled.onchange=()=>{block.enabled=enabled.checked;update();renderEdit(action)};
+    heading.append(el("strong",name),label);panel.append(heading);
+    if(block.enabled){
+      if(a.entity_id.startsWith("light.")){
+        let editor=modeEditors.get(block);
+        if(!editor){
+          editor={entity_id:a.entity_id,operation:"on",sensorMode:mode,get data(){return block.data},set data(value){block.data=value}};
+          modeEditors.set(block,editor);
+        }
+        lightProfileControls(editor,t,panel,action);
+      }
+      const p=el("div",undefined,"params");
+      p.append(durationControl("Авто-OFF после отсутствия",block.off_delay_seconds,0,total=>{
+        if(total===undefined)delete block.off_delay_seconds;else block.off_delay_seconds=total;
+      }));
+      panel.append(p);
+    }
+    row.append(panel);
   }
-  night.append(el("strong","Ночь"));lightProfileControls(editor,t,night,action);
-  row.append(day,night);
 }
 function assignedRow(action,a,container){const t=model.targets.find(t=>t.entity_id===a.entity_id),row=el("div",undefined,"assigned");row.append(targetIcon(t,a.entity_id),el("strong",(t?.name||a.entity_id)+" · "+a.entity_id));const op=el("select");for(const [v,n] of (editing?.sensor?[["on","ON"]]:editing?.schedule?scheduleOperations(a,t):assignmentOperations(a,t))){const o=el("option",n);o.value=v;op.append(o)}op.value=a.operation;op.onchange=()=>{a.operation=op.value;
 if(a.entity_id.startsWith("cover.")){if(op.value==="position")a.data.position=50;else delete a.data.position}
 else if(/^(climate|media_player)\./.test(a.entity_id))a.data=DHActionsEntityPicker.initialData(op.value,t);
-if(op.value==="off"){delete a.off_delay_seconds;for(const k of Object.keys(a.data))if(k!=="transition")delete a.data[k];}update();renderEdit(action)};const test=lightTestControl(t,a.entity_id);if(test)row.append(test);row.append(op,button("Удалить",()=>{draft.bindings[action]=draft.bindings[action].filter(x=>x.entity_id!==a.entity_id);if(!draft.bindings[action].length){delete draft.bindings[action];draft.disabled_actions=draft.disabled_actions.filter(x=>x!==action)}update();renderEdit(action)}));if(!t){row.append(el("span","⚠ Сущность отсутствует","problem"));container.append(row);return}if(a.entity_id.startsWith("cover."))coverControls(action,a,t,row);if(a.entity_id.startsWith("climate."))climateControls(a,t,row);if(a.entity_id.startsWith("media_player."))mediaControls(a,t,row,action);if(editing?.sensor)sensorModeControls(action,a,t,row);
-if(a.entity_id.startsWith("light.")){if(editing?.sensor)sensorLightControls(a,t,row,action);else lightProfileControls(a,t,row,action);}
-if(!editing?.schedule&&(editing?.sensor||(/^(light|switch)\./.test(a.entity_id)&&["on","toggle"].includes(a.operation)))){
+if(op.value==="off"){delete a.off_delay_seconds;for(const k of Object.keys(a.data))if(k!=="transition")delete a.data[k];}update();renderEdit(action)};const test=lightTestControl(t,a.entity_id);if(test)row.append(test);if(!editing?.sensor)row.append(op);row.append(button("Удалить",()=>{draft.bindings[action]=draft.bindings[action].filter(x=>x.entity_id!==a.entity_id);if(!draft.bindings[action].length){delete draft.bindings[action];draft.disabled_actions=draft.disabled_actions.filter(x=>x!==action)}update();renderEdit(action)}));if(!t){row.append(el("span","⚠ Сущность отсутствует","problem"));container.append(row);return}if(a.entity_id.startsWith("cover."))coverControls(action,a,t,row);if(a.entity_id.startsWith("climate."))climateControls(a,t,row);if(a.entity_id.startsWith("media_player."))mediaControls(a,t,row,action);if(editing?.sensor)sensorModeControls(action,a,t,row);
+else if(a.entity_id.startsWith("light."))lightProfileControls(a,t,row,action);
+if(!editing?.sensor&&!editing?.schedule&&/^(light|switch)\./.test(a.entity_id)&&["on","toggle"].includes(a.operation)){
   const p=el("div",undefined,"params");
-  p.append(durationControl(editing?.sensor?"Авто-OFF после отсутствия":"Авто-OFF после включения",a.off_delay_seconds,editing?.sensor?0:1,total=>{
+  p.append(durationControl("Авто-OFF после включения",a.off_delay_seconds,1,total=>{
     if(total===undefined)delete a.off_delay_seconds;else a.off_delay_seconds=total;
   }));
   row.append(p);
@@ -584,9 +613,9 @@ function renderSensors(){
     const targets=el("div",undefined,"bindings");
     for(const a of sensor.config.assignments||[]){
       const line=el("div",undefined,"binding");line.append(targetNode(a.entity_id));
-      if(a.when&&a.when!=="always")line.append(el("span",sensorWhenNames[a.when],"muted"));
-      if(Object.hasOwn(a,"night_data"))line.append(el("span","Разные параметры День/Ночь","muted"));
-      if(a.off_delay_seconds!=null)line.append(el("span","Авто-OFF: "+formatDuration(a.off_delay_seconds),"muted"));
+      for(const [mode,b] of Object.entries(sensorModeBlocks(a))){
+        line.append(el("span",(mode==="day"?"День":"Ночь")+": "+(b.enabled?"ON":"OFF")+(b.enabled&&b.off_delay_seconds!=null?" · Авто-OFF "+formatDuration(b.off_delay_seconds):""),"muted"));
+      }
       const due=model.sensor_deadlines?.[a.entity_id];
       if(due!=null)line.append(el("span","До OFF: "+formatDuration(Math.max(0,Math.ceil(due-Date.now()/1000))),"muted"));
       const t=model.targets.find(x=>x.entity_id===a.entity_id);
@@ -606,7 +635,7 @@ function openSensor(sensor){
   editing={...sensor,sensor:true};
   const c=structuredClone(sensor.config);
   draft={id:sensor.entity_id,room:sensor.area,area_id:sensor.area_id,enabled:c.enabled,
-         bindings:{presence:c.assignments.map(a=>({...a,data:a.data||{}}))},revision:model.revision,
+         bindings:{presence:c.assignments.map(sensorAssignment)},revision:model.revision,
          disabled_actions:[],lux_entity_id:c.lux_entity_id||(sensor.lux_sources?.length===1?sensor.lux_sources[0].entity_id:undefined),lux_threshold:c.lux_threshold};
   dirty=false;renderSensorEdit();
 }
@@ -640,7 +669,7 @@ function renderSensorEdit(){
     DHActionsEntityPicker.open({items:model.targets.filter(t=>(!t.group&&t.integration!=="group")||t.sensor_group_supported||existing.some(a=>a.entity_id===t.entity_id)),values:existing.map(a=>a.entity_id),domains:["light","switch"],
       areaId:draft.area_id,areaHint:draft.room,renderIcon:targetIcon,renderTest:lightTestControl,
       onConfirm:ids=>{
-        draft.bindings[action]=DHActionsEntityPicker.mergeAssignments(existing,ids,model.targets).map(a=>({...a,operation:"on"}));
+        draft.bindings[action]=DHActionsEntityPicker.mergeAssignments(existing,ids,model.targets).map(sensorAssignment);
         if(ids.length)draft.enabled=true;update();renderSensorEdit();
       }});
   }));

@@ -278,7 +278,7 @@ class SensorEngine:
             owned=self.mode_owner(eid)
             if owned:
                 _,a=owned
-                if sensor_rules.mode_allows(a,mode) and "night_data" in a:
+                if sensor_rules.mode_allows(a,mode) and ("night_data" in a or "modes" in a):
                     data=sensor_rules.mode_data(a,mode)
                     if data and eid.startswith("light."):result[eid]=deepcopy(data)
         return result
@@ -295,8 +295,12 @@ class SensorEngine:
         count=0
         for eid,r in list(self.owners.items()):
             source=r["source"]
+            owned=self.mode_owner(eid)
+            if owned and sensor_rules.mode_allows(owned[1],snapshot["mode"]):
+                r["mode"]=snapshot["mode"]
             if self.mode_off_allowed(eid,source,snapshot) and not self.app.event_log.active_target(eid):
                 if self.enqueue(source,"off",[eid],mode_snapshot=snapshot):count+=1
+        self.save()
         return count
 
     def enqueue(self,source,operation,ids,mode_snapshot=None):
@@ -321,9 +325,9 @@ class SensorEngine:
     def dynamic_owner(self,eid):
         record=self.owners.get(eid)
         if not record or self.row(record["source"])!=record["row"] or (not record["source"].startswith("key:") and self.group_overlap(eid)):return False
-        return any(a["entity_id"]==eid and "night_data" not in a
+        return any(a["entity_id"]==eid and "night_data" not in a and not ("modes" in a and sensor_rules.conditional(a))
                    and sensor_rules.mode_allows(a,self.home_mode())
-                   and a.get("data",{}).get("profile")=="current"
+                   and sensor_rules.mode_data(a,self.home_mode()).get("profile")=="current"
                    for a in record["row"]["assignments"])
 
     def expect_profile(self,eid,data):
@@ -374,7 +378,7 @@ class SensorEngine:
                 if target!=eid or self.group_members(target) is not None or old.get("state")=="off":
                     self.pending.pop(target,None)
                     self.owners[target]={"source":pending["source"],"row":pending["row"],
-                                         "signature":observed,"deadline":None}
+                                         "signature":observed,"deadline":None,"mode":pending.get("mode")}
             elif pending and current not in ("on","off","mixed"):
                 self.pending.pop(target,None)
             elif target in self.owners and observed!=self.owners[target]["signature"]:
@@ -410,8 +414,9 @@ class SensorEngine:
                 self.drop(eid)
                 continue
             a=next((a for a in row["assignments"] if a["entity_id"]==eid),{})
-            delay=a.get("off_delay_seconds")
+            delay=sensor_rules.mode_delay(a,r.get("mode",self.home_mode()))
             if r["source"].startswith("key:"):
+                delay=a.get("off_delay_seconds")
                 if delay is None:self.drop(eid)
                 elif r["deadline"] is None:r["deadline"]=now+delay
                 continue
@@ -464,14 +469,15 @@ class SensorEngine:
             self.drop(eid)
         elif token["manual"].get(eid)==self.manual.get(eid,0) and token["row"]==self.row(source):
             a=next((a for a in token["row"]["assignments"] if a["entity_id"]==eid),{})
-            if a.get("off_delay_seconds") is not None or a.get("data",{}).get("profile")=="current" or sensor_rules.conditional(a):
+            if (sensor_rules.mode_delay(a,token.get("mode")) is not None
+                    or sensor_rules.mode_data(a,token.get("mode")).get("profile")=="current" or sensor_rules.conditional(a)):
                 if self.state(eid)=="on" and self.target_signature(eid).get("last_changed"):
                     self.owners[eid]={"source":source,"row":deepcopy(token["row"]),
-                                      "signature":self.target_signature(eid),"deadline":None}
+                                      "signature":self.target_signature(eid),"deadline":None,"mode":token.get("mode")}
                 else:
                     self.pending[eid]={"source":source,"row":deepcopy(token["row"]),"expires":time.time()+CONFIRM_SECONDS,
                                        "route":deepcopy(self.app.config.get("light_routes",{}).get(eid)),
-                                       "members":self.group_members(eid)}
+                                       "members":self.group_members(eid),"mode":token.get("mode")}
         self.reconcile(time.time())
 
     def tick(self):
