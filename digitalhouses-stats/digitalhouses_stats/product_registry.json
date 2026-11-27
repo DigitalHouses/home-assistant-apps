@@ -148,7 +148,7 @@
       "id": "digitalhouses_aqara_switch_app",
       "type": "app",
       "entity_prefix": "dh_aqara_switch_app",
-      "display_name": "Aqara Switch App (legacy)",
+      "display_name": "Aqara Switch App",
       "telemetry_allowed": true,
       "lifecycle": "deprecated",
       "superseded_by": "digitalhouses_actions_app",
