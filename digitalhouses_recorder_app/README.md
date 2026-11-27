@@ -32,9 +32,11 @@ The app monitors Recorder rather than replacing it. It does not delete history, 
 
 ## Dashboard
 
-![DigitalHouses Recorder dashboard — Russian](images/dh_db_monitor.png)
+![DigitalHouses Recorder dashboard — English](images/recorder_dashboard_en.png)
 
-*Existing Russian dashboard screenshot. The new English dashboard uses the same layout and functionality; an English screenshot from a running installation is pending.*
+*English dashboard running on Home Assistant with PostgreSQL and Recorder App 0.1.29.*
+
+[View the Russian dashboard screenshot](images/dh_db_monitor.png).
 
 The dashboard brings database health, storage, activity graphs and entity rankings together. Monitoring entities are created automatically through MQTT Discovery. You can also use them in your own dashboards and automations.
 
