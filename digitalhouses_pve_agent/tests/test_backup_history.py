@@ -462,3 +462,14 @@ def test_coverage_unknown_when_selector_unavailable():
                                   lambda path,*args: [{"node":"pve","vmid":100}] if path == "/cluster/resources" else {})
     assert inventory["status"] == "unknown"
     assert inventory["guests"][0]["status"] == "unknown"
+
+
+def test_coverage_view_does_not_present_zero_counts_for_legacy_agents():
+    from pathlib import Path
+    raw = (Path(__file__).resolve().parents[1] / "dashboards" / "ru" /
+           "10_pve_proxmox.yaml").read_text()
+    card = raw.split("title: PVE · Покрытие заданиями", 1)[1].split("grid_options:", 1)[0]
+    assert "c is not mapping" in card
+    assert all(f"'{key}' in c" in card for key in ("covered", "uncovered", "excluded", "unknown"))
+    assert card.index("Инвентаризация недоступна") < card.index("В заданиях:")
+    assert "Покрытие определено не полностью" in card

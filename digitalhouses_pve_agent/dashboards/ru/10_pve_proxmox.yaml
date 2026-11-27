@@ -950,10 +950,13 @@ sections:
         title: PVE · Покрытие заданиями
         content: |-
           {% set e = 'sensor.dh_pve_agent_backup_job_coverage' %}
-          {% set c = state_attr(e, 'counts') or {} %}
-          {% if states(e) not in ['available', 'unknown'] %}
+          {% set c = state_attr(e, 'counts') %}
+          {% if states(e) not in ['available', 'unknown'] or c is not mapping or not ('covered' in c and 'uncovered' in c and 'excluded' in c and 'unknown' in c) %}
           ⚪ Инвентаризация недоступна
           {% else %}
+          {% if states(e) == 'unknown' %}
+          ⚠ Покрытие определено не полностью
+          {% endif %}
           🟢 В заданиях: {{ c.covered | default(0) }} · 🔴 Без заданий: {{ c.uncovered | default(0) }} · ⚪ Исключено: {{ c.excluded | default(0) }} · Неизвестно: {{ c.unknown | default(0) }}
           {% for job in state_attr(e, 'jobs') or [] %}
           - {{ job.name }} · {{ job.schedule or '—' }} · {{ job.members | length }} VM/CT{% if job.status != 'enabled' %} · {{ job.status }}{% endif %}
