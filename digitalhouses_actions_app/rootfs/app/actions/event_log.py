@@ -281,6 +281,7 @@ class EventLog:
                      observed_at=datetime.now(timezone.utc).isoformat())
             self.pending.pop(route,None)
             self._touch(row)
+            return True
 
     def profile_pending(self,route):
         with self.lock:
@@ -314,6 +315,7 @@ class EventLog:
                           observed_at=datetime.now(timezone.utc).isoformat())
             self.pending.pop(route,None)
             self._touch(row)
+            return True
 
     def ha_observations(self, states):
         with self.lock:

@@ -36,12 +36,23 @@ def validate_row(row):
         raise CatalogError("Omit both Lux fields when unavailable")
     assignments=[]
     for a in row["assignments"]:
-        if not isinstance(a,Mapping) or set(a)-{"entity_id","operation","data","off_delay_seconds"} or a.get("operation")!="on" or not isinstance(a.get("entity_id"),str) or not a["entity_id"].startswith(("light.","switch.")):
+        if not isinstance(a,Mapping) or set(a)-{"entity_id","operation","data","off_delay_seconds","when","night_data"} or a.get("operation")!="on" or not isinstance(a.get("entity_id"),str) or not a["entity_id"].startswith(("light.","switch.")):
             raise CatalogError("Motion/Presence supports explicit ON for lights and switches")
         delay=a.get("off_delay_seconds")
         if delay is not None and (type(delay) is not int or not 0<=delay<=86400):
             raise CatalogError("Auto-OFF delay must be 0..86400 seconds or omitted")
-        assignments.append({k:v for k,v in a.items() if k!="off_delay_seconds"})
+        when=a.get("when","always")
+        if when not in ("always","day","night"):
+            raise CatalogError("Invalid Day/Night condition")
+        primary={k:v for k,v in a.items() if k not in ("off_delay_seconds","when","night_data")}
+        if "night_data" in a:
+            if when!="always" or not a["entity_id"].startswith("light."):
+                raise CatalogError("Separate night parameters require an always-enabled light")
+            night={**primary,"data":a["night_data"]}
+            parse_rule({"assignments":[night]})
+            if "brightness_step_pct" in a["night_data"] or "brightness_step_pct" in primary.get("data",{}):
+                raise CatalogError("Mode-specific parameters require absolute brightness")
+        assignments.append(primary)
     if assignments:parse_rule({"assignments":assignments})
     return deepcopy(dict(row))
 
@@ -84,12 +95,30 @@ def lux_allows(row,states,now=None):
         return math.isfinite(value) and 0<=value<row["lux_threshold"] and 0<=age<=MAX_LUX_AGE
     except (ValueError,KeyError,TypeError,AttributeError,OverflowError):return False
 
-def commands(row,ids,operation):
+def conditional(a):
+    return a.get("when","always")!="always" or "night_data" in a
+
+def mode_allows(a,mode):
+    when=a.get("when","always")
+    return (when=="always" and ("night_data" not in a or mode in ("day","night"))) or when==mode
+
+def mode_data(a,mode):
+    return a["night_data"] if mode=="night" and "night_data" in a else a.get("data",{})
+
+def variants(a):
+    primary={k:v for k,v in a.items() if k not in ("off_delay_seconds","when","night_data")}
+    yield primary
+    if "night_data" in a:yield {**primary,"data":a["night_data"]}
+
+def commands(row,ids,operation,mode=None):
     result=[]
     for a in row["assignments"]:
         eid=a["entity_id"]
         if eid not in ids:continue
         call={"service":eid.split(".")[0]+".turn_"+operation,"target":{"entity_id":[eid]}}
-        if operation=="on" and a.get("data"):call["data"]=deepcopy(a["data"])
+        if operation=="on":
+            if not mode_allows(a,mode):continue
+            data=mode_data(a,mode)
+            if data:call["data"]=deepcopy(data)
         result.append(call)
     return result

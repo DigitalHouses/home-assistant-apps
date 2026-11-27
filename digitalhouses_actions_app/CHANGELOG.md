@@ -2,6 +2,12 @@
 
 Historical releases below were published as DigitalHouses Aqara Switch App; their identifiers are retained.
 
+## 0.3.9
+
+- Add per-target presence conditions (Always / Day / Night) and optional separate night light parameters, including custom brightness independent of System Globals. Existing assignments default to Always. Unknown mode blocks only mode-dependent ON; queued mode-dependent commands are rechecked.
+- With auto_day_night enabled, a real mode transition may turn off an exclusively presence-owned, currently occupied target disallowed in the new mode, and update an already-ON presence-owned light with separate parameters. Do not turn on previously OFF lights on transition, take over manual lights, or infer ownership from group summaries. Reuse verified dispatch, timer ownership, Lux and availability safeguards; no replay, extra polling or changes to existing bindings. Mode-dependent custom commands use parameter confirmation in LOG.
+- Use existing HA state_changed events to confirm native light/switch ON/OFF and clear confirmed light shadows without waiting for periodic refresh.
+
 ## 0.3.8
 
 - Add Ingress Parameters tab and MQTT Discovery switch for live auto_day_night changes. Persist the existing Supervisor option without restart, preserve all other options/bindings and publish authoritative retained state on connect/change. Strict boolean / ON-OFF commands; no retained replay or implicit application of the current profile. Invalidate queued stale adaptations when the flag changes.

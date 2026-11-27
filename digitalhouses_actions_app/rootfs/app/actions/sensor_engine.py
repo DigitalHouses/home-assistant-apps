@@ -254,15 +254,63 @@ class SensorEngine:
         if self.state(eid) not in ("off","on"):return
         self.dispatched(token["source"],"KEY_ON",token,eid,desired)
 
-    def enqueue(self,source,operation,ids):
+    def home_mode(self):
+        return (self.app._home_profile or {}).get("mode")
+
+    def assignment(self,row,eid):
+        return next((a for a in row["assignments"] if a["entity_id"]==eid),{})
+
+    def mode_owner(self,eid):
+        record=self.owners.get(eid)
+        if not record or record["source"].startswith("key:"):return None
+        source=record["source"]
+        row=self.row(source)
+        if (not self.ready or not row or record["row"]!=row or self.presence(source)!="on"
+                or self.related(eid)!=[source] or self.group_overlap(eid) or not self.target_ok(eid)
+                or self.state(eid)!="on" or self.target_signature(eid)!=record["signature"]):
+            return None
+        a=self.assignment(row,eid)
+        return (source,a) if sensor_rules.conditional(a) else None
+
+    def mode_parameters(self,mode):
+        result={}
+        for eid in self.owners:
+            owned=self.mode_owner(eid)
+            if owned:
+                _,a=owned
+                if sensor_rules.mode_allows(a,mode) and "night_data" in a:
+                    data=sensor_rules.mode_data(a,mode)
+                    if data and eid.startswith("light."):result[eid]=deepcopy(data)
+        return result
+
+    def mode_off_allowed(self,eid,source,snapshot):
+        if (self.app._home_profile is not snapshot or not self.app.globals.get("auto_day_night")
+                or self.app.globals["maintenance_mode"] or eid in self.profile_changes):
+            return False
+        owned=self.mode_owner(eid)
+        return bool(owned and owned[0]==source and not sensor_rules.mode_allows(owned[1],snapshot["mode"])
+                    and self.group_ready(eid,"on"))
+
+    def mode_transition(self,snapshot):
+        count=0
+        for eid,r in list(self.owners.items()):
+            source=r["source"]
+            if self.mode_off_allowed(eid,source,snapshot) and not self.app.event_log.active_target(eid):
+                if self.enqueue(source,"off",[eid],mode_snapshot=snapshot):count+=1
+        return count
+
+    def enqueue(self,source,operation,ids,mode_snapshot=None):
         row = self.row(source)
         if not row or not ids:return False
         action = "SENSOR_ON" if operation=="on" else "SENSOR_OFF"
         token = {"generation":self.generation,"epoch":self.epoch.get(source,0),
                  "row":deepcopy(row),"manual":{eid:self.manual.get(eid,0) for eid in ids},
                  "routes":{eid:deepcopy(self.app.config.get("light_routes",{}).get(eid)) for eid in ids}}
-        calls = sensor_rules.commands(row,set(ids),operation)
-        rid = self.app.event_log.press("ha",source,"Присутствие" if operation=="on" else "Авто-OFF",ids)
+        token["mode"]=self.home_mode()
+        if mode_snapshot is not None:token["mode_snapshot"]=mode_snapshot
+        calls = sensor_rules.commands(row,set(ids),operation,token["mode"])
+        if not calls:return False
+        rid = self.app.event_log.press("ha",source,"Присутствие" if operation=="on" else "День/Ночь · OFF" if mode_snapshot is not None else "Авто-OFF",ids)
         try:
             self.app._jobs.put_nowait((None,token,source,action,calls,rid))
             return True
@@ -273,11 +321,13 @@ class SensorEngine:
     def dynamic_owner(self,eid):
         record=self.owners.get(eid)
         if not record or self.row(record["source"])!=record["row"] or (not record["source"].startswith("key:") and self.group_overlap(eid)):return False
-        return any(a["entity_id"]==eid and a.get("data",{}).get("profile")=="current"
+        return any(a["entity_id"]==eid and "night_data" not in a
+                   and sensor_rules.mode_allows(a,self.home_mode())
+                   and a.get("data",{}).get("profile")=="current"
                    for a in record["row"]["assignments"])
 
     def expect_profile(self,eid,data):
-        if self.dynamic_owner(eid):
+        if self.dynamic_owner(eid) or self.mode_owner(eid):
             self.profile_changes[eid]={"data":deepcopy(data),"until":time.time()+CONFIRM_SECONDS+data.get("transition",0)}
 
     def profile_matches(self,eid,observed,now):
@@ -341,7 +391,7 @@ class SensorEngine:
                 self.epoch[eid]=self.epoch.get(eid,0)+1
                 row=self.row(eid)
                 if self.ready and row and before=="off" and after=="on" and not self.app.globals["maintenance_mode"]:
-                    ids=[a["entity_id"] for a in row["assignments"] if self.target_ok(a["entity_id"])
+                    ids=[a["entity_id"] for a in row["assignments"] if sensor_rules.mode_allows(a,self.home_mode()) and self.target_ok(a["entity_id"])
                          and self.state(a["entity_id"])=="off"
                          and not self.group_overlap(a["entity_id"])
                          and self.group_ready(a["entity_id"],"off")
@@ -368,7 +418,7 @@ class SensorEngine:
             if delay is None:
                 r["deadline"]=None
                 r.pop("absence",None)
-                if not self.dynamic_owner(eid):self.drop(eid)
+                if not self.dynamic_owner(eid) and not sensor_rules.conditional(a):self.drop(eid)
             elif self.app.globals["maintenance_mode"] or not self.absent(eid):
                 r["deadline"]=None
                 r.pop("absence",None)
@@ -398,7 +448,12 @@ class SensorEngine:
             return False
         if action=="SENSOR_ON":
             if rid is not None and self.app.event_log.active_target(eid,exclude=rid):return False
+            a=self.assignment(token["row"],eid)
+            if not sensor_rules.mode_allows(a,self.home_mode()) or (sensor_rules.conditional(a) and token.get("mode")!=self.home_mode()):return False
             return self.presence(source)=="on" and token["epoch"]==self.epoch.get(source,0) and self.state(eid)=="off" and eid not in self.pending and self.group_ready(eid,"off")
+        if "mode_snapshot" in token:
+            return (not self.app.event_log.active_target(eid,exclude=rid)
+                    and self.mode_off_allowed(eid,source,token["mode_snapshot"]))
         r=self.owners.get(eid)
         return bool(r and r["source"]==source and r["deadline"] is not None
                     and r["deadline"]<=time.time() and (source.startswith("key:") or self.absent(eid)) and self.state(eid)=="on" and eid not in self.profile_changes
@@ -409,7 +464,7 @@ class SensorEngine:
             self.drop(eid)
         elif token["manual"].get(eid)==self.manual.get(eid,0) and token["row"]==self.row(source):
             a=next((a for a in token["row"]["assignments"] if a["entity_id"]==eid),{})
-            if a.get("off_delay_seconds") is not None or a.get("data",{}).get("profile")=="current":
+            if a.get("off_delay_seconds") is not None or a.get("data",{}).get("profile")=="current" or sensor_rules.conditional(a):
                 if self.state(eid)=="on" and self.target_signature(eid).get("last_changed"):
                     self.owners[eid]={"source":source,"row":deepcopy(token["row"]),
                                       "signature":self.target_signature(eid),"deadline":None}

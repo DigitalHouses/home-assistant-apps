@@ -228,9 +228,8 @@ def validate_sensor_assignment(row,sources,targets,previous=None):
         raise CatalogError("Задайте порог освещённости для датчика с Lux")
     previous=previous or {}
     for a in row["assignments"]:
-        check={k:v for k,v in a.items() if k!="off_delay_seconds"}
         if a not in previous.get("assignments",[]):
-            validate_assignment(check,targets)
+            for check in sensor_rules.variants(a):validate_assignment(check,targets)
 
 def save_sensor(app,payload):
     if not isinstance(payload,dict) or set(payload)!={"revision","config"}:
@@ -334,7 +333,7 @@ def import_bindings(app, payload):
                     if row["entity_id"] in getattr(app,"sensor_catalog",{}):
                         for a in row["assignments"]:
                             if a["entity_id"] in app.target_catalog:
-                                validate_assignment({k:v for k,v in a.items() if k!="off_delay_seconds"},app.target_catalog)
+                                for check in sensor_rules.variants(a):validate_assignment(check,app.target_catalog)
                         if "lux_entity_id" in row and row["lux_entity_id"] not in {x["entity_id"] for x in app.sensor_catalog[row["entity_id"]]["lux_sources"]}:
                             raise CatalogError("Lux source does not belong to sensor")
                     continue

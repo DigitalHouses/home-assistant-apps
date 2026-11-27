@@ -123,7 +123,7 @@ def resolve_commands(commands,catalog,snapshot):
     return output,skipped,unresolved_toggles
 
 
-def adaptation_plan(config, dynamic_owner=None):
+def adaptation_plan(config, dynamic_owner=None, mode=None):
     """Enabled dynamic assignments only; ambiguous mixed policies fail closed.
 
     Plain ON/OFF is not a parameter owner. Do not infer the active profile from ON.
@@ -154,7 +154,11 @@ def adaptation_plan(config, dynamic_owner=None):
         if row.get("enabled"):
             for a in row["assignments"]:
                 if a["entity_id"].startswith("light."):
-                    add(a["entity_id"],a.get("data",{}))
+                    from .sensor_rules import mode_allows
+                    if "night_data" in a:
+                        add(a["entity_id"],{"mode_specific":True})
+                    elif mode_allows(a,mode):
+                        add(a["entity_id"],a.get("data",{}))
     for row in config.get("schedules",{}).values():
         if not row["enabled"]:continue
         for a in row["assignments"]:
