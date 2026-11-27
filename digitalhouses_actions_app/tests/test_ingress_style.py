@@ -147,39 +147,49 @@ assert.equal(logLightParameters({}),"");
         self.assertIn('formatDuration(b.off_delay_seconds)',js)
         self.assertIn('formatDuration(remaining)',js)
         self.assertIn('main.querySelector(".duration-control input:invalid")',js)
+        self.assertIn('heading=el("div",undefined,"sensor-profile-heading")',js)
+        self.assertIn('for(const block of Object.values(result.modes))block.off_delay_seconds=0',js)
+        css=(WEB/"style.css").read_text()
+        self.assertIn(".sensor-profile-heading{display:flex;align-items:center;justify-content:flex-start",css)
         if not shutil.which("node"):
             self.skipTest("Node unavailable")
         source=js[js.index("function formatDuration("):js.index("function modeControls(")]
         subprocess.run(["node","-e",source+"""
 const assert=require('node:assert/strict');
 for(const n of [0,1,59,60,61,90,1800,1830,86399,86400]){
-  const [m,s]=splitDuration(n);
-  assert.equal(joinDuration(m,s,0),n);
+  assert.equal(parseDuration(formatDuration(n),0),n);
 }
-assert.deepEqual(splitDuration(undefined),['','']);
-assert.equal(joinDuration('','',1),undefined);
-assert.equal(joinDuration('30','',1),1800);
-assert.equal(joinDuration('','45',1),45);
-assert.equal(joinDuration('0','0',0),0);
-assert.equal(formatDuration(1830),'30 мин. 30 сек.');
-for(const args of [['0','0',1],['1','60',0],['1440','1',0],['-1','0',0],['1.5','0',0],['1e2','0',0],['','-1',0]]){
-  assert.throws(()=>joinDuration(...args));
+assert.equal(formatDuration(0),'00:00');
+assert.equal(formatDuration(1830),'30:30');
+assert.equal(formatDuration(86400),'1440:00');
+assert.equal(parseDuration('',1),undefined);
+assert.equal(parseDuration('2:15',1),135);
+assert.equal(parseDuration('00:00',0),0);
+for(const [v,min] of [['00:00',1],['1:60',0],['1440:01',0],['-1:00',0],['1.5:00',0],['1e2:00',0],['1:5',0],['1',0],[' 1:00',0]]){
+  assert.throws(()=>parseDuration(v,min));
 }
 function el(tag,text,cls){
-  return {tag,textContent:text,className:cls,value:'',children:[],validity:{badInput:false},
+  return {tag,textContent:text,className:cls,value:'',children:[],
     append(...c){this.children.push(...c)},setAttribute(){},setCustomValidity(v){this.error=v}};
 }
 function button(text,fn,cls){const b=el('button',text,cls);b.onclick=fn;return b}
 function update(){}
-const document={createTextNode:v=>v};
 let result=1830;
 const control=durationControl('Авто-OFF',result,1,v=>result=v);
-const m=control.children[1].children[0],s=control.children[2].children[0],clear=control.children[3];
-assert.equal(m.value,'30');assert.equal(s.value,'30');
-m.value='2';m.oninput();assert.equal(result,150);
-s.value='60';s.oninput();assert.equal(result,150);assert.ok(s.error);
-s.value='15';s.oninput();assert.equal(result,135);assert.equal(s.error,'');
-clear.onclick();assert.equal(result,undefined);assert.equal(m.value,'');assert.equal(s.value,'');
+const field=control.children[0].children[0],clear=control.children[1],status=control.children[2];
+assert.equal(field.value,'30:30');
+field.value='2:15';field.oninput();assert.equal(result,135);
+field.onblur();assert.equal(field.value,'02:15');
+field.value='02:60';field.oninput();assert.equal(result,135);assert.ok(field.error);
+field.value='00:05';field.oninput();assert.equal(result,5);assert.equal(field.error,'');
+clear.onclick();assert.equal(result,undefined);assert.equal(field.value,'');assert.equal(field.placeholder,'00:00');assert.equal(status.textContent,'Отключён');
+const sensor=durationControl('Авто-OFF',0,0,v=>result=v);
+const sf=sensor.children[0].children[0];
+assert.equal(sf.value,'00:00');assert.equal(sensor.children[2].textContent,'');
+sf.value='00:00';sf.oninput();assert.equal(result,0);
+const disabled=durationControl('Авто-OFF',undefined,0,v=>result=v);
+assert.equal(disabled.children[0].children[0].value,'');
+assert.equal(disabled.children[2].textContent,'Отключён');
 """],check=True)
 
     def test_schedule_editor_uses_existing_assignment_picker(self):

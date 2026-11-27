@@ -60,44 +60,40 @@ function selectOptions(choices,value,label){
   select.value=value;return select;
 }
 function formatDuration(seconds){
-  return Math.floor(seconds/60)+" мин. "+seconds%60+" сек.";
+  return String(Math.floor(seconds/60)).padStart(2,"0")+":"+String(seconds%60).padStart(2,"0");
 }
-function splitDuration(value){
-  return value==null?["",""]:[String(Math.floor(value/60)),String(value%60)];
-}
-function joinDuration(minutes,seconds,minimum){
-  if(minutes===""&&seconds==="")return undefined;
-  if(!/^\d*$/.test(minutes)||!/^\d*$/.test(seconds))throw Error("Введите целое число минут и секунд");
-  const m=Number(minutes),s=Number(seconds),total=m*60+s;
-  if(!Number.isInteger(total)||m>1440||s>59||total<minimum||total>86400)throw Error("Допустимо от "+formatDuration(minimum)+" до 1440 мин. 0 сек.");
+function parseDuration(value,minimum){
+  if(value==="")return undefined;
+  const match=/^\d{1,4}:\d{2}$/.exec(value);
+  if(!match)throw Error("Введите минуты и секунды в формате MM:SS");
+  const [m,s]=value.split(":").map(Number),total=m*60+s;
+  if(s>59||total<minimum||total>86400)throw Error("Допустимо от "+formatDuration(minimum)+" до 1440:00");
   return total;
 }
 function durationControl(title,value,minimum,onChange){
-  const box=el("div",undefined,"duration-control"),caption=el("span",title);
-  const [m,s]=splitDuration(value);
-  const minutes=el("input"),seconds=el("input");
-  for(const [n,label,max,v] of [[minutes,"мин.",1440,m],[seconds,"сек.",59,s]]){
-    n.type="number";n.min=0;n.max=max;n.step=1;n.placeholder="—";n.value=v;
-    n.setAttribute("aria-label",title+" — "+label);
-  }
+  const box=el("div",undefined,"duration-control"),caption=el("label",title,"duration-caption");
+  const field=el("input");field.type="text";field.placeholder="00:00";field.value=value==null?"":formatDuration(value);
+  field.maxLength=7;field.autocomplete="off";field.spellcheck=false;
+  field.setAttribute("aria-label",title+" (MM:SS)");
   const error=el("span","","duration-error problem");
+  const status=el("span",value==null?"Отключён":"","duration-status muted");
+  caption.append(field);
   function changed(){
     update();
     try{
-      if(minutes.validity.badInput||seconds.validity.badInput)throw Error("Введите целое число минут и секунд");
-      const total=joinDuration(minutes.value,seconds.value,minimum);
-      error.textContent="";minutes.setCustomValidity("");seconds.setCustomValidity("");
+      const total=parseDuration(field.value,minimum);
+      field.setCustomValidity("");error.textContent="";
+      status.textContent=total===undefined?"Отключён":"";
       onChange(total);
     }catch(e){
-      error.textContent=e.message;minutes.setCustomValidity(e.message);seconds.setCustomValidity(e.message);
+      status.textContent="";error.textContent=e.message;field.setCustomValidity(e.message);
     }
   }
-  minutes.oninput=seconds.oninput=changed;
-  const ml=el("label"),sl=el("label");
-  ml.append(minutes,document.createTextNode("мин."));sl.append(seconds,document.createTextNode("сек."));
-  const clear=button("×",()=>{minutes.value=seconds.value="";changed()},"duration-clear");
+  field.oninput=changed;
+  field.onblur=()=>{try{const total=parseDuration(field.value,minimum);if(total!==undefined)field.value=formatDuration(total)}catch(_){}};
+  const clear=button("×",()=>{field.value="";changed()},"duration-clear");
   clear.type="button";clear.title="Отключить таймер";clear.setAttribute("aria-label","Отключить таймер");
-  box.append(caption,ml,sl,clear,error);
+  box.append(caption,clear,status,error);
   return box;
 }
 function modeControls(){
@@ -422,7 +418,7 @@ function sensorModeControls(action,a,t,row){
   if(!a.modes)Object.assign(a,sensorAssignment(a));
   for(const mode of ["day","night"]){
     const block=a.modes[mode],name=mode==="day"?"День":"Ночь";
-    const panel=el("div",undefined,"sensor-profile"),heading=el("div",undefined,"head");
+    const panel=el("div",undefined,"sensor-profile"),heading=el("div",undefined,"sensor-profile-heading");
     const enabled=el("input");enabled.type="checkbox";enabled.checked=block.enabled;
     const label=el("label");label.append(enabled,document.createTextNode("Активно"));
     enabled.onchange=()=>{block.enabled=enabled.checked;update();renderEdit(action)};
@@ -669,7 +665,14 @@ function renderSensorEdit(){
     DHActionsEntityPicker.open({items:model.targets.filter(t=>(!t.group&&t.integration!=="group")||t.sensor_group_supported||existing.some(a=>a.entity_id===t.entity_id)),values:existing.map(a=>a.entity_id),domains:["light","switch"],
       areaId:draft.area_id,areaHint:draft.room,renderIcon:targetIcon,renderTest:lightTestControl,
       onConfirm:ids=>{
-        draft.bindings[action]=DHActionsEntityPicker.mergeAssignments(existing,ids,model.targets).map(sensorAssignment);
+        const oldIds=new Set(existing.map(a=>a.entity_id));
+        draft.bindings[action]=DHActionsEntityPicker.mergeAssignments(existing,ids,model.targets).map(a=>{
+          const result=sensorAssignment(a);
+          if(!oldIds.has(a.entity_id)){
+            for(const block of Object.values(result.modes))block.off_delay_seconds=0;
+          }
+          return result;
+        });
         if(ids.length)draft.enabled=true;update();renderSensorEdit();
       }});
   }));
