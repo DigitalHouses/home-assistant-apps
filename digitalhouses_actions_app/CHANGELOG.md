@@ -2,6 +2,11 @@
 
 Historical releases below were published as DigitalHouses Aqara Switch App; their identifiers are retained.
 
+## 0.3.3
+
+- Plain light ON/OFF/Toggle assignments do not conflict with Day/Night profile adaptation. A light controlled by a plain key and a separate dynamic key or presence sensor can adapt when already ON, even without a timer owner. Explicit fixed-profile or color-source conflicts retain conservative handling.
+- Log automatic Day/Night configuration at startup and actual mode changes, including disabled/maintenance/missing profiles, queued application and eligible/conflicting target counts. No startup replay.
+
 ## 0.3.2
 
 - Use System Globals brightness and independent CCT/RGB profiles without duplicating values. Single-color targets use their capability automatically; dual-capability lights require explicit color_source cct or rgb in the global profile assignment, never automatic fallback.

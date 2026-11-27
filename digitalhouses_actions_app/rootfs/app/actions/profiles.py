@@ -126,13 +126,17 @@ def resolve_commands(commands,catalog,snapshot):
 def adaptation_plan(config, dynamic_owner=None):
     """Enabled dynamic assignments only; ambiguous mixed policies fail closed.
 
-    OFF is not a parameter owner. Do not infer the active profile from ON.
+    Plain ON/OFF is not a parameter owner. Do not infer the active profile from ON.
     Return per-target profile references and conflicts. A confirmed dynamic
     timer owner may resolve a fixed/dynamic conflict, but not contradictory
     color selections. Compare physical identities for overlapping groups.
     """
     kinds={}
     def add(eid,data):
+        # Plain ON/OFF (including a transition duration) does not select
+        # brightness or color, so it is not a competing profile owner.
+        if eid.startswith("light.") and not set(data)-{"transition"}:
+            return
         policy=("current",data.get("color_source")) if data.get("profile")=="current" else ("fixed",None)
         kinds.setdefault(eid,set()).add(policy)
     for room in config["rooms"]:
