@@ -217,6 +217,21 @@ class AutoProfileTests(unittest.TestCase):
                     logged=next(r["targets"][PHYSICAL] for r in app.event_log.snapshot()["rows"] if PHYSICAL in r["targets"])
                     self.assertEqual(logged["parameters"],{"brightness_pct":40,**({"color_temp_kelvin":2700} if choice=="cct" else {"rgb_color":[0,255,0]})})
                     self.assertEqual(logged["status"],"accepted")
+                    self.assertFalse(app.event_log.active_target(PHYSICAL))
+                    def status():
+                        return next(r["targets"][PHYSICAL] for r in app.event_log.snapshot()["rows"] if PHYSICAL in r["targets"])
+                    payload={"state":"ON","brightness":102,**expected}
+                    for report in (packet(BASE+"/led_strip",payload,True),
+                                   packet(BASE+"/led_strip",{"state":"ON"}),
+                                   packet(BASE+"/led_strip",{**payload,"brightness":230})):
+                        app._on_message(None,None,report)
+                        self.assertEqual(status()["status"],"accepted")
+                    report=packet(BASE+"/led_strip",payload);report.dup=True
+                    app._on_message(None,None,report)
+                    self.assertEqual(status()["status"],"accepted")
+                    app._on_message(None,None,packet(BASE+"/led_strip",payload))
+                    self.assertEqual(status()["status"],"confirmed")
+                    self.assertEqual(status()["observed_parameters"]["brightness_pct"],40)
                 ha.execute.assert_not_called()
 
     def test_group_requires_all_members_online_fresh_on(self):

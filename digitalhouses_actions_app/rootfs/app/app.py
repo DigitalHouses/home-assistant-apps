@@ -23,7 +23,8 @@ def main() -> int:
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
     )
     import paho.mqtt.client as mqtt
-    application = Application(mqtt, version=version, options=BindingStore(SupervisorOptions()))
+    application = Application(mqtt, version=version, options=BindingStore(SupervisorOptions()),
+                              event_log_path=Path("/data/actions_log.sqlite3"))
     application.run()
     return 0
 

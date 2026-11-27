@@ -1,6 +1,6 @@
 FROM ghcr.io/home-assistant/base:latest
 
-ARG BUILD_VERSION="0.3.5"
+ARG BUILD_VERSION="0.3.6"
 ARG BUILD_ARCH
 
 ENV APP_VERSION="$BUILD_VERSION" PYTHONUNBUFFERED="1"
@@ -17,5 +17,5 @@ RUN apk add --no-cache \
         py3-websocket-client \
         py3-yaml
 COPY rootfs /
-RUN chmod a+x /run.sh && python3 -m compileall -q /app
+RUN chmod a+x /run.sh && python3 -c 'import sqlite3; assert sqlite3.sqlite_version' && python3 -m compileall -q /app
 CMD ["/run.sh"]

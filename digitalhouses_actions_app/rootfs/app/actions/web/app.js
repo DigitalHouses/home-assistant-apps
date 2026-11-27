@@ -620,6 +620,8 @@ function logLightParameters(p){
   if(p.brightness_pct!=null)values.push("Яркость "+p.brightness_pct+"%");
   if(p.color_temp_kelvin!=null)values.push("CCT "+p.color_temp_kelvin+" K");
   if(Array.isArray(p.rgb_color))values.push("RGB ("+p.rgb_color.join(", ")+")");
+  if(Array.isArray(p.xy_color))values.push("XY ("+p.xy_color.join(", ")+")");
+  if(Array.isArray(p.hs_color))values.push("HS ("+p.hs_color.join(", ")+")");
   if(p.transition!=null)values.push("переход "+p.transition+" с");
   return values.join(" · ");
 }
@@ -636,11 +638,16 @@ function renderLogRow(row){
       :confirmed?before+" → "+desired:sent?before+" ⇢ "+desired:t.status==="queued"?"…":"пропущено";
     const mark=confirmed?"✓✓":sent?"✓"+(["timeout","superseded"].includes(t.status)?" ⚠":""):t.status==="queued"?"…":"⚠";
     const check=el("span",mark,"log-check "+(confirmed?"":t.status==="sent"?"sent":"problem"));
-    check.title={confirmed:"Получено наблюдаемое состояние; не физический ACK",sent:"Команда отправлена, ожидается состояние",accepted:"Команда принята; завершение не подтверждено",timeout:"Нет подтверждения за 90 сек.",superseded:"Заменена более новой командой",queued:"В очереди",skipped:"Пропущено"}[t.status]||"";
+    check.title={confirmed:"Получено наблюдаемое состояние; не физический ACK",sent:"Команда отправлена, ожидается состояние",accepted:"Команда принята; завершение не подтверждено",timeout:"Нет подтверждения в допустимый срок",superseded:"Заменена более новой командой",queued:"В очереди",skipped:"Пропущено"}[t.status]||"";
     if(target?.group&&confirmed)check.title="Состояние группы Z2M получено; не подтверждение каждого участника (возможен optimistic state)";
     item.title=t.reason||check.title;item.append(ico,el("span",eid.split(".")[1]||eid),el("span",change),check);
-    if(params&&t.status==="accepted")item.append(el("span","параметры не подтверждены","muted"));
+    if(confirmed&&t.observed_parameters){
+      item.append(el("span","Получено: "+logLightParameters(t.observed_parameters),"muted"));
+      if(target?.group)item.append(el("span","отчёт группы","muted"));
+    }
+    if(params&&t.status==="accepted")item.append(el("span",t.expected_parameters?"ожидание параметров":"параметры не подтверждены","muted"));
     if(t.status==="skipped"&&t.reason)item.append(el("span",t.reason,"muted"));
+    if(["timeout","superseded"].includes(t.status))item.append(el("span",t.reason||(t.status==="timeout"?"Нет подтверждения":"Заменено новой командой"),"muted"));
     n.append(item);
   }
   if(row.reason)n.append(el("span",row.reason,"muted"));
@@ -682,7 +689,7 @@ async function pollLog(){
     const mode=({day:"День",night:"Ночь"})[model?.home_mode]||"режим неизвестен";
     const globals=model?.home_profiles_ready?"профили OK":"нет профилей";
     const auto=model?.auto_day_night?"авто ON":"авто OFF";
-    document.querySelector("#log-info").textContent=journal.size+" / "+data.limit+" · "+(logTimezone||"UTC (HA timezone недоступен)")+" · "+mode+" · "+globals+" · "+auto;
+    document.querySelector("#log-info").textContent=journal.size+" / "+data.limit+" · "+(logTimezone||"UTC (HA timezone недоступен)")+" · "+mode+" · "+globals+" · "+auto+" · "+(data.storage_error?"SQLite ⚠ RAM":data.storage==="sqlite"?"SQLite":"RAM");
     applyLiveState();
   }catch(e){document.querySelector("#log-info").textContent="Нет связи: "+e.message}
   finally{logBusy=false}
@@ -692,6 +699,14 @@ logButton.onclick=()=>{
   logButton.classList.toggle("active",logOpen);logButton.setAttribute("aria-expanded",String(logOpen));
   document.querySelector("#workspace").classList.toggle("log-open",logOpen);
   if(logOpen){renderAllLog();pollLog()}
+};
+document.querySelector("#export-log").onclick=async()=>{
+  try{
+    const doc=await api("log/export"),blob=new Blob([JSON.stringify(doc,null,2)],{type:"application/json"});
+    const url=URL.createObjectURL(blob),a=el("a");
+    a.href=url;a.download="dh-actions-log-"+new Date().toISOString().replace(/[:.]/g,"-")+".json";
+    document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),10000);
+  }catch(e){document.querySelector("#log-info").textContent="Ошибка выгрузки: "+e.message}
 };
 const jsonDialog=document.querySelector("#json-dialog"),jsonText=document.querySelector("#json-text"),jsonStatus=document.querySelector("#json-status");
 async function showJSON(){

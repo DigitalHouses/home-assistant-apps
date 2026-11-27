@@ -2,6 +2,12 @@
 
 Historical releases below were published as DigitalHouses Aqara Switch App; their identifiers are retained.
 
+## 0.3.6
+
+- Persist the existing bounded action journal in /data/actions_log.sqlite3, preserving the latest 500 rows within 24 hours across restarts and upgrades. No command replay; unfinished rows are marked interrupted. Storage failures fall back to RAM with explicit diagnostic.
+- Export the entire retained journal as JSON via the LOG panel button, including requested and observed values and statuses.
+- Confirm profile light commands only from matching fresh state and parameters, using actual Z2M brightness/mired/XY/HS payload values or HA attributes and active color mode. No added polling, no ON-only parameter confirmation. Pending parameter observation does not block newer commands. Timeout includes transition duration; replacement is explicit. Group reports do not prove each member.
+
 ## 0.3.5
 
 - Show resolved light profile brightness, CCT/RGB and transition in the existing Ingress LOG for Day/Night adaptation and profile-driven key, sensor and schedule commands, rather than an uninformative ON-to-ON line.
