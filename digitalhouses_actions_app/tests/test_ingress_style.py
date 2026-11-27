@@ -141,9 +141,10 @@ assert.equal(logLightParameters({}),"");
         import subprocess
         js=(WEB/"app.js").read_text()
         self.assertIn('durationControl("Авто-OFF после включения",draft.relay_timers?.[key],1',js)
-        self.assertIn('durationControl(editing?.sensor?"Авто-OFF после отсутствия":"Авто-OFF после включения",a.off_delay_seconds,editing?.sensor?0:1',js)
+        self.assertIn('durationControl("Авто-OFF после включения",a.off_delay_seconds,1',js)
+        self.assertIn('durationControl("Авто-OFF после отсутствия",block.off_delay_seconds,0',js)
         self.assertIn('formatDuration(t.off_delay_seconds)',js)
-        self.assertIn('formatDuration(a.off_delay_seconds)',js)
+        self.assertIn('formatDuration(b.off_delay_seconds)',js)
         self.assertIn('formatDuration(remaining)',js)
         self.assertIn('main.querySelector(".duration-control input:invalid")',js)
         if not shutil.which("node"):

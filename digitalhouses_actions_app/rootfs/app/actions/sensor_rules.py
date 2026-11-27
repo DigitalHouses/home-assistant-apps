@@ -36,8 +36,25 @@ def validate_row(row):
         raise CatalogError("Omit both Lux fields when unavailable")
     assignments=[]
     for a in row["assignments"]:
-        if not isinstance(a,Mapping) or set(a)-{"entity_id","operation","data","off_delay_seconds","when","night_data"} or a.get("operation")!="on" or not isinstance(a.get("entity_id"),str) or not a["entity_id"].startswith(("light.","switch.")):
+        if not isinstance(a,Mapping) or set(a)-{"entity_id","operation","data","off_delay_seconds","when","night_data","modes"} or a.get("operation")!="on" or not isinstance(a.get("entity_id"),str) or not a["entity_id"].startswith(("light.","switch.")):
             raise CatalogError("Motion/Presence supports explicit ON for lights and switches")
+        if "modes" in a:
+            if set(a)!={"entity_id","operation","modes"}:
+                raise CatalogError("Do not mix mode blocks with legacy fields")
+            modes=a["modes"]
+            if not isinstance(modes,Mapping) or set(modes)!={"day","night"}:
+                raise CatalogError("Both Day and Night settings are required")
+            for block in modes.values():
+                if (not isinstance(block,Mapping) or set(block)-{"enabled","data","off_delay_seconds"}
+                        or type(block.get("enabled")) is not bool or not isinstance(block.get("data"),Mapping)):
+                    raise CatalogError("Invalid Day/Night settings")
+                if "off_delay_seconds" in block and (type(block["off_delay_seconds"]) is not int or not 0<=block["off_delay_seconds"]<=86400):
+                    raise CatalogError("Auto-OFF delay must be 0..86400 seconds or omitted")
+                if "brightness_step_pct" in block["data"] and modes["day"]!=modes["night"]:
+                    raise CatalogError("Mode-specific parameters require absolute brightness")
+                parse_rule({"assignments":[{"entity_id":a["entity_id"],"operation":"on","data":block["data"]}]})
+            assignments.append({"entity_id":a["entity_id"],"operation":"on","data":{}})
+            continue
         delay=a.get("off_delay_seconds")
         if delay is not None and (type(delay) is not int or not 0<=delay<=86400):
             raise CatalogError("Auto-OFF delay must be 0..86400 seconds or omitted")
@@ -95,20 +112,48 @@ def lux_allows(row,states,now=None):
         return math.isfinite(value) and 0<=value<row["lux_threshold"] and 0<=age<=MAX_LUX_AGE
     except (ValueError,KeyError,TypeError,AttributeError,OverflowError):return False
 
+def mode_blocks(a):
+    """Project legacy assignments into identical Day/Night blocks without mutation."""
+    if "modes" in a:return a["modes"]
+    when=a.get("when","always")
+    return {mode:{"enabled":when in ("always",mode),
+                  "data":a["night_data"] if mode=="night" and "night_data" in a else a.get("data",{}),
+                  **({"off_delay_seconds":a["off_delay_seconds"]} if a.get("off_delay_seconds") is not None else {})}
+            for mode in ("day","night")}
+
+
 def conditional(a):
+    if "modes" in a:
+        blocks=mode_blocks(a)
+        return blocks["day"]!=blocks["night"]
     return a.get("when","always")!="always" or "night_data" in a
 
+
+def mode_block(a,mode):
+    blocks=mode_blocks(a)
+    if mode in ("day","night"):return blocks[mode]
+    # Preserve mode-independent legacy behavior even without System Globals.
+    if "modes" not in a and "night_data" in a:return {"enabled":False,"data":{}}
+    if blocks["day"]==blocks["night"]:return blocks["day"]
+    return {"enabled":False,"data":{}}
+
+
 def mode_allows(a,mode):
-    when=a.get("when","always")
-    return (when=="always" and ("night_data" not in a or mode in ("day","night"))) or when==mode
+    return mode_block(a,mode)["enabled"]
+
 
 def mode_data(a,mode):
-    return a["night_data"] if mode=="night" and "night_data" in a else a.get("data",{})
+    return mode_block(a,mode)["data"]
+
+
+def mode_delay(a,mode):
+    return mode_block(a,mode).get("off_delay_seconds")
+
 
 def variants(a):
-    primary={k:v for k,v in a.items() if k not in ("off_delay_seconds","when","night_data")}
-    yield primary
-    if "night_data" in a:yield {**primary,"data":a["night_data"]}
+    for block in mode_blocks(a).values():
+        if block["enabled"]:
+            yield {"entity_id":a["entity_id"],"operation":"on","data":block["data"]}
 
 def commands(row,ids,operation,mode=None):
     result=[]

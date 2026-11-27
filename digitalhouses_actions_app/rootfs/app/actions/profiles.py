@@ -154,11 +154,11 @@ def adaptation_plan(config, dynamic_owner=None, mode=None):
         if row.get("enabled"):
             for a in row["assignments"]:
                 if a["entity_id"].startswith("light."):
-                    from .sensor_rules import mode_allows
-                    if "night_data" in a:
+                    from .sensor_rules import mode_allows, mode_data, conditional
+                    if "night_data" in a or ("modes" in a and conditional(a)):
                         add(a["entity_id"],{"mode_specific":True})
                     elif mode_allows(a,mode):
-                        add(a["entity_id"],a.get("data",{}))
+                        add(a["entity_id"],mode_data(a,mode))
     for row in config.get("schedules",{}).values():
         if not row["enabled"]:continue
         for a in row["assignments"]:

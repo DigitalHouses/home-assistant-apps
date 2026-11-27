@@ -197,6 +197,8 @@ class PresenceModeTests(unittest.TestCase):
 
     def test_ingress_controls(self):
         js=(Path(__file__).resolve().parents[1]/"rootfs/app/actions/web/app.js").read_text()
-        self.assertIn('sensorWhenNames={always:"Всегда",day:"День",night:"Ночь"}',js)
-        self.assertIn("Отдельные параметры ночью",js)
-        self.assertIn("a.night_data=value",js)
+        self.assertIn('for(const mode of ["day","night"])',js)
+        self.assertIn('enabled.checked=block.enabled',js)
+        self.assertIn('block.off_delay_seconds',js)
+        self.assertIn('Глобальные параметры "+title',js)
+        self.assertNotIn("Отдельные параметры ночью",js)
