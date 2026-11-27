@@ -4,344 +4,94 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](../LICENSE)
 ![Type: Home Assistant App](https://img.shields.io/badge/type-Home%20Assistant%20App-41BDF5.svg)
 
-Home Assistant App for monitoring the health, retained history, write activity, size and storage footprint of the database used by Home Assistant Recorder.
+**Understand what is happening inside your Home Assistant Recorder database.**
 
-[Quick start](#quick-start) · [Technical documentation](DOCS.md) · [HA/MQTT migration](#hamqtt-identity-migration) · [Changelog](CHANGELOG.md) · [Issues](https://github.com/DigitalHouses/home-assistant-apps/issues)
+Monitor database health, disk space, history retention and the entities generating the most records — directly from a Home Assistant dashboard.
 
-Canonical product and Home Assistant App identity:
+## Why I built this app
 
-```text
-digitalhouses_recorder_app
-```
+I've been using Home Assistant and, over time, kept running into the same questions about its Recorder database.
 
-Canonical MQTT/HA identity completed by the 0.1.16 cleanup release:
+Sometimes I was running out of disk space. Other times the database was growing much faster than I expected, and I had to figure out which entity was responsible. I also wanted to know whether Recorder was still writing data, how much history I actually had, and how quickly the number of records was increasing.
 
-```text
-MQTT base:    DigitalHouses/Global/digitalhouses_recorder_app
-device ID:    digitalhouses_recorder_app
-entity prefix dh_recorder_app
-```
+I could investigate these things using SQL queries and server tools, but I wanted to see the answers in Home Assistant itself, without having to investigate the database manually every time.
 
-![DigitalHouses Recorder dashboard](images/dh_db_monitor.png)
+That's why I built DigitalHouses Recorder App. It started as a practical tool for my own Home Assistant installations, and I decided to make it available to other users who face the same problems.
 
-## Dashboard and packages
+## What can it tell you?
 
-The canonical [Russian Lovelace view](dashboards/ru/10_recorder.yaml)
-has a stable `path: recorder`. The [common Recorder package](packages/common/dh_recorder_app.yaml)
-includes the monitoring entities in Recorder history. Optional [Russian
-notification package](packages/locales/ru/dh_recorder_app_notification_package.yaml)
-is intended for DigitalHouses sites with their local notification dependencies.
+| Question | What the app shows |
+| --- | --- |
+| Is Recorder still working? | Database connectivity, write activity and the age of the last recorded state. |
+| Why is my database growing? | Database size, historical growth and record counts by hour and day. |
+| Which entities produce the most records? | Top-N rankings for the last 24 hours and all retained history, with counts and percentage shares. |
+| How much history do I have? | Earliest and latest recorded states, total records and history depth. |
+| Am I running out of disk space? | Free and used space, disk usage history and a configurable warning threshold when storage monitoring is available. |
 
-DH Sync 0.6 automatically discovers the retained QoS 1 MQTT announcement at
-`DigitalHouses/Global/digitalhouses_recorder_app/sync` and synchronizes canonical
-YAML from the repository default branch. Panel placement is owned by DH Sync.
-The running App version is informational, not a resource compatibility gate.
-DH Sync is optional; copy the standalone view into a Lovelace dashboard manually
-if not using it. Install the common package using Home Assistant's package
-configuration, merging with any existing Recorder selection.
+The app monitors Recorder rather than replacing it. It does not delete history, change Recorder's configuration, or modify its database tables. You decide what to do with the information.
 
-Install the frontend dependencies before importing the view: Mushroom,
-button-card >= 5.0, mini-graph-card and entity-progress-card
-(`custom:entity-progress-card-template`). DH Sync does not install HACS cards.
-The English view is not yet published.
+## Dashboard
 
-See the [current DH Sync standard](../docs/standards/DH_SYNC_DEVELOPER_STANDARD.md).
+![DigitalHouses Recorder dashboard — English](images/recorder_dashboard_en.png)
 
-## Quick start
+*English dashboard running on Home Assistant with PostgreSQL and Recorder App 0.1.29.*
 
-1. In Home Assistant open **Settings → Apps → App store → Repositories**.
-2. Add:
+[View the Russian dashboard screenshot](images/dh_db_monitor.png).
 
-```text
-https://github.com/DigitalHouses/home-assistant-apps
-```
+The dashboard brings database health, storage, activity graphs and entity rankings together. Monitoring entities are created automatically through MQTT Discovery. You can also use them in your own dashboards and automations.
 
-3. Install **DigitalHouses Recorder App**.
-4. Select PostgreSQL or MariaDB, configure the database connection, and optionally enable storage monitoring.
-5. Start the App. MQTT credentials are obtained from the Home Assistant Supervisor MQTT service.
-
-The production App uses the versioned GHCR image family:
-
-```text
-ghcr.io/digitalhouses/digitalhouses_recorder_app
-```
-
-## What it monitors
-
-Recorder App publishes one canonical MQTT Discovery device with:
-
-- database connectivity and Recorder write activity;
-- earliest/latest retained state and history depth;
-- rolling-hour, current-hour, current-day, previous-day and total Recorder state-row volume in thousands;
-- database size, type, database name/user and server version;
-- optional filesystem free, used, total and used percentage;
-- configurable Top-N Recorder entities for the last 24 hours and all retained history;
-- on-demand full refresh and last successful refresh timestamp;
-- compact App status/control state with explicit stable-release checks;
-- App-owned disk-usage threshold;
-- machine events for DB/Recorder/storage transitions;
-- common runtime diagnostics: App Version and Started at.
+- [English dashboard (development preview YAML)](https://github.com/DigitalHouses/home-assistant-apps/blob/123d7dca8aa789a387baf9d41a9a112d863d0b57/digitalhouses_recorder_app/dashboards/en/10_recorder.yaml)
+- [Russian dashboard (YAML)](dashboards/ru/10_recorder.yaml)
 
 ## Supported databases
 
-- **PostgreSQL** — manual database connection.
-- **MariaDB Supervisor App** — automatic Supervisor MySQL service connection.
-- **External MariaDB** — manual database connection.
-
-The App reads Recorder data and database metadata; it does not modify Recorder tables.
-
-## Canonical Home Assistant entities
-
-Core diagnostics and controls include:
-
-| Entity ID | Purpose |
+| Database | Connection |
 | --- | --- |
-| `sensor.dh_recorder_app_version` | Running Recorder App release |
-| `sensor.dh_recorder_app_started_at` | Current App process start timestamp |
-| `sensor.dh_recorder_app_database_type` | PostgreSQL or MariaDB |
-| `sensor.dh_recorder_app_db_start` | Earliest retained Recorder state |
-| `sensor.dh_recorder_app_db_last` | Latest Recorder state |
-| `sensor.dh_recorder_app_db_depth` | Retained history depth |
-| `sensor.dh_recorder_app_db_current_hour_records` | Recorder writes since the start of the current local hour, K records |
-| `sensor.dh_recorder_app_db_today_records` | Recorder writes since local midnight, K records |
-| `sensor.dh_recorder_app_db_records` | Total Recorder state rows, K records |
-| `sensor.dh_recorder_app_db_size` | Database size |
-| `sensor.dh_recorder_app_db_version` | Database server/version |
-| `sensor.dh_recorder_app_db_name` | Database name reported by the server |
-| `sensor.dh_recorder_app_db_user` | Database user reported by the server |
-| `binary_sensor.dh_recorder_app_db_connected` | Database connectivity after the first real observation |
-| `binary_sensor.dh_recorder_app_recorder_writing` | Recorder write activity |
-| `sensor.dh_recorder_app_db_last_age` | Age of the latest Recorder state |
-| `sensor.dh_recorder_app_db_top_entities_24h` | Top Recorder entities for 24h |
-| `sensor.dh_recorder_app_db_top_entities_all_time` | Top Recorder entities across retained history |
-| `button.dh_recorder_app_db_refresh` | Full on-demand refresh |
-| `sensor.dh_recorder_app_card` | Compact-card operation state and timing |
-| `button.dh_recorder_app_check_updates` | Check the latest published stable Recorder App release |
-| `sensor.dh_recorder_app_latest_version` | Latest published stable Recorder App version |
-| `binary_sensor.dh_recorder_app_update_available` | Stable Recorder App update availability |
-| `sensor.dh_recorder_app_db_last_refresh` | Last successful full manual refresh |
-| `number.dh_recorder_app_db_disk_usage_threshold` | App-owned storage threshold |
-| `event.dh_recorder_app_diagnostic` | Machine transition events |
-| `button.dh_recorder_app_delete_telemetry` | Authenticated deletion of this installation's telemetry record |
-
-When storage monitoring is enabled:
-
-- `sensor.dh_recorder_app_db_disk_free`
-- `sensor.dh_recorder_app_db_disk_used`
-- `sensor.dh_recorder_app_db_disk_total`
-- `sensor.dh_recorder_app_db_disk_used_percentage`
-
-## HA/MQTT identity migration
-
-Release 0.1.15 provided the controlled compatibility bridge from the released
-legacy contract to the canonical Recorder App identity. Live acceptance
-confirmed the canonical device/entities, local package migration, telemetry,
-and App-data backup/restore before cleanup.
-
-Release 0.1.16 completes that migration. Runtime publication and command/event
-handling are canonical-only:
-
-```text
-MQTT base:    DigitalHouses/Global/digitalhouses_recorder_app
-device ID:    digitalhouses_recorder_app
-entity prefix dh_recorder_app
-```
+| SQLite (planned for 0.2.0) | Default Home Assistant database. No credentials required. |
+| MariaDB | Supervisor MariaDB App or an external server. |
+| PostgreSQL | Manual server connection. |
 
-On the first 0.1.16 MQTT connection, the App removes retained state under the
-former `DigitalHouses/Global/db_monitoring` namespace and publishes an empty
-retained Discovery payload for `digitalhouses_db_monitoring`. Each retained
-delete uses QoS 1 and must be acknowledged by the broker before cleanup is
-marked complete.
-
-Migration state is persisted in:
-
-```text
-/data/ha_mqtt_identity_migration.json
-```
-
-After the marker reaches `phase=completed`, rolling back to bridge release
-0.1.15 does not resurrect the legacy identity. Releases 0.1.14 and older
-predate this completed-marker behavior and are not safe rollback targets after
-cleanup.
-
-Historical Supervisor slug migration is separate and remains complete. The
-Supervisor slug is:
-
-```text
-digitalhouses_recorder_app
-```
-
-## Machine events and notifications
+SQLite support and the English dashboard are part of the upcoming 0.2.0 release. The current published 0.1.29 release supports MariaDB and PostgreSQL. See [releases](https://github.com/DigitalHouses/home-assistant-apps/releases) for available versions.
 
-Recorder App publishes transient MQTT Events through:
+## Quick start
 
-```text
-event.dh_recorder_app_diagnostic
-```
-
-Event types:
-
-- `db_connection_lost`
-- `db_connection_restored`
-- `recorder_writing_stopped`
-- `recorder_writing_restored`
-- `storage_usage_high`
-- `storage_usage_normal`
-
-Events use QoS 1 and `retain=false`. State is published before the transition event. The App establishes a startup baseline without synthetic alert/recovery events.
-
-Local Home Assistant notification logic should remain:
-
-```text
-machine event
-→ trigger.id
-→ choose
-→ direct action
-```
+1. Make sure MQTT is configured in Home Assistant and a Supervisor MQTT service is available (for example, the Mosquitto broker App).
+2. Open **Settings → Apps → App store → Repositories** and add:
 
-The public product has no dependency on `notify.*`, Telegram, site-specific helpers or any private delivery service.
+   ```text
+   https://github.com/DigitalHouses/home-assistant-apps
+   ```
 
-## Contract Data behavior
+3. Install **DigitalHouses Recorder App**.
+4. Select the database actually used by Recorder. Configure the connection for PostgreSQL or external MariaDB. SQLite is not supported by 0.1.29.
+5. Review the [telemetry policy](../docs/standards/PRODUCT_TELEMETRY_POLICY.md) and enable the statistics consent option to activate the App under the current policy.
+6. Start the App. Its monitoring entities appear automatically through MQTT Discovery.
 
-Required product facts are validated before publication.
+### Add the dashboard
 
-- Version is a strict semantic release value and is shared by the Version sensor, `device.sw_version` and `origin.sw_version`.
-- Started at is created once per App process and is timezone-aware ISO8601.
-- Database type is required configuration-derived state.
-- Database name, database user and database version are considered available only after all required static database fields were read successfully.
-- DB connectivity remains unavailable until the first actual connection observation.
-- Recorder-writing state is not synthesized as `false` when DB state is unknown.
-- Event payloads are validated by event-specific required-field contracts.
+Install the following frontend cards through HACS:
 
-Optional metrics may remain absent/null where their schema allows it, for example when Recorder contains no state rows yet.
+- Mushroom
+- Button Card (5.0 or newer)
+- Mini Graph Card
+- Entity Progress Card
 
-## Telemetry
+Copy the [Russian standalone view](dashboards/ru/10_recorder.yaml) into your Home Assistant dashboard YAML (as an entry under `views:`). The [English view](https://github.com/DigitalHouses/home-assistant-apps/blob/123d7dca8aa789a387baf9d41a9a112d863d0b57/digitalhouses_recorder_app/dashboards/en/10_recorder.yaml) is available as a development preview; its new monitoring controls require 0.2.0. Choose one language, not both. Use the [Recorder package](packages/common/dh_recorder_app.yaml) to retain the monitoring entities in Recorder history, merging its selection with your existing Recorder configuration if necessary.
 
-Согласие на сбор статистики DigitalHouses обязательно для запуска Recorder App. В настройках Home Assistant App расположен переключатель `telemetry_enabled` с начальным значением `false` и текстом:
+DigitalHouses Sync is optional. Its current version selects Russian; the English preview can be imported manually. No other DigitalHouses products are required for monitoring.
 
-> Consent to collect statistics (product name, version, installation ID).
+## Privacy and database access
 
-При `false` (в том числе после обновления ранее установленной версии) App выводит в журнал `Statistics collection consent not granted. Stopping application.` и останавливается **до подключения к БД, MQTT и инициализации телеметрии**. Для работы необходимо вручную выбрать `true`; обновление не изменяет это значение автоматически. Если согласие отозвано, последующий запуск также завершается.
+Recorder metrics and database credentials stay local. For external databases, use a least-privileged monitoring account. The upcoming SQLite adapter uses a read-only configuration mount and bounded read-only database queries.
 
-Формат и периодичность протокола v1 не меняются. Отправляются только:
+The current release policy requires explicit consent to minimal usage statistics (product, version and a random installation ID). It does not send your Recorder records, entity IDs, database credentials or monitoring metrics. The app continues to monitor Recorder if the statistics server is temporarily unavailable. See the [telemetry policy](../docs/standards/PRODUCT_TELEMETRY_POLICY.md) and [privacy review](../docs/standards/TELEMETRY_PRIVACY_LEGAL_REVIEW.md).
 
-- schema;
-- telemetry policy version;
-- persistent installation UUID;
-- product `digitalhouses_recorder_app`;
-- running release version.
+## Documentation and feedback
 
-It does not send database host/name/user, Home Assistant identity, hostname, IP, storage path, SSH information, metrics or country.
+- [Technical documentation](DOCS.md) — configuration, MQTT entities, storage monitoring, monitoring settings and migration details.
+- [Changelog](CHANGELOG.md)
+- [Report a bug or suggest a feature](https://github.com/DigitalHouses/home-assistant-apps/issues)
 
-Installation identity and a 256-bit token are stored in:
+If you've ever had to investigate an unexpectedly large Recorder database, I'd be interested to hear what you found and which metrics would help you.
 
-```text
-/data/telemetry.json
-```
-
-После согласия первый heartbeat и отчёт о новой версии выполняются по существующему графику, далее приблизительно каждые 24 часа. Ошибки DNS/HTTPS или недоступность сервера статистики не останавливают мониторинг Recorder; повторная попытка — через час. Существующая кнопка удаления записи телеметрии сохранена.
-
-## Polling strategy
-
-Recorder health uses `publish_interval_minutes`, default one minute. Expensive work is rate-limited:
-
-| Metric group | Interval |
-| --- | ---: |
-| Recorder health/latest state | Configured publish interval |
-| Database size/current record counters | 5 minutes |
-| Storage metrics | 5 minutes |
-| History depth/total records | 1 hour |
-| Top entities — 24h | 1 hour |
-| Top entities — all retained history | 1 day |
-| Static database information | Startup/reconnect until successful |
-
-The five-minute database metric group is aligned to local five-minute clock boundaries after its immediate startup collection. The hourly history-depth/total-record group is aligned to the local top of the hour instead of drifting from App startup time.
-
-A manual refresh collects every enabled group immediately without changing the normal background schedule.
-
-For Recorder activity bar charts, use the live period counters directly:
-`db_current_hour_records` grouped by hour and `db_today_records` grouped by
-date. The maintained dashboard uses `mini-graph-card` with
-`aggregate_func: delta`, which keeps the current incomplete hour/day visible
-while empty history buckets render as zero.
-
-Top-entity ranking rows include the absolute record count and the entity's percentage
-share of all Recorder rows in the same ranking window. The 24-hour ranking uses a
-rolling `now - 24h .. now` epoch window; the all-history ranking uses all retained
-Recorder rows.
-
-## Configuration examples
-
-PostgreSQL:
-
-```yaml
-database_type: postgresql
-postgresql:
-  host: "db.example.local"
-  port: 5432
-  database: homeassistant
-  username: recorder_monitor
-  password: "CHANGE_ME"
-top_entities_limit: 10
-telemetry_enabled: false
-```
-
-Supervisor MariaDB:
-
-```yaml
-database_type: mariadb
-mariadb:
-  connection: supervisor
-top_entities_limit: 10
-telemetry_enabled: false
-```
-
-External MariaDB:
-
-```yaml
-database_type: mariadb
-mariadb:
-  connection: manual
-  host: "db.example.local"
-  port: 3306
-  database: homeassistant
-  username: recorder_monitor
-  password: "CHANGE_ME"
-telemetry_enabled: false
-```
-
-## Storage monitoring
-
-Storage collection can be automatic, explicit SSH, or disabled.
-
-For Supervisor MariaDB, automatic mode uses Home Assistant OS host storage information. For external PostgreSQL/MariaDB, storage can be collected through a normal SSH user that can log in and run `df`; root access is not required.
-
-For new external database hosts, provision the standard unprivileged SSH user with
-[`scripts/create_storage_ssh_user.sh`](scripts/create_storage_ssh_user.sh),
-run **as root inside the database Linux host/LXC**. The script is safe to
-repeat and never changes the SSH daemon or database configuration. The
-username to configure in Recorder App is `dh_recorder`.
-
-See [Technical documentation](DOCS.md#standard-ssh-storage-account-new-sites) for
-the one-command installation, password reset, required settings,
-path autodetection and PostgreSQL cluster selection.
-
-## Backup and restore
-
-Product-persistent state lives under `/data`, including telemetry identity, runtime threshold, SSH known-host state where applicable and HA/MQTT migration state. It is App data, not a container image copy.
-
-Production image delivery is external through versioned GHCR releases. Release automation records the immutable image digest and source merge commit, so a historical App release can resolve its historical registry image rather than embedding a duplicate image in App backup data.
-
-HA/MQTT cleanup was enabled only after live partial App backup/restore acceptance confirmed persistent telemetry identity under `/data`.
-
-## Security
-
-The App does not require privileged container access, Docker socket access, Home Assistant configuration-directory access, `secrets.yaml` or a Home Assistant API token.
-
-Database credentials remain in Home Assistant App configuration and are never published to MQTT or telemetry. Use least-privileged database and SSH accounts that satisfy the documented read-only requirements.
-
-## Support and license
-
-Report reproducible bugs or feature requests through repository [Issues](https://github.com/DigitalHouses/home-assistant-apps/issues). Security-sensitive reports follow the repository [security policy](../.github/SECURITY.md).
-
-DigitalHouses Recorder App is provided under the repository [MIT License](../LICENSE).
+Licensed under the [MIT License](../LICENSE).
