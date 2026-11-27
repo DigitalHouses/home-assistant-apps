@@ -107,7 +107,7 @@ class TelemetryClient:
         self.now_epoch = now_epoch
         self.log = logging.getLogger(__name__)
         self._lock = threading.Lock()
-        self._enabled_heartbeat_pending = False
+        self._startup_pending = True
         if not self.enabled:
             raise ValueError('TelemetryClient requires explicit telemetry_enabled=true')
         self._state = self._load_or_create_state()
@@ -176,9 +176,6 @@ class TelemetryClient:
                 "telemetry.last_reported_version must be a non-empty string when present"
             )
 
-        self._enabled_heartbeat_pending = (
-            self.enabled and previous_enabled is False
-        )
         if previous_enabled is not self.enabled:
             state["telemetry_enabled"] = self.enabled
             self._save_state(state)
@@ -256,13 +253,15 @@ class TelemetryClient:
 
         with self._lock:
             now = float(self.now_epoch())
-            enabled_heartbeat = self._enabled_heartbeat_pending
-            self._enabled_heartbeat_pending = False
-            if not enabled_heartbeat and not self._due(now):
+            startup = self._startup_pending
+            if not startup and not self._due(now):
                 return False
+            self._startup_pending = False
 
             self._state["last_attempt_epoch"] = now
             self._save_state()
+            if startup:
+                self.log.info("Telemetry startup heartbeat: product=%s version=%s", PRODUCT, self.version)
             try:
                 status = self.transport.request(
                     method="POST",
@@ -363,7 +362,7 @@ class TelemetryRunner:
                 # A telemetry-only fault must not terminate the scheduler.
                 # The ordinary cadence is used for future attempts.
                 self.client.log.exception(
-                    "Aqara telemetry worker failed; retry remains scheduled"
+                    "Actions telemetry worker failed; retry remains scheduled"
                 )
             self._stop.wait(self.check_seconds)
 

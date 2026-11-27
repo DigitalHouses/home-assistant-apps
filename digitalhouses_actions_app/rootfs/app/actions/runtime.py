@@ -150,7 +150,7 @@ class Application:
                 # A failed telemetry identity must never interrupt light
                 # control or be silently replaced with a fresh identifier.
                 LOG.error(
-                    "Aqara telemetry unavailable (persistent state error): %s; "
+                    "Actions telemetry unavailable (persistent state error): %s; "
                     "lighting remains operational; saved identity preserved", exc
                 )
                 self.telemetry = None
@@ -1319,7 +1319,7 @@ class Application:
                         try:
                             self._ha_client.execute(call)
                         except Exception as exc:
-                            LOG.warning("Aqara HA-native light call failed: %s", exc)
+                            LOG.warning("Actions HA-native light call failed: %s", exc)
                             skipped.extend({"light":eid,
                                             "reason":"HA light service call failed"}
                                            for eid in ids)
@@ -1407,19 +1407,19 @@ class Application:
                     self.event_log.skip(rid,item["light"],item["reason"])
                 self.event_log.finish(rid)
                 if skipped:
-                    LOG.warning("Aqara action %s %s skipped: %s", name, action, skipped)
+                    LOG.warning("Actions %s %s skipped: %s", name, action, skipped)
                 note = "; ".join(x["light"]+": "+x["reason"] for x in skipped)
                 status = ("partial" if sent and skipped else
                           "sent" if sent else "skipped")
                 self._publish_action(state=status, switch=name, action=action,
                                      target=", ".join(sent),
                                      error=note[:300] if note else None)
-                LOG.info("Aqara %s/%s delivered=%d skipped=%d "
+                LOG.info("Actions %s/%s delivered=%d skipped=%d "
                          "(Z2M physical + authorized HA lights)",
                          name, action, len(sent), len(skipped))
             except Exception as exc:
                 self.event_log.finish(rid,str(exc),targets)
-                LOG.exception("Aqara MQTT light action failed")
+                LOG.exception("Actions MQTT light action failed")
                 self._publish_action(state="error", switch=name, action=action,
                                      target=", ".join(targets), error=str(exc)[:300])
             finally:
@@ -1475,7 +1475,7 @@ class Application:
             self._publish(ROOT + "/scan_details", {"state": "ready", **report})
             error = None
         except Exception as exc:
-            LOG.exception("Manual Aqara scan failed")
+            LOG.exception("Manual Actions scan failed")
             error = str(exc)
         finally:
             duration = round(time.monotonic() - start, 3)
@@ -1627,7 +1627,7 @@ class Application:
                     if not completed:
                         self._stop.wait(30)
             except Exception:
-                LOG.exception("Automatic Aqara scan scheduling failed")
+                LOG.exception("Automatic Actions scan scheduling failed")
                 self._stop.wait(30)
 
     def _delete_telemetry(self) -> None:
@@ -1636,16 +1636,16 @@ class Application:
         try:
             deleted = self.telemetry.delete()
         except (ContractDataError, OSError, ValueError) as exc:
-            LOG.error("Aqara telemetry deletion state error: %s", exc)
+            LOG.error("Actions telemetry deletion state error: %s", exc)
             return
         if deleted:
-            LOG.info("Aqara telemetry installation and history deleted; identity rotated")
+            LOG.info("Actions telemetry installation and history deleted; identity rotated")
         else:
-            LOG.warning("Aqara telemetry deletion failed")
+            LOG.warning("Actions telemetry deletion failed")
 
     def run(self) -> None:
         host, port = os.environ["MQTT_HOST"], int(os.environ["MQTT_PORT"])
-        LOG.info("Starting Aqara MQTT input, Mode Keeper and direct MQTT lights %s", self.version)
+        LOG.info("Starting DigitalHouses Actions App %s: MQTT input, Mode Keeper, verified Z2M and HA control", self.version)
         threading.Thread(target=self._run_actions, daemon=True,
                          name="dh-actions-action-worker").start()
         threading.Thread(target=run_keeper, args=(self,), daemon=True,
