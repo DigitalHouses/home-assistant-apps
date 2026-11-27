@@ -850,11 +850,21 @@ class Application:
         self._home_profile=snapshot
         if (retained or not previous or not snapshot or previous.get("mode") not in ("day","night")
                 or snapshot.get("mode") not in ("day","night")
-                or previous["mode"]==snapshot["mode"] or snapshot["mode"] not in snapshot
-                or not self.globals.get("auto_day_night") or self.globals["maintenance_mode"]):
+                or previous["mode"]==snapshot["mode"]):
+            return
+        before,after=previous["mode"],snapshot["mode"]
+        if not self.globals.get("auto_day_night"):
+            LOG.info("Day/Night transition %s -> %s: automatic application disabled",before,after)
+            return
+        if self.globals["maintenance_mode"]:
+            LOG.info("Day/Night transition %s -> %s: maintenance mode",before,after)
+            return
+        if after not in snapshot:
+            LOG.warning("Day/Night transition %s -> %s: global profiles missing or invalid",before,after)
             return
         try:
             self._jobs.put_nowait((None,None,"Режим дома","AUTO_PROFILE",[],None,snapshot))
+            LOG.info("Day/Night transition %s -> %s: profile application queued",before,after)
         except queue.Full:
             LOG.warning("Day/Night transition skipped: queue full")
 
@@ -870,6 +880,8 @@ class Application:
             if self._home_profile is not snapshot or not self.globals.get("auto_day_night") or self.globals["maintenance_mode"]:return
             policies,conflicts=profiles.adaptation_plan(self.config,self.sensor_engine.dynamic_owner)
             candidates=list(policies)
+            LOG.info("Day/Night profile %s: %d eligible assignments, %d conflicts",
+                     snapshot["mode"],len(candidates),len(conflicts))
             # Groups first; successful group command covers its member routes.
             candidates.sort(key=lambda eid:(self.config.get("light_routes",{}).get(eid,{}).get("kind")!="group",eid))
         handled=set()
@@ -1643,6 +1655,7 @@ class Application:
     def run(self) -> None:
         host, port = os.environ["MQTT_HOST"], int(os.environ["MQTT_PORT"])
         LOG.info("Starting DigitalHouses Actions App %s: MQTT input, Mode Keeper, verified Z2M and HA control", self.version)
+        LOG.info("Automatic Day/Night application: %s", "enabled" if self.globals["auto_day_night"] else "disabled")
         threading.Thread(target=self._run_actions, daemon=True,
                          name="dh-actions-action-worker").start()
         threading.Thread(target=run_keeper, args=(self,), daemon=True,

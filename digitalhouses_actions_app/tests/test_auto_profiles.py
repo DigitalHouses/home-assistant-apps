@@ -93,6 +93,40 @@ class AutoProfileTests(unittest.TestCase):
         self.assertTrue(app._jobs.empty())
         ha.execute.assert_not_called()
 
+    def test_plain_toggle_does_not_conflict_with_dynamic_profile(self):
+        for plain in ({},{"transition":1}):
+            app,ha,sw=self.app()
+            sw["bindings"]["single"]=parse_rule({"assignments":[{"entity_id":TV,"operation":"toggle","data":plain}]})
+            self.assertEqual(profiles.adaptation_targets(app.config),([TV],[]))
+            self.transition(app)
+            ha.execute.assert_called_once_with({"service":"light.turn_on","target":{"entity_id":[TV]},
+                                                "data":{"brightness_pct":30,"color_temp_kelvin":2700}})
+
+    def test_sensor_dynamic_and_plain_key_works_without_timer_owner(self):
+        app,ha,sw=self.app()
+        sw["bindings"]["double"]=parse_rule({"assignments":[{"entity_id":TV,"operation":"toggle","data":{}}]})
+        app.config["sensor_bindings"]={"binary_sensor.room":{"enabled":True,
+            "assignments":[binding(TV,"current","on",color="cct")]}}
+        self.assertFalse(app.sensor_engine.dynamic_owner(TV))
+        self.assertEqual(profiles.adaptation_targets(app.config),([TV],[]))
+        self.transition(app)
+        ha.execute.assert_called_once()
+
+    def test_actual_mode_change_diagnostics(self):
+        for enabled,maintenance,missing,expected in (
+            (False,False,False,"automatic application disabled"),
+            (True,True,False,"maintenance mode"),
+            (True,False,True,"global profiles missing or invalid"),
+            (True,False,False,"profile application queued"),
+        ):
+            app,ha,_=self.app(enabled=enabled)
+            app.globals["maintenance_mode"]=maintenance
+            app._accept_home_profile({**deepcopy(SNAP),"mode":"day"},retained=True)
+            with self.assertLogs("actions.runtime",level="INFO") as logs:
+                app._accept_home_profile({"mode":"night"} if missing else deepcopy(SNAP))
+            self.assertTrue(any(expected in line for line in logs.output))
+            self.assertEqual(app._jobs.qsize(),int(enabled and not maintenance and not missing))
+
     def test_conflict_and_disabled_binding(self):
         app,ha,sw=self.app()
         sw["bindings"]["single"]=parse_rule({"assignments":[binding(TV,"day")]})
