@@ -46,7 +46,7 @@ class TelemetryTests(unittest.TestCase):
         self.assertFalse(config["options"]["telemetry_enabled"])
         self.assertEqual(config["schema"]["telemetry_enabled"], "bool")
         self.assertEqual(config["boot"], "manual")
-        self.assertEqual(config["version"], "0.3.0")
+        self.assertEqual(config["version"], "0.3.1")
 
     def test_disabled_legacy_lighting_creates_no_telemetry_identity(self):
         for value in (False, None):
@@ -79,7 +79,7 @@ class TelemetryTests(unittest.TestCase):
             runner.assert_called_once_with(telemetry.return_value)
             self.assertIs(app.telemetry_runner, runner.return_value)
 
-    def test_identity_payload_and_no_restart_storm(self):
+    def test_identity_payload_and_one_heartbeat_per_process_start(self):
         with TemporaryDirectory() as td:
             path = Path(td)/"telemetry.json"
             transport = FakeTransport()
@@ -103,7 +103,13 @@ class TelemetryTests(unittest.TestCase):
                                        state_file=path, transport=transport,
                                        now_epoch=lambda: 1100.0)
             self.assertEqual(restored.installation_id, t.installation_id)
+            with self.assertLogs("actions.telemetry", level="INFO") as logs:
+                self.assertTrue(restored.tick())
+            self.assertTrue(any("Telemetry startup heartbeat" in line for line in logs.output))
+            self.assertTrue(any("Telemetry heartbeat sent" in line for line in logs.output))
             self.assertFalse(restored.tick())
+            self.assertEqual(len(transport.calls), 2)
+            self.assertEqual(restored.installation_token, t.installation_token)
 
     def test_version_upgrade_uses_same_identity(self):
         with TemporaryDirectory() as td:
@@ -129,6 +135,32 @@ class TelemetryTests(unittest.TestCase):
             self.assertFalse(t.tick())
             self.assertFalse(t.tick())
             self.assertEqual(len(transport.calls), 1)
+
+    def test_restart_after_failed_422_retries_immediately_then_respects_backoff(self):
+        with TemporaryDirectory() as td:
+            path = Path(td)/"telemetry.json"
+            now = [1000.0]
+            transport = FakeTransport(status=422)
+            first = TelemetryClient(enabled=True, version="0.3.0", state_file=path,
+                                    transport=transport, now_epoch=lambda: now[0])
+            self.assertFalse(first.tick())
+            self.assertFalse(first.tick())
+            self.assertEqual(len(transport.calls), 1)
+            now[0] += 10
+            restored = TelemetryClient(enabled=True, version="0.3.0", state_file=path,
+                                       transport=transport, now_epoch=lambda: now[0])
+            self.assertEqual(restored.installation_id, first.installation_id)
+            self.assertFalse(restored.tick())
+            self.assertFalse(restored.tick())
+            self.assertEqual(len(transport.calls), 2)
+            now[0] += 3599
+            self.assertFalse(restored.tick())
+            self.assertEqual(len(transport.calls), 2)
+            transport.status = 204
+            now[0] += 1
+            self.assertTrue(restored.tick())
+            self.assertFalse(restored.tick())
+            self.assertEqual(len(transport.calls), 3)
 
     def test_authenticated_deletion_rotates_pseudonym(self):
         with TemporaryDirectory() as td:

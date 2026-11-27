@@ -159,7 +159,7 @@ import the JSON, verify the bindings and only then remove Aqara. Do not run
 both controllers against the same devices. No automatic migration is provided.
 This first Actions release remains experimental, with manual startup and field acceptance required. Keep the old installation/backup until acceptance.
 
-The existing telemetry opt-in remains unchanged. HA Core is required to read
+The existing telemetry opt-in remains unchanged. With consent enabled, each process start sends one immediate best-effort heartbeat; subsequent attempts follow daily cadence and hourly failure backoff. HA Core is required to read
 entity metadata and execute HA-native targets; verified direct Z2M routes can
 operate while HA Core is unavailable as long as MQTT/Z2M/App are working.
 No additional service, database, broker or HA Automation is introduced.

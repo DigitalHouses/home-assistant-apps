@@ -2,6 +2,11 @@
 
 Historical releases below were published as DigitalHouses Aqara Switch App; their identifiers are retained.
 
+## 0.3.1
+
+- Replace legacy Aqara product wording in startup and generic runtime/telemetry logs; keep Aqara-specific device diagnostics.
+- Send one immediate best-effort telemetry heartbeat per process start when consent is enabled, including after a prior HTTP 422 or recent success. Log the startup attempt and accepted response; retain installation identity, daily cadence and hourly failure backoff within each process. No new payload fields or telemetry consent changes.
+
 ## 0.3.0
 
 - First DigitalHouses Actions App release; canonical identity, new slug, GHCR image, MQTT discovery, telemetry, DH Sync and HA entity prefix. Existing Aqara releases and LAB entity identities remain unchanged.
