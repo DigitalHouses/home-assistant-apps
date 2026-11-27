@@ -38,6 +38,7 @@ from .configuration import parse_configuration
 from .ha_registry import HARegistryClient
 from .mqtt_ui import (
     AVAILABILITY, DISCOVERY_TOPIC, ROOT, SCAN_REQUEST, SYNC_TOPIC,
+    AUTO_DAY_NIGHT_STATE, AUTO_DAY_NIGHT_COMMAND,
     sync_payload, wire_payload,
 )
 from .scan import scan_once
@@ -188,6 +189,7 @@ class Application:
         self._light_probe_at = {}
         self._mutex = threading.RLock()
         self._scan_lock = threading.Lock()
+        self._settings_lock = threading.Lock()
         self.target_catalog = {}
         self.sensor_catalog = {}
         self.sensor_engine = SensorEngine(self,last_scan_path.with_name("sensor_timers.json"))
@@ -251,6 +253,7 @@ class Application:
     def _publish_all(self):
         self._publish(DISCOVERY_TOPIC, wire_payload(self.version))
         self._publish(ROOT + "/version", self.version)
+        self._publish_auto_day_night()
         self._publish(ROOT + "/scan_state", dict(self._scan))
         self._publish(ROOT + "/scan_details", {"state": "ready" if self._previous else "unknown",
                                                **(self._previous or {})})
@@ -260,6 +263,31 @@ class Application:
         self._publish_release()
         self._publish(ROOT + "/refresh_state", self._refresh_state)
         self._publish(ROOT + "/last_refresh", self._last_refresh or "unknown")
+
+    def _publish_auto_day_night(self):
+        with self._mutex:
+            self._publish(AUTO_DAY_NIGHT_STATE, "ON" if self.globals["auto_day_night"] else "OFF")
+
+    def _apply_global_policy(self, policy):
+        # Caller holds _mutex. Invalidate queued adaptations on a real flag
+        # change without replaying the current mode or changing its value.
+        changed = self.globals["auto_day_night"] != policy["auto_day_night"]
+        self.globals = policy
+        if changed:
+            self._home_profile = deepcopy(self._home_profile)
+        return changed
+
+    def set_auto_day_night(self, enabled):
+        if type(enabled) is not bool:
+            raise CatalogError("auto_day_night must be boolean")
+        with self._settings_lock:
+            # Do not hold the MQTT/state lock across Supervisor HTTP I/O.
+            self.options.set_auto_day_night(enabled)
+            with self._mutex:
+                self._apply_global_policy({**self.globals, "auto_day_night": enabled})
+                self._publish_auto_day_night()
+            LOG.info("Automatic Day/Night application: %s", "enabled" if enabled else "disabled")
+        return {"auto_day_night": enabled}
 
     def _publish_action(self, *, state, switch, action, target, error=None):
         self._last_action = {"state": state, "at": _iso_now(),
@@ -442,7 +470,7 @@ class Application:
             self.relay_timers.reset()
             self.readiness.reset()
             self.schedule_engine.recovery.disconnect()
-        for topic in (*_FILTERS, SCAN_REQUEST, ROOT + "/command/refresh",
+        for topic in (*_FILTERS, SCAN_REQUEST, AUTO_DAY_NIGHT_COMMAND, ROOT + "/command/refresh",
                       ROOT + "/command/check_updates", ROOT + "/command/delete_telemetry", "homeassistant/status", *profiles.TOPICS, *readiness.TOPICS):
             self._subscribe(topic)
         self._publish(AVAILABILITY, "online")
@@ -496,6 +524,15 @@ class Application:
                 self._accept_home_profile(
                     profiles.snapshot(self._global_mode,self._global_profiles),
                     retained=message.retain or message.topic==profiles.PROFILES_TOPIC)
+            return
+        if message.topic == AUTO_DAY_NIGHT_COMMAND:
+            raw = bytes(message.payload)
+            if not message.retain and not getattr(message, "dup", False) and raw in (b"ON", b"OFF"):
+                try:
+                    self._jobs.put_nowait((None, None, "Параметры", "SET_AUTO_DAY_NIGHT", [], None, raw == b"ON"))
+                except queue.Full:
+                    LOG.warning("Day/Night setting rejected: action queue full")
+                    self._publish_auto_day_night()
             return
         if message.topic == ROOT + "/command/delete_telemetry":
             if (self.telemetry is not None and not message.retain
@@ -1097,6 +1134,13 @@ class Application:
                     with self._mutex:sent_relay=self.relay_timers.dispatch(job[6],rid)
                     self._publish_action(state="sent" if sent_relay else "skipped",switch=name,action=action,target=job[6][0][0])
                     continue
+                if base is None and action=="SET_AUTO_DAY_NIGHT":
+                    try:
+                        self.set_auto_day_night(job[6])
+                    except Exception:
+                        LOG.exception("Failed to save Day/Night setting")
+                        self._publish_auto_day_night()
+                    continue
                 if base is None and action=="AUTO_PROFILE":
                     self._adapt_home_profile(job[6],rid)
                     continue
@@ -1504,7 +1548,8 @@ class Application:
             with self._mutex:
                 routes_changed = self.config.get("light_routes",{}) != merged.get("light_routes",{})
                 self.config = merged
-                self.globals = global_policy(self.options.read())
+                if self._apply_global_policy(global_policy(self.options.read())):
+                    self._publish_auto_day_night()
                 if routes_changed:
                     self._light_shadows.clear()
                     self._ha_shadows.clear()

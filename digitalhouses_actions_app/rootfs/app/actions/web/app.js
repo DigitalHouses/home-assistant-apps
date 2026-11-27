@@ -1,5 +1,6 @@
 "use strict";
 let model, editing=null, draft=null, dirty=false, busy=false, section="keys";
+let parametersBusy=false, parametersError="";
 const main=document.querySelector("#main"), notice=document.querySelector("#notice"), scan=document.querySelector("#scan");
 function el(tag,text,cls){const n=document.createElement(tag);if(text!==undefined)n.textContent=text;if(cls)n.className=cls;return n}
 function button(text,fn,cls){const n=el("button",text,cls);n.onclick=fn;return n}
@@ -40,7 +41,7 @@ function knownState(state){return typeof state==="string"&&!["unknown","unavaila
 function targetLabel(id,t){return t?.name&&t.name!==id?id+" - "+t.name:id}
 function targetNode(id){const t=model.targets.find(x=>x.entity_id===id);const n=el("span",undefined,"target");n.dataset.entity=id;n.append(targetIcon(t,id),el("span",targetLabel(id,t),"target-label"));if(!t||!knownState(t.state)){const w=el("span","⚠","problem");w.title=t?"Сущность недоступна":"Сущность не найдена";n.append(w)}return n}
 async function api(path,data,raw=false){const r=await fetch("api/"+path,data===undefined?{}:{method:"POST",headers:{"Content-Type":"application/json"},body:raw?data:JSON.stringify(data)});const v=await r.json();if(!r.ok)throw Error(v.error||"Ошибка");return v}
-async function load(){try{model=await api("state");document.querySelector("#app-version").textContent="v"+model.version;document.querySelector("#summary").textContent=section==="schedules"?"Расписания ("+(model.schedules||[]).length+")":section==="sensors"?"Датчики ("+(model.sensors||[]).length+")":"Клавиши · устройства ("+model.devices.length+") · Сети Z2M ("+new Set(model.devices.map(d=>d.network).filter(n=>n!=="—")).size+")";notice.classList.toggle("error",!!model.scan.error);scan.disabled=model.scan.state==="updating"||busy;scan.textContent=model.scan.state==="updating"?"Сканирование…":"⟳ Сканировать";if(!editing)renderList();if(!editing&&!busy){if(model.scan.error)notice.textContent=model.scan.error;else if(model.scan.state==="updating")notice.textContent="Сканирование…";else if(model.report){const p=model.report.problems||[];notice.textContent="Последний Scan: "+(model.report.scanned??0)+" устройств · "+p.length+" проблем";notice.title=p.map(x=>x.name+": "+x.reason).join("\n")}}}catch(e){notice.textContent=e.message}}
+async function load(){try{model=await api("state");document.querySelector("#app-version").textContent="v"+model.version;document.querySelector("#summary").textContent=section==="parameters"?"Параметры":section==="schedules"?"Расписания ("+(model.schedules||[]).length+")":section==="sensors"?"Датчики ("+(model.sensors||[]).length+")":"Клавиши · устройства ("+model.devices.length+") · Сети Z2M ("+new Set(model.devices.map(d=>d.network).filter(n=>n!=="—")).size+")";notice.classList.toggle("error",!!model.scan.error);scan.disabled=model.scan.state==="updating"||busy;scan.textContent=model.scan.state==="updating"?"Сканирование…":"⟳ Сканировать";if(!editing)renderList();if(!editing&&!busy){if(model.scan.error)notice.textContent=model.scan.error;else if(model.scan.state==="updating")notice.textContent="Сканирование…";else if(model.report){const p=model.report.problems||[];notice.textContent="Последний Scan: "+(model.report.scanned??0)+" устройств · "+p.length+" проблем";notice.title=p.map(x=>x.name+": "+x.reason).join("\n")}}}catch(e){notice.textContent=e.message}}
 const keyNames={main:"Основная",left:"Левая",right:"Правая",center:"Центральная"};
 const modeNames={"":"Не настроена",control_relay:"Физическая",decoupled:"Логическая","decoupled/ON":"Логическая · ON","decoupled/OFF":"Логическая · OFF"};
 const logicalPolicy=p=>["decoupled","decoupled/ON","decoupled/OFF"].includes(p);
@@ -130,7 +131,28 @@ function modeControls(){
   return panel;
 }
 function deviceTitle(d){return d.ha_name&&d.ha_name!==d.name?d.name+" - "+d.ha_name:d.name}
+function renderParameters(){
+  const panel=el("article"),label=el("label",undefined,"live-parameter"),description=el("div");
+  const title="Применять параметры при переходе День/Ночь";
+  description.append(el("strong",title),el("div","При смене внешнего режима обновлять параметры уже работающих устройств с профилем День/Ночь. Не включать выключенные светильники и не запускать музыку.","muted"));
+  const check=el("input");check.type="checkbox";check.setAttribute("role","switch");check.setAttribute("aria-label",title);
+  check.checked=model.auto_day_night===true;check.disabled=parametersBusy;
+  check.onchange=async()=>{
+    const requested=check.checked;
+    parametersBusy=true;parametersError="";check.disabled=true;
+    try{
+      const result=await api("parameters",{auto_day_night:requested});
+      model.auto_day_night=result.auto_day_night;
+    }catch(e){parametersError=e.message}
+    finally{parametersBusy=false;await load();if(section==="parameters")renderParameters()}
+  };
+  label.append(description,check);panel.append(label);
+  if(parametersBusy)panel.append(el("div","Сохранение…","muted"));
+  if(parametersError)panel.append(el("div",parametersError,"problem"));
+  main.replaceChildren(panel);
+}
 function renderList(){
+if(section==="parameters"){renderParameters();return}
 if(section==="schedules"){renderSchedules();return}
 if(section==="sensors"){renderSensors();return}
 const focused=main.contains(document.activeElement)?document.activeElement.dataset.deviceId:null;
@@ -422,11 +444,13 @@ function selectSection(next){
   document.querySelector("#devices-nav").classList.toggle("active",next==="keys");
   document.querySelector("#sensors-nav").classList.toggle("active",next==="sensors");
   document.querySelector("#schedules-nav").classList.toggle("active",next==="schedules");
+  document.querySelector("#parameters-nav").classList.toggle("active",next==="parameters");
   if(model)renderList();load();
 }
 document.querySelector("#devices-nav").onclick=()=>selectSection("keys");
 document.querySelector("#sensors-nav").onclick=()=>selectSection("sensors");
 document.querySelector("#schedules-nav").onclick=()=>selectSection("schedules");
+document.querySelector("#parameters-nav").onclick=()=>selectSection("parameters");
 function triggerLabel(trigger){
   if(trigger.kind==="time")return trigger.time;
   const n=trigger.offset_minutes;

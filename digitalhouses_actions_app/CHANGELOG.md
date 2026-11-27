@@ -2,6 +2,10 @@
 
 Historical releases below were published as DigitalHouses Aqara Switch App; their identifiers are retained.
 
+## 0.3.8
+
+- Add Ingress Parameters tab and MQTT Discovery switch for live auto_day_night changes. Persist the existing Supervisor option without restart, preserve all other options/bindings and publish authoritative retained state on connect/change. Strict boolean / ON-OFF commands; no retained replay or implicit application of the current profile. Invalidate queued stale adaptations when the flag changes.
+
 ## 0.3.7
 
 - Record observation timestamps for all confirmed operations, not only profile changes. Expose dispatch_ms (journal event to dispatch timestamp) and confirmation_ms (dispatch to matching observation receipt) in LOG and JSON export. Missing legacy observation timestamps remain unknown; no database migration or invented measurements. Label received parameters as «Подтверждение». No changes to execution or observation cadence.

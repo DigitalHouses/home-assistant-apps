@@ -1,6 +1,6 @@
 """Home Assistant MQTT Device Discovery for the Actions App scan pilot.
 
-No device-control commands, only app-local SCAN request topic.
+App-local operation and configuration commands; no arbitrary HA calls.
 """
 from __future__ import annotations
 import json
@@ -10,6 +10,8 @@ ROOT = "DigitalHouses/Global/" + PREFIX
 DISCOVERY_TOPIC = "homeassistant/device/" + PREFIX + "/config"
 AVAILABILITY = ROOT + "/availability"
 SCAN_REQUEST = ROOT + "/command/scan"
+AUTO_DAY_NIGHT_STATE = ROOT + "/auto_day_night"
+AUTO_DAY_NIGHT_COMMAND = ROOT + "/command/auto_day_night"
 PRODUCT_ID = "digitalhouses_actions_app"
 SYNC_TOPIC = "DigitalHouses/Global/" + PRODUCT_ID + "/sync"
 
@@ -54,6 +56,17 @@ def configuration(version: str) -> dict:
         return data
 
     components = {
+        "auto_day_night": {
+            "platform": "switch",
+            "name": "Применять параметры при переходе День/Ночь",
+            "unique_id": PREFIX + "_auto_day_night",
+            "default_entity_id": "switch." + PREFIX + "_auto_day_night",
+            "state_topic": AUTO_DAY_NIGHT_STATE,
+            "command_topic": AUTO_DAY_NIGHT_COMMAND,
+            "payload_on": "ON", "payload_off": "OFF",
+            "qos": 1, "retain": False, "optimistic": False,
+            "entity_category": "config",
+        },
         "card": sensor("card", "Статус", "card", True),
         "devices_details": sensor("devices_details", "Выключатели", "devices", True),
         "scan_state": sensor("scan_state", "Сканирование", "scan_state", True),
