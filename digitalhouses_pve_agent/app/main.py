@@ -685,7 +685,7 @@ def run(config: AppConfig, *, state_dir: Path = DEFAULT_STATE_DIR,
                 )
                 if guest_reconcile_interval != target_interval:
                     runtime.scheduler.set_interval(
-                        "guests", target_interval, now=time.monotonic()
+                        "guests", target_interval, now=time.monotonic(), preserve_due=True
                     )
                     guest_reconcile_interval = target_interval
                 if guest_event_pending.is_set():
