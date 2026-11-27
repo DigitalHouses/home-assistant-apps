@@ -641,8 +641,13 @@ function renderLogRow(row){
     check.title={confirmed:"Получено наблюдаемое состояние; не физический ACK",sent:"Команда отправлена, ожидается состояние",accepted:"Команда принята; завершение не подтверждено",timeout:"Нет подтверждения в допустимый срок",superseded:"Заменена более новой командой",queued:"В очереди",skipped:"Пропущено"}[t.status]||"";
     if(target?.group&&confirmed)check.title="Состояние группы Z2M получено; не подтверждение каждого участника (возможен optimistic state)";
     item.title=t.reason||check.title;item.append(ico,el("span",eid.split(".")[1]||eid),el("span",change),check);
+    if(t.dispatch_ms!=null)item.append(el("span","Отправка: "+t.dispatch_ms+" мс","muted"));
+    if(confirmed){
+      const details=t.observed_parameters?logLightParameters(t.observed_parameters):"";
+      const duration=t.confirmation_ms!=null?t.confirmation_ms+" мс":"время неизвестно";
+      item.append(el("span","Подтверждение: "+duration+(details?" · "+details:""),"muted"));
+    }
     if(confirmed&&t.observed_parameters){
-      item.append(el("span","Получено: "+logLightParameters(t.observed_parameters),"muted"));
       if(target?.group)item.append(el("span","отчёт группы","muted"));
     }
     if(params&&t.status==="accepted")item.append(el("span",t.expected_parameters?"ожидание параметров":"параметры не подтверждены","muted"));
