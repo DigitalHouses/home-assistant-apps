@@ -59,8 +59,10 @@ class Scheduler:
         interval_seconds: float,
         *,
         now: float,
+        preserve_due: bool = False,
     ) -> None:
         task = self._tasks[name]
         interval = self._validated_interval(interval_seconds)
         task.interval_seconds = interval
-        task.next_due = float(now) + interval
+        next_due = float(now) + interval
+        task.next_due = min(task.next_due, next_due) if preserve_due else next_due

@@ -3,68 +3,100 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
 WORKFLOW = ROOT / ".github" / "workflows" / "auto-merge.yml"
+VALIDATE = ROOT / ".github" / "workflows" / "validate.yml"
 
 
 class AutoMergeWorkflowTests(unittest.TestCase):
-    # These tests protect the exact-base invariant under concurrent owner PRs.
-    def _text(self) -> str:
+    def _text(self):
         return WORKFLOW.read_text(encoding="utf-8")
 
-    def test_stale_validated_base_updates_branch_instead_of_merging(self):
+    def test_successful_pr_is_resolved_even_when_workflow_run_prs_empty(self):
         text = self._text()
+        self.assertIn('gh run download "$VALIDATION_RUN_ID"', text)
+        self.assertIn("--name ci-provenance", text)
+        self.assertIn('artifact_head" = "$VALIDATED_HEAD_SHA"', text)
+        self.assertIn('artifact_attempt" = "$VALIDATION_RUN_ATTEMPT"', text)
+        self.assertIn('commits/$VALIDATED_HEAD_SHA/pulls', text)
+        self.assertIn('test "$head_repo" = "$GITHUB_REPOSITORY"', text)
+        self.assertIn('test "$author" = DigitalHouses', text)
+        self.assertIn('test "$head_ref" = "$VALIDATED_HEAD_BRANCH"', text)
 
-        self.assertIn(
-            'current_base_sha="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq .object.sha)"',
-            text,
-        )
-        self.assertIn(
-            'if [ "$current_base_sha" != "$VALIDATED_BASE_SHA" ]; then',
-            text,
-        )
-        self.assertIn(
-            'gh api --method PUT "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/update-branch"',
-            text,
-        )
-        self.assertIn('-f "expected_head_sha=${head_sha}"', text)
-        self.assertIn('echo "merged=false" >> "$GITHUB_OUTPUT"', text)
-        self.assertLess(
-            text.index('if [ "$current_base_sha" != "$VALIDATED_BASE_SHA" ]; then'),
-            text.index('gh pr merge "$PR_NUMBER"'),
-        )
-
-    def test_release_detection_uses_actual_first_parent_of_merge_commit(self):
+    def test_stale_base_dispatches_new_validation_without_branch_update(self):
         text = self._text()
+        self.assertIn('current_main" != "$VALIDATED_BASE_SHA"', text)
+        self.assertIn('base_sha" != "$VALIDATED_BASE_SHA"', text)
+        self.assertIn('actions/workflows/validate.yml/dispatches', text)
+        self.assertIn('-f "inputs[expected_head_sha]=$head_sha"', text)
+        self.assertIn('-f "inputs[expected_base_sha]=$current_main"', text)
+        self.assertNotIn('/update-branch', text)
+        self.assertLess(text.index('if [ "$current_main" != "$VALIDATED_BASE_SHA" ]'),
+                        text.index('gh pr merge "$PR_NUMBER"'))
+        self.assertIn('--match-head-commit "$VALIDATED_HEAD_SHA"', text)
+        self.assertIn('else\n              merge_rc=$?\n            fi', text)
 
-        self.assertIn(
-            "release_base_sha=\"$(gh api \"repos/${GITHUB_REPOSITORY}/git/commits/${merge_sha}\" --jq '.parents[0].sha')\"",
-            text,
-        )
-        self.assertIn('echo "release_base_sha=$release_base_sha" >> "$GITHUB_OUTPUT"', text)
-        self.assertIn(
-            'BASE_SHA: ${{ steps.merge.outputs.release_base_sha }}',
-            text,
-        )
-        self.assertNotIn(
-            'BASE_SHA: ${{ steps.merge.outputs.base_sha }}',
-            text,
-        )
-
-    def test_post_merge_steps_run_only_after_an_actual_merge(self):
+    def test_manual_main_push_reconciles_releases(self):
         text = self._text()
+        self.assertIn('github.event.workflow_run.event == \'push\'', text)
+        self.assertIn('if [ "$VALIDATION_EVENT" = push ]', text)
+        self.assertIn('if [ "$VALIDATED_HEAD_SHA" != "$current_main" ]; then', text)
+        self.assertIn('echo "merge_sha=$current_main" >> "$GITHUB_OUTPUT"', text)
+        self.assertIn('--include-pending-existing', text)
 
-        self.assertIn('echo "merged=true" >> "$GITHUB_OUTPUT"', text)
-        for step_name in (
-            "Check out exact merged main revision",
-            "Set up Python",
-            "Detect and validate releases",
-            "Publish product releases",
-            "Verify published releases",
-        ):
-            marker = f"- name: {step_name}"
-            start = text.index(marker)
-            end = text.find("\n      - name:", start + len(marker))
-            block = text[start:] if end == -1 else text[start:end]
-            self.assertIn("if: steps.merge.outputs.merged == 'true'", block)
+    def test_release_source_is_actual_first_parent(self):
+        text = self._text()
+        self.assertIn('git/commits/$merge_sha" --jq \'.parents[0].sha\'', text)
+        self.assertIn('git/commits/$current_main" --jq \'.parents[0].sha\'', text)
+        self.assertIn('BASE_SHA: ${{ steps.merge.outputs.release_base_sha }}', text)
+        self.assertIn('MERGE_SHA: ${{ steps.merge.outputs.merge_sha }}', text)
+
+    def test_new_validation_dispatch_checks_exact_merge_revision(self):
+        text = VALIDATE.read_text()
+        self.assertIn('workflow_dispatch:', text)
+        self.assertIn('name: Upload validated PR identity', text)
+        self.assertIn('name: Validate dispatched PR identity and current main', text)
+        self.assertIn('git rev-parse HEAD^1', text)
+        self.assertIn('git rev-parse HEAD^2', text)
+        self.assertIn('refs/pull/{0}/merge', text)
+        self.assertIn("Restrict main recovery validation", text)
+
+    def test_all_jobs_pin_exact_scoped_merge_revision(self):
+        text = VALIDATE.read_text()
+        self.assertIn('merge_sha: ${{ steps.pin.outputs.merge_sha }}', text)
+        self.assertIn('merge_sha="$(git rev-parse HEAD)"', text)
+        self.assertEqual(text.count("format('refs/pull/{0}/merge'"), 1)
+        self.assertEqual(
+            text.count('ref: ${{ needs.validation-scope.outputs.merge_sha }}'),
+            text.count('uses: actions/checkout@v6') - 2,
+        )
+        self.assertIn(
+            'repository-contract:\n    name: Repository contract\n    needs: validation-scope',
+            text,
+        )
+        self.assertIn(
+            'release-readiness:\n    name: Release readiness\n    needs: validation-scope',
+            text,
+        )
+
+    def test_native_build_and_publish_gates(self):
+        text = self._text()
+        self.assertNotIn('setup-qemu-action', text)
+        self.assertIn('runs-on: ${{ matrix.runner }}', text)
+        self.assertIn('needs: [integrate, build-native]', text)
+        self.assertIn("needs.build-native.result == 'success'", text)
+        self.assertIn("needs.build-native.result == 'skipped'", text)
+        self.assertIn("needs.integrate.outputs.merged == 'true'", text)
+        self.assertIn('refs+=("$image@$digest")', text)
+        self.assertIn('--cache-to', text)
+
+    def test_release_credential_is_confined_to_final_publication(self):
+        text = self._text()
+        self.assertEqual(text.count("secrets.DH_RELEASE_TOKEN"), 1)
+        publish = text.split("      - name: Publish product releases", 1)[1]
+        publish, verify = publish.split("      - name: Verify published releases", 1)
+        self.assertIn("secrets.DH_RELEASE_TOKEN", publish)
+        self.assertIn('GH_TOKEN:?DH_RELEASE_TOKEN', publish)
+        self.assertIn('--target "$source_sha"', publish)
+        self.assertIn("github.token", verify)
 
 
 if __name__ == "__main__":

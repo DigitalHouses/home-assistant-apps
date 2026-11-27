@@ -25,6 +25,7 @@ from validators.products.pve_agent import validate_digitalhouses_pve_agent
 from validators.products.recorder_app import validate_db_monitoring
 from validators.products.speedtest_app import validate_speedtest
 from validators.products.sync_app import validate_sync_app
+from validators.products.system_globals_app import validate_system_globals
 from validators.products.zigbee_monitor_app import validate_zigbee_monitor
 from validators.types.haos_app import validate_haos_addon
 from validators.types.linux_agent import validate_linux_agent
@@ -53,6 +54,7 @@ PRODUCT_VALIDATORS = {
     "digitalhouses_recorder_app": validate_db_monitoring,
     "digitalhouses_speedtest_app": validate_speedtest,
     "digitalhouses_sync_app": validate_sync_app,
+    "digitalhouses_system_globals_app": validate_system_globals,
     "digitalhouses_zigbee_monitor_app": validate_zigbee_monitor,
 }
 

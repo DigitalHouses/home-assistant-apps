@@ -20,6 +20,7 @@ from .fan_hardware_ipmi_passive import AsrockAst2500PassiveFanAdapter
 from .fan_hardware_beelink import BeelinkIt8613FanAdapter
 from .fan_hardware_hwmon import HwmonPwmFanAdapter
 from .fan_runtime import FanAwareRuntime as ProblemAwareRuntime
+from .guest_events import PveGuestEventMonitor
 from .identity import resolve_identity
 from .migration_cleanup import cleanup_legacy_mqtt_namespace
 from .machine_event_outbox import MachineEventOutbox
@@ -74,6 +75,8 @@ DEFAULT_STATE_DIR = Path("/var/lib/digitalhouses_pve_agent")
 FAST_SECONDS = 10.0
 SLOW_SECONDS = 60.0
 HEALTH_SECONDS = 3600.0
+# Passive event stream handles normal transitions; occasionally reconcile missed events.
+EVENT_RECONCILE_SECONDS = 300.0
 RESTART_EXIT_CODE = 75
 PROCESS_STARTED_AT = datetime.now(timezone.utc).isoformat()
 
@@ -392,7 +395,7 @@ def run(config: AppConfig, *, state_dir: Path = DEFAULT_STATE_DIR,
     setup_manager = UpsSetupManager(bridge, config_path=config_path, state_dir=state_dir)
     telemetry_runner = TelemetryRunner(_telemetry_client(config, state_dir))
     update_manager = UpdateManager(state_dir, _version())
-    card = AgentCard(state_dir / "agent_card.json", bridge.publish_agent_card)
+    card = AgentCard(bridge.publish_agent_card)
     runtime.collection_observer = card.collected
     # Separate read-only backup observer; never blocks UPS/NUT or the PVE scheduler.
     try:
@@ -411,6 +414,10 @@ def run(config: AppConfig, *, state_dir: Path = DEFAULT_STATE_DIR,
     backup_publish_due = True
     backup_last_published: dict | None = None
     backup_event_flush_at = 0.0
+    guest_event_pending = threading.Event()
+    backup_event_pending = threading.Event()
+    guest_event_followup_at: float | None = None
+    guest_reconcile_interval = SLOW_SECONDS
 
 
     def observe_card_operation(operation: str, phase: str, error: str | None) -> None:
@@ -495,11 +502,24 @@ def run(config: AppConfig, *, state_dir: Path = DEFAULT_STATE_DIR,
     signal.signal(signal.SIGINT, stop)
     signal.signal(signal.SIGHUP, reload_policy)
 
+    def wake_guest_event() -> None:
+        guest_event_pending.set()
+        bridge.wake_requested.set()
+
+    def wake_backup_event() -> None:
+        backup_event_pending.set()
+        bridge.wake_requested.set()
+
+    guest_event_monitor = PveGuestEventMonitor(wake_guest_event, wake_backup_event)
+
     log.info("Запуск DigitalHouses PVE Agent %s", _version())
     telemetry_runner.start()
     if ups_runtime is not None:
         log.info("Найден сохраненный UPS %s", ups_runtime.config.name)
     bridge.start()
+    update_manager.sync_install_card(card, startup=True)
+    # Subscribe before the startup inventory; events during the scan remain pending.
+    guest_event_monitor.start()
 
     try:
         while not stop_event.is_set():
@@ -535,6 +555,7 @@ def run(config: AppConfig, *, state_dir: Path = DEFAULT_STATE_DIR,
             ):
                 if bridge.publish_ups_debug_state(actual_debug):
                     debug_last_published = actual_debug
+            update_manager.sync_install_card(card)
             if bridge.restart_requested.is_set():
                 bridge.restart_requested.clear()
                 denied = (
@@ -586,23 +607,13 @@ def run(config: AppConfig, *, state_dir: Path = DEFAULT_STATE_DIR,
                 ),
             )
             if card.state == "running" and card.operation in {"check", "install"}:
-                result = update_manager._payload()
-                status = result.get("status")
+                status = update_manager._status
                 if card.operation == "check" and status in {"idle", "error"}:
                     card.finish(
                         "check",
-                        error=str(result.get("error") or "GitHub check failed") if status == "error" else None,
+                        error=str(update_manager._status_error or "GitHub check failed") if status == "error" else None,
                     )
-                elif card.operation == "install":
-                    outcome = update_manager.install_card_outcome(
-                        card_started_at=card.started_at,
-                    )
-                    if outcome is not None:
-                        success, error = outcome
-                        card.finish(
-                            "install",
-                            error=None if success else (error or "Update failed"),
-                        )
+            update_manager.sync_install_card(card, requested=install_update)
             card.tick()
 
             if ups_runtime is not None and not ups_startup_attempted:
@@ -659,12 +670,6 @@ def run(config: AppConfig, *, state_dir: Path = DEFAULT_STATE_DIR,
                 if bridge.reconnect_requested.is_set():
                     update_manager.publish(bridge)
                     card.publish()
-                # A restart is complete once this new agent process has
-                # initialized and MQTT is connected. It must not depend on
-                # every unrelated startup collector publishing successfully.
-                if (card.state == "running" and card.operation == "restart"
-                        and bridge.connected.is_set()):
-                    card.finish("restart")
                 memory_reconnected = bridge.reconnect_requested.is_set()
                 if card.state == "running" and card.operation in {"check", "install"}:
                     # Avoid starting an unrelated operation behind the active card.
@@ -672,6 +677,34 @@ def run(config: AppConfig, *, state_dir: Path = DEFAULT_STATE_DIR,
                 memory_manual_refresh = bridge.refresh_requested.is_set()
                 memory_force_due = memory_force_due or memory_manual_refresh
                 runtime.process_events()
+                # Cheap reconciliation when the journal stream is unavailable;
+                # sparse safety reconciliation when it is healthy.
+                target_interval = (
+                    EVENT_RECONCILE_SECONDS if guest_event_monitor.healthy
+                    else SLOW_SECONDS
+                )
+                if guest_reconcile_interval != target_interval:
+                    runtime.scheduler.set_interval(
+                        "guests", target_interval, now=time.monotonic(), preserve_due=True
+                    )
+                    guest_reconcile_interval = target_interval
+                if guest_event_pending.is_set():
+                    guest_event_pending.clear()
+                    # A late task completion must be reflected even after a
+                    # bounded retry gave up waiting for its shutdown record.
+                    try:
+                        shutdown_history_tracker.refresh_current_guest_shutdowns()
+                    except Exception:
+                        log.exception("Не удалось прочитать новое событие shutdown")
+                    runtime.run_collection(("guests",))
+                    # The PVE RRD state cache can lag the completed task event.
+                    guest_event_followup_at = time.monotonic() + 5.0
+                elif (
+                    guest_event_followup_at is not None
+                    and time.monotonic() >= guest_event_followup_at
+                ):
+                    guest_event_followup_at = None
+                    runtime.run_collection(("guests",))
                 runtime.tick(time.monotonic())
 
                 if memory_pending is not None and memory_pending.done():
@@ -704,6 +737,9 @@ def run(config: AppConfig, *, state_dir: Path = DEFAULT_STATE_DIR,
                     bridge.publish_memory_diagnostics(memory_monitor.payload())
 
                 if backup_history is not None and backup_reader is not None:
+                    if backup_event_pending.is_set():
+                        backup_event_pending.clear()
+                        backup_last_check = None
                     while not bridge.backup_limit_updates.empty():
                         requested_limit = bridge.backup_limit_updates.get_nowait()
                         if backup_history.set_limit(requested_limit):
@@ -835,6 +871,7 @@ def run(config: AppConfig, *, state_dir: Path = DEFAULT_STATE_DIR,
             bridge.wake_requested.wait(1.0)
             bridge.wake_requested.clear()
     finally:
+        guest_event_monitor.stop()
         if backup_reader is not None:
             backup_reader.cancel()
         backup_worker.shutdown(wait=False, cancel_futures=True)

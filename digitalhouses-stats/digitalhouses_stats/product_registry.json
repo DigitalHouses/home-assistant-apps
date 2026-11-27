@@ -181,6 +181,20 @@
       },
       "repository_directory": "digitalhouses_sync_app",
       "haos_slug": "digitalhouses_sync_app"
+    },
+    {
+      "id": "digitalhouses_system_globals_app",
+      "type": "app",
+      "entity_prefix": "dh_system_globals_app",
+      "display_name": "System Globals App",
+      "telemetry_allowed": true,
+      "release": {
+        "title": "DigitalHouses System Globals App",
+        "version_source": "haos_config",
+        "policy_baseline": "0.0.0"
+      },
+      "repository_directory": "digitalhouses_system_globals_app",
+      "haos_slug": "digitalhouses_system_globals_app"
     }
   ]
 }

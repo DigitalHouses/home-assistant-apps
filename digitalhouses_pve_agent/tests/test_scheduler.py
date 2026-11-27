@@ -28,3 +28,12 @@ def test_invalid_interval_is_rejected(interval):
     scheduler = Scheduler()
     with pytest.raises(ValueError):
         scheduler.add("bad", interval_seconds=interval, now=0.0)
+
+def test_interval_flapping_does_not_starve_reconciliation():
+    scheduler = Scheduler()
+    scheduler.add("guests", interval_seconds=60, now=0)
+    for now in range(5,60,5):
+        scheduler.set_interval("guests", 300 if now % 10 else 60,
+                               now=now, preserve_due=True)
+    assert scheduler.due(59) == ()
+    assert scheduler.due(60) == ("guests",)

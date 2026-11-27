@@ -86,10 +86,11 @@ class _Session:
 class DashboardPublisher:
     """Publish only dashboards declared in GitHub panel YAML (no migrations)."""
 
-    def __init__(self, root: Path, data: Path, *, transport=None):
+    def __init__(self, root: Path, data: Path, *, transport=None, journal=None):
         self.root = Path(root)
         self.data = Path(data)
         self.transport = transport if transport is not None else SupervisorWS
+        self.journal = journal
 
     @staticmethod
     def _render(panel: dict, sources: dict) -> list[dict]:
@@ -172,6 +173,8 @@ class DashboardPublisher:
                 entry["id"] = response["id"]
             entries.append(entry)
             LOG.info("Created panel %s", slug)
+            if self.journal is not None:
+                self.journal.record("dashboard_created", slug)
 
         old = self._config(ws, slug)
         new = {**old, "views": views}
@@ -180,6 +183,12 @@ class DashboardPublisher:
         ws.request("lovelace/config/save", url_path=slug, config=new)
         if ws.request("lovelace/config", url_path=slug, force=True) != new:
             raise DashboardError("Panel save not confirmed: " + slug)
+        if self.journal is not None:
+            old_views = {v.get("path"): v for v in old["views"] if isinstance(v, dict)}
+            for ref in panel["views"]:
+                for view in views:
+                    if view["path"] == ref["path"] and old_views.get(ref["path"]) != view:
+                        self.journal.record("view_updated", slug + "/" + ref["path"], product=ref["product"])
         return "Updated"
 
     def sync(self, panels: list[dict], sources: dict) -> dict:
@@ -199,6 +208,8 @@ class DashboardPublisher:
                     state = self._publish(ws, entries, panel, views)
                     results.append({"slug": slug, "url": "/" + slug + "/",
                                     "state": state, "views": len(views)})
+                    if state == "Updated" and self.journal is not None:
+                        self.journal.record("dashboard_updated", slug)
                 except Exception as exc:
                     issues.append("Dashboard " + slug + ": " + str(exc)[:160])
                     results.append({"slug": slug, "url": "/" + slug + "/",

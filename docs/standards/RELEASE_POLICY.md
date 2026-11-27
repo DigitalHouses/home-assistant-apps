@@ -219,6 +219,8 @@ The resolved SHA is verification metadata. The release tag remains the canonical
 
 ### 7.2 Home Assistant Apps
 
+The release pipeline derives a native runner matrix from the validated App architecture list. AMD64 uses `ubuntu-latest`; AArch64 uses `ubuntu-24.04-arm`. Builds run in parallel with separate product/architecture registry caches. QEMU is not used. Each build records its pushed digest; the publication job verifies the architecture tags against these digests and creates the final manifest from digest references only after every required build succeeds. Agent-only releases skip the image build matrix. Standard public-repository runners are used; paid runners are not required.
+
 The production delivery contract for a Home Assistant App is an immutable container artifact built from the exact released source.
 
 The required provenance chain is:
@@ -301,7 +303,13 @@ A shared commit does not create a shared product version.
 
 ## 10. Supported release mechanism
 
-New releases are published automatically by the repository integration workflow after a pull request has passed the complete repository validation and release-readiness checks.
+New releases are published automatically by the repository integration workflow after a pull request has passed repository-wide contract validation, all affected product checks, and release-readiness checks.
+
+### 10.1 Dependency-aware validation
+
+The CI scope is determined from the exact tested Git revision and its base. Repository contract and release readiness checks remain mandatory for PRs. Existing product check names are preserved; unrelated product jobs may be skipped only when the complete diff is confined to explicitly mapped product directories. Changes to shared files, the product registry, CI tooling, unknown paths, or an unverifiable/empty diff trigger the full suite. Product changes also validate DH Sync and Stats consumer contracts; Electrica and System Globals are validated together. Renames include both old and new paths. No release provenance, exact revision, or artifact checks are relaxed.
+
+### 10.2 Release candidate validation
 
 Release-readiness compares the pull request base and head revisions and identifies products whose canonical version source changed:
 
@@ -325,8 +333,8 @@ After merge, the workflow:
 1. checks out the exact merge commit on `main`;
 2. determines the release candidates introduced by that merge;
 3. re-validates all candidates before publication;
-4. creates each canonical tag and GitHub Release from that exact merge commit;
-5. verifies that every published tag resolves back to the merge commit.
+4. creates each canonical tag and GitHub Release from the verified release source (the exact merge commit for a new version, or its verified earlier introduction commit for a pending App release);
+5. verifies that every published tag resolves back to that release source.
 
 For products that already have canonical release history, the integration workflow may also reconcile a newer current source version that predates adoption of automatic release. This is limited to products with an existing canonical `<release_identifier>-v*` tag so enabling automation cannot unexpectedly create a first release for an unadopted product.
 
@@ -334,7 +342,68 @@ For Home Assistant Apps, the release mechanism must additionally build and publi
 
 The implementation may order publication steps transactionally to avoid partial releases, but it must not represent a release as complete until every artifact and provenance check required for that product type has passed.
 
-Manual `workflow_dispatch` release is not part of the normal repository workflow. Manual creation of new-format release tags is reserved for explicit recovery work.
+Normal release publication is automatic. An explicit `Validate repository` dispatch on `main` may reconcile pending releases after full validation. Manual creation of new-format release tags is reserved for explicit recovery work.
+
+### 10.3 CI provenance, revalidation and recovery
+
+A successful `Validate repository` run records its originating PR number, exact PR
+head, tested base of `main`, and Actions run/attempt in a short-lived Actions
+artifact. The privileged integration workflow verifies that artifact against
+the completed workflow run, the GitHub commit-to-PR association, the PR owner,
+repository, branch, and exact refs before considering a merge. It does **not**
+rely on `workflow_run.pull_requests`, which GitHub may return empty.
+
+If `main` advances during PR validation, integration **does not** update the PR
+branch with `GITHUB_TOKEN` (which can lead to an approval-required Actions run).
+Instead it dispatches `Validate repository` against the exact new base via
+`workflow_dispatch`, a supported GitHub Actions token exception. The validation-scope job resolves the synthetic `refs/pull/<number>/merge`
+revision exactly once, and the dispatched run checks that its first parent is
+the expected `main` SHA and its second parent is the expected PR head. It
+exports the resolved immutable merge commit SHA to every dependent validation
+job; each job checks out that exact SHA, not a moving PR merge ref.
+Release readiness checks the exact PR head SHA. Integration refuses a stale base, an
+unexpected head, a draft PR, or an unresolved branch policy/check failure. No
+checks or branch protections are bypassed.
+
+A human-merged PR triggers a normal `main` push validation. Its successful
+`workflow_run` reconciles any new release candidates from the exact validated
+`main` commit; this covers a manual merge without relying on the PR integration
+job. If a newer `main` commit supersedes that run, it cannot publish from a
+stale validation. GitHub-token-initiated PR merges are handled by their
+privileged integration run because ordinary `push` workflows are suppressed by
+GitHub's event-recursion rules.
+
+Partial Docker builds can be retried without overwriting already published
+architecture tags: an existing tag is reusable only with matching immutable
+source/version OCI annotations. The final manifest is created only after all
+architecture digests have been checked; existing final manifests are reusable
+only when their source, version, ordered source architecture-index digest
+annotation, flattened native image-manifest child digests resolved from those
+architecture indexes, and platforms all match. OCI index digests and their
+child image-manifest digests are distinct and must not be compared directly. Any
+unverifiable or mismatched immutable artifact is a hard failure, never a
+reason to replace its tag.
+
+Privileged workflow runs use native GitHub Actions concurrency with `queue: max`
+(up to 100 pending runs) to serialize merge and release publication without
+canceling pending runs. AMD64 and ARM64 builds remain parallel within each
+workflow run. The platform queue limit of 100 still applies.
+
+The automatic path uses standard public-repository runners and the repository
+`GITHUB_TOKEN` for validation, merge, dispatch, GHCR publication and verification.
+The final GitHub Release creation step alone uses the repository secret
+`DH_RELEASE_TOKEN`, a fine-grained credential restricted to this repository
+with Contents and Workflows read/write permissions. This allows canonical tags
+at validated historical main commits even when workflow files have changed.
+Keep the credential out of logs and PR validation; rotate it before expiry.
+No paid runner, branch bypass or weakened required check is permitted.
+
+For a pending App release, resolve the version-introduction commit on the
+first-parent main history and require an identical product tree. Reuse only
+verified source/version/platform OCI indexes whose digest is confirmed by
+GHCR. The canonical release tag and notes must identify that same source,
+not a later unrelated merge. Explicit main-branch validation may reconcile
+pending releases after an infrastructure failure.
 
 ## 11. Policy enforcement
 

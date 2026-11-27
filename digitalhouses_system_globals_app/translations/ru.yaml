@@ -1,0 +1,7 @@
+configuration:
+  telemetry_enabled:
+    name: Принять условия телеметрии
+    description: "Для статистики DigitalHouses отправляются название приложения, версия и случайный идентификатор установки. Политика: https://github.com/DigitalHouses/home-assistant-apps/blob/main/docs/standards/PRODUCT_TELEMETRY_POLICY.md"
+  require_z2m:
+    name: Учитывать Zigbee2MQTT
+    description: Требовать подтвержденную готовность всех автоматически обнаруженных экземпляров Zigbee2MQTT.
