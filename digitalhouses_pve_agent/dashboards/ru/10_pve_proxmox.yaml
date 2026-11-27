@@ -923,7 +923,7 @@ sections:
                   result += '<div style="opacity:.65">Детали гостей отсутствуют</div>';
                 }
                 for (const g of guests) {
-                  const detail = [statesText[g.s] || 'Неизвестно', size(g.z, g.t)]
+                  const detail = [statesText[g.s] || 'Неизвестно', length(g.m), size(g.z, g.t)]
                     .filter(Boolean).join(' · ');
                   result += '<div>' + (colors[g.s] || '⚪') + ' '
                     + esc((g.k || 'VM/CT') + ' ' + g.id)
@@ -944,6 +944,25 @@ sections:
               result += '</div>';
               return result;
             ]]]
+        grid_options:
+          columns: 12
+      - type: markdown
+        title: PVE · Покрытие заданиями
+        content: |-
+          {% set e = 'sensor.dh_pve_agent_backup_job_coverage' %}
+          {% set c = state_attr(e, 'counts') or {} %}
+          {% if states(e) not in ['available', 'unknown'] %}
+          ⚪ Инвентаризация недоступна
+          {% else %}
+          🟢 В заданиях: {{ c.covered | default(0) }} · 🔴 Без заданий: {{ c.uncovered | default(0) }} · ⚪ Исключено: {{ c.excluded | default(0) }} · Неизвестно: {{ c.unknown | default(0) }}
+          {% for job in state_attr(e, 'jobs') or [] %}
+          - {{ job.name }} · {{ job.schedule or '—' }} · {{ job.members | length }} VM/CT{% if job.status != 'enabled' %} · {{ job.status }}{% endif %}
+          {% endfor %}
+          {% for guest in state_attr(e, 'guests') or [] if guest.status != 'covered' %}
+          - {{ guest.id }} · {{ guest.name }} · {{ {'uncovered':'без задания','excluded':'исключён','unknown':'неизвестно'}.get(guest.status, guest.status) }}
+          {% endfor %}
+          {% if state_attr(e, 'details_limited') %}Часть деталей скрыта из-за лимита атрибутов.{% endif %}
+          {% endif %}
         grid_options:
           columns: 12
       - type: entities

@@ -8,6 +8,7 @@ import threading
 from datetime import datetime, timezone
 from typing import Callable
 
+from .backup_coverage import collect_inventory, bounded_inventory
 from .machine_event_outbox import MachineEventOutbox
 from .state_store import StateStore
 
@@ -19,6 +20,8 @@ POLL_SECONDS = 60.0
 _START = re.compile(r"Starting Backup of VM (\d+) \((qemu|lxc)\)", re.I)
 _END = re.compile(r"Finished Backup of VM (\d+)", re.I)
 _FAILURE = re.compile(r"Backup of VM (\d+) failed\s*-\s*(.*)", re.I)
+_FINISH_DURATION = re.compile(r"Finished Backup of VM \d+ \((\d+):(\d+):(\d+)\)", re.I)
+_EXPLICIT_SKIP = re.compile(r"\b(?:skip(?:ping|ped)?\s+Backup of VM\s+(?P<early>\d+)|Backup of VM\s+(?P<late>\d+)\b.*\bskip(?:ped|ping)?)", re.I)
 _SKIP = re.compile(r"skip external VMs:\s*([\d, ]+)", re.I)
 _JOB = re.compile(r"Job '([^'\n]{1,128})' triggered by schedule", re.I)
 _JOB_ARG = re.compile(r"--job-id\s+(?:'([^']+)'|\"([^\"]+)\"|([^\s]+))")
@@ -77,6 +80,13 @@ def parse_log(lines: list[str], configured_jobs: dict[str, str]) -> dict:
         if match:
             for vmid in re.findall(r"\d+", match.group(1)):
                 guests.setdefault(vmid, {"id": vmid, "kind": "?", "status": "skipped"})
+        match = _EXPLICIT_SKIP.search(line)
+        if match and not _FAILURE.search(line):
+            vmid = match.group("early") or match.group("late")
+            guest = guests.setdefault(vmid, {"id": vmid, "kind": "?", "status": "unknown"})
+            if guest["status"] != "failed":
+                guest["status"] = "skipped"
+            continue
         match = _START.search(line)
         if match:
             vmid, kind = match.groups()
@@ -98,6 +108,11 @@ def parse_log(lines: list[str], configured_jobs: dict[str, str]) -> dict:
             guest = guests.setdefault(vmid, {"id": vmid, "kind": "?", "status": "unknown"})
             if guest["status"] != "failed":
                 guest["status"] = "success"
+                duration = _FINISH_DURATION.search(line)
+                if duration:
+                    hh, mm, ss = map(int, duration.groups())
+                    if mm < 60 and ss < 60:
+                        guest["duration_seconds"] = hh * 3600 + mm * 60 + ss
             current = None
             continue
         if current is not None and current in guests:
@@ -199,6 +214,7 @@ class BackupReader:
             raise ValueError("invalid history limit")
         jobs: dict[str, str] = {}
         job_coverage = "available"
+        inventory = {"status": "unavailable", "jobs": [], "guests": []}
         try:
             configured = self._get("/cluster/backup")
             if not isinstance(configured, list):
@@ -209,6 +225,8 @@ class BackupReader:
                     jobs[ident] = str(raw.get("comment") or ident)[:100]
         except (OSError, subprocess.SubprocessError, ValueError, TypeError):
             job_coverage = "unavailable"
+        if job_coverage == "available" and not self._cancel.is_set():
+            inventory = collect_inventory(self.node, configured, self._get)
         tasks = self._get(f"/nodes/{self.node}/tasks", "--typefilter", "vzdump",
                           "--source", "all", "--limit", str(max(100, limit * 2)))
         if not isinstance(tasks, list):
@@ -247,7 +265,7 @@ class BackupReader:
         keep = {r["upid"] for r in runs}
         self._logs = {key: item for key, item in self._logs.items() if key in keep}
         return {"coverage": "available", "jobs_coverage": job_coverage,
-                "runs": runs, "observed_at": datetime.now(timezone.utc).isoformat()}
+                "runs": runs, "job_inventory": inventory, "observed_at": datetime.now(timezone.utc).isoformat()}
 
 
 class BackupHistory:
@@ -323,6 +341,7 @@ class BackupHistory:
                 **({"n": g["name"]} if g.get("name") else {}),
                 **({"z": g["size_gib"], "t": g.get("size_kind")} if "size_gib" in g else {}),
                 **({"e": g["error"]} if g.get("error") else {}),
+                **({"m": g["duration_seconds"]} if "duration_seconds" in g else {}),
             } for g in item.get("guests", [])]
             runs.append({
                 "d": item.get("started_at"), "n": item.get("label"),
@@ -354,6 +373,7 @@ class BackupHistory:
             "observed_at": self.snapshot.get("observed_at"),
             "details_limited": limited,
             "runs": output,
+            "job_inventory": bounded_inventory(self.snapshot.get("job_inventory", {"status": "unavailable", "jobs": [], "guests": []}) if self.snapshot.get("coverage") == "available" else {"status": "unavailable", "jobs": [], "guests": []}),
         }
 
     def flush_events(self, publisher: Callable[[dict], bool]) -> None:
