@@ -1,6 +1,6 @@
 FROM ghcr.io/home-assistant/base:latest
 
-ARG BUILD_VERSION="0.1.29"
+ARG BUILD_VERSION="0.2.0"
 ARG BUILD_ARCH
 
 ENV APP_VERSION="${BUILD_VERSION}" \
@@ -21,7 +21,8 @@ RUN apk add --no-cache \
 
 COPY rootfs /
 
-RUN chmod a+x /run.sh \
+RUN python3 -c "import sqlite3; assert sqlite3.sqlite_version_info >= (3, 25, 0)" \
+    && chmod a+x /run.sh \
     && python3 -m py_compile \
         /app/app.py \
         /app/config.py \
@@ -37,6 +38,7 @@ RUN chmod a+x /run.sh \
         /app/db/__init__.py \
         /app/db/base.py \
         /app/db/postgres.py \
-        /app/db/mariadb.py
+        /app/db/mariadb.py \
+        /app/db/sqlite.py
 
 CMD ["/run.sh"]

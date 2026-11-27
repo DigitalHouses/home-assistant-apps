@@ -5,6 +5,9 @@ from db.base import DatabaseAdapter
 
 
 def create_adapter(config: DatabaseConfig) -> DatabaseAdapter:
+    if config.engine == 'sqlite':
+        from db.sqlite import SQLiteAdapter
+        return SQLiteAdapter(config)
     if config.engine == 'postgresql':
         from db.postgres import PostgresAdapter
         return PostgresAdapter(config)

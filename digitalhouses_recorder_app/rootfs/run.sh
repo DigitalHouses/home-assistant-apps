@@ -47,7 +47,7 @@ export MYSQL_SERVICE_USER=""
 export MYSQL_SERVICE_PASSWORD=""
 
 if [[ "$(bashio::config 'database_type')" == "mariadb" ]] &&
-   [[ "$(bashio::config 'mariadb.connection')" == "supervisor" ]]; then
+   [[ "$(bashio::config 'mariadb.connection' 'supervisor')" == "supervisor" ]]; then
     if MYSQL_HOST_VALUE="$(bashio::services mysql host 2>/dev/null)" && [[ -n "${MYSQL_HOST_VALUE}" ]]; then
         export MYSQL_SERVICE_HOST="${MYSQL_HOST_VALUE}"
         export MYSQL_SERVICE_PORT="$(bashio::services mysql port)"
@@ -57,6 +57,18 @@ if [[ "$(bashio::config 'database_type')" == "mariadb" ]] &&
     else
         bashio::log.info "Supervisor MySQL service is not available; manual MariaDB mode remains available."
     fi
+fi
+
+# Keep the migration-only schema keys until all installed versions have
+# had a chance to persist their chosen values. Remove them only after the
+# atomic migration succeeds, never before.
+if bashio::config.true 'telemetry_enabled'; then
+    python3 /app/runtime_settings.py
+    for key in publish_interval_minutes recorder_stale_seconds top_entities_limit; do
+        if bashio::jq.exists "${OPTIONS_JSON}" ".${key}"; then
+            bashio::app.option "${key}"
+        fi
+    done
 fi
 
 exec python3 /app/app.py

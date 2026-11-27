@@ -1,7 +1,7 @@
 configuration:
   database_type:
     name: Database type
-    description: Recorder database engine used by Home Assistant.
+    description: Active Recorder database engine. SQLite uses the default database file and needs no credentials.
   postgresql:
     name: PostgreSQL
     description: Manual PostgreSQL Recorder database connection.
@@ -46,7 +46,7 @@ configuration:
     description: Monitor free disk space and disk usage for the Recorder database storage.
   storage.source:
     name: Storage source
-    description: Automatic uses the HAOS data disk for Supervisor MariaDB and SSH when external DB SSH credentials are supplied. SSH forces remote monitoring. Disabled turns storage monitoring off.
+    description: Automatic uses the local database filesystem for SQLite, the HAOS data disk for Supervisor MariaDB and SSH when external DB SSH credentials are supplied. SSH forces remote monitoring. Disabled turns storage monitoring off.
   storage.ssh_host:
     name: SSH host
     description: Optional SSH hostname or IP address. Leave empty to use the database host.
@@ -64,13 +64,13 @@ configuration:
     description: Optional manual path override. Leave empty and the App will detect an accessible database storage path automatically over SQL/SSH, with / as the final fallback.
   publish_interval_minutes:
     name: Publish interval, min
-    description: Interval in minutes between MQTT state publications and Recorder health checks.
+    description: Legacy migration option; use the MQTT Publish interval number.
   recorder_stale_seconds:
     name: Recorder stale threshold
-    description: Maximum age in seconds of the newest state before DB recorder writing is reported as off.
+    description: Legacy migration option; use the MQTT Recorder stale threshold number.
   top_entities_limit:
     name: Top entities count
-    description: Number of Recorder entities returned by each ranking. Default 10.
+    description: Legacy migration option; use the MQTT Top entities count number.
   telemetry_enabled:
     name: Statistics collection consent
     description: Consent to collect statistics (product name, version, installation ID).

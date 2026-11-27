@@ -47,9 +47,9 @@ The JSON contains `schema`, `product_id`, `type`, `version`,
 
 The canonical resources are:
 
-- [Russian view](dashboards/ru/10_recorder.yaml), stable `path: recorder`.
+- [English view](dashboards/en/10_recorder.yaml) and [Russian view](dashboards/ru/10_recorder.yaml), both with stable `path: recorder`. DH Sync 0.6.5 selects Russian; the English view can be imported manually.
 - [Common Recorder package](packages/common/dh_recorder_app.yaml).
-- [Russian notification package](packages/locales/ru/dh_recorder_app_notification_package.yaml).
+- Optional [English](packages/locales/en/dh_recorder_app_notification_package.yaml) and [Russian notification packages](packages/locales/ru/dh_recorder_app_notification_package.yaml) for sites with the local notification script.
 
 DH Sync discovers canonical YAML from the repository default branch.
 Dashboard placement is owned by DH Sync, not the Recorder App. Resource changes
@@ -99,6 +99,7 @@ permissions.
 
 ## Database support
 
+- SQLite: read-only default Home Assistant Recorder database.
 - PostgreSQL: manual database connection.
 - MariaDB Supervisor App: automatic MySQL service discovery.
 - External MariaDB: manual database connection.
@@ -108,10 +109,10 @@ permissions.
 Required static database identity consists of:
 
 - database name;
-- database user;
+- database user (not applicable to SQLite);
 - database version.
 
-Those three values share a dedicated availability gate. If one cannot be read,
+All applicable values share a dedicated availability gate. If one cannot be read,
 the static DB diagnostics stay unavailable instead of receiving a fabricated
 fallback.
 
@@ -124,13 +125,32 @@ failure therefore makes Recorder-writing data unavailable instead of changing
 it to synthetic `false`.
 
 
+## SQLite read-only operation
+
+The App mounts Home Assistant configuration at `/homeassistant` read-only and opens
+`home-assistant_v2.db` using Python sqlite3 with URI `mode=ro`, query-only mode,
+normal WAL locking, a short busy timeout and a two-second query progress-handler
+budget. A missing file is never created. Live WAL/SHM sidecars must be readable
+while Recorder is operating; startup may temporarily fail if they are absent.
+No immutable flag, checkpoint, schema or data writes are used. Connections are
+closed after each query, including on errors. Query timeout limits are best-effort
+at the SQLite VM level, not a hard OS I/O deadline.
+
+The Top-N query aggregates metadata IDs before joining names. It uses the existing
+Recorder indexes and does not create indexes. Expensive queries can be interrupted
+on a large or busy database. Successful metric-group timestamps and previous
+results remain available; no failed query publishes a fabricated count. The WAL
+size is separate from the main database size. An inactive leftover SQLite file
+cannot be distinguished reliably by its presence; select the actual Recorder
+database engine. Recorder-write health is derived from its newest state.
+
 ## Timezone ownership
 
 Recorder App has no user-configurable timezone. At startup, `run.sh` reads the
 Home Assistant Supervisor timezone through `bashio::supervisor.timezone` and
 exports it as `TZ`. Local-hour, previous-hour, local-day and previous-day
 boundaries all use that authoritative timezone. The App converts those local boundaries to Unix epoch
-values before querying Recorder, so MariaDB and PostgreSQL use the same numeric
+values before querying Recorder, so SQLite, MariaDB and PostgreSQL use the same numeric
 `last_updated_ts` ranges and do not depend on the database session timezone. There
 is no silent UTC fallback.
 
@@ -163,6 +183,8 @@ When storage monitoring is enabled:
 - `sensor.dh_recorder_app_db_disk_used_percentage` — used percentage.
 
 ### Automatic
+
+SQLite reads filesystem metrics via `statvfs` on the database directory. No SSH is required.
 
 For MariaDB running as a Home Assistant OS App, Automatic reads Home Assistant
 OS data-disk metrics from the Supervisor Host API. No SSH configuration is
@@ -237,8 +259,7 @@ Disabled omits the four storage entities.
 
 ## Publishing and polling
 
-`publish_interval_minutes` controls Recorder health/state refresh and retained
-MQTT state publication. Expensive operations are rate-limited.
+`number.dh_recorder_app_publish_interval_minutes` controls Recorder health/state refresh and retained MQTT state publication. Runtime values are migrated from the old optional Supervisor keys to `/data/runtime_settings.json` and updated through MQTT number entities without restart. The disk threshold and all user values survive migration. Expensive operations are rate-limited.
 
 ### PostgreSQL cluster selection
 
@@ -256,7 +277,7 @@ Canonical ranking sensors:
 The 24-hour ranking refreshes hourly. All-time ranking refreshes daily. Each
 uses a dedicated retained MQTT topic and is republished after MQTT reconnect.
 
-`top_entities_limit` controls both rankings. It defaults to `10` and accepts
+`number.dh_recorder_app_top_entities_limit` controls both rankings. It defaults to `10` and accepts
 values from `1` through `100`. The SQL query itself uses this limit, so a
 larger user-selected value changes both query result size and the published
 ranking payload.
@@ -353,20 +374,20 @@ machine event
 
 ## Telemetry
 
-Подтверждение согласия — существующий переключатель в конфигурации Home Assistant App:
+Consent is controlled by the existing Home Assistant App configuration option:
 
 ```yaml
 telemetry_enabled: false
 ```
 
-Описание переключателя (английский текст): `Consent to collect statistics (product name, version, installation ID).`
+Option description: `Consent to collect statistics (product name, version, installation ID).`
 
-- `false` либо отсутствующий ключ: журнал `Statistics collection consent not granted. Stopping application.` и остановка до создания DB/MQTT/Telemetry-клиентов;
-- `true`: штатная работа и отправка телеметрии;
-- прежнее значение настройки сохраняется при обновлении; включения без действия пользователя нет;
-- сбои сервера статистики не влияют на работу Recorder.
+- `false` or an absent key: log `Statistics collection consent not granted. Stopping application.` and stop before creating DB, MQTT or telemetry clients;
+- `true`: normal operation and telemetry;
+- upgrades preserve the existing setting; consent is never enabled automatically;
+- telemetry server failures do not affect Recorder monitoring.
 
-Состояние после принятия согласия:
+Persistent state after consent:
 
 ```text
 /data/telemetry.json
@@ -463,7 +484,7 @@ Core diagnostics and controls include:
 | --- | --- |
 | `sensor.dh_recorder_app_version` | Running Recorder App release |
 | `sensor.dh_recorder_app_started_at` | Current App process start timestamp |
-| `sensor.dh_recorder_app_database_type` | PostgreSQL or MariaDB |
+| `sensor.dh_recorder_app_database_type` | SQLite, PostgreSQL or MariaDB |
 | `sensor.dh_recorder_app_db_start` | Earliest retained Recorder state |
 | `sensor.dh_recorder_app_db_last` | Latest Recorder state |
 | `sensor.dh_recorder_app_db_depth` | Retained history depth |
@@ -473,7 +494,7 @@ Core diagnostics and controls include:
 | `sensor.dh_recorder_app_db_size` | Database size |
 | `sensor.dh_recorder_app_db_version` | Database server/version |
 | `sensor.dh_recorder_app_db_name` | Database name reported by the server |
-| `sensor.dh_recorder_app_db_user` | Database user reported by the server |
+| `sensor.dh_recorder_app_db_user` | Database user reported by the server (not applicable to SQLite) |
 | `binary_sensor.dh_recorder_app_db_connected` | Database connectivity after the first real observation |
 | `binary_sensor.dh_recorder_app_recorder_writing` | Recorder write activity |
 | `sensor.dh_recorder_app_db_last_age` | Age of the latest Recorder state |
@@ -486,6 +507,12 @@ Core diagnostics and controls include:
 | `binary_sensor.dh_recorder_app_update_available` | Stable Recorder App update availability |
 | `sensor.dh_recorder_app_db_last_refresh` | Last successful full manual refresh |
 | `number.dh_recorder_app_db_disk_usage_threshold` | App-owned storage threshold |
+| `number.dh_recorder_app_publish_interval_minutes` | Health check interval |
+| `number.dh_recorder_app_recorder_stale_seconds` | Recorder stale threshold |
+| `number.dh_recorder_app_top_entities_limit` | Ranking size |
+| `sensor.dh_recorder_app_db_wal_size` | SQLite WAL physical size (MiB; SQLite only) |
+| `sensor.dh_recorder_app_db_medium_observed_at` | Last successful period counter collection |
+| `sensor.dh_recorder_app_db_slow_observed_at` | Last successful history collection |
 | `event.dh_recorder_app_diagnostic` | Machine transition events |
 | `button.dh_recorder_app_delete_telemetry` | Authenticated deletion of this installation's telemetry record |
 
@@ -495,6 +522,118 @@ When storage monitoring is enabled:
 - `sensor.dh_recorder_app_db_disk_used`
 - `sensor.dh_recorder_app_db_disk_total`
 - `sensor.dh_recorder_app_db_disk_used_percentage`
+
+## Contract Data behavior
+
+Required product facts are validated before publication.
+
+- Version is a strict semantic release value and is shared by the Version sensor, `device.sw_version` and `origin.sw_version`.
+- Started at is created once per App process and is timezone-aware ISO8601.
+- Database type is required configuration-derived state.
+- Database name, applicable database user and database version are available only after all required static database fields were read successfully. SQLite has no database user.
+- DB connectivity remains unavailable until the first actual connection observation.
+- Recorder-writing state is not synthesized as `false` when DB state is unknown.
+- Event payloads are validated by event-specific required-field contracts.
+
+Optional metrics may remain absent/null where their schema allows it, for example when Recorder contains no state rows yet.
+
+## Metric collection schedule
+
+Recorder health uses the MQTT number `number.dh_recorder_app_publish_interval_minutes`, default one minute. The other runtime numbers set the stale threshold (300 seconds), ranking size (10) and disk threshold (80%). Existing configuration values migrate to `/data/runtime_settings.json` before deprecated options are removed. Settings are applied without an App restart; ranking size takes effect at the next scheduled collection or manual refresh. Expensive work is rate-limited:
+
+| Metric group | Interval |
+| --- | ---: |
+| Recorder health/latest state | Configured publish interval |
+| Database size/current record counters | 5 minutes |
+| Storage metrics | 5 minutes |
+| History depth/total records | 1 hour |
+| Top entities — 24h | 1 hour |
+| Top entities — all retained history | 1 day |
+| Static database information | Startup/reconnect until successful |
+
+The five-minute database metric group is aligned to local five-minute clock boundaries after its immediate startup collection. The hourly history-depth/total-record group is aligned to the local top of the hour instead of drifting from App startup time.
+
+A manual refresh collects every enabled group immediately without changing the normal background schedule.
+
+For Recorder activity bar charts, use the live period counters directly:
+`db_current_hour_records` grouped by hour and `db_today_records` grouped by
+date. The maintained dashboard uses `mini-graph-card` with
+`aggregate_func: delta`, which keeps the current incomplete hour/day visible
+while empty history buckets render as zero.
+
+Top-entity ranking rows include the absolute record count and the entity's percentage
+share of all Recorder rows in the same ranking window. The 24-hour ranking uses a
+rolling `now - 24h .. now` epoch window; the all-history ranking uses all retained
+Recorder rows.
+
+## Configuration examples
+
+SQLite (fresh-install default):
+
+```yaml
+database_type: sqlite
+storage:
+  source: automatic
+telemetry_enabled: false
+```
+
+Enable telemetry only after reviewing the current policy, otherwise the App does not start.
+The unused PostgreSQL and MariaDB groups may be left empty. No credentials
+are needed for SQLite. Supervisor may display unused optional fields in its
+configuration UI.
+
+PostgreSQL:
+
+```yaml
+database_type: postgresql
+postgresql:
+  host: "db.example.local"
+  port: 5432
+  database: homeassistant
+  username: recorder_monitor
+  password: "CHANGE_ME"
+telemetry_enabled: false
+```
+
+Supervisor MariaDB:
+
+```yaml
+database_type: mariadb
+mariadb:
+  connection: supervisor
+telemetry_enabled: false
+```
+
+External MariaDB:
+
+```yaml
+database_type: mariadb
+mariadb:
+  connection: manual
+  host: "db.example.local"
+  port: 3306
+  database: homeassistant
+  username: recorder_monitor
+  password: "CHANGE_ME"
+telemetry_enabled: false
+```
+
+## Backup and restore
+
+Product-persistent state lives under `/data`, including telemetry identity, runtime settings, SSH known-host state where applicable and HA/MQTT migration state. It is App data, not a container image copy.
+
+Production image delivery is external through versioned GHCR releases. Release automation records the immutable image digest and source merge commit, so a historical App release can resolve its historical registry image rather than embedding a duplicate image in App backup data.
+
+HA/MQTT cleanup was enabled only after live partial App backup/restore acceptance confirmed persistent telemetry identity under `/data`.
+
+## Security
+
+The App does not require privileged container access, Docker socket access or a
+Home Assistant API token. SQLite requires the read-only Home Assistant
+configuration-directory mount declared in the App manifest; it reads the
+standard Recorder database and its WAL/SHM sidecars.
+Database and SSH credentials remain in the App configuration and are never
+published to MQTT or telemetry. Use least-privileged database and SSH accounts.
 
 ## HA/MQTT identity migration
 
@@ -535,100 +674,3 @@ Supervisor slug is:
 ```text
 digitalhouses_recorder_app
 ```
-
-## Contract Data behavior
-
-Required product facts are validated before publication.
-
-- Version is a strict semantic release value and is shared by the Version sensor, `device.sw_version` and `origin.sw_version`.
-- Started at is created once per App process and is timezone-aware ISO8601.
-- Database type is required configuration-derived state.
-- Database name, database user and database version are considered available only after all required static database fields were read successfully.
-- DB connectivity remains unavailable until the first actual connection observation.
-- Recorder-writing state is not synthesized as `false` when DB state is unknown.
-- Event payloads are validated by event-specific required-field contracts.
-
-Optional metrics may remain absent/null where their schema allows it, for example when Recorder contains no state rows yet.
-
-## Polling strategy
-
-Recorder health uses `publish_interval_minutes`, default one minute. Expensive work is rate-limited:
-
-| Metric group | Interval |
-| --- | ---: |
-| Recorder health/latest state | Configured publish interval |
-| Database size/current record counters | 5 minutes |
-| Storage metrics | 5 minutes |
-| History depth/total records | 1 hour |
-| Top entities — 24h | 1 hour |
-| Top entities — all retained history | 1 day |
-| Static database information | Startup/reconnect until successful |
-
-The five-minute database metric group is aligned to local five-minute clock boundaries after its immediate startup collection. The hourly history-depth/total-record group is aligned to the local top of the hour instead of drifting from App startup time.
-
-A manual refresh collects every enabled group immediately without changing the normal background schedule.
-
-For Recorder activity bar charts, use the live period counters directly:
-`db_current_hour_records` grouped by hour and `db_today_records` grouped by
-date. The maintained dashboard uses `mini-graph-card` with
-`aggregate_func: delta`, which keeps the current incomplete hour/day visible
-while empty history buckets render as zero.
-
-Top-entity ranking rows include the absolute record count and the entity's percentage
-share of all Recorder rows in the same ranking window. The 24-hour ranking uses a
-rolling `now - 24h .. now` epoch window; the all-history ranking uses all retained
-Recorder rows.
-
-## Configuration examples
-
-PostgreSQL:
-
-```yaml
-database_type: postgresql
-postgresql:
-  host: "db.example.local"
-  port: 5432
-  database: homeassistant
-  username: recorder_monitor
-  password: "CHANGE_ME"
-top_entities_limit: 10
-telemetry_enabled: false
-```
-
-Supervisor MariaDB:
-
-```yaml
-database_type: mariadb
-mariadb:
-  connection: supervisor
-top_entities_limit: 10
-telemetry_enabled: false
-```
-
-External MariaDB:
-
-```yaml
-database_type: mariadb
-mariadb:
-  connection: manual
-  host: "db.example.local"
-  port: 3306
-  database: homeassistant
-  username: recorder_monitor
-  password: "CHANGE_ME"
-telemetry_enabled: false
-```
-
-## Backup and restore
-
-Product-persistent state lives under `/data`, including telemetry identity, runtime threshold, SSH known-host state where applicable and HA/MQTT migration state. It is App data, not a container image copy.
-
-Production image delivery is external through versioned GHCR releases. Release automation records the immutable image digest and source merge commit, so a historical App release can resolve its historical registry image rather than embedding a duplicate image in App backup data.
-
-HA/MQTT cleanup was enabled only after live partial App backup/restore acceptance confirmed persistent telemetry identity under `/data`.
-
-## Security
-
-The App does not require privileged container access, Docker socket access, Home Assistant configuration-directory access, `secrets.yaml` or a Home Assistant API token.
-
-Database credentials remain in Home Assistant App configuration and are never published to MQTT or telemetry. Use least-privileged database and SSH accounts that satisfy the documented read-only requirements.

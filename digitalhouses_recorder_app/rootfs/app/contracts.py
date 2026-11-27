@@ -84,19 +84,20 @@ def validate_runtime_state(payload: Mapping[str, Any]) -> None:
     validate_release_version(payload.get("version"))
     validate_timestamp(payload.get("started_at"), "started_at")
     db_type = require_nonempty_string(payload.get("db_type"), "db_type")
-    if db_type not in {"postgresql", "mariadb"}:
-        raise ValueError("db_type must be postgresql or mariadb")
+    if db_type not in {"sqlite", "postgresql", "mariadb"}:
+        raise ValueError("db_type must be sqlite, postgresql or mariadb")
 
 
-def validate_static_db_metrics(payload: Mapping[str, Any]) -> dict[str, str]:
+def validate_static_db_metrics(payload: Mapping[str, Any], engine: str = "postgresql") -> dict[str, str]:
     validated = {
         "db_name": require_nonempty_string(payload.get("db_name"), "db_name"),
-        "db_user": require_nonempty_string(payload.get("db_user"), "db_user"),
         "db_version": require_nonempty_string(
             payload.get("db_version"),
             "db_version",
         ),
     }
+    if engine != "sqlite":
+        validated["db_user"] = require_nonempty_string(payload.get("db_user"), "db_user")
     return validated
 
 
@@ -127,8 +128,8 @@ def validate_machine_event(payload: Mapping[str, Any]) -> None:
             payload["database_engine"],
             "database_engine",
         )
-        if engine not in {"postgresql", "mariadb"}:
-            raise ValueError("database_engine must be postgresql or mariadb")
+        if engine not in {"sqlite", "postgresql", "mariadb"}:
+            raise ValueError("database_engine must be sqlite, postgresql or mariadb")
         require_nonempty_string(payload["database_name"], "database_name")
         if event_type == "db_connection_restored":
             _require_integer(

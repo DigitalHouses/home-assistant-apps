@@ -144,14 +144,13 @@ def validate_db_monitoring(
             f"{app.name}: timezone must come from Supervisor, "
             "not App options"
         )
-    if options.get("top_entities_limit") != 10:
-        fail(
-            f"{app.name}: top_entities_limit must default to 10"
-        )
-    if schema.get("top_entities_limit") != "int(1,100)":
-        fail(
-            f"{app.name}: top_entities_limit schema must be int(1,100)"
-        )
+    for key, schema_type in {
+        "publish_interval_minutes": "int(1,60)?",
+        "recorder_stale_seconds": "int(30,86400)?",
+        "top_entities_limit": "int(1,100)?",
+    }.items():
+        if key in options or schema.get(key) != schema_type:
+            fail(f"{app.name}: {key} must be a migration-only optional option")
 
     run_script = (
         app / "rootfs" / "run.sh"

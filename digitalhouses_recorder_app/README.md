@@ -40,18 +40,20 @@ The app monitors Recorder rather than replacing it. It does not delete history, 
 
 The dashboard brings database health, storage, activity graphs and entity rankings together. Monitoring entities are created automatically through MQTT Discovery. You can also use them in your own dashboards and automations.
 
-- [English dashboard (development preview YAML)](https://github.com/DigitalHouses/home-assistant-apps/blob/123d7dca8aa789a387baf9d41a9a112d863d0b57/digitalhouses_recorder_app/dashboards/en/10_recorder.yaml)
+- [English dashboard (YAML)](dashboards/en/10_recorder.yaml)
 - [Russian dashboard (YAML)](dashboards/ru/10_recorder.yaml)
 
 ## Supported databases
 
 | Database | Connection |
 | --- | --- |
-| SQLite (planned for 0.2.0) | Default Home Assistant database. No credentials required. |
+| SQLite | Default Home Assistant database. No credentials required. |
 | MariaDB | Supervisor MariaDB App or an external server. |
 | PostgreSQL | Manual server connection. |
 
-SQLite support and the English dashboard are part of the upcoming 0.2.0 release. The current published 0.1.29 release supports MariaDB and PostgreSQL. See [releases](https://github.com/DigitalHouses/home-assistant-apps/releases) for available versions.
+SQLite support and the English dashboard were introduced in version 0.2.0. Earlier versions support MariaDB and PostgreSQL. See [releases](https://github.com/DigitalHouses/home-assistant-apps/releases) for available versions.
+
+SQLite has passed synthetic database tests with concurrent writes; live HAOS acceptance is still pending. See the [changelog](CHANGELOG.md#020) for details.
 
 ## Quick start
 
@@ -63,7 +65,7 @@ SQLite support and the English dashboard are part of the upcoming 0.2.0 release.
    ```
 
 3. Install **DigitalHouses Recorder App**.
-4. Select the database actually used by Recorder. Configure the connection for PostgreSQL or external MariaDB. SQLite is not supported by 0.1.29.
+4. Select the database actually used by Recorder. Configure the connection for PostgreSQL or external MariaDB; SQLite requires no database credentials.
 5. Review the [telemetry policy](../docs/standards/PRODUCT_TELEMETRY_POLICY.md) and enable the statistics consent option to activate the App under the current policy.
 6. Start the App. Its monitoring entities appear automatically through MQTT Discovery.
 
@@ -76,19 +78,19 @@ Install the following frontend cards through HACS:
 - Mini Graph Card
 - Entity Progress Card
 
-Copy the [Russian standalone view](dashboards/ru/10_recorder.yaml) into your Home Assistant dashboard YAML (as an entry under `views:`). The [English view](https://github.com/DigitalHouses/home-assistant-apps/blob/123d7dca8aa789a387baf9d41a9a112d863d0b57/digitalhouses_recorder_app/dashboards/en/10_recorder.yaml) is available as a development preview; its new monitoring controls require 0.2.0. Choose one language, not both. Use the [Recorder package](packages/common/dh_recorder_app.yaml) to retain the monitoring entities in Recorder history, merging its selection with your existing Recorder configuration if necessary.
+Copy the [English](dashboards/en/10_recorder.yaml) or [Russian](dashboards/ru/10_recorder.yaml) standalone view into your Home Assistant dashboard YAML (as an entry under `views:`). Choose one language, not both. Use the [Recorder package](packages/common/dh_recorder_app.yaml) to retain the monitoring entities in Recorder history, merging its selection with your existing Recorder configuration if necessary.
 
-DigitalHouses Sync is optional. Its current version selects Russian; the English preview can be imported manually. No other DigitalHouses products are required for monitoring.
+DigitalHouses Sync is optional. Its current version selects Russian; the English view can be imported manually. No other DigitalHouses products are required for monitoring.
 
 ## Privacy and database access
 
-Recorder metrics and database credentials stay local. For external databases, use a least-privileged monitoring account. The upcoming SQLite adapter uses a read-only configuration mount and bounded read-only database queries.
+Recorder metrics and database credentials stay local. SQLite is accessed through a read-only configuration mount and read-only database connections, with bounded queries to minimize impact on Recorder. For external databases, use a least-privileged monitoring account.
 
 The current release policy requires explicit consent to minimal usage statistics (product, version and a random installation ID). It does not send your Recorder records, entity IDs, database credentials or monitoring metrics. The app continues to monitor Recorder if the statistics server is temporarily unavailable. See the [telemetry policy](../docs/standards/PRODUCT_TELEMETRY_POLICY.md) and [privacy review](../docs/standards/TELEMETRY_PRIVACY_LEGAL_REVIEW.md).
 
 ## Documentation and feedback
 
-- [Technical documentation](DOCS.md) — configuration, MQTT entities, storage monitoring, monitoring settings and migration details.
+- [Technical documentation](DOCS.md) — configuration, MQTT entities, storage monitoring, runtime settings and migration details.
 - [Changelog](CHANGELOG.md)
 - [Report a bug or suggest a feature](https://github.com/DigitalHouses/home-assistant-apps/issues)
 

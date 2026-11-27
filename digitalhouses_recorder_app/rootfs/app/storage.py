@@ -182,6 +182,19 @@ class StorageCollector:
         return self.config.path or self._detected_path
 
     def collect(self) -> dict[str, float]:
+        if self.config.source == 'local':
+            stat = os.statvfs(self.adapter.data_directory())
+            total = stat.f_blocks * stat.f_frsize
+            used = (stat.f_blocks - stat.f_bfree) * stat.f_frsize
+            free = stat.f_bavail * stat.f_frsize
+            if not total:
+                raise ValueError('Filesystem has no reported capacity')
+            return {
+                'db_disk_free': round(free / 1e9, 1),
+                'db_disk_used': round(used / 1e9, 1),
+                'db_disk_total': round(total / 1e9, 1),
+                'db_disk_used_percentage': round(100 * used / total, 1),
+            }
         if self.config.source == 'supervisor':
             return parse_supervisor_host_payload(self.supervisor_fetcher())
         if self.config.source == 'ssh':

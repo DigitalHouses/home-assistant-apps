@@ -58,7 +58,7 @@ class RecorderDHSynchronizationStandardTests(unittest.TestCase):
         )
         view = CANONICAL.read_text(encoding="utf-8")
         self.assertTrue(view.startswith("# DH-View: dh_recorder_app\n"))
-        self.assertIn("# DH-View-Version: 1.0.0\n", view)
+        self.assertIn("# DH-View-Version: 1.1.0\n", view)
         self.assertNotIn("# DH-Compatible-App:", view)
         self.assertNotIn("# DH-Compatible-Agent:", view)
         body = _view_body(view)
@@ -105,6 +105,11 @@ class RecorderDHSynchronizationStandardTests(unittest.TestCase):
             for component in discovery["components"].values()
             if "default_entity_id" in component
         }
+        discovered.update(
+            component["default_entity_id"]
+            for component in build_discovery_payload(version, include_storage=True, database_engine="sqlite")["components"].values()
+            if "default_entity_id" in component
+        )
         self.assertEqual(references - discovered, SUPERVISOR_ENTITIES | EXTERNAL_ACTIONS)
         self.assertIn("sensor.dh_recorder_app_version", discovered)
         self.assertIn("sensor.dh_recorder_app_started_at", discovered)
@@ -114,6 +119,17 @@ class RecorderDHSynchronizationStandardTests(unittest.TestCase):
             discovery["device"]["sw_version"],
             build_sync_payload(version)["version"],
         )
+
+    def test_english_view_has_equivalent_cards_and_entity_references(self):
+        ru = _view_body(CANONICAL.read_text(encoding="utf-8"))
+        en = _view_body((APP / "dashboards/en/10_recorder.yaml").read_text(encoding="utf-8"))
+        self.assertNotRegex(en, "[А-Яа-яЁё]")
+        self.assertEqual(ENTITY_REFERENCE.findall(ru), ENTITY_REFERENCE.findall(en))
+        for contract in (r"(?m)^\s*(?:- )?type: (.*)$",
+                         r"(?m)^\s*perform_action: (.*)$",
+                         r"(?m)^\s*path: (.*)$",
+                         r"(?m)^\s*aggregate_func: (.*)$"):
+            self.assertEqual(re.findall(contract, ru), re.findall(contract, en))
 
     def test_existing_controls_graphs_and_frontend_requirements_preserved(self):
         body = _view_body(CANONICAL.read_text(encoding="utf-8"))

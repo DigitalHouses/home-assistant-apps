@@ -1,0 +1,706 @@
+# DH-View: dh_recorder_app
+# DH-View-Version: 1.1.0
+# DH-View-Date: 2026-11-28
+# Published English Lovelace view; DH Sync automatically maintains this YAML.
+# Requires Mushroom, button-card >= 5.0, mini-graph-card, and entity-progress-card.
+title: DH Recorder
+path: recorder
+icon: mdi:database
+type: sections
+max_columns: 4
+sections:
+  - type: grid
+    cards:
+      - type: heading
+        heading: Database health
+        heading_style: title
+        icon: mdi:database-check
+      - type: heading
+        heading: Information
+        heading_style: subtitle
+        icon: mdi:information
+      - type: custom:mushroom-template-card
+        entity: binary_sensor.dh_recorder_app_db_connected
+        primary: >-
+          {% if states('binary_sensor.dh_recorder_app_db_connected') not in ['on','off']
+          or states('binary_sensor.dh_recorder_app_recorder_writing') not in ['on','off'] %}
+            {% if is_state('binary_sensor.dh_recorder_app_db_connected', 'off') %}
+              Database unavailable
+            {% else %}
+              Waiting for data
+            {% endif %}
+          {% elif is_state('binary_sensor.dh_recorder_app_db_connected', 'off') %}
+            Database unavailable
+          {% elif not is_state('binary_sensor.dh_recorder_app_recorder_writing',
+          'on') %}
+            Recorder is not writing data
+          {% else %}
+            Database operating normally
+          {% endif %}
+        secondary: >-
+          {% set connected = states('binary_sensor.dh_recorder_app_db_connected') %}
+          {% set writing = states('binary_sensor.dh_recorder_app_recorder_writing') %}
+          {% set age = states('sensor.dh_recorder_app_db_last_age') %}
+          Connection: {{ 'OK' if connected == 'on' else 'ERROR' if connected == 'off' else '—' }}
+          {{ '\n' }}Recorder: {{ 'writing' if writing == 'on' else 'not writing' if writing == 'off' else '—' }}
+          {{ '\n' }}Last record: {{ age ~ ' s ago' if is_number(age) else '—' }}
+        icon: >-
+          {% if is_state('binary_sensor.dh_recorder_app_db_connected', 'off') %}
+            mdi:database-off
+          {% elif states('binary_sensor.dh_recorder_app_db_connected') != 'on'
+          or states('binary_sensor.dh_recorder_app_recorder_writing') not in ['on','off'] %}
+            mdi:database-clock
+          {% elif not is_state('binary_sensor.dh_recorder_app_recorder_writing',
+          'on') %}
+            mdi:database-alert
+          {% else %}
+            mdi:database-check
+          {% endif %}
+        icon_color: >-
+          {% if is_state('binary_sensor.dh_recorder_app_db_connected', 'off') %}
+            red
+          {% elif states('binary_sensor.dh_recorder_app_db_connected') != 'on'
+          or states('binary_sensor.dh_recorder_app_recorder_writing') not in ['on','off'] %}
+            grey
+          {% elif not is_state('binary_sensor.dh_recorder_app_recorder_writing',
+          'on') %}
+            orange
+          {% else %}
+            green
+          {% endif %}
+        multiline_secondary: true
+        tap_action:
+          action: more-info
+        grid_options:
+          columns: 12
+      - type: heading
+        heading_style: subtitle
+        icon: mdi:refresh
+        heading: App controls
+      - type: vertical-stack
+        cards:
+          - type: custom:button-card
+            entity: sensor.dh_recorder_app_card
+            triggers_update:
+              - sensor.dh_recorder_app_card
+              - sensor.dh_recorder_app_version
+              - sensor.dh_recorder_app_latest_version
+              - binary_sensor.dh_recorder_app_update_available
+              - binary_sensor.dh_recorder_app_db_connected
+              - binary_sensor.dh_recorder_app_recorder_writing
+              - sensor.dh_recorder_app_db_disk_used_percentage
+              - number.dh_recorder_app_db_disk_usage_threshold
+              - update.digitalhouses_recorder_app_update
+            update_timer: |
+              [[[
+                const s = states['sensor.dh_recorder_app_card']?.state;
+                const updating =
+                  states['update.digitalhouses_recorder_app_update']?.attributes?.in_progress === true;
+                return s === 'running' || updating ? 1000 : 5000;
+              ]]]
+            show_icon: true
+            show_name: true
+            show_label: true
+            icon: |
+              [[[
+                const s = states['sensor.dh_recorder_app_card']?.state;
+                const db = states['binary_sensor.dh_recorder_app_db_connected']?.state;
+                const writing = states['binary_sensor.dh_recorder_app_recorder_writing']?.state;
+                const used = Number(states['sensor.dh_recorder_app_db_disk_used_percentage']?.state);
+                const threshold = Number(states['number.dh_recorder_app_db_disk_usage_threshold']?.state);
+                const storageHigh =
+                  Number.isFinite(used) && Number.isFinite(threshold) && used >= threshold;
+                const upgrade =
+                  states['binary_sensor.dh_recorder_app_update_available']?.state === 'on';
+                const updating =
+                  states['update.digitalhouses_recorder_app_update']?.attributes?.in_progress === true;
+        
+                if (updating || s === 'running') return 'mdi:progress-clock';
+                if (s === 'error') return 'mdi:alert-circle';
+                if (s === 'success') return 'mdi:check-circle';
+                if (db === 'off') return 'mdi:database-off';
+                if (writing === 'off') return 'mdi:database-alert';
+                if (storageHigh) return 'mdi:harddisk-alert';
+                if (upgrade) return 'mdi:package-up';
+                return 'mdi:robot-outline';
+              ]]]
+            name: |
+              [[[
+                const installed = states['sensor.dh_recorder_app_version']?.state;
+                const latest = states['sensor.dh_recorder_app_latest_version']?.state;
+                const available =
+                  states['binary_sensor.dh_recorder_app_update_available']?.state === 'on';
+                const valid = (v) =>
+                  typeof v === 'string'
+                  && !['unknown', 'unavailable', 'none', ''].includes(v);
+                const upgrade =
+                  available && valid(installed) && valid(latest) && latest !== installed;
+        
+                return 'Recorder App' + (valid(installed)
+                  ? ' · v' + installed + (upgrade ? ' → v' + latest : '')
+                  : '');
+              ]]]
+            label: |
+              [[[
+                const item = states['sensor.dh_recorder_app_card'];
+                const db = states['binary_sensor.dh_recorder_app_db_connected']?.state;
+                const writing = states['binary_sensor.dh_recorder_app_recorder_writing']?.state;
+                const used = Number(states['sensor.dh_recorder_app_db_disk_used_percentage']?.state);
+                const threshold = Number(states['number.dh_recorder_app_db_disk_usage_threshold']?.state);
+                const storageHigh =
+                  Number.isFinite(used) && Number.isFinite(threshold) && used >= threshold;
+                const supervisorUpdate = states['update.digitalhouses_recorder_app_update'];
+        
+                const elapsedText = (since) => {
+                  const seconds = Math.max(
+                    0,
+                    Math.floor((performance.now() - since) / 1000)
+                  );
+                  const mm = String(Math.floor(seconds / 60)).padStart(2, '0');
+                  const ss = String(seconds % 60).padStart(2, '0');
+                  return mm + ':' + ss;
+                };
+                const duration = (value) => {
+                  if (typeof value !== 'number') return '—';
+                  const seconds = Math.round(Math.max(0, value));
+                  const minutes = Math.floor(seconds / 60);
+                  return minutes
+                    ? minutes + ' min ' + String(seconds % 60).padStart(2, '0') + ' sec'
+                    : seconds + ' sec';
+                };
+        
+                if (supervisorUpdate?.attributes?.in_progress === true) {
+                  if (this._dh_recorder_timer?.operation !== 'install') {
+                    this._dh_recorder_timer = {
+                      operation: 'install',
+                      since: performance.now()
+                    };
+                  }
+                  const pct = supervisorUpdate.attributes.update_percentage;
+                  return 'Installing update… '
+                    + (typeof pct === 'number' ? Math.round(pct) + '% · ' : '')
+                    + elapsedText(this._dh_recorder_timer.since);
+                }
+        
+                if (!item || ['unknown', 'unavailable'].includes(item.state)) {
+                  return 'App unavailable';
+                }
+        
+                const a = item.attributes || {};
+                const operation = a.operation;
+                const names = {
+                  refresh: 'Refreshing data',
+                  check: 'Checking version'
+                };
+        
+                if (item.state === 'running') {
+                  const key = String(operation) + '|' + String(a.started_at || '');
+                  if (this._dh_recorder_timer?.key !== key) {
+                    this._dh_recorder_timer = {
+                      key: key,
+                      operation: operation,
+                      since: performance.now()
+                    };
+                  }
+                  return (names[operation] || 'Operation') + '… '
+                    + elapsedText(this._dh_recorder_timer.since);
+                }
+        
+                this._dh_recorder_timer = null;
+        
+                if (item.state === 'error') {
+                  return 'Error: ' + (a.error || 'operation failed');
+                }
+        
+                if (item.state === 'success') {
+                  let message = operation === 'refresh'
+                    ? 'Data refreshed'
+                    : operation === 'check'
+                      ? (
+                          states['binary_sensor.dh_recorder_app_update_available']?.state === 'on'
+                            ? 'Update available'
+                            : states['binary_sensor.dh_recorder_app_update_available']?.state === 'off'
+                              ? 'Up to date'
+                              : 'Check completed'
+                        )
+                      : 'Done';
+                  return message + ' · ' + duration(a.duration_seconds);
+                }
+        
+                if (states['binary_sensor.dh_recorder_app_update_available']?.state === 'on') {
+                  return 'Update available';
+                }
+                if (db === 'off') return 'Database unavailable';
+                if (writing === 'off') return 'Recorder is not writing data';
+                if (storageHigh) {
+                  return 'Disk usage: ' + used.toFixed(1) + '%';
+                }
+                if (db === 'on' && writing === 'on') return 'Recorder operating normally';
+                return 'Waiting for data';
+              ]]]
+            styles:
+              card:
+                - padding: 12px
+                - text-align: left
+              grid:
+                - grid-template-areas: '"i n" "i l"'
+                - grid-template-columns: 48px 1fr
+                - grid-template-rows: min-content min-content
+              img_cell:
+                - width: 40px
+                - justify-content: start
+              icon:
+                - width: 26px
+                - color: |
+                    [[[
+                      const s = states['sensor.dh_recorder_app_card']?.state;
+                      const db = states['binary_sensor.dh_recorder_app_db_connected']?.state;
+                      const writing = states['binary_sensor.dh_recorder_app_recorder_writing']?.state;
+                      const used = Number(states['sensor.dh_recorder_app_db_disk_used_percentage']?.state);
+                      const threshold = Number(states['number.dh_recorder_app_db_disk_usage_threshold']?.state);
+                      const storageHigh =
+                        Number.isFinite(used) && Number.isFinite(threshold) && used >= threshold;
+                      const upgrade =
+                        states['binary_sensor.dh_recorder_app_update_available']?.state === 'on';
+                      const updating =
+                        states['update.digitalhouses_recorder_app_update']?.attributes?.in_progress === true;
+        
+                      return s === 'error' || db === 'off'
+                        ? 'var(--error-color)'
+                        : s === 'running' || updating
+                          ? 'var(--info-color, var(--primary-color))'
+                          : s === 'success'
+                            ? 'var(--success-color, var(--primary-color))'
+                            : writing === 'off' || storageHigh || upgrade
+                              ? 'var(--warning-color, orange)'
+                              : db === 'on' && writing === 'on'
+                                ? 'var(--success-color, var(--primary-color))'
+                                : 'var(--secondary-text-color)';
+                    ]]]
+              name:
+                - justify-self: start
+                - font-size: 14px
+                - font-weight: 600
+              label:
+                - justify-self: start
+                - white-space: normal
+                - text-align: left
+                - font-size: 13px
+                - color: var(--secondary-text-color)
+            tap_action:
+              action: none
+        
+          - type: custom:mushroom-chips-card
+            alignment: center
+            chips:
+              - type: template
+                icon: mdi:refresh
+                content: Refresh
+                tap_action:
+                  action: perform-action
+                  perform_action: button.press
+                  target:
+                    entity_id: button.dh_recorder_app_db_refresh
+        
+              - type: template
+                icon: mdi:cloud-search
+                content: Version
+                tap_action:
+                  action: perform-action
+                  perform_action: button.press
+                  target:
+                    entity_id: button.dh_recorder_app_check_updates
+        
+              - type: conditional
+                conditions:
+                  - entity: update.digitalhouses_recorder_app_update
+                    state: "on"
+                chip:
+                  type: template
+                  icon: mdi:package-down
+                  icon_color: orange
+                  content: Update available
+                  tap_action:
+                    action: perform-action
+                    perform_action: update.install
+                    target:
+                      entity_id: update.digitalhouses_recorder_app_update
+                    data:
+                      backup: true
+                    confirmation:
+                      text: >-
+                        Install a new Recorder App version?
+                        Home Assistant will back up the App before updating.
+                        Recorder monitoring will be temporarily interrupted.
+        
+              - type: template
+                icon: mdi:restart
+                content: Restart
+                tap_action:
+                  action: perform-action
+                  perform_action: hassio.app_restart
+                  data:
+                    app: 8133339d_digitalhouses_recorder_app
+                  confirmation:
+                    text: >-
+                      Restart Recorder App?
+                      Recorder monitoring will be temporarily interrupted.
+        grid_options:
+          columns: 12
+      - type: heading
+        heading: Database
+        heading_style: subtitle
+        icon: mdi:database-cog
+      - type: custom:mushroom-template-card
+        entity: sensor.dh_recorder_app_db_version
+        primary: '{{ states(''sensor.dh_recorder_app_db_version'') }}'
+        secondary: >-
+          Database: {{ states('sensor.dh_recorder_app_db_name') }}
+          {% if not is_state('sensor.dh_recorder_app_database_type', 'sqlite')
+             and states('sensor.dh_recorder_app_db_user') not in ['unknown','unavailable'] %}
+          {{ '\n' }}User: {{ states('sensor.dh_recorder_app_db_user') }}
+          {% endif %}
+        icon: mdi:database-cog
+        icon_color: blue
+        multiline_secondary: true
+        tap_action:
+          action: more-info
+        grid_options:
+          columns: 12
+          rows: auto
+      - type: grid
+        columns: 2
+        square: false
+        cards:
+          - type: custom:mushroom-template-card
+            entity: sensor.dh_recorder_app_db_size
+            primary: DB size
+            secondary: '{{ states(''sensor.dh_recorder_app_db_size'') }} MiB'
+            icon: mdi:database
+            icon_color: blue
+            tap_action:
+              action: more-info
+          - type: custom:mushroom-template-card
+            entity: sensor.dh_recorder_app_db_records
+            primary: Records
+            secondary: '{{ states(''sensor.dh_recorder_app_db_records'') }} K'
+            icon: mdi:database-marker
+            icon_color: cyan
+            tap_action:
+              action: more-info
+          - type: custom:mushroom-template-card
+            entity: sensor.dh_recorder_app_db_depth
+            primary: History depth
+            secondary: '{{ states(''sensor.dh_recorder_app_db_depth'') }} days'
+            icon: mdi:calendar-range
+            icon_color: purple
+            tap_action:
+              action: more-info
+          - type: custom:mushroom-template-card
+            entity: sensor.dh_recorder_app_db_last_age
+            primary: Last record
+            secondary: >-
+              {% set raw_age = states('sensor.dh_recorder_app_db_last_age') %}
+              {% if not is_number(raw_age) %}
+                Unavailable
+              {% else %}
+                {% set age = raw_age | int %}
+                {{ age }} s ago
+              {% endif %}
+            icon: mdi:database-clock
+            icon_color: >-
+              {% set raw_age = states('sensor.dh_recorder_app_db_last_age') %}
+              {% set threshold = states('number.dh_recorder_app_recorder_stale_seconds') | int(300) %}
+              {% if not is_number(raw_age) %}
+                grey
+              {% elif raw_age | int >= threshold %}
+                red
+              {% elif raw_age | int >= threshold * 0.4 %}
+                orange
+              {% else %}
+                green
+              {% endif %}
+            tap_action:
+              action: more-info
+      - type: entities
+        title: Monitoring settings
+        visibility:
+          - condition: numeric_state
+            entity: number.dh_recorder_app_publish_interval_minutes
+            above: 0
+        entities:
+          - entity: number.dh_recorder_app_publish_interval_minutes
+            name: Health check interval
+          - entity: number.dh_recorder_app_recorder_stale_seconds
+            name: Recorder stale threshold
+          - entity: number.dh_recorder_app_top_entities_limit
+            name: Top entities count
+      - type: entities
+        title: Data freshness
+        visibility:
+          - condition: numeric_state
+            entity: number.dh_recorder_app_publish_interval_minutes
+            above: 0
+        entities:
+          - entity: sensor.dh_recorder_app_db_medium_observed_at
+            name: Counters measured at
+          - entity: sensor.dh_recorder_app_db_slow_observed_at
+            name: History measured at
+      - type: entities
+        title: SQLite WAL
+        visibility:
+          - condition: numeric_state
+            entity: sensor.dh_recorder_app_db_wal_size
+            above: -1
+        entities:
+          - entity: sensor.dh_recorder_app_db_wal_size
+            name: WAL size
+      - type: custom:mushroom-template-card
+        entity: sensor.dh_recorder_app_db_start
+        primary: History start
+        secondary: >-
+          {% if states('sensor.dh_recorder_app_db_start') not in ['unknown',
+          'unavailable'] %}
+            {{ as_timestamp(states('sensor.dh_recorder_app_db_start'))
+               | timestamp_custom('%d.%m.%Y %H:%M:%S', true) }}
+          {% else %}
+            Unavailable
+          {% endif %}
+        icon: mdi:database-clock-outline
+        icon_color: green
+        tap_action:
+          action: more-info
+      - type: custom:mushroom-template-card
+        entity: sensor.dh_recorder_app_db_last
+        primary: Last record
+        secondary: >-
+          {% if states('sensor.dh_recorder_app_db_last') not in ['unknown',
+          'unavailable'] %}
+            {{ as_timestamp(states('sensor.dh_recorder_app_db_last'))
+               | timestamp_custom('%d.%m.%Y %H:%M:%S', true) }}
+          {% else %}
+            Unavailable
+          {% endif %}
+        icon: mdi:database-clock
+        icon_color: green
+        tap_action:
+          action: more-info
+  - type: grid
+    cards:
+      - type: heading
+        heading: Database storage
+        heading_style: title
+        icon: mdi:harddisk
+      - type: heading
+        heading: Disk space
+        heading_style: subtitle
+        icon: mdi:harddisk
+      - type: custom:entity-progress-card-template
+        entity: sensor.dh_recorder_app_db_disk_used_percentage
+        visibility:
+          - condition: numeric_state
+            entity: sensor.dh_recorder_app_db_disk_used_percentage
+            above: -1
+        name: >-
+          {% set pct = states('sensor.dh_recorder_app_db_disk_used_percentage')
+          | float(0) %} DB disk · {{ '%.1f' | format(pct) }}%
+        secondary: >-
+          {% set used = states('sensor.dh_recorder_app_db_disk_used') | float(0)
+          %} {% set total = states('sensor.dh_recorder_app_db_disk_total') |
+          float(0) %} Used {{ '%.1f' | format(used) }} / {{ '%.1f' |
+          format(total) }} GB
+        percent: >-
+          {{ '%.1f' |
+          format(states('sensor.dh_recorder_app_db_disk_used_percentage') |
+          float(0)) }}
+        icon: >-
+          {% set used = states('sensor.dh_recorder_app_db_disk_used_percentage')
+          | float(0) %} {% set threshold =
+          states('number.dh_recorder_app_db_disk_usage_threshold') | float(80)
+          %} {{ 'mdi:harddisk-alert' if used >= threshold else
+          'mdi:harddisk-check' }}
+        color: >-
+          {% set used = states('sensor.dh_recorder_app_db_disk_used_percentage')
+          | float(0) %} {% set threshold =
+          states('number.dh_recorder_app_db_disk_usage_threshold') | float(80)
+          %} {{ 'red' if used >= threshold else 'green' }}
+        bar_color: >-
+          {% set used = states('sensor.dh_recorder_app_db_disk_used_percentage')
+          | float(0) %} {% set threshold =
+          states('number.dh_recorder_app_db_disk_usage_threshold') | float(80)
+          %} {{ 'red' if used >= threshold else 'green' }}
+        bar_size: medium
+        tap_action:
+          action: more-info
+        grid_options:
+          columns: 12
+          rows: 1
+      - type: heading
+        heading: Disk usage threshold
+        heading_style: subtitle
+        icon: mdi:database-alert
+      - type: custom:mushroom-number-card
+        entity: number.dh_recorder_app_db_disk_usage_threshold
+        name: Disk usage
+        icon: mdi:database-alert
+        display_mode: buttons
+        fill_container: true
+        grid_options:
+          columns: 14
+          rows: 1
+        layout: horizontal
+      - type: heading
+        heading: Disk usage · 10 days
+        heading_style: subtitle
+        icon: mdi:chart-line
+      - square: false
+        type: grid
+        columns: 2
+        cards:
+          - type: tile
+            entity: sensor.dh_recorder_app_db_disk_used_percentage
+            name: Disk used, %
+            icon: mdi:cpu-64-bit
+            vertical: false
+            features:
+              - type: trend-graph
+                hours_to_show: 3
+                detail: true
+            features_position: bottom
+          - type: tile
+            entity: sensor.dh_recorder_app_db_disk_used
+            name: Disk used, Gb
+            icon: mdi:movie-cog
+            features_position: bottom
+            features:
+              - type: trend-graph
+                hours_to_show: 3
+                detail: true
+      - type: heading
+        heading: Database growth · 10 days
+        heading_style: subtitle
+        icon: mdi:database-arrow-up
+      - type: custom:mini-graph-card
+        entities:
+          - sensor.dh_recorder_app_db_size
+        name: DB size
+        hours_to_show: 240
+        aggregate_func: last
+        group_by: date
+        show:
+          graph: bar
+          show_points: true
+  - type: grid
+    cards:
+      - type: heading
+        heading: Recorder activity
+        heading_style: title
+        icon: mdi:database-edit
+      - type: heading
+        heading: Total records by day
+        heading_style: subtitle
+        icon: mdi:database-marker
+      - type: custom:mini-graph-card
+        entities:
+          - sensor.dh_recorder_app_db_records
+        name: Record count
+        hours_to_show: 240
+        aggregate_func: last
+        group_by: date
+        show:
+          graph: bar
+          show_points: true
+      - type: heading
+        heading: New records per day
+        heading_style: subtitle
+        icon: mdi:calendar-arrow-left
+      - type: custom:mini-graph-card
+        entities:
+          - sensor.dh_recorder_app_db_today_records
+        name: New records per day
+        hours_to_show: 240
+        aggregate_func: delta
+        group_by: date
+        show:
+          graph: bar
+          show_points: true
+      - type: heading
+        heading: New records per hour
+        heading_style: subtitle
+        icon: mdi:database-arrow-down
+      - type: custom:mini-graph-card
+        entities:
+          - sensor.dh_recorder_app_db_current_hour_records
+        name: New records per hour
+        hours_to_show: 24
+        aggregate_func: delta
+        group_by: hour
+        show:
+          graph: bar
+          show_points: true
+  - type: grid
+    cards:
+      - type: heading
+        heading_style: title
+        heading: Top Recorder entities
+        icon: mdi:record-circle
+      - type: markdown
+        title: Top Recorder entities · 24 hours
+        content: >
+          {% set results =
+          state_attr('sensor.dh_recorder_app_db_top_entities_24h',
+          'top_entities') or [] %}
+
+          {% set generated =
+          state_attr('sensor.dh_recorder_app_db_top_entities_24h',
+          'generated_at') %}
+
+
+          Generated: {% if generated %}{{
+          as_local(as_datetime(generated)).strftime('%d.%m.%Y %H:%M') }}{% else
+          %}no data{% endif %} - updated hourly
+
+
+          | % | count | Entity |
+
+          | ---: | ---: | :--- |
+
+          {%- for r in results %}
+
+          | {{ '%.2f' | format(r.share_percent | float(0)) }}% | {{ r.records }}
+          | {% if r.share_percent | float(0) >= 10 %}🔴 {% elif r.share_percent
+          | float(0) >= 5 %}🟡 {% endif %}{{ r.entity_id | replace('|',
+          '&#124;') }} |
+
+          {%- endfor %}
+      - type: markdown
+        title: Top Recorder entities · all retained history
+        content: >
+          {% set results =
+          state_attr('sensor.dh_recorder_app_db_top_entities_all_time',
+          'top_entities') or [] %}
+
+          {% set generated =
+          state_attr('sensor.dh_recorder_app_db_top_entities_all_time',
+          'generated_at') %}
+
+
+          Generated: {% if generated %}{{
+          as_local(as_datetime(generated)).strftime('%d.%m.%Y %H:%M') }}{% else
+          %}no data{% endif %} - updated every 24 hours
+
+
+          | % | count | Entity |
+
+          | ---: | ---: | :--- |
+
+          {%- for r in results %}
+
+          | {{ '%.2f' | format(r.share_percent | float(0)) }}% | {{ r.records }}
+          | {% if r.share_percent | float(0) >= 10 %}🔴 {% elif r.share_percent
+          | float(0) >= 5 %}🟡 {% endif %}{{ r.entity_id | replace('|',
+          '&#124;') }} |
+
+          {%- endfor %}
+cards: []
+badges: []
