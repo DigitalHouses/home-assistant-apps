@@ -2,6 +2,11 @@
 
 Historical releases below were published as DigitalHouses Aqara Switch App; their identifiers are retained.
 
+## 0.3.11
+
+- Align the active checkbox beside the Day/Night heading, rather than at the far edge.
+- Use one compact MM:SS duration field across presence, logical keys and physical relay editors; align rows and use the same format in summaries. New presence assignments default to 00:00 (immediate OFF on absence). Existing omitted delays remain disabled, shown with a 00:00 placeholder and explicit disabled label. Clear removes the timer; key/relay timers retain the existing 1-second minimum and 24-hour maximum. Stored durations remain seconds; no runtime change.
+
 ## 0.3.10
 
 - Replace the presence assignment editor's asymmetric Always/Day/Night condition and night override with two symmetric per-target Day and Night blocks: active, ON/OFF or global profile for that mode or custom light parameters, and independent Auto-OFF after absence. Disabled blocks preserve their saved settings.
