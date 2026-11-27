@@ -156,6 +156,8 @@ automatic canonical tag + GitHub Release
 product-specific production delivery
 ```
 
+Before requesting a release, complete and document the product-specific open PR review required by [Repository Governance, section 6.1](REPOSITORY_GOVERNANCE.md#61-product-pull-request-lifecycle-mandatory). Resolve stale or overlapping work, preserve deferred work in Issues, and explicitly justify any remaining active PR. This is a developer responsibility, not a new manual approval step. A release must not be created merely to clean up PRs.
+
 The developer expresses release intent by changing the product version source and matching changelog in the pull request. No repository-owner button press or manual release approval is part of the normal mechanical path.
 
 If a pull request does not change a product version, it does not create a release for that product.

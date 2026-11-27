@@ -28,6 +28,9 @@ Describe changes to installation, configuration, entities, diagnostics, behavior
 
 ## Checklist
 
+- [ ] Existing open PRs (including Drafts) for the affected product(s) were reviewed; overlapping work was reconciled. See [Repository Governance](../docs/standards/REPOSITORY_GOVERNANCE.md).
+- [ ] If this is a release PR, the product's open PR review and disposition are recorded; remaining active PRs have a documented reason. Otherwise N/A.
+- [ ] If canonical Views/Packages changed, compatibility with supported deployed versions was verified, including missing/unavailable entities and attributes. Otherwise N/A.
 - [ ] The change is scoped to one clear purpose.
 - [ ] Relevant tests were added or updated.
 - [ ] Repository validation passes.

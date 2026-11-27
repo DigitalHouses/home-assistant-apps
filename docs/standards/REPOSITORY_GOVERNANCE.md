@@ -91,6 +91,21 @@ Before deleting an old branch, compare it with `main`.
 
 A branch name such as `tmp`, `tdd`, `fix`, or `release` is never sufficient evidence by itself that deletion is safe.
 
+### 6.1 Product pull request lifecycle (mandatory)
+
+Before starting product development, review all open PRs for that product, including Drafts and repository-wide PRs affecting it. Compare the task with their scope, current `main`, latest stable release, applicable architecture contracts, and available field-test evidence. Reuse or reconcile relevant work rather than creating a parallel implementation of the same task.
+
+Before every product release (including prereleases), repeat this review and record the disposition of relevant open PRs in the release PR. For each outstanding PR:
+
+- Already implemented or superseded: close with a reason and links to the implementing commit, PR or release where applicable.
+- Partially relevant: preserve and integrate only the still-needed changes against current `main`; do not restore superseded behavior.
+- Still needed and actively developed or awaiting a specific acceptance gate: retain a single PR, identify the remaining work/gate, and update its status.
+- Deferred or inactive: record the remaining task in an Issue with links to the PR and preserved source commits, then close the PR. Preserve any unique useful work before branch deletion.
+
+Do not leave a Draft open merely as a backlog item. Do not close necessary active work simply to reach zero open PRs; every remaining PR must have a documented reason and next acceptance condition. Review code and regression evidence before integration; passing CI alone does not replace required product field acceptance. Do not weaken CI/CD, rewrite history, discard unique work, or publish a new version solely to close PRs.
+
+Canonical Views and Packages may reach installations independently of runtime releases. Before merging resource changes, verify backward compatibility with the latest stable release and other supported deployed versions, following the [DH Sync developer standard](DH_SYNC_DEVELOPER_STANDARD.md). Record the relevant compatibility tests in the PR.
+
 ## 7. Force push and history rewriting
 
 Do not force-push `main`.
