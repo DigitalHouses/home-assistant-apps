@@ -42,8 +42,8 @@ def stats_summary(db: Session = Depends(get_db)) -> dict[str, object]:
 
 
 @app.get("/v1/stats/products")
-def stats_products(db: Session = Depends(get_db)) -> list[dict[str, object]]:
-    return products(db)
+def stats_products(raw: bool = Query(default=False), db: Session = Depends(get_db)) -> list[dict[str, object]]:
+    return products(db, raw=raw)
 
 
 @app.get("/v1/stats/versions")

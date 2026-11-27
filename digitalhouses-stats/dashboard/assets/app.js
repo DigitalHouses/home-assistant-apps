@@ -183,7 +183,7 @@ async function load() {
     $("last-heartbeat-exact").textContent = lastHeartbeat.exact;
 
     tableRows("versions", versions, (r) =>
-      '<tr><td class="product">' + (r.name || r.product) + '</td><td>' + r.version +
+      '<tr><td class="product">' + escapeHtml(r.name || r.product) + '</td><td>' + escapeHtml(r.version) + (r.legacy ? ' (legacy)' : '') +
       '</td><td>' + r.observed_installations + '</td><td>' + r.active_7d + '</td></tr>', 4);
 
     renderCountries(countries);
