@@ -634,3 +634,43 @@ configuration-directory mount declared in the App manifest; it reads the
 standard Recorder database and its WAL/SHM sidecars.
 Database and SSH credentials remain in the App configuration and are never
 published to MQTT or telemetry. Use least-privileged database and SSH accounts.
+
+## HA/MQTT identity migration
+
+Release 0.1.15 provided the controlled compatibility bridge from the released
+legacy contract to the canonical Recorder App identity. Live acceptance
+confirmed the canonical device/entities, local package migration, telemetry,
+and App-data backup/restore before cleanup.
+
+Release 0.1.16 completes that migration. Runtime publication and command/event
+handling are canonical-only:
+
+```text
+MQTT base:    DigitalHouses/Global/digitalhouses_recorder_app
+device ID:    digitalhouses_recorder_app
+entity prefix dh_recorder_app
+```
+
+On the first 0.1.16 MQTT connection, the App removes retained state under the
+former `DigitalHouses/Global/db_monitoring` namespace and publishes an empty
+retained Discovery payload for `digitalhouses_db_monitoring`. Each retained
+delete uses QoS 1 and must be acknowledged by the broker before cleanup is
+marked complete.
+
+Migration state is persisted in:
+
+```text
+/data/ha_mqtt_identity_migration.json
+```
+
+After the marker reaches `phase=completed`, rolling back to bridge release
+0.1.15 does not resurrect the legacy identity. Releases 0.1.14 and older
+predate this completed-marker behavior and are not safe rollback targets after
+cleanup.
+
+Historical Supervisor slug migration is separate and remains complete. The
+Supervisor slug is:
+
+```text
+digitalhouses_recorder_app
+```
