@@ -4,6 +4,7 @@ import os
 import subprocess
 
 PRODUCT_JOBS = {
+    "digitalhouses_actions_app": "aqara-switch-app",
     "digitalhouses_aqara_switch_app": "aqara-switch-app",
     "digitalhouses_zigbee_monitor_app": "zigbee-monitor-app",
     "digitalhouses_speedtest_app": "speedtest-app",
@@ -39,7 +40,7 @@ def select_jobs(paths):
     # Keep consumer checks for changes to product contracts.
     if selected - {"stats-server"}:
         selected.update(("sync-app", "stats-server"))
-    # Electrica and System Globals share the day/night protocol.
+    # Actions and System Globals share the day/night protocol.
     if selected.intersection(("aqara-switch-app", "system-globals-app")):
         selected.update(("aqara-switch-app", "system-globals-app"))
     return frozenset(selected)

@@ -14,7 +14,7 @@ from validators.common import (
     require_files,
     validate_common,
 )
-from validators.products.electrica_app import validate_electrica
+from validators.products.actions_app import validate_actions
 from validators.products.backblaze_app import validate_backblaze
 from validators.products.internet_app import validate_internet
 from validators.products.network_app import validate_network
@@ -43,7 +43,7 @@ PRODUCT_TYPE_TO_APPLICATION_TYPE = {
 }
 
 PRODUCT_VALIDATORS = {
-    "digitalhouses_electrica_app": validate_electrica,
+    "digitalhouses_actions_app": validate_actions,
     "digitalhouses_backblaze_app": validate_backblaze,
     "digitalhouses_internet_app": validate_internet,
     "digitalhouses_network_app": validate_network,

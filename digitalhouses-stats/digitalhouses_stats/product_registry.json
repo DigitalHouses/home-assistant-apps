@@ -145,18 +145,18 @@
       "haos_slug": "digitalhouses_zigbee_monitor_app"
     },
     {
-      "id": "digitalhouses_electrica_app",
+      "id": "digitalhouses_actions_app",
       "type": "app",
-      "entity_prefix": "dh_electrica_app",
-      "display_name": "Electrica App",
+      "entity_prefix": "dh_actions_app",
+      "display_name": "Actions App",
       "telemetry_allowed": true,
       "release": {
-        "title": "DigitalHouses Electrica App",
+        "title": "DigitalHouses Actions App",
         "version_source": "haos_config",
         "policy_baseline": "0.1.2"
       },
-      "repository_directory": "digitalhouses_electrica_app",
-      "haos_slug": "digitalhouses_electrica_app"
+      "repository_directory": "digitalhouses_actions_app",
+      "haos_slug": "digitalhouses_actions_app"
     },
     {
       "id": "digitalhouses_network_app",

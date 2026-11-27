@@ -66,7 +66,7 @@ def test_empty_dashboard_products_lists_full_catalog() -> None:
         "digitalhouses_climate_app",
         "digitalhouses_presence_app",
         "digitalhouses_zigbee_monitor_app",
-        "digitalhouses_electrica_app",
+        "digitalhouses_actions_app",
         "digitalhouses_network_app",
         "digitalhouses_sync_app",
         "digitalhouses_system_globals_app",

@@ -153,26 +153,26 @@ jobs:
         with:
           python-version: "3.13"
 
-      - name: Compile Electrica App
-        run: python -m compileall -q digitalhouses_electrica_app/rootfs/app digitalhouses_electrica_app/tests
+      - name: Compile Actions App
+        run: python -m compileall -q digitalhouses_actions_app/rootfs/app digitalhouses_actions_app/tests
 
       - name: Install test dependencies
         run: python -m pip install --disable-pip-version-check PyYAML
 
-      - name: Run Electrica App tests
+      - name: Run Actions App tests
         env:
-          PYTHONPATH: digitalhouses_electrica_app/rootfs/app
-        run: python -m unittest discover -s digitalhouses_electrica_app/tests -v
+          PYTHONPATH: digitalhouses_actions_app/rootfs/app
+        run: python -m unittest discover -s digitalhouses_actions_app/tests -v
 
       - name: Check launcher
-        run: bash -n digitalhouses_electrica_app/rootfs/run.sh
+        run: bash -n digitalhouses_actions_app/rootfs/run.sh
 
-      - name: Build installable Electrica App image
+      - name: Build installable Actions App image
         run: |
-          APP_VERSION="$(awk '$1 == "version:" {print $2; exit}' digitalhouses_electrica_app/config.yaml)"
+          APP_VERSION="$(awk '$1 == "version:" {print $2; exit}' digitalhouses_actions_app/config.yaml)"
           test -n "$APP_VERSION"
-          docker build --build-arg BUILD_VERSION="$APP_VERSION" --build-arg BUILD_ARCH=amd64 --tag digitalhouses-electrica-ci:"$APP_VERSION" digitalhouses_electrica_app
-          docker run --rm --entrypoint python3 digitalhouses-electrica-ci:"$APP_VERSION" -c 'import sys; sys.path.insert(0, "/app"); from electrica.runtime import Application; import paho.mqtt.client; print("Electrica App MQTT runtime OK")'
+          docker build --build-arg BUILD_VERSION="$APP_VERSION" --build-arg BUILD_ARCH=amd64 --tag digitalhouses-actions-ci:"$APP_VERSION" digitalhouses_actions_app
+          docker run --rm --entrypoint python3 digitalhouses-actions-ci:"$APP_VERSION" -c 'import sys; sys.path.insert(0, "/app"); from actions.runtime import Application; import paho.mqtt.client; print("Actions App MQTT runtime OK")'
 
   zigbee-monitor-app:
     name: Zigbee Monitor App
