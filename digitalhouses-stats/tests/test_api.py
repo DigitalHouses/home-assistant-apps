@@ -60,11 +60,13 @@ def test_empty_dashboard_products_lists_full_catalog() -> None:
         "digitalhouses_pbs_agent",
         "digitalhouses_plex_agent",
         "digitalhouses_recorder_app",
+        "digitalhouses_speedtest_app",
         "digitalhouses_backblaze_app",
         "digitalhouses_internet_app",
         "digitalhouses_climate_app",
         "digitalhouses_presence_app",
         "digitalhouses_zigbee_monitor_app",
+        "digitalhouses_aqara_switch_app",
         "digitalhouses_actions_app",
         "digitalhouses_network_app",
         "digitalhouses_sync_app",
@@ -499,56 +501,3 @@ def test_seven_day_installation_history() -> None:
         row["active_installations"] <= row["total_installations"]
         for row in rows
     )
-
-
-def test_product_succession_is_read_only_and_deduplicates_shared_identity():
-    reset_database()
-    old = "digitalhouses_aqara_switch_app"
-    new = "digitalhouses_actions_app"
-    shared = str(uuid.uuid4())
-    other = str(uuid.uuid4())
-    for product, identity, version, country in (
-        (old, shared, "0.2.3", "DE"),
-        (new, shared, "0.3.1", "KZ"),
-        (old, other, "0.2.2", "US"),
-    ):
-        _send_heartbeat(installation_id=identity, token_hex_pair="11",
-                        product=product, version=version, country=country)
-    def get(endpoint, **params):
-        response = dashboard_client.get("/v1/stats/" + endpoint, params=params)
-        assert response.status_code == 200, response.text
-        return response.json()
-    rows = {r["product"]: r for r in get("products")}
-    assert old not in rows
-    assert rows[new]["observed_installations"] == 2
-    assert rows[new]["active_24h"] == 2
-    raw = {r["product"]: r for r in get("products", raw=True)}
-    assert raw[old]["observed_installations"] == 2
-    assert raw[new]["observed_installations"] == 1
-    assert get("summary")["observed_installations"] == 2
-    assert get("summary")["heartbeats"] == 3
-    assert get("summary")["active_7d"] == 2
-    versions = get("versions", product=new)
-    assert versions == get("versions", product=old)
-    assert {r["product"] for r in versions} == {new}
-    assert {r["version"] for r in versions} == {"0.3.1", "0.2.2"}
-    assert next(r for r in versions if r["version"] == "0.2.2")["legacy"]
-    countries = get("countries", product=new)
-    assert {r["country"] for r in countries} == {"KZ", "US"}
-    assert all(r["products"][0]["product"] == new for r in countries)
-    today = get("history", product=new, days=1)[0]
-    assert today["active_installations"] == 2 and today["heartbeats"] == 3
-    chart = get("installation-history", days=1)[0]
-    assert chart["total_installations"] == chart["active_installations"] == 2
-    with engine.connect() as connection:
-        assert connection.execute(text("SELECT count(*) FROM installations")).scalar_one() == 3
-
-
-def test_speedtest_is_presented_as_internet():
-    reset_database()
-    _send_heartbeat(installation_id=str(uuid.uuid4()), token_hex_pair="22",
-                    product="digitalhouses_speedtest_app", version="1.2.1", country="KZ")
-    rows = dashboard_client.get("/v1/stats/versions").json()
-    assert len(rows) == 1
-    assert rows[0]["product"] == "digitalhouses_internet_app"
-    assert rows[0]["legacy"] is True

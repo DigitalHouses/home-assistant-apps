@@ -15,7 +15,6 @@ class ProductDefinition:
     display_name: str
     telemetry_allowed: bool
     release: dict[str, str] | None
-    superseded_by: str | None = None
 
 
 def _load_products() -> tuple[ProductDefinition, ...]:
@@ -57,7 +56,6 @@ def _load_products() -> tuple[ProductDefinition, ...]:
                 display_name=display_name,
                 telemetry_allowed=telemetry_allowed,
                 release=release,
-                superseded_by=entry.get("superseded_by"),
             )
         )
 
@@ -74,23 +72,3 @@ ALLOWED_PRODUCTS = frozenset(
 def product_name(identifier: str) -> str:
     product = PRODUCT_BY_ID.get(identifier)
     return product.display_name if product is not None else identifier
-
-
-def canonical_product(identifier: str) -> str:
-    """Resolve presentation lineage without changing ingestion identities."""
-    seen: set[str] = set()
-    while identifier in PRODUCT_BY_ID:
-        successor = PRODUCT_BY_ID[identifier].superseded_by
-        if successor is None:
-            return identifier
-        if identifier in seen or successor not in PRODUCT_BY_ID:
-            raise RuntimeError("invalid product succession chain")
-        seen.add(identifier)
-        identifier = successor
-    return identifier
-
-
-PRODUCT_SUCCESSORS = {
-    p.identifier: canonical_product(p.identifier)
-    for p in PRODUCTS if p.superseded_by is not None
-}

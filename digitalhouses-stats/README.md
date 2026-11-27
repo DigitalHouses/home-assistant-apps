@@ -83,5 +83,3 @@ See `deploy/digitalhouses-stats-country-notifier.service`,
 ### Product succession
 
 Actions App supersedes Aqara Switch App. Both IDs remain in the catalog and telemetry allowlist; the historical Aqara ID is deprecated and is not release-managed. Installations and heartbeats remain keyed by the original product ID. Do not rewrite or combine historical records automatically.
-
-Dashboard statistics resolve superseded_by transitively. The current product owns its lineage in summary, products, versions, countries and history. Shared UUIDs in a lineage are counted once; different UUIDs are not assumed to be the same installation. Legacy version rows are marked legacy. The local products API accepts raw=true for exact registry/deployment checks; ingestion and stored historical rows remain unchanged.
