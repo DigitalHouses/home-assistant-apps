@@ -56,11 +56,11 @@ It is independent of any Home Assistant dashboard.
 - **Sensors (DEV):** discover HA binary_sensor
   motion/occupancy/presence and same-device illuminance in lx. Sensor rows
   use the existing versioned JSON bindings store alongside legacy switch rows.
-  Ingress configures explicit light/switch ON, per-target profiles and optional
+  Ingress configures explicit light/switch ON, per-target Always/Day/Night conditions and optional separate night light parameters, per-target profiles and optional
   OFF delay after absence. Lux thresholds are validated; raw/foreign Lux is
   not accepted. Read-only HA state_changed events feed the existing execution
   queue. Only observed OFF→ON presence may activate an observed-off target;
-  already-on lights remain untouched. Confirmed ownership and absence
+  already-on lights remain untouched on entry. With auto_day_night enabled a real transition can turn off an exclusively presence-owned target no longer allowed and apply separate parameters to an already-on owned light while presence is active. No waking off targets, no takeover of manually lit lights. Unknown mode skips mode-dependent ON; old bindings remain Always. Confirmed ownership and absence
   deadlines are persisted and checked on reconnect/restart. Manual commands
   cancel ownership; observable external changes cancel it as well. Verified Z2M
   groups use one multicast command with all-member OFF/ON checks and persistent

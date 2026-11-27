@@ -931,10 +931,17 @@ class Application:
 
     def _adapt_home_profile(self,snapshot,transition_rid=None):
         """Same serialized worker, same verified transports. No synthetic key."""
+        def adaptation():
+            policies,conflicts=profiles.adaptation_plan(self.config,self.sensor_engine.dynamic_owner,mode=snapshot["mode"])
+            # Mode-specific parameters apply only to a light owned by the
+            # active presence rule; never claim manually lit lights.
+            for eid,data in self.sensor_engine.mode_parameters(snapshot["mode"]).items():
+                if eid not in conflicts and eid not in policies:policies[eid]=data
+            return policies,conflicts
         def eligible(eid):
             return (self._home_profile is snapshot and self.globals.get("auto_day_night")
                     and not self.globals["maintenance_mode"]
-                    and profiles.adaptation_plan(self.config,self.sensor_engine.dynamic_owner)[0].get(eid)==policies.get(eid)
+                    and adaptation()[0].get(eid)==policies.get(eid)
                     and eid in policies
                     and not self.event_log.active_target(eid,exclude=rid))
         with self._mutex:
@@ -942,13 +949,15 @@ class Application:
                 if transition_rid is not None:
                     self.event_log.finish(transition_rid,"Режим, профиль или настройки изменились до выполнения")
                 return
-            policies,conflicts=profiles.adaptation_plan(self.config,self.sensor_engine.dynamic_owner)
+            mode_off_count=self.sensor_engine.mode_transition(snapshot)
+            policies,conflicts=adaptation()
             candidates=list(policies)
             LOG.info("Day/Night profile %s: %d eligible assignments, %d conflicts",
                      snapshot["mode"],len(candidates),len(conflicts))
             if transition_rid is not None:
                 self.event_log.finish(transition_rid,f"Целей: {len(candidates)} · конфликтов: {len(conflicts)}"
-                                      if candidates or conflicts else "Нет назначений День/Ночь")
+                                      + (f" · OFF по режиму: {mode_off_count}" if mode_off_count else "")
+                                      if candidates or conflicts or mode_off_count else "Нет назначений День/Ночь")
             # Groups first; successful group command covers its member routes.
             candidates.sort(key=lambda eid:(self.config.get("light_routes",{}).get(eid,{}).get("kind")!="group",eid))
         handled=set()
@@ -1007,9 +1016,13 @@ class Application:
                     if regs is None:raise ActionError("HA catalog unavailable")
                     live=target_catalog(regs,[state],self.config).get(eid,{})
                     data=profiles.resolve(policies[eid],live,snapshot,"light")
+                    if "profile" not in policies[eid]:
+                        from .ingress import validate_assignment
+                        validate_assignment({"entity_id":eid,"operation":"on","data":data},{eid:live})
                     with self._mutex:
                         shadow=self._ha_shadows.get(eid)
                         if (not eligible(eid) or eid in self.config.get("light_routes",{})
+                                or (eid in self.sensor_engine.mode_parameters(snapshot["mode"]) and not self.sensor_engine.live_owned(eid,state))
                                 or (shadow and time.monotonic()-shadow["at"]<=HA_SHADOW_SECONDS)):
                             raise ActionError("Light route or profile changed")
                         self.sensor_engine.expect_profile(eid,data)
@@ -1149,6 +1162,10 @@ class Application:
                     commands,profile_skipped,unresolved_toggles=profiles.resolve_commands(commands,self.target_catalog,self._home_profile)
                 profile_lights={eid for c in all_commands if c["service"].startswith("light.")
                                 and "profile" in c.get("data",{}) for eid in c["target"]["entity_id"]}
+                if sensor_job and action=="SENSOR_ON":
+                    profile_lights.update(a["entity_id"] for a in coordinator["row"]["assignments"]
+                        if a["entity_id"].startswith("light.") and sensor_rules.conditional(a)
+                        and profile_feedback.ha_expected(sensor_rules.mode_data(a,coordinator.get("mode"))))
                 profile_parameters={eid:dict(c.get("data",{})) for c in commands
                                     for eid in c["target"]["entity_id"] if eid in profile_lights}
                 zero_profile_lights={eid for c in commands if c["service"].startswith("light.")
@@ -1661,6 +1678,17 @@ class Application:
             self.sensor_catalog = sensor_rules.discover(registry,states)
         self._publish_details()
 
+    def _ha_state_changed(self,eid,state):
+        with self._mutex:
+            if isinstance(state,dict) and state.get("entity_id")==eid:
+                if eid.startswith(("light.","switch.")):
+                    confirmed=(eid.startswith("light.") and self.event_log.observe_light(("ha",eid),state))
+                    confirmed=confirmed or self.event_log.observe(("ha",eid),state.get("state"),state.get("last_changed"))
+                    if confirmed:
+                        self._ha_shadows.pop(eid,None)
+            self.sensor_engine.changed(eid,state)
+            if eid=="sun.sun":self.schedule_engine.observe_sun(state)
+
     def _watch_sensor_states(self):
         def baseline(states):
             self.refresh_targets()
@@ -1670,11 +1698,7 @@ class Application:
                 self.sensor_engine.baseline(states)
                 self.schedule_engine.baseline(zone,self.sensor_engine.states.get("sun.sun"))
         def changed(eid,state):
-            with self._mutex:
-                if eid.startswith("light.") and isinstance(state,dict) and state.get("entity_id")==eid:
-                    self.event_log.observe_light(("ha",eid),state)
-                self.sensor_engine.changed(eid,state)
-                if eid=="sun.sun":self.schedule_engine.observe_sun(state)
+            self._ha_state_changed(eid,state)
         while not self._stop.is_set():
             try:
                 self.registry.watch_states(self._stop,baseline,changed)
