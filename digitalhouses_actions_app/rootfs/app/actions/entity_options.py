@@ -12,7 +12,7 @@ import yaml
 
 from .catalog import CatalogError, validate_config
 from .light_rules import parse_rule
-from . import sensor_rules, schedule_rules, common_rules
+from . import sensor_rules, schedule_rules
 from .mode_keeper import global_policy, validate_keep_mode, validate_action_policy, POLICIES, PHYSICAL, action_channels, MODE_TO_RELAY
 from .structured_options import _read_profiles, _save_profiles
 
@@ -57,11 +57,6 @@ def validate_rows(rows: object) -> list[dict]:
             raise CatalogError("Binding row requires entity_id")
         entity_id = row["entity_id"]
         value = {key: val for key, val in row.items() if key != "entity_id"}
-        if common_rules.is_common(entity_id):
-            if entity_id in unique:raise CatalogError("Duplicate common action ID")
-            unique.add(entity_id)
-            result.append(common_rules.validate_row(dict(row)))
-            continue
         if schedule_rules.is_schedule(entity_id):
             if entity_id in unique:raise CatalogError("Duplicate schedule ID")
             unique.add(entity_id)
@@ -139,10 +134,7 @@ def project(profiles: Mapping, options: Mapping) -> dict:
     schedules={r["entity_id"]:r for r in rows if schedule_rules.is_schedule(r["entity_id"])}
     if schedules:data["schedules"]=schedules
     else:data.pop("schedules",None)
-    common={r["entity_id"]:r for r in rows if common_rules.is_common(r["entity_id"])}
-    if common:data["common_actions"]=common
-    else:data.pop("common_actions",None)
-    rows=[r for r in rows if not sensor_rules.is_source(r["entity_id"]) and not schedule_rules.is_schedule(r["entity_id"]) and not common_rules.is_common(r["entity_id"])]
+    rows=[r for r in rows if not sensor_rules.is_source(r["entity_id"]) and not schedule_rules.is_schedule(r["entity_id"])]
     index = {}
     for room in data["rooms"]:
         for item in room["switches"]:

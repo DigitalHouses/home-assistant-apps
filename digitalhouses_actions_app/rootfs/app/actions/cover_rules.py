@@ -74,6 +74,5 @@ def guard_ids(config, entity_id):
     rules.extend(parse_rule(rule) for row in config.get("orphan_bindings",[])
                  for rule in row["actions"].values())
     rules.extend(parse_rule({"assignments":row["assignments"]}) for row in config.get("schedules",{}).values() if row["assignments"])
-    rules.extend(parse_rule({"assignments":r["assignments"]}) for r in config.get("common_actions",{}).values() if r["assignments"])
     return sorted({sensor for rule in rules
                    for sensor in rule.get("target_data",{}).get(entity_id,{}).get("window_sensors",[])})

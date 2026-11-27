@@ -2,6 +2,18 @@
 
 Historical releases below were published as DigitalHouses Aqara Switch App; their identifiers are retained.
 
+## 0.3.0
+
+- First DigitalHouses Actions App release; canonical identity, new slug, GHCR image, MQTT discovery, telemetry, DH Sync and HA entity prefix. Existing Aqara releases and LAB entity identities remain unchanged.
+- Physical/logical keys, verified Mode Keeper, reusable entity picker, explicit light/switch/cover/climate/media assignments, window guards and observed-state LOG.
+- Day/Night profiles from System Globals with independent CCT and RGB; dual-capability lights prefer valid CCT. Optional adjustment of already active dynamic targets.
+- Motion/presence with Lux condition, confirmed ownership and Auto-OFF; explicit logical and physical key timers.
+- Daily time/sunrise/sunset schedules with offsets and optional one-shot missed ON/OFF recovery after fresh readiness, bounded to 24 hours.
+- Common-action editor and bulk all-lights OFF are excluded pending agreement. HA native groups and hardware acceptance remain limited; experimental, manual start.
+- Migration from Aqara: export bindings JSON before stopping the old app and disabling autostart; install Actions, import JSON, Scan and verify targets before enabling control. Do not run both controllers against the same devices. New slug creates separate HAOS data; retain old app/backup until acceptance. Existing historical artifacts remain immutable.
+
+Historical Aqara releases:
+
 ## 0.2.3
 
 - Discover Zigbee2MQTT groups from bridge/groups, exact HA MQTT unique ID and verified member endpoints; support one direct group MQTT command with no HA fallback.

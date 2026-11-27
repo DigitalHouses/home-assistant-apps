@@ -10,13 +10,13 @@ import test_ha_native_output as native
 from test_ha_native_output import TV, LAB
 from test_lab_rest_fallback import packet
 
-BASE_PROFILE={"brightness":None,"color_mode":None,"color_temp_kelvin":None,"rgb_color":None,
-              "volume":None,"display_brightness":None,"indicator_brightness":None,
+BASE_PROFILE={"brightness":None,"color_temp_kelvin":None,"rgb_color":None,
+              "volume":None,
               "transition_seconds":None,"voice_notifications_enabled":None,
               "noncritical_sound_notifications_enabled":None}
 SNAP={"mode":"night",
-      "day":{**BASE_PROFILE,"brightness":100,"color_temp_kelvin":4300,"color_mode":"cct","volume":40},
-      "night":{**BASE_PROFILE,"brightness":30,"color_temp_kelvin":2700,"color_mode":"cct","volume":15}}
+      "day":{**BASE_PROFILE,"brightness":100,"color_temp_kelvin":4300,"volume":40},
+      "night":{**BASE_PROFILE,"brightness":30,"color_temp_kelvin":2700,"volume":15}}
 def publish_profiles(app,mode=True,values=None):
     app._on_message(None,None,packet(profiles.PROFILES_TOPIC,values if values is not None else {k:SNAP[k] for k in ("day","night")},True))
     if mode:
@@ -36,11 +36,19 @@ class ProfileTests(unittest.TestCase):
         self.assertEqual(profiles.resolve({"profile":"night"},CAP,snap,"light")["brightness_pct"],30)
         self.assertEqual(profiles.resolve({"profile":"current"},{"brightness":True},SNAP,"light"),{"brightness_pct":30})
         self.assertEqual(profiles.resolve({"profile":"current"},{"brightness":True,"rgb":True},SNAP,"light"),{"brightness_pct":30})
-        rgb={**SNAP,"night":{**SNAP["night"],"color_mode":"rgb","rgb_color":[255,100,20],"color_temp_kelvin":None}}
+        rgb={**SNAP,"night":{**SNAP["night"],"rgb_color":[255,100,20],"color_temp_kelvin":None}}
         self.assertEqual(profiles.resolve({"profile":"current"},CAP,rgb,"light"),{"brightness_pct":30,"rgb_color":[255,100,20]})
         self.assertEqual(profiles.resolve({"profile":"current"},{"operations":["volume"]},SNAP,"media_player"),{"volume_pct":15})
         for bad in ({"profile":"foo"},{"profile":"day","brightness_pct":20},{"profile":False}):
             with self.assertRaises(CatalogError):profiles.source(bad)
+
+    def test_independent_global_colors_and_dual_capability_priority(self):
+        snapshot=deepcopy(SNAP)
+        snapshot["night"]["rgb_color"]=[0,0,255]
+        profiles.validate_profiles({k:snapshot[k] for k in ("day","night")})
+        self.assertEqual(profiles.resolve({"profile":"current"},CAP,snapshot,"light"),{"brightness_pct":30,"color_temp_kelvin":2700})
+        self.assertEqual(profiles.resolve({"profile":"current"},{"brightness":True,"rgb":True},snapshot,"light"),{"brightness_pct":30,"rgb_color":[0,0,255]})
+        self.assertEqual(profiles.resolve({"profile":"current"},{**CAP,"rgb":False},snapshot,"light"),{"brightness_pct":30,"color_temp_kelvin":2700})
 
     def test_validation_and_backward_compatibility(self):
         raw={"assignments":[binding(TV,"day"),binding("media_player.speaker","night","volume")]}
@@ -55,7 +63,7 @@ class ProfileTests(unittest.TestCase):
     def test_snapshot_invalidated_and_independent_commands_work(self):
         values={k:SNAP[k] for k in ("day","night")}
         self.assertEqual(profiles.validate_profiles(values),values)
-        for change in ({"day":{}},{"night":{**SNAP["night"],"brightness":-1}},{"night":{**SNAP["night"],"rgb_color":[1,2,3]}}, {"night":{**SNAP["night"],"color_mode":"rgb"}}):
+        for change in ({"day":{}},{"night":{**SNAP["night"],"brightness":-1}},{"night":{**SNAP["night"],"rgb_color":[1,2,256]}}, {"night":{**SNAP["night"],"color_temp_kelvin":7000}}):
             with self.assertRaises(CatalogError):profiles.validate_profiles({**values,**change})
         app,ha,_=native.NativeLightIntegration().build([TV,LAB],tv="off",lab="off")
         app.target_catalog={TV:CAP}

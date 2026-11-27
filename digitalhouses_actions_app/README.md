@@ -2,9 +2,9 @@
 
 ## Target architecture (planned)
 
-See [DigitalHouses Actions App — target architecture v0.3.0](docs/ACTIONS_TARGET_ARCHITECTURE.md). The previously published Aqara 0.2.3 release remains unchanged. This branch is development toward Actions v0.3.0, not a published Actions release.
+See [DigitalHouses Actions App — target architecture v0.3.0](docs/ACTIONS_TARGET_ARCHITECTURE.md). The previously published Aqara 0.2.3 release remains unchanged. Actions v0.3.0 is the first release under the new identity, for field acceptance.
 
-## 0.2.x — Ingress configuration
+## 0.3.0 — Ingress configuration
 
 Actions App consumes events from supported logical keys across MQTT
 Zigbee2MQTT instances and dispatches explicitly configured light/switch/cover/climate/media_player actions.
@@ -46,7 +46,7 @@ It is independent of any Home Assistant dashboard.
   profile values. Missing/invalid snapshots block profile ON/volume, not
   OFF or independent assignments. No global settings are persisted here.
   Nulls are unset; zero brightness means OFF, zero volume means mute.
-  CCT/RGB are mutually exclusive; unsupported color is omitted.
+  Global CCT and RGB coexist. For a dual-capability lamp prefer valid CCT, otherwise RGB; send only one color parameter. Unsupported color is omitted.
   Profile edits alone do not trigger a transition. App option auto_day_night (default false) enables adaptation
   on a real mode transition for active dynamic-only targets. Skip ambiguous
   fixed/dynamic overlaps, offline targets and groups without all members
@@ -67,12 +67,6 @@ It is independent of any Home Assistant dashboard.
   skipped. Manual changes to one member cancel the group timer. Native HA
   groups remain excluded pending route verification. Hardware acceptance
   and readiness integration remain.
-- **Common actions (DEV):** named reusable explicit command sets in
-  the same JSON store. Ingress run, logical key reference, daily schedule
-  reference and non-retained MQTT invocation share the normal Engine.
-  No nested sets or relative operations; no automatic replay of named
-  sets. Existing route and window guard verification applies. Dynamic
-  all-lights OFF with exclusions and group deduplication is still pending.
 - **Schedules (DEV):** named daily point actions using HA local clock
   or sun.sun sunrise/sunset with signed minute offsets. Ingress reuses
   the assignment editor and JSON store; dispatch uses the existing queue
@@ -147,7 +141,7 @@ It is independent of any Home Assistant dashboard.
   are published by the App. Reported state is not physical confirmation.
 - **DH Sync:** target product ID `digitalhouses_actions_app`;
   retained QoS 1 /sync on MQTT connect/reconnect;
-  `dashboards/ru/actions.yaml`, stable `path: actions`. Panel integration is coordinated separately.
+  `dashboards/ru/actions.yaml`, stable `path: actions`. DH Sync panel references the new product and view.
   LAB examples are not automatic Packages.
 
 ## Installation and upgrade
@@ -159,11 +153,11 @@ new assignments manually in Ingress; until then, the App sends no button-based
 commands and does not enable new Mode Keeper policies. Only system parameters
 remain in Supervisor options. Keep a backup if you need the old configuration.
 
-For the planned transition from Aqara v0.2.3 to Actions v0.3.0:
+For migration from Aqara v0.2.3 to Actions v0.3.0:
 export JSON from Aqara, stop Aqara and disable its autostart, install Actions,
 import the JSON, verify the bindings and only then remove Aqara. Do not run
 both controllers against the same devices. No automatic migration is provided.
-This development branch is not yet suitable for production cutover.
+This first Actions release remains experimental, with manual startup and field acceptance required. Keep the old installation/backup until acceptance.
 
 The existing telemetry opt-in remains unchanged. HA Core is required to read
 entity metadata and execute HA-native targets; verified direct Z2M routes can

@@ -79,7 +79,7 @@ def light_commands(saved: Mapping, reported_action: object) -> list[dict] | None
         for eid in verified["targets"]:
             domain = eid.split(".")[0]
             operation = verified["target_operations"][eid]
-            service = ("common_action.run" if domain=="common_action" else media_rules.SERVICES[operation] if domain=="media_player" else
+            service = (media_rules.SERVICES[operation] if domain=="media_player" else
                        climate_rules.SERVICES[operation] if domain=="climate" else
                        cover_rules.SERVICES[operation] if domain=="cover" else
                        domain + "." + {"toggle":"toggle","on":"turn_on","off":"turn_off"}[operation])

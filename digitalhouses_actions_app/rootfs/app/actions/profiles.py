@@ -6,9 +6,9 @@ STATE_TOPIC = "DigitalHouses/Global/night_mode/state"
 PROFILES_TOPIC = "DigitalHouses/Global/night_mode/profiles"
 TOPICS = (STATE_TOPIC, PROFILES_TOPIC)
 SOURCES = {"day","night","current"}
-PERCENT_FIELDS = {"brightness","volume","display_brightness","indicator_brightness"}
+PERCENT_FIELDS = {"brightness","volume"}
 BOOLEAN_FIELDS = {"voice_notifications_enabled","noncritical_sound_notifications_enabled"}
-FIELDS = PERCENT_FIELDS | BOOLEAN_FIELDS | {"color_mode","color_temp_kelvin","rgb_color","transition_seconds"}
+FIELDS = PERCENT_FIELDS | BOOLEAN_FIELDS | {"color_temp_kelvin","rgb_color","transition_seconds"}
 
 def integer(value,lo,hi):
     return type(value) is int and lo<=value<=hi
@@ -18,7 +18,7 @@ def validate_profiles(value):
     if not isinstance(value,dict) or set(value)!={"day","night"}:
         raise CatalogError("Expected day and night profiles")
     for row in value.values():
-        if not isinstance(row,dict) or not FIELDS <= set(row):
+        if not isinstance(row,dict) or set(row)!=FIELDS:
             raise CatalogError("Incomplete global profile")
         for field in PERCENT_FIELDS:
             if row[field] is not None and not integer(row[field],0,100):
@@ -29,11 +29,11 @@ def validate_profiles(value):
         transition=row["transition_seconds"]
         if transition is not None and (type(transition) not in (int,float) or not 0<=transition or not math.isfinite(transition)):
             raise CatalogError("Invalid transition")
-        mode,cct,rgb=row["color_mode"],row["color_temp_kelvin"],row["rgb_color"]
-        if mode=="cct" and integer(cct,2000,6000) and rgb is None:continue
-        if mode=="rgb" and cct is None and isinstance(rgb,list) and len(rgb)==3 and all(integer(v,0,255) for v in rgb):continue
-        if mode is None and cct is None and rgb is None:continue
-        raise CatalogError("Invalid or conflicting global color")
+        cct,rgb=row["color_temp_kelvin"],row["rgb_color"]
+        if cct is not None and not integer(cct,2000,6000):
+            raise CatalogError("Invalid global CCT")
+        if rgb is not None and not (isinstance(rgb,list) and len(rgb)==3 and all(integer(v,0,255) for v in rgb)):
+            raise CatalogError("Invalid global RGB")
     return value
 
 def state_mode(raw):
@@ -69,11 +69,11 @@ def resolve(data,target,snapshot,domain):
     result={}
     if target.get("brightness") and row["brightness"] is not None:
         result["brightness_pct"]=row["brightness"]
-    if row["color_mode"]=="cct" and target.get("cct"):
+    if row["color_temp_kelvin"] is not None and target.get("cct"):
         lo,hi=target.get("min_kelvin"),target.get("max_kelvin")
         if type(lo) is int and type(hi) is int and 0<lo<=hi:
             result["color_temp_kelvin"]=max(lo,min(hi,row["color_temp_kelvin"]))
-    elif row["color_mode"]=="rgb" and target.get("rgb"):
+    if "color_temp_kelvin" not in result and row["rgb_color"] is not None and target.get("rgb"):
         result["rgb_color"]=list(row["rgb_color"])
     if not result:raise CatalogError("No applicable profile parameters")
     if result.get("brightness_pct")==0:
@@ -131,7 +131,7 @@ def adaptation_targets(config):
             for a in row["assignments"]:
                 if a["entity_id"].startswith("light."):
                     kinds.setdefault(a["entity_id"],set()).add(a.get("data",{}).get("profile")=="current")
-    for row in list(config.get("schedules",{}).values())+list(config.get("common_actions",{}).values()):
+    for row in config.get("schedules",{}).values():
         if not row["enabled"]:continue
         for a in row["assignments"]:
             if (a["entity_id"].startswith("light.") and a["operation"]=="on") or (a["entity_id"].startswith("media_player.") and a["operation"]=="volume"):
