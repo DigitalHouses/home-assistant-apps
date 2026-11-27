@@ -1,4 +1,4 @@
-"""Read-only consumer contract for the future global home-mode module."""
+"""Read-only consumer contract for System Globals profiles."""
 import math
 from .catalog import CatalogError
 
@@ -46,12 +46,25 @@ def snapshot(mode,values):
 def source(data):
     if "profile" not in data:return None
     value=data["profile"]
-    if not isinstance(value,str) or value not in SOURCES or set(data)!={"profile"}:
+    if not isinstance(value,str) or value not in SOURCES or set(data)-{"profile","color_source"}:
         raise CatalogError("Profile reference cannot contain local parameters")
+    if "color_source" in data and (not isinstance(data["color_source"],str) or data["color_source"] not in ("cct","rgb")):
+        raise CatalogError("Choose CCT or RGB")
     return value
 
 def supported_light(target):
     return bool(target.get("brightness") or target.get("cct") or target.get("rgb"))
+
+def light_color_source(data,target):
+    """A dual-capability light needs an explicit color source; never fall back."""
+    choice=data.get("color_source")
+    if choice is not None:
+        if choice not in ("cct","rgb") or not target.get(choice):
+            raise CatalogError("Selected global color source is not supported")
+        return choice
+    if target.get("cct") and target.get("rgb"):
+        raise CatalogError("Choose CCT or RGB for this dual-capability light in Ingress")
+    return "cct" if target.get("cct") else "rgb" if target.get("rgb") else None
 
 def resolve(data,target,snapshot,domain):
     ref=source(data)
@@ -61,19 +74,21 @@ def resolve(data,target,snapshot,domain):
     row=snapshot.get(name) if name else None
     if row is None:raise CatalogError("Global profile or mode unavailable")
     if domain=="media_player":
+        if "color_source" in data:raise CatalogError("Color source requires light")
         if "volume" not in target.get("operations",[]):
             raise CatalogError("Volume not supported")
         if row["volume"] is None:raise CatalogError("Global volume is unset")
         return {"volume_pct":row["volume"]}
     if not supported_light(target):raise CatalogError("Light has no profile capabilities")
+    color=light_color_source(data,target)
     result={}
     if target.get("brightness") and row["brightness"] is not None:
         result["brightness_pct"]=row["brightness"]
-    if row["color_temp_kelvin"] is not None and target.get("cct"):
+    if color=="cct" and row["color_temp_kelvin"] is not None:
         lo,hi=target.get("min_kelvin"),target.get("max_kelvin")
         if type(lo) is int and type(hi) is int and 0<lo<=hi:
             result["color_temp_kelvin"]=max(lo,min(hi,row["color_temp_kelvin"]))
-    if "color_temp_kelvin" not in result and row["rgb_color"] is not None and target.get("rgb"):
+    if color=="rgb" and row["rgb_color"] is not None:
         result["rgb_color"]=list(row["rgb_color"])
     if not result:raise CatalogError("No applicable profile parameters")
     if result.get("brightness_pct")==0:
@@ -108,13 +123,18 @@ def resolve_commands(commands,catalog,snapshot):
     return output,skipped,unresolved_toggles
 
 
-def adaptation_targets(config):
+def adaptation_plan(config, dynamic_owner=None):
     """Enabled dynamic assignments only; ambiguous mixed policies fail closed.
 
     OFF is not a parameter owner. Do not infer the active profile from ON.
-    Return candidates and conflicts, including overlapping Z2M groups.
+    Return per-target profile references and conflicts. A confirmed dynamic
+    timer owner may resolve a fixed/dynamic conflict, but not contradictory
+    color selections. Compare physical identities for overlapping groups.
     """
     kinds={}
+    def add(eid,data):
+        policy=("current",data.get("color_source")) if data.get("profile")=="current" else ("fixed",None)
+        kinds.setdefault(eid,set()).add(policy)
     for room in config["rooms"]:
         for sw in room["switches"]:
             if not sw.get("enabled",False) or sw.get("maintenance_mode",False):continue
@@ -125,17 +145,17 @@ def adaptation_targets(config):
                     if ((eid.startswith("light.") and op in ("on","toggle")) or
                             (eid.startswith("media_player.") and op=="volume")):
                         data=rule.get("target_data",{}).get(eid,rule.get("data",{}))
-                        kinds.setdefault(eid,set()).add(data.get("profile")=="current")
+                        add(eid,data)
     for row in config.get("sensor_bindings",{}).values():
         if row.get("enabled"):
             for a in row["assignments"]:
                 if a["entity_id"].startswith("light."):
-                    kinds.setdefault(a["entity_id"],set()).add(a.get("data",{}).get("profile")=="current")
+                    add(a["entity_id"],a.get("data",{}))
     for row in config.get("schedules",{}).values():
         if not row["enabled"]:continue
         for a in row["assignments"]:
             if (a["entity_id"].startswith("light.") and a["operation"]=="on") or (a["entity_id"].startswith("media_player.") and a["operation"]=="volume"):
-                kinds.setdefault(a["entity_id"],set()).add(a.get("data",{}).get("profile")=="current")
+                add(a["entity_id"],a.get("data",{}))
     routes=config.get("light_routes",{})
     def physical_ids(eid):
         route=routes.get(eid)
@@ -144,10 +164,27 @@ def adaptation_targets(config):
         if route.get("kind")=="group":
             return {(base,m["ieee"]) for m in route["members"]}
         return {(base,route.get("ieee",route["friendly_name"]))}
-    fixed=set().union(*(physical_ids(eid) for eid,v in kinds.items() if False in v))
-    candidates={eid for eid,v in kinds.items() if True in v}
-    conflicts={eid for eid in candidates if physical_ids(eid)&fixed}
-    return sorted(candidates-conflicts),sorted(conflicts)
+    fixed=set().union(*(physical_ids(eid) for eid,v in kinds.items() if ("fixed",None) in v))
+    choices={eid:{color for kind,color in v if kind=="current"} for eid,v in kinds.items()}
+    candidates={eid for eid,v in choices.items() if v}
+    identities={eid:physical_ids(eid) for eid in candidates}
+    conflicts=set()
+    plan={}
+    for eid in sorted(candidates):
+        colors=choices[eid]
+        # No arbitrary priority if two keys/group aliases specify different colors.
+        if len(colors)!=1 or any(identities[eid]&identities[other] and choices[other]!=colors
+                                for other in candidates if other!=eid):
+            conflicts.add(eid);continue
+        if identities[eid]&fixed and not (dynamic_owner and dynamic_owner(eid)):
+            conflicts.add(eid);continue
+        color=next(iter(colors))
+        plan[eid]={"profile":"current",**({"color_source":color} if color is not None else {})}
+    return plan,sorted(conflicts)
+
+def adaptation_targets(config):
+    plan,conflicts=adaptation_plan(config)
+    return sorted(plan),conflicts
 
 def group_already_on(route,net,availability,fresh_fields,shadows):
     base=route["base_topic"]

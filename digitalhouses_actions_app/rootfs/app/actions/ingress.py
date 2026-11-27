@@ -103,8 +103,10 @@ def validate_assignment(assignment, targets):
         raise CatalogError("Целевая сущность отсутствует: " + eid)
     data = rule["target_data"][eid]
     if "profile" in data:
-        if eid.startswith("light.") and not profiles.supported_light(target):
-            raise CatalogError("Светильник не поддерживает параметры профиля: "+eid)
+        if eid.startswith("light."):
+            if not profiles.supported_light(target):
+                raise CatalogError("Светильник не поддерживает параметры профиля: "+eid)
+            profiles.light_color_source(data,target)
         if eid.startswith("media_player.") and "volume" not in target.get("operations",[]):
             raise CatalogError("Громкость не поддерживается: "+eid)
         return

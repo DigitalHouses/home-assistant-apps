@@ -306,7 +306,9 @@ function profileSelect(a,t,p,action,volume=false){
   mode.value=volume&&kind==="simple"?"fixed":kind;
   mode.onchange=()=>{
     customDrafts.delete(a);
+    const color=a.data.color_source;
     a.data=mode.value==="current"?{profile:"current"}:mode.value==="fixed"?{profile:"day"}:{};
+    if(a.data.profile&&color&&!volume)a.data.color_source=color;
     update();renderEdit(action);
   };
   p.append(mode);
@@ -318,13 +320,26 @@ function profileSelect(a,t,p,action,volume=false){
     select.value=saved==="day"||saved==="night"?saved:"custom";
     select.onchange=()=>{
       if(select.value==="custom")customDrafts.add(a);else customDrafts.delete(a);
+      const color=a.data.color_source;
       a.data=select.value==="custom"?(volume?{volume_pct:t.volume_pct??null}:{}):{profile:select.value};
+      if(a.data.profile&&color&&!volume)a.data.color_source=color;
       update();renderEdit(action);
     };
     p.append(select);
     if(select.value==="custom")return true;
   }
   if(a.data.profile){
+    if(!volume&&t.cct&&t.rgb){
+      const label=el("label","Источник цвета"),color=el("select");
+      for(const [value,title] of [["","Выберите CCT или RGB"],["cct","CCT — температура"],["rgb","RGB — цвет"]]){
+        const o=el("option",title);o.value=value;color.append(o);
+      }
+      color.value=a.data.color_source||"";
+      color.required=true;
+      color.onchange=()=>{if(color.value)a.data.color_source=color.value;else delete a.data.color_source;update();renderEdit(action)};
+      label.append(color);p.append(label);
+      if(!a.data.color_source)p.append(el("span","⚠ Укажите источник цвета для глобального профиля","problem"));
+    }
     p.append(el("span",model.home_profiles_ready&&(a.data.profile!=="current"||model.home_mode)?"Глобальные параметры дома":"Глобальные параметры недоступны","muted"));
   }
   return false;
@@ -383,7 +398,7 @@ const allowed=actionAllowed(draft,action),detail=el("details",undefined,"action"
   }));
 }main.append(detail)}}
 async function save(){try{
-  const invalid=main.querySelector(".duration-control input:invalid");
+  const invalid=main.querySelector(".duration-control input:invalid")||main.querySelector(".params select:invalid");
   if(invalid){invalid.reportValidity();return}
   if(editing?.schedule){
     const config={entity_id:draft.id,name:draft.name.trim(),enabled:draft.enabled,trigger:draft.trigger,catch_up:!!draft.catch_up,assignments:draft.bindings.schedule||[]};
