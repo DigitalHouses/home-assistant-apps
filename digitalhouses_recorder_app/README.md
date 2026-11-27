@@ -51,7 +51,9 @@ The dashboard brings database health, storage, activity graphs and entity rankin
 | MariaDB | Supervisor MariaDB App or an external server. |
 | PostgreSQL | Manual server connection. |
 
-SQLite support and the English dashboard are part of the upcoming 0.2.0 release. The current published 0.1.29 release supports MariaDB and PostgreSQL. See [releases](https://github.com/DigitalHouses/home-assistant-apps/releases) for available versions.
+SQLite support and the English dashboard were introduced in version 0.2.0. Earlier versions support MariaDB and PostgreSQL. See [releases](https://github.com/DigitalHouses/home-assistant-apps/releases) for available versions.
+
+SQLite has passed synthetic database tests with concurrent writes; live HAOS acceptance is still pending. See the [changelog](CHANGELOG.md#020) for details.
 
 ## Quick start
 
@@ -63,7 +65,7 @@ SQLite support and the English dashboard are part of the upcoming 0.2.0 release.
    ```
 
 3. Install **DigitalHouses Recorder App**.
-4. Select the database actually used by Recorder. Configure the connection for PostgreSQL or external MariaDB; SQLite (0.2.0) requires no database credentials.
+4. Select the database actually used by Recorder. Configure the connection for PostgreSQL or external MariaDB; SQLite requires no database credentials.
 5. Review the [telemetry policy](../docs/standards/PRODUCT_TELEMETRY_POLICY.md) and enable the statistics consent option to activate the App under the current policy.
 6. Start the App. Its monitoring entities appear automatically through MQTT Discovery.
 

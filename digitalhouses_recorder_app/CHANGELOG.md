@@ -1,11 +1,12 @@
 # Changelog
 
-## Unreleased
+## 0.2.0
 - Add a read-only SQLite adapter using the default Home Assistant Recorder database, bounded queries, live WAL support and separate database/WAL/storage metrics.
 - Make unused database and SSH connection fields optional. Migrate existing polling, stale-threshold and ranking settings to persisted MQTT numbers without changing database credentials or consent.
 - Add English canonical Dashboard and notification package, preserve the Russian resources, remove duplicate Lovelace examples and update the standalone installation documentation.
 - Preserve existing PostgreSQL, MariaDB, MQTT and DH Sync identities and telemetry policy.
-- Field acceptance on HAOS and public release are pending; no stable version bump yet.
+- SQLite is the default for new installations. Existing PostgreSQL/MariaDB installations retain their selected database and credentials. Runtime setting values are migrated on startup.
+- SQLite has passed synthetic WAL and concurrent-writer tests with up to 10 million state rows. Full real-HAOS and large production database acceptance remains pending. DH Sync 0.6.5 selects the Russian view; import the English view manually. The current telemetry policy is unchanged.
 
 ## 0.1.29
 - Publish Recorder App 0.1.29 with the existing runtime, MQTT Discovery, retained DH Sync /sync source announcement, database monitoring, telemetry-consent behavior and Home Assistant entity IDs unchanged from 0.1.28.
