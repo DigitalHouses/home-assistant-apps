@@ -47,7 +47,7 @@ It is independent of any Home Assistant dashboard.
   OFF or independent assignments. No global settings are persisted here.
   Nulls are unset; zero brightness means OFF, zero volume means mute.
   Global CCT and RGB coexist. Single-color lights automatically use their supported color source. Dual-capability lights require an explicit CCT or RGB selection in each global-profile assignment. Only the chosen source is used, including during automatic mode changes; never fall back to the other color. Existing ambiguous assignments are preserved but profile ON/adaptation is skipped until selected in Ingress; OFF remains available.
-  Profile edits alone do not trigger a transition. App option auto_day_night (default false) enables adaptation
+  Profile edits and flag changes alone do not trigger a transition. App option auto_day_night (default false), editable live in Ingress Parameters and through switch.dh_actions_app_auto_day_night, enables adaptation
   on a real mode transition for active dynamic targets using the configured color source. Skip ambiguous
   fixed/dynamic overlaps, offline targets and groups without all members
   confirmed ON. No retained startup replay or playback start. HA light

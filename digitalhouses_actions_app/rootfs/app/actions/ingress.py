@@ -444,6 +444,11 @@ def start_ingress(app, port=8099):
                 if path == "/api/scan":
                     if not app.request_scan(foreground=False):
                         raise CatalogError("Сканирование уже выполняется")
+                elif path == "/api/parameters":
+                    if not isinstance(payload,dict) or set(payload)!={"auto_day_night"} or type(payload["auto_day_night"]) is not bool:
+                        raise CatalogError("Ожидается логический параметр auto_day_night")
+                    self.reply(200,app.set_auto_day_night(payload["auto_day_night"]))
+                    return
                 elif path == "/api/test-light":
                     if not isinstance(payload,dict) or set(payload) != {"entity_id"}:
                         raise CatalogError("Тест требует один entity_id")

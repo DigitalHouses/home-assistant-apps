@@ -1,7 +1,8 @@
 """App-owned persistent JSON bindings; start empty on first use.
 
 The existing Scan/Adopt engine receives an in-memory options projection.
-No import of old Supervisor bindings and no writes to Supervisor options.
+No import of old Supervisor bindings; only explicit live parameter changes
+write the corresponding Supervisor option.
 """
 from __future__ import annotations
 
@@ -89,6 +90,16 @@ class BindingStore:
             settings = self.supervisor.read()
             return {**settings, "switches": render_rows(self._read()),
                     "_bindings_store": True}
+
+    def set_auto_day_night(self, enabled):
+        """Persist only this explicitly writable option, preserving the rest."""
+        if type(enabled) is not bool:
+            raise CatalogError("auto_day_night must be boolean")
+        with self.lock:
+            settings = dict(self.supervisor.read())
+            if settings.get("auto_day_night", False) != enabled:
+                settings["auto_day_night"] = enabled
+                self.supervisor.write(settings)
 
     def write(self, options):
         with self.lock:
