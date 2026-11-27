@@ -2,6 +2,11 @@
 
 Historical releases below were published as DigitalHouses Aqara Switch App; their identifiers are retained.
 
+## 0.3.4
+
+- Show every actual observed Day/Night transition in the Ingress journal, including when auto_day_night is off, maintenance is active, profiles are missing, queue is full or no targets qualify. Keep per-target dispatch records and no startup/reconnect replay.
+- Show received home mode, profile readiness and automatic application state in the existing LOG header. Log initial Globals snapshot and invalid profiles in runtime diagnostics.
+
 ## 0.3.3
 
 - Plain light ON/OFF/Toggle assignments do not conflict with Day/Night profile adaptation. A light controlled by a plain key and a separate dynamic key or presence sensor can adapt when already ON, even without a timer owner. Explicit fixed-profile or color-source conflicts retain conservative handling.

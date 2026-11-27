@@ -488,8 +488,9 @@ class Application:
                     try:
                         if len(raw)>16384:raise CatalogError("Global profiles too large")
                         self._global_profiles=profiles.validate_profiles(decode_json(raw))
-                    except (CatalogError,ValueError,TypeError,KeyError,OverflowError):
+                    except (CatalogError,ValueError,TypeError,KeyError,OverflowError) as exc:
                         self._global_profiles=None
+                        LOG.warning("System Globals profiles rejected: %s",type(exc).__name__)
                 self._accept_home_profile(
                     profiles.snapshot(self._global_mode,self._global_profiles),
                     retained=message.retain or message.topic==profiles.PROFILES_TOPIC)
@@ -848,27 +849,40 @@ class Application:
         previous=self._home_profile
         if previous==snapshot:return
         self._home_profile=snapshot
+        if snapshot:
+            ready="day" in snapshot and "night" in snapshot
+            was_ready=bool(previous and "day" in previous and "night" in previous)
+            if not previous or ready!=was_ready:
+                LOG.info("System Globals snapshot: mode=%s profiles=%s",
+                         snapshot.get("mode") or "unknown","ready" if ready else "missing")
         if (retained or not previous or not snapshot or previous.get("mode") not in ("day","night")
                 or snapshot.get("mode") not in ("day","night")
                 or previous["mode"]==snapshot["mode"]):
             return
         before,after=previous["mode"],snapshot["mode"]
+        names={"day":"День","night":"Ночь"}
+        rid=self.event_log.press("global","Режим дома",names[before]+" → "+names[after])
         if not self.globals.get("auto_day_night"):
+            self.event_log.finish(rid,"Автоприменение отключено (auto_day_night)")
             LOG.info("Day/Night transition %s -> %s: automatic application disabled",before,after)
             return
         if self.globals["maintenance_mode"]:
+            self.event_log.finish(rid,"Режим обслуживания")
             LOG.info("Day/Night transition %s -> %s: maintenance mode",before,after)
             return
         if after not in snapshot:
+            self.event_log.finish(rid,"Глобальные профили отсутствуют или некорректны")
             LOG.warning("Day/Night transition %s -> %s: global profiles missing or invalid",before,after)
             return
         try:
-            self._jobs.put_nowait((None,None,"Режим дома","AUTO_PROFILE",[],None,snapshot))
+            self._jobs.put_nowait((None,None,"Режим дома","AUTO_PROFILE",[],rid,snapshot))
+            self.event_log.finish(rid,"Применение профиля в очереди")
             LOG.info("Day/Night transition %s -> %s: profile application queued",before,after)
         except queue.Full:
+            self.event_log.finish(rid,"Очередь заполнена")
             LOG.warning("Day/Night transition skipped: queue full")
 
-    def _adapt_home_profile(self,snapshot):
+    def _adapt_home_profile(self,snapshot,transition_rid=None):
         """Same serialized worker, same verified transports. No synthetic key."""
         def eligible(eid):
             return (self._home_profile is snapshot and self.globals.get("auto_day_night")
@@ -877,11 +891,17 @@ class Application:
                     and eid in policies
                     and not self.event_log.active_target(eid,exclude=rid))
         with self._mutex:
-            if self._home_profile is not snapshot or not self.globals.get("auto_day_night") or self.globals["maintenance_mode"]:return
+            if self._home_profile is not snapshot or not self.globals.get("auto_day_night") or self.globals["maintenance_mode"]:
+                if transition_rid is not None:
+                    self.event_log.finish(transition_rid,"Режим, профиль или настройки изменились до выполнения")
+                return
             policies,conflicts=profiles.adaptation_plan(self.config,self.sensor_engine.dynamic_owner)
             candidates=list(policies)
             LOG.info("Day/Night profile %s: %d eligible assignments, %d conflicts",
                      snapshot["mode"],len(candidates),len(conflicts))
+            if transition_rid is not None:
+                self.event_log.finish(transition_rid,f"Целей: {len(candidates)} · конфликтов: {len(conflicts)}"
+                                      if candidates or conflicts else "Нет назначений День/Ночь")
             # Groups first; successful group command covers its member routes.
             candidates.sort(key=lambda eid:(self.config.get("light_routes",{}).get(eid,{}).get("kind")!="group",eid))
         handled=set()
@@ -1066,7 +1086,7 @@ class Application:
                     self._publish_action(state="sent" if sent_relay else "skipped",switch=name,action=action,target=job[6][0][0])
                     continue
                 if base is None and action=="AUTO_PROFILE":
-                    self._adapt_home_profile(job[6])
+                    self._adapt_home_profile(job[6],rid)
                     continue
                 all_commands = commands
                 with self._mutex:

@@ -85,7 +85,7 @@ class EntityOptionTests(unittest.TestCase):
 
     def test_schema_contains_auto_scan_not_yaml_bindings(self):
         config=yaml.safe_load((Path(__file__).resolve().parents[1]/"config.yaml").read_text())
-        self.assertEqual(config["version"], "0.3.3")
+        self.assertEqual(config["version"], "0.3.4")
         self.assertNotIn("switches",config["schema"])
         self.assertTrue(config["ingress"])
         self.assertEqual(config["options"]["auto_scan_interval"],60)
