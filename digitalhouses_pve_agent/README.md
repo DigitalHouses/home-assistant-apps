@@ -85,6 +85,15 @@ Example of the DigitalHouses PVE Agent dashboard in Home Assistant.
 
 ### PVE backup execution history (0.5.99)
 
+Unreleased development: the same read-only history worker also resolves
+configured backup job membership from PVE job and guest inventories.
+Configured coverage is not proof of a successful or scheduled backup.
+Disabled jobs do not cover guests; ambiguous selectors remain unknown.
+The separate coverage sensor shares the existing retained MQTT history
+payload, with its own bounded HA attribute view. No second task/log scanner
+or duplicate failure notification is introduced.
+
+
 The Proxmox View shows a compact collapsible `vzdump` run tree: date/time,
 verified job name (or `vzdump` when unknown), result, elapsed time and
 a size *only when its meaning is known*. Successful runs are collapsed by

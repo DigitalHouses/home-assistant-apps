@@ -27,6 +27,16 @@ def backup_components(topics) -> dict[str, dict]:
             "availability": availability, "entity_category": "diagnostic",
             "icon": "mdi:backup-restore",
         },
+        "backup_job_coverage": {
+            "platform": "sensor", "name": "Configured backup coverage",
+            "default_entity_id": "sensor.dh_pve_agent_backup_job_coverage",
+            "state_topic": base + "/history",
+            "value_template": "{{ value_json.job_inventory.status | default('unavailable') }}",
+            "json_attributes_topic": base + "/history",
+            "json_attributes_template": "{{ value_json.job_inventory | default({}) | tojson }}",
+            "availability": availability, "entity_category": "diagnostic",
+            "icon": "mdi:clipboard-check-outline",
+        },
         "backup_history_limit": {
             "platform": "number", "name": "Backup history limit",
             "default_entity_id": "number.dh_pve_agent_backup_history_limit",

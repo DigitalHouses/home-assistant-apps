@@ -211,6 +211,8 @@ def test_reader_is_strictly_read_only_uses_task_log_and_caches_completed():
     calls = []
     task = _task()
     def api(argv):
+        if argv[2] == "/cluster/resources":
+            return []
         calls.append(argv)
         assert argv[:2] == ["pvesh", "get"]
         path = argv[2]
@@ -234,6 +236,8 @@ def test_reader_is_strictly_read_only_uses_task_log_and_caches_completed():
 
 def test_reader_records_missing_log_without_fabricating_guest_success():
     def api(argv):
+        if argv[2] == "/cluster/resources":
+            return []
         if argv[2] == "/cluster/backup":
             return []
         if argv[2] == "/nodes/pve/tasks":
@@ -404,6 +408,8 @@ def test_dashboard_uses_collapsible_tree_and_number():
 def test_active_task_is_included_from_source_all():
     task = _task(upid="UPID:pve:0:0:0:vzdump::root@pam:", status="RUNNING")
     def api(argv):
+        if argv[2] == "/cluster/resources":
+            return []
         if argv[2] == "/cluster/backup":
             return []
         if argv[2] == "/nodes/pve/tasks":
@@ -421,3 +427,38 @@ def test_missing_endtime_does_not_imply_running():
     row = _task(status="")
     row.pop("endtime")
     assert build_run(row, parse_log([], {}))["status"] == "unknown"
+
+
+def test_explicit_skip_and_duration():
+    rows = parse_log(["INFO: Starting Backup of VM 100 (qemu)",
+                      "INFO: Finished Backup of VM 100 (00:01:02)",
+                      "WARNING: skipping Backup of VM 101",
+                      "WARNING: Backup of VM 102 skipped"], {})["guests"]
+    assert rows[0]["duration_seconds"] == 62
+    assert [r["status"] for r in rows] == ["success", "skipped", "skipped"]
+
+
+def test_single_reader_reports_configured_coverage_without_extra_task_reads():
+    calls = []
+    def api(argv):
+        path = argv[2]
+        calls.append(path)
+        if path == "/cluster/backup":
+            return [{"id":"daily","all":1,"exclude":"103","enabled":1},
+                    {"id":"off","vmid":"103","enabled":0}]
+        if path == "/cluster/resources":
+            return [{"node":"pve","vmid":v,"type":"qemu"} for v in [101,102,103]]
+        if path == "/nodes/pve/tasks":
+            return []
+        raise AssertionError(path)
+    snapshot = BackupReader("pve", api).read(10)
+    assert snapshot["job_inventory"]["counts"] == {"covered":2,"uncovered":0,"excluded":1,"unknown":0}
+    assert calls.count("/cluster/backup") == calls.count("/nodes/pve/tasks") == 1
+
+
+def test_coverage_unknown_when_selector_unavailable():
+    from app.backup_coverage import collect_inventory
+    inventory = collect_inventory("pve", [{"id":"daily","pool":"missing"}],
+                                  lambda path,*args: [{"node":"pve","vmid":100}] if path == "/cluster/resources" else {})
+    assert inventory["status"] == "unknown"
+    assert inventory["guests"][0]["status"] == "unknown"
