@@ -112,8 +112,7 @@ def validate_db_monitoring(
             app / "tests/test_control.py",
             app / "tests/test_identity_migration.py",
             app / "tests/test_telemetry.py",
-            app / "examples/lovelace/dh_recorder_app_dashboard.yaml",
-            app / "examples/lovelace/recorder_app_card_ru.yaml",
+            app / "dashboards/ru/10_recorder.yaml",
         ],
     )
 
@@ -190,7 +189,7 @@ def validate_db_monitoring(
         )
 
     dashboard = (
-        app / "examples/lovelace/dh_recorder_app_dashboard.yaml"
+        app / "dashboards/ru/10_recorder.yaml"
     ).read_text(encoding="utf-8")
     for retired_entity_id in (
         "sensor.dh_recorder_app_db_records_per_hour",
@@ -217,9 +216,6 @@ def validate_db_monitoring(
             "for hourly and daily activity"
         )
 
-    card = (
-        app / "examples/lovelace/recorder_app_card_ru.yaml"
-    ).read_text(encoding="utf-8")
     for required_card_text in (
         "sensor.dh_recorder_app_card",
         "sensor.dh_recorder_app_latest_version",
@@ -232,11 +228,6 @@ def validate_db_monitoring(
         "perform_action: hassio.app_restart",
         "app: 8133339d_digitalhouses_recorder_app",
     ):
-        if required_card_text not in card:
-            fail(
-                "Recorder App compact card missing "
-                f"{required_card_text!r}"
-            )
         if required_card_text not in dashboard:
             fail(
                 "Recorder App dashboard missing compact-card "

@@ -78,12 +78,10 @@ class SyncDiscoveryContractTests(unittest.TestCase):
         self.assertFalse(parsed.query or parsed.fragment or parsed.username)
         self.assertEqual(PRODUCT_PATH, "digitalhouses_recorder_app")
 
-    def test_ru_view_is_standalone_and_preserves_existing_dashboard(self):
+    def test_ru_view_is_standalone(self):
         canonical = (APP / "dashboards" / "ru" / "10_recorder.yaml").read_text(
             encoding="utf-8"
         )
-        maintained = (APP / "examples" / "lovelace" /
-                      "dh_recorder_app_dashboard.yaml").read_text(encoding="utf-8")
         self.assertTrue(canonical.startswith(
             "# DH-View: dh_recorder_app\n"
             "# DH-View-Version: 1.0.0\n"
@@ -91,10 +89,9 @@ class SyncDiscoveryContractTests(unittest.TestCase):
         ))
         self.assertIn("\ntitle: DH Recorder\npath: recorder\nicon: mdi:database\n"
                       "type: sections\n", canonical)
-        self.assertEqual(
-            canonical.split("title: DH Recorder", 1)[1],
-            maintained.split("title: DH Recorder", 1)[1],
-        )
+        self.assertEqual(canonical.count("\npath: recorder\n"), 1)
+        self.assertIn("\nsections:\n", canonical)
+        self.assertNotIn("\nviews:", canonical)
         self.assertNotIn("lovelace:", canonical)
         self.assertNotIn("192.168.", canonical)
 

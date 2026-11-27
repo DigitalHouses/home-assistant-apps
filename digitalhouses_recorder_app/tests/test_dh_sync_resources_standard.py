@@ -1,4 +1,4 @@
-"""Recorder App's published YAML contract for automatic DH Sync 0.4.
+"""Recorder App's published YAML contract for automatic DH Sync 0.6.
 
 DH Sync admits sources by the DigitalHouses GitHub owner alone, discovers
 canonical YAML in the default branch, and synchronizes it without Apply.
@@ -6,7 +6,6 @@ The App's release version is metadata, not a YAML compatibility gate.
 """
 from __future__ import annotations
 
-import hashlib
 import re
 import sys
 import unittest
@@ -29,18 +28,11 @@ from sync_discovery import (  # noqa: E402
 )
 
 CANONICAL = APP / "dashboards" / "ru" / "10_recorder.yaml"
-BASELINE = APP / "examples" / "lovelace" / "dh_recorder_app_dashboard.yaml"
-BASELINE_GIT_BLOB_SHA1 = "45dd279a425c0165deccdb0b53e6d9fe6b37a8af"
 EXTERNAL_ACTIONS = {"button.press", "update.install"}
 SUPERVISOR_ENTITIES = {"update.digitalhouses_recorder_app_update"}
 ENTITY_REFERENCE = re.compile(
     r"\b(?:sensor|binary_sensor|button|number|event|update)\.[a-z0-9_]+\b"
 )
-
-
-def _git_blob_sha1(raw: bytes) -> str:
-    prefix = b"blob " + str(len(raw)).encode("ascii") + b"\0"
-    return hashlib.sha1(prefix + raw).hexdigest()
 
 
 def _view_body(raw: str) -> str:
@@ -78,15 +70,6 @@ class RecorderDHSynchronizationStandardTests(unittest.TestCase):
         self.assertNotIn("\nlovelace:", body)
         self.assertNotIn("\nviews:", body)
         self.assertNotIn("192.168.", body)
-
-    def test_published_dashboard_body_preserves_the_maintained_example(self):
-        original = BASELINE.read_bytes()
-        self.assertEqual(_git_blob_sha1(original), BASELINE_GIT_BLOB_SHA1)
-        self.assertEqual(
-            _view_body(CANONICAL.read_text(encoding="utf-8")).encode("utf-8"),
-            original,
-        )
-        self.assertTrue(original.endswith(b"cards: []\nbadges: []\n"))
 
     def test_product_announces_digitalhouses_owner_and_product_path(self):
         parsed = urlsplit(REPOSITORY_URL)
