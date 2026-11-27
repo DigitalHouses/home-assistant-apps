@@ -37,6 +37,7 @@ RUN chmod a+x /run.sh \
         /app/db/__init__.py \
         /app/db/base.py \
         /app/db/postgres.py \
-        /app/db/mariadb.py
+        /app/db/mariadb.py \
+        /app/db/sqlite.py
 
 CMD ["/run.sh"]

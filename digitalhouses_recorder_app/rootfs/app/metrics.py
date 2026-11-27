@@ -75,5 +75,5 @@ def short_db_version(raw: str | None, engine: str) -> str | None:
     match = re.search(r"(\d+)\.(\d+)", str(raw))
     if not match:
         return str(raw)
-    prefix = "PostgreSQL" if engine == "postgresql" else "MariaDB"
+    prefix = {"postgresql": "PostgreSQL", "mariadb": "MariaDB", "sqlite": "SQLite"}.get(engine, engine)
     return f"{prefix} {match.group(1)}.{match.group(2)}"

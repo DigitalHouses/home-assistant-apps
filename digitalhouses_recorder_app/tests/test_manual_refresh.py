@@ -114,6 +114,8 @@ class ManualRefreshTests(unittest.TestCase):
         app.publish_discovery = Mock()
         app.publish_rankings = Mock()
         app.publish_disk_usage_threshold = Mock()
+        app.publish_runtime_settings = Mock()
+        app.settings_changed = threading.Event()
         app._publish_db_availability = Mock()
         app._publish_db_status_availability = Mock()
         app._publish_db_static_availability = Mock()
@@ -130,6 +132,29 @@ class ManualRefreshTests(unittest.TestCase):
         app.legacy_cleanup_pending = False
         app.legacy_cleanup_in_progress = threading.Event()
         return app
+
+    def test_runtime_setting_mqtt_command_changes_config_without_restart(self):
+        from config import AppConfig, DatabaseConfig, StorageConfig
+        from discovery import BASE_TOPIC
+        app = self.make_app()
+        app.config = AppConfig(
+            DatabaseConfig("sqlite", "", 0, "home-assistant_v2.db", "", ""),
+            StorageConfig("local", "", 22, "", "", ""),
+            1, 300, True, "info", "UTC", 10,
+        )
+        topic = f"{BASE_TOPIC}/settings/top_entities_limit/set"
+        with patch.object(APP_MODULE, "save_runtime_setting", return_value=25) as save:
+            app._on_message(None, None, Message(topic, b"25"))
+            save.assert_called_once_with("top_entities_limit", "25")
+        self.assertEqual(app.config.top_entities_limit, 25)
+        self.assertTrue(app.settings_changed.is_set())
+        app.publish_runtime_settings.assert_called_once_with()
+        retained = Message(topic, b"5")
+        retained.retain = True
+        with patch.object(APP_MODULE, "save_runtime_setting") as save:
+            app._on_message(None, None, retained)
+            save.assert_not_called()
+        self.assertEqual(app.config.top_entities_limit, 25)
 
     def test_refresh_command_queues_manual_refresh(self):
         app = self.make_app()

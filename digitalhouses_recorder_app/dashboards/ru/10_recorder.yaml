@@ -1,6 +1,6 @@
 # DH-View: dh_recorder_app
-# DH-View-Version: 1.0.0
-# DH-View-Date: 2026-11-14
+# DH-View-Version: 1.1.0
+# DH-View-Date: 2026-11-28
 # Published Russian Lovelace view; DH Sync automatically maintains this YAML.
 # Requires Mushroom, button-card >= 5.0, mini-graph-card, and entity-progress-card.
 title: DH Recorder
@@ -22,8 +22,14 @@ sections:
       - type: custom:mushroom-template-card
         entity: binary_sensor.dh_recorder_app_db_connected
         primary: >-
-          {% if not is_state('binary_sensor.dh_recorder_app_db_connected', 'on')
-          %}
+          {% if states('binary_sensor.dh_recorder_app_db_connected') not in ['on','off']
+          or states('binary_sensor.dh_recorder_app_recorder_writing') not in ['on','off'] %}
+            {% if is_state('binary_sensor.dh_recorder_app_db_connected', 'off') %}
+              База данных недоступна
+            {% else %}
+              Ожидание данных
+            {% endif %}
+          {% elif is_state('binary_sensor.dh_recorder_app_db_connected', 'off') %}
             База данных недоступна
           {% elif not is_state('binary_sensor.dh_recorder_app_recorder_writing',
           'on') %}
@@ -32,18 +38,18 @@ sections:
             База данных работает штатно
           {% endif %}
         secondary: >-
-          {% set connected =
-          is_state('binary_sensor.dh_recorder_app_db_connected', 'on') %} {% set
-          writing = is_state('binary_sensor.dh_recorder_app_recorder_writing',
-          'on') %} {% set age = states('sensor.dh_recorder_app_db_last_age') %}
-
-          Подключение: {{ 'OK' if connected else 'ОШИБКА' }} {{ '\n' }}Recorder:
-          {{ 'идёт запись' if writing else 'нет записи' }} {{ '\n' }}Последняя
-          запись: {{ age }} с назад
+          {% set connected = states('binary_sensor.dh_recorder_app_db_connected') %}
+          {% set writing = states('binary_sensor.dh_recorder_app_recorder_writing') %}
+          {% set age = states('sensor.dh_recorder_app_db_last_age') %}
+          Подключение: {{ 'OK' if connected == 'on' else 'ОШИБКА' if connected == 'off' else '—' }}
+          {{ '\n' }}Recorder: {{ 'идёт запись' if writing == 'on' else 'нет записи' if writing == 'off' else '—' }}
+          {{ '\n' }}Последняя запись: {{ age ~ ' с назад' if is_number(age) else '—' }}
         icon: >-
-          {% if not is_state('binary_sensor.dh_recorder_app_db_connected', 'on')
-          %}
+          {% if is_state('binary_sensor.dh_recorder_app_db_connected', 'off') %}
             mdi:database-off
+          {% elif states('binary_sensor.dh_recorder_app_db_connected') != 'on'
+          or states('binary_sensor.dh_recorder_app_recorder_writing') not in ['on','off'] %}
+            mdi:database-clock
           {% elif not is_state('binary_sensor.dh_recorder_app_recorder_writing',
           'on') %}
             mdi:database-alert
@@ -51,9 +57,11 @@ sections:
             mdi:database-check
           {% endif %}
         icon_color: >-
-          {% if not is_state('binary_sensor.dh_recorder_app_db_connected', 'on')
-          %}
+          {% if is_state('binary_sensor.dh_recorder_app_db_connected', 'off') %}
             red
+          {% elif states('binary_sensor.dh_recorder_app_db_connected') != 'on'
+          or states('binary_sensor.dh_recorder_app_recorder_writing') not in ['on','off'] %}
+            grey
           {% elif not is_state('binary_sensor.dh_recorder_app_recorder_writing',
           'on') %}
             orange
@@ -347,8 +355,11 @@ sections:
         entity: sensor.dh_recorder_app_db_version
         primary: '{{ states(''sensor.dh_recorder_app_db_version'') }}'
         secondary: >-
-          БД: {{ states('sensor.dh_recorder_app_db_name') }} {{ '\n'
-          }}Пользователь: {{ states('sensor.dh_recorder_app_db_user') }}
+          БД: {{ states('sensor.dh_recorder_app_db_name') }}
+          {% if not is_state('sensor.dh_recorder_app_database_type', 'sqlite')
+             and states('sensor.dh_recorder_app_db_user') not in ['unknown','unavailable'] %}
+          {{ '\n' }}Пользователь: {{ states('sensor.dh_recorder_app_db_user') }}
+          {% endif %}
         icon: mdi:database-cog
         icon_color: blue
         multiline_secondary: true
@@ -389,26 +400,61 @@ sections:
             entity: sensor.dh_recorder_app_db_last_age
             primary: Последняя запись
             secondary: >-
-              {% set age = states('sensor.dh_recorder_app_db_last_age') |
-              int(9999) %} {% if age == 1 %}
-                1 секунду назад
-              {% elif age % 10 in [2, 3, 4] and age % 100 not in [12, 13, 14] %}
-                {{ age }} секунды назад
+              {% set raw_age = states('sensor.dh_recorder_app_db_last_age') %}
+              {% if not is_number(raw_age) %}
+                Недоступно
               {% else %}
-                {{ age }} секунд назад
+                {% set age = raw_age | int %}
+                {{ age }} с назад
               {% endif %}
             icon: mdi:database-clock
             icon_color: >-
-              {% set age = states('sensor.dh_recorder_app_db_last_age') |
-              int(9999) %} {% if age >= 300 %}
+              {% set raw_age = states('sensor.dh_recorder_app_db_last_age') %}
+              {% set threshold = states('number.dh_recorder_app_recorder_stale_seconds') | int(300) %}
+              {% if not is_number(raw_age) %}
+                grey
+              {% elif raw_age | int >= threshold %}
                 red
-              {% elif age >= 120 %}
+              {% elif raw_age | int >= threshold * 0.4 %}
                 orange
               {% else %}
                 green
               {% endif %}
             tap_action:
               action: more-info
+      - type: entities
+        title: Настройки мониторинга
+        visibility:
+          - condition: numeric_state
+            entity: number.dh_recorder_app_publish_interval_minutes
+            above: 0
+        entities:
+          - entity: number.dh_recorder_app_publish_interval_minutes
+            name: Интервал проверки
+          - entity: number.dh_recorder_app_recorder_stale_seconds
+            name: Порог отсутствия записей
+          - entity: number.dh_recorder_app_top_entities_limit
+            name: Количество Top-N сущностей
+      - type: entities
+        title: Актуальность данных
+        visibility:
+          - condition: numeric_state
+            entity: number.dh_recorder_app_publish_interval_minutes
+            above: 0
+        entities:
+          - entity: sensor.dh_recorder_app_db_medium_observed_at
+            name: Счётчики обновлены
+          - entity: sensor.dh_recorder_app_db_slow_observed_at
+            name: История обновлена
+      - type: entities
+        title: SQLite WAL
+        visibility:
+          - condition: numeric_state
+            entity: sensor.dh_recorder_app_db_wal_size
+            above: -1
+        entities:
+          - entity: sensor.dh_recorder_app_db_wal_size
+            name: Размер WAL
       - type: custom:mushroom-template-card
         entity: sensor.dh_recorder_app_db_start
         primary: Начало истории
@@ -451,6 +497,10 @@ sections:
         icon: mdi:harddisk
       - type: custom:entity-progress-card-template
         entity: sensor.dh_recorder_app_db_disk_used_percentage
+        visibility:
+          - condition: numeric_state
+            entity: sensor.dh_recorder_app_db_disk_used_percentage
+            above: -1
         name: >-
           {% set pct = states('sensor.dh_recorder_app_db_disk_used_percentage')
           | float(0) %} Диск БД · {{ '%.1f' | format(pct) }}%

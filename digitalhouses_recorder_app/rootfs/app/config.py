@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 OPTIONS_FILE = Path('/data/options.json')
+SQLITE_PATH = Path('/homeassistant/home-assistant_v2.db')
 
 
 @dataclass(frozen=True)
@@ -69,7 +70,9 @@ def load_config(path: Path = OPTIONS_FILE) -> AppConfig:
     engine = str(options.get('database_type', 'postgresql')).lower()
     mariadb_connection = ''
 
-    if engine == 'postgresql':
+    if engine == 'sqlite':
+        db = DatabaseConfig('sqlite', '', 0, SQLITE_PATH.name, '', '')
+    elif engine == 'postgresql':
         raw = options.get('postgresql') or {}
         if not isinstance(raw, dict):
             raw = {}
@@ -77,7 +80,7 @@ def load_config(path: Path = OPTIONS_FILE) -> AppConfig:
             engine='postgresql',
             host=_required(raw.get('host'), 'PostgreSQL host'),
             port=_bounded_int(raw.get('port'), 1, 65535, 5432),
-            database=_required(raw.get('database'), 'PostgreSQL database'),
+            database=_required(raw.get('database', 'homeassistant'), 'PostgreSQL database'),
             username=_required(raw.get('username'), 'PostgreSQL username'),
             password=_required(raw.get('password'), 'PostgreSQL password'),
         )
@@ -100,14 +103,14 @@ def load_config(path: Path = OPTIONS_FILE) -> AppConfig:
                 engine='mariadb',
                 host=_required(raw.get('host'), 'MariaDB host'),
                 port=_bounded_int(raw.get('port'), 1, 65535, 3306),
-                database=_required(raw.get('database'), 'MariaDB database'),
+                database=_required(raw.get('database', 'homeassistant'), 'MariaDB database'),
                 username=_required(raw.get('username'), 'MariaDB username'),
                 password=_required(raw.get('password'), 'MariaDB password'),
             )
         else:
             raise ValueError("MariaDB connection must be 'supervisor' or 'manual'")
     else:
-        raise ValueError("database_type must be 'postgresql' or 'mariadb'")
+        raise ValueError("database_type must be 'sqlite', 'postgresql' or 'mariadb'")
 
     storage_raw = options.get('storage') or {}
     if not isinstance(storage_raw, dict):
@@ -124,6 +127,8 @@ def load_config(path: Path = OPTIONS_FILE) -> AppConfig:
 
     if requested_storage == 'disabled':
         storage_source = 'disabled'
+    elif engine == 'sqlite':
+        storage_source = 'local'
     elif requested_storage == 'automatic' and engine == 'mariadb' and mariadb_connection == 'supervisor':
         storage_source = 'supervisor'
     elif requested_storage == 'automatic':

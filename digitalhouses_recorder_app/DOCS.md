@@ -47,9 +47,9 @@ The JSON contains `schema`, `product_id`, `type`, `version`,
 
 The canonical resources are:
 
-- [Russian view](dashboards/ru/10_recorder.yaml), stable `path: recorder`.
+- [English view](dashboards/en/10_recorder.yaml) and [Russian view](dashboards/ru/10_recorder.yaml), both with stable `path: recorder`. DH Sync 0.6.5 selects Russian; the English view can be imported manually.
 - [Common Recorder package](packages/common/dh_recorder_app.yaml).
-- [Russian notification package](packages/locales/ru/dh_recorder_app_notification_package.yaml).
+- Optional [English](packages/locales/en/dh_recorder_app_notification_package.yaml) and [Russian notification packages](packages/locales/ru/dh_recorder_app_notification_package.yaml) for sites with the local notification script.
 
 DH Sync discovers canonical YAML from the repository default branch.
 Dashboard placement is owned by DH Sync, not the Recorder App. Resource changes
@@ -99,6 +99,7 @@ permissions.
 
 ## Database support
 
+- SQLite: read-only default Home Assistant Recorder database.
 - PostgreSQL: manual database connection.
 - MariaDB Supervisor App: automatic MySQL service discovery.
 - External MariaDB: manual database connection.
@@ -108,10 +109,10 @@ permissions.
 Required static database identity consists of:
 
 - database name;
-- database user;
+- database user (not applicable to SQLite);
 - database version.
 
-Those three values share a dedicated availability gate. If one cannot be read,
+All applicable values share a dedicated availability gate. If one cannot be read,
 the static DB diagnostics stay unavailable instead of receiving a fabricated
 fallback.
 
@@ -124,13 +125,32 @@ failure therefore makes Recorder-writing data unavailable instead of changing
 it to synthetic `false`.
 
 
+## SQLite read-only operation
+
+The App mounts Home Assistant configuration at `/homeassistant` read-only and opens
+`home-assistant_v2.db` using Python sqlite3 with URI `mode=ro`, query-only mode,
+normal WAL locking, a short busy timeout and a two-second query progress-handler
+budget. A missing file is never created. Live WAL/SHM sidecars must be readable
+while Recorder is operating; startup may temporarily fail if they are absent.
+No immutable flag, checkpoint, schema or data writes are used. Connections are
+closed after each query, including on errors. Query timeout limits are best-effort
+at the SQLite VM level, not a hard OS I/O deadline.
+
+The Top-N query aggregates metadata IDs before joining names. It uses the existing
+Recorder indexes and does not create indexes. Expensive queries can be interrupted
+on a large or busy database. Successful metric-group timestamps and previous
+results remain available; no failed query publishes a fabricated count. The WAL
+size is separate from the main database size. An inactive leftover SQLite file
+cannot be distinguished reliably by its presence; select the actual Recorder
+database engine. Recorder-write health is derived from its newest state.
+
 ## Timezone ownership
 
 Recorder App has no user-configurable timezone. At startup, `run.sh` reads the
 Home Assistant Supervisor timezone through `bashio::supervisor.timezone` and
 exports it as `TZ`. Local-hour, previous-hour, local-day and previous-day
 boundaries all use that authoritative timezone. The App converts those local boundaries to Unix epoch
-values before querying Recorder, so MariaDB and PostgreSQL use the same numeric
+values before querying Recorder, so SQLite, MariaDB and PostgreSQL use the same numeric
 `last_updated_ts` ranges and do not depend on the database session timezone. There
 is no silent UTC fallback.
 
@@ -163,6 +183,8 @@ When storage monitoring is enabled:
 - `sensor.dh_recorder_app_db_disk_used_percentage` — used percentage.
 
 ### Automatic
+
+SQLite reads filesystem metrics via `statvfs` on the database directory. No SSH is required.
 
 For MariaDB running as a Home Assistant OS App, Automatic reads Home Assistant
 OS data-disk metrics from the Supervisor Host API. No SSH configuration is
@@ -237,8 +259,7 @@ Disabled omits the four storage entities.
 
 ## Publishing and polling
 
-`publish_interval_minutes` controls Recorder health/state refresh and retained
-MQTT state publication. Expensive operations are rate-limited.
+`number.dh_recorder_app_publish_interval_minutes` controls Recorder health/state refresh and retained MQTT state publication. Runtime values are migrated from the old optional Supervisor keys to `/data/runtime_settings.json` and updated through MQTT number entities without restart. The disk threshold and all user values survive migration. Expensive operations are rate-limited.
 
 ### PostgreSQL cluster selection
 
@@ -256,7 +277,7 @@ Canonical ranking sensors:
 The 24-hour ranking refreshes hourly. All-time ranking refreshes daily. Each
 uses a dedicated retained MQTT topic and is republished after MQTT reconnect.
 
-`top_entities_limit` controls both rankings. It defaults to `10` and accepts
+`number.dh_recorder_app_top_entities_limit` controls both rankings. It defaults to `10` and accepts
 values from `1` through `100`. The SQL query itself uses this limit, so a
 larger user-selected value changes both query result size and the published
 ranking payload.

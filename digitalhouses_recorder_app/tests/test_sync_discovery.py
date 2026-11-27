@@ -84,8 +84,8 @@ class SyncDiscoveryContractTests(unittest.TestCase):
         )
         self.assertTrue(canonical.startswith(
             "# DH-View: dh_recorder_app\n"
-            "# DH-View-Version: 1.0.0\n"
-            "# DH-View-Date: 2026-11-14\n"
+            "# DH-View-Version: 1.1.0\n"
+            "# DH-View-Date: 2026-11-28\n"
         ))
         self.assertIn("\ntitle: DH Recorder\npath: recorder\nicon: mdi:database\n"
                       "type: sections\n", canonical)

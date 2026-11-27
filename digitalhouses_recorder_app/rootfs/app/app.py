@@ -7,6 +7,7 @@ import signal
 import threading
 import time
 from datetime import datetime, timezone
+from dataclasses import replace
 from typing import Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
@@ -22,6 +23,7 @@ from control import AppCard, CHECK_INTERVAL_SECONDS, ReleaseChecker
 from db import create_adapter
 from discovery import (
     APP_AVAILABILITY_TOPIC,
+    BASE_TOPIC,
     CARD_STATE_TOPIC,
     CHECK_UPDATES_COMMAND_TOPIC,
     DB_AVAILABILITY_TOPIC,
@@ -59,6 +61,9 @@ from storage import StorageCollector
 from telemetry import TelemetryClient, TelemetryRunner
 from runtime_settings import (
     RuntimeSettingError,
+    RUNTIME_SETTINGS,
+    migrate_runtime_settings,
+    save_runtime_setting,
     load_disk_usage_threshold,
     save_disk_usage_threshold,
 )
@@ -122,6 +127,10 @@ class DatabaseMonitorApp:
         self.storage_available = False
         self._logged_storage_path = ''
         self.ranking_state: dict[str, dict[str, Any]] = {}
+        self.config = replace(self.config, **migrate_runtime_settings({
+            key: getattr(self.config, key) for key in RUNTIME_SETTINGS
+        }))
+        self.settings_changed = threading.Event()
         self.disk_usage_threshold_percent = load_disk_usage_threshold()
         self._db_connected_observed: bool | None = None
         self._db_outage_started_epoch: float | None = None
@@ -167,6 +176,8 @@ class DatabaseMonitorApp:
 
         self.mqtt_connected.set()
         client.subscribe(HA_STATUS_TOPIC, qos=1)
+        for key in RUNTIME_SETTINGS:
+            client.subscribe(f"{BASE_TOPIC}/settings/{key}/set", qos=1)
         client.subscribe(REFRESH_COMMAND_TOPIC, qos=1)
         client.subscribe(CHECK_UPDATES_COMMAND_TOPIC, qos=1)
         client.subscribe(
@@ -195,6 +206,7 @@ class DatabaseMonitorApp:
         self.publish_state()
         self.publish_rankings()
         self.publish_disk_usage_threshold()
+        self.publish_runtime_settings()
         self._publish_update_state()
         self.app_card.publish()
         self._schedule_legacy_cleanup()
@@ -208,6 +220,7 @@ class DatabaseMonitorApp:
             build_discovery_payload(
                 self.app_version,
                 include_storage=self.storage.enabled,
+                database_engine=self.config.database.engine,
             ),
             retain=True,
         )
@@ -293,6 +306,12 @@ class DatabaseMonitorApp:
     ) -> None:
         del client, userdata
 
+        for key in RUNTIME_SETTINGS:
+            if message.topic == f"{BASE_TOPIC}/settings/{key}/set":
+                if not getattr(message, "retain", False):
+                    self._set_runtime_setting(key, message.payload.decode("utf-8", errors="replace").strip())
+                return
+
         threshold_topics = {
             DISK_USAGE_THRESHOLD_COMMAND_TOPIC
         }
@@ -370,6 +389,7 @@ class DatabaseMonitorApp:
             self.publish_state()
             self.publish_rankings()
             self.publish_disk_usage_threshold()
+            self.publish_runtime_settings()
             self._publish_update_state()
             self.app_card.publish()
 
@@ -481,6 +501,24 @@ class DatabaseMonitorApp:
             retain=True,
         )
 
+    def publish_runtime_settings(self) -> None:
+        for key in RUNTIME_SETTINGS:
+            self.publish_text(f"{BASE_TOPIC}/settings/{key}/state",
+                              str(getattr(self.config, key)), retain=True)
+
+    def _set_runtime_setting(self, key: str, raw: str) -> None:
+        try:
+            value = save_runtime_setting(key, raw)
+        except (RuntimeSettingError, OSError) as exc:
+            self.log.warning("Rejected runtime setting %s: %s", key, exc)
+        else:
+            previous = getattr(self.config, key)
+            self.config = replace(self.config, **{key: value})
+            if previous != value:
+                self.settings_changed.set()
+                self.log.info("Runtime setting %s changed: %s -> %s", key, previous, value)
+        self.publish_runtime_settings()
+
     def _observed_at(self, epoch: float | None = None) -> str:
         when = time.time() if epoch is None else epoch
         return datetime.fromtimestamp(
@@ -509,7 +547,7 @@ class DatabaseMonitorApp:
     def _set_disk_usage_threshold(self, raw_value: str) -> None:
         try:
             updated = save_disk_usage_threshold(raw_value)
-        except RuntimeSettingError as exc:
+        except (RuntimeSettingError, OSError) as exc:
             self.log.warning('Rejected disk usage threshold: %s', exc)
             self.publish_disk_usage_threshold()
             return
@@ -733,6 +771,11 @@ class DatabaseMonitorApp:
                 'db_last_age': age,
                 'recorder_writing': writing,
             })
+            if 'db_wal_size_bytes' in raw:
+                self.update_state({
+                    'db_size': round(raw['db_size_bytes'] / 1048576, 1),
+                    'db_wal_size': round(raw['db_wal_size_bytes'] / 1048576, 1),
+                })
             self.set_db_available(True)
             self.set_db_status_observed(True)
             self._observe_db_connection(True)
@@ -779,6 +822,9 @@ class DatabaseMonitorApp:
                     else None
                 ),
             })
+            if 'db_wal_size_bytes' in raw:
+                self.update_state({'db_wal_size': round(raw['db_wal_size_bytes'] / 1048576, 1)})
+            self.update_state({'db_medium_observed_at': iso_from_epoch(now)})
             return True
         except Exception as exc:
             self.log.warning('Medium database query failed: %s', exc)
@@ -793,6 +839,7 @@ class DatabaseMonitorApp:
                 'db_start': iso_from_epoch(start_ts),
                 'db_depth': db_depth_days(start_ts, now, self.config.timezone),
                 'db_records': records_k(raw.get('records_total')),
+                'db_slow_observed_at': iso_from_epoch(now),
             })
             return True
         except Exception as exc:
@@ -806,7 +853,7 @@ class DatabaseMonitorApp:
                 raw.get("db_version"),
                 self.config.database.engine,
             )
-            validated = validate_static_db_metrics(raw)
+            validated = validate_static_db_metrics(raw, self.config.database.engine)
             self.update_state(validated)
             self.set_db_static_available(True)
             return True
@@ -820,20 +867,21 @@ class DatabaseMonitorApp:
 
     def collect_top_entities(self, period: str) -> bool:
         generated_ts = time.time()
+        limit = self.config.top_entities_limit
         since_ts = generated_ts - 86400 if period == '24h' else None
         until_ts = generated_ts if period == '24h' else None
         try:
             rows = self.adapter.top_entities(
                 since_ts,
                 until_ts,
-                self.config.top_entities_limit,
+                limit,
             )
             snapshot = build_top_entities_snapshot(
                 rows,
                 period,
                 generated_ts,
                 self.config.timezone,
-                self.config.top_entities_limit,
+                limit,
             )
             with self.state_lock:
                 self.ranking_state[period] = snapshot
@@ -889,18 +937,15 @@ class DatabaseMonitorApp:
 
     def run(self) -> None:
         db = self.config.database
-        publish_interval_seconds = self.config.publish_interval_minutes * 60
         self.log.info(
             "Starting DigitalHouses Recorder App %s",
             self.app_version,
         )
         self.log.info('Database engine: %s', db.engine)
-        self.log.info(
-            "Database target: %s:%s/%s",
-            db.host,
-            db.port,
-            db.database,
-        )
+        if db.engine == "sqlite":
+            self.log.info("Database target: %s", db.database)
+        else:
+            self.log.info("Database target: %s:%s/%s", db.host, db.port, db.database)
         self.log.info('Timezone: %s', self.config.timezone)
         self.log.info(
             'Top entities limit: %s',
@@ -927,6 +972,9 @@ class DatabaseMonitorApp:
             while not self.stop_event.is_set():
                 now_mono = time.monotonic()
                 now_epoch = time.time()
+                if self.settings_changed.is_set():
+                    self.settings_changed.clear()
+                    next_publish = 0.0
                 if self.refresh_requested.is_set():
                     self.manual_refresh()
                 if now_mono >= next_publish:
@@ -958,7 +1006,7 @@ class DatabaseMonitorApp:
                         self.collect_storage()
                         next_storage = now_mono + STORAGE_INTERVAL_SECONDS
                     self.publish_state()
-                    next_publish = now_mono + publish_interval_seconds
+                    next_publish = now_mono + self.config.publish_interval_minutes * 60
                 self.stop_event.wait(1.0)
         finally:
             self.telemetry_runner.stop()

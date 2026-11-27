@@ -8,6 +8,8 @@ from contracts import (
     validate_release_version,
 )
 
+from runtime_settings import RUNTIME_SETTINGS
+
 PRODUCT_ID = "digitalhouses_recorder_app"
 ENTITY_PREFIX = "dh_recorder_app"
 DEVICE_NAME = "DH Recorder"
@@ -882,13 +884,37 @@ def _build_payload(
 def build_discovery_payload(
     app_version: str,
     include_storage: bool = False,
+    database_engine: str = "postgresql",
 ) -> dict[str, Any]:
-    return _build_payload(
+    payload = _build_payload(
         CANONICAL_IDENTITY,
         app_version,
         include_storage=include_storage,
         include_canonical_runtime=True,
     )
+    if database_engine == "sqlite":
+        payload["components"].pop("db_user")
+        payload["components"]["db_wal_size"] = _component(
+            CANONICAL_IDENTITY, "sensor", "DB WAL size", "db_wal_size",
+            "{{ value_json.db_wal_size }}", diagnostic=True,
+            device_class="data_size", state_class="measurement",
+            unit_of_measurement="MiB", suggested_display_precision=1,
+            icon="mdi:database-clock",
+        )
+    for key, label in (("db_medium_observed_at", "DB counters measured at"),
+                       ("db_slow_observed_at", "DB history measured at")):
+        payload["components"][key] = _component(
+            CANONICAL_IDENTITY, "sensor", label, key,
+            "{{ value_json." + key + " }}", diagnostic=True, device_class="timestamp",
+        )
+    for key, (low, high, _, label, unit) in RUNTIME_SETTINGS.items():
+        payload["components"][key] = _number_component(
+            CANONICAL_IDENTITY, label, key,
+            f"{BASE_TOPIC}/settings/{key}/state",
+            f"{BASE_TOPIC}/settings/{key}/set",
+            minimum=low, maximum=high, step=1, unit=unit,
+        )
+    return payload
 
 
 def build_legacy_discovery_payload(

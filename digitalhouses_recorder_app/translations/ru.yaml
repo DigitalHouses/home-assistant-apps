@@ -1,7 +1,7 @@
 configuration:
   database_type:
     name: Тип базы данных
-    description: Тип базы данных Recorder, используемой Home Assistant.
+    description: Тип активной базы Recorder. SQLite использует стандартный файл базы без реквизитов.
   postgresql:
     name: PostgreSQL
     description: Ручное подключение к базе Recorder PostgreSQL.
@@ -46,7 +46,7 @@ configuration:
     description: Контроль свободного места и использования диска базы Recorder.
   storage.source:
     name: Источник данных диска
-    description: Автоматически использует диск HAOS для MariaDB Supervisor и SSH для внешней БД при заполненных SSH-реквизитах. SSH включает удалённый мониторинг принудительно. Отключено выключает мониторинг диска.
+    description: Автоматически использует файловую систему SQLite, диск HAOS для MariaDB Supervisor и SSH для внешней БД при заполненных SSH-реквизитах. SSH включает удалённый мониторинг принудительно. Отключено выключает мониторинг диска.
   storage.ssh_host:
     name: SSH хост
     description: Необязательный SSH-хост или IP. Если пусто, используется хост базы данных.
@@ -64,13 +64,13 @@ configuration:
     description: Необязательный ручной путь. Если оставить пустым, App сам определит доступный путь хранения БД через SQL/SSH; последним резервным вариантом используется /.
   publish_interval_minutes:
     name: Интервал публикации, мин
-    description: Интервал в минутах между публикациями MQTT и проверками состояния Recorder.
+    description: Устаревший параметр миграции; используйте MQTT number интервала проверки.
   recorder_stale_seconds:
     name: Порог остановки Recorder
-    description: Максимальный возраст последней записи в секундах, после которого DB recorder writing переключается в off.
+    description: Устаревший параметр миграции; используйте MQTT number порога отсутствия записей.
   top_entities_limit:
     name: Количество Top entities
-    description: Количество сущностей Recorder в каждом рейтинге. По умолчанию 10.
+    description: Устаревший параметр миграции; используйте MQTT number количества сущностей.
   telemetry_enabled:
     name: Согласие на сбор статистики
     description: Consent to collect statistics (product name, version, installation ID).
