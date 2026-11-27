@@ -94,6 +94,9 @@ class ProfileTests(unittest.TestCase):
             self.assertEqual(results[0]["state"],"sent")
             self.assertEqual(ha.execute.call_args.args[0]["data"]["brightness_pct"],expected)
             self.assertNotIn("profile",ha.execute.call_args.args[0]["data"])
+            logged=next(r["targets"][TV] for r in app.event_log.snapshot()["rows"] if TV in r["targets"])
+            self.assertEqual(logged["parameters"],ha.execute.call_args.args[0]["data"])
+            self.assertEqual(logged["status"],"accepted")
 
 
     def test_missing_profile_allows_only_toggle_off(self):

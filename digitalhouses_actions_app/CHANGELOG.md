@@ -2,6 +2,11 @@
 
 Historical releases below were published as DigitalHouses Aqara Switch App; their identifiers are retained.
 
+## 0.3.5
+
+- Show resolved light profile brightness, CCT/RGB and transition in the existing Ingress LOG for Day/Night adaptation and profile-driven key, sensor and schedule commands, rather than an uninformative ON-to-ON line.
+- Mark parameters as requested, not physically confirmed; accepted profile commands do not acquire a state-only confirmation. Display skip reasons inline and localize Day/Night profile labels. No changes to light dispatch or new polling.
+
 ## 0.3.4
 
 - Show every actual observed Day/Night transition in the Ingress journal, including when auto_day_night is off, maintenance is active, profiles are missing, queue is full or no targets qualify. Keep per-target dispatch records and no startup/reconnect replay.

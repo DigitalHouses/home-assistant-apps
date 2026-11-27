@@ -113,6 +113,23 @@ for(const domain of ['light','switch','cover','climate','media_player','future_d
         self.assertIn('a.data.color_source=color.value',js)
         self.assertIn('main.querySelector(".params select:invalid")',js)
 
+    def test_log_light_parameters_formatter(self):
+        import shutil
+        import subprocess
+        js=(WEB/"app.js").read_text()
+        self.assertIn("logLightParameters(t.parameters||{})",js)
+        self.assertIn('t.status==="accepted"',js)
+        self.assertIn('t.status==="skipped"&&t.reason',js)
+        if not shutil.which("node"):
+            self.skipTest("node unavailable")
+        source=js[js.index("function logLightParameters("):js.index("function renderLogRow(")]
+        subprocess.run(["node","-e",source+"""
+const assert=require('node:assert/strict');
+assert.equal(logLightParameters({brightness_pct:40,rgb_color:[0,255,0],transition:2}),"Яркость 40% · RGB (0, 255, 0) · переход 2 с");
+assert.equal(logLightParameters({brightness_pct:0,color_temp_kelvin:2700,transition:0}),"Яркость 0% · CCT 2700 K · переход 0 с");
+assert.equal(logLightParameters({}),"");
+"""],check=True)
+
     def test_minutes_seconds_duration_controls(self):
         import shutil
         import subprocess

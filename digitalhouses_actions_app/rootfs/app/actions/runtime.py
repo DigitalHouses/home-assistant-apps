@@ -906,7 +906,7 @@ class Application:
             candidates.sort(key=lambda eid:(self.config.get("light_routes",{}).get(eid,{}).get("kind")!="group",eid))
         handled=set()
         for eid in candidates+conflicts:
-            rid=self.event_log.press("global","Режим дома","День/Ночь: "+snapshot["mode"],[eid])
+            rid=self.event_log.press("global","Режим дома","Профиль: "+({"day":"День","night":"Ночь"}[snapshot["mode"]]),[eid])
             try:
                 if eid in conflicts:raise ActionError("Conflicting profile or color-source assignments")
                 with self._mutex:
@@ -939,7 +939,7 @@ class Application:
                             self.sensor_engine.profile_changes.pop(eid,None)
                             raise ActionError("MQTT profile command rejected")
                         handled.update(members)
-                        self.event_log.sent(rid,eid,("z2m",*ident),"on","off" if zero else "on",accepted_only=not zero)
+                        self.event_log.sent(rid,eid,("z2m",*ident),"on","off" if zero else "on",accepted_only=not zero,parameters=data)
                         continue
                 if self._ha_client is None:self._ha_client=HAClient(os.environ.get("SUPERVISOR_TOKEN",""))
                 if eid.startswith("light."):
@@ -968,7 +968,7 @@ class Application:
                     zero=data.get("brightness_pct")==0
                     at=_iso_now()
                     self._ha_client.execute({"service":"light.turn_off" if zero else "light.turn_on","target":{"entity_id":[eid]},"data":{k:v for k,v in data.items() if k=="transition"} if zero else data})
-                    self.event_log.sent(rid,eid,("ha",eid),"on","off" if zero else "on",sent_at=at,accepted_only=not zero)
+                    self.event_log.sent(rid,eid,("ha",eid),"on","off" if zero else "on",sent_at=at,accepted_only=not zero,parameters=data)
                 else:
                     entities=self.registry.fetch_entities()
                     matches=[e for e in entities if e.get("entity_id")==eid]
@@ -1093,6 +1093,8 @@ class Application:
                     commands,profile_skipped,unresolved_toggles=profiles.resolve_commands(commands,self.target_catalog,self._home_profile)
                 profile_lights={eid for c in all_commands if c["service"].startswith("light.")
                                 and "profile" in c.get("data",{}) for eid in c["target"]["entity_id"]}
+                profile_parameters={eid:dict(c.get("data",{})) for c in commands
+                                    for eid in c["target"]["entity_id"] if eid in profile_lights}
                 zero_profile_lights={eid for c in commands if c["service"].startswith("light.")
                     and c.get("data",{}).get("brightness_pct")==0 for eid in c["target"]["entity_id"] if eid in profile_lights}
                 is_test = base is None and action == "TEST"
@@ -1248,7 +1250,8 @@ class Application:
                             previous = (group_observed_state(route,net,self._fresh_fields)
                                         if route.get("kind")=="group" else net.get("states",{}).get(ident[1],{}).get("state"))
                             self.event_log.sent(rid,plan["light"],("z2m",*ident),previous,plan["state"],
-                                accepted_only=plan["light"] in profile_lights and plan["state"]=="ON")
+                                accepted_only=plan["light"] in profile_lights and plan["state"]=="ON",
+                                parameters=profile_parameters.get(plan["light"]) if plan["state"]=="ON" or plan["light"] in zero_profile_lights else None)
                             self._light_shadows[ident] = {
                                 "value": plan["state"], "at": time.monotonic()}
                             if sensor_job:self.sensor_engine.dispatched(name,action,coordinator,plan["light"],plan["state"].lower())
@@ -1357,7 +1360,8 @@ class Application:
                         with self._mutex:
                             for eid in ids:
                                 self.event_log.sent(rid,eid,("ha",eid),lab_state_cache.get(eid,(False,None))[1] if lab_state_cache.get(eid,(False,None))[0] else None,value, sent_at=dispatched_at,
-                                    accepted_only=eid in profile_lights and value=="on")
+                                    accepted_only=eid in profile_lights and value=="on",
+                                    parameters=(call.get("data",{}) if value=="on" else profile_parameters.get(eid)) if eid in profile_lights and (value=="on" or eid in zero_profile_lights) else None)
                                 self._ha_shadows[eid] = {
                                     "state":value, "at": time.monotonic()}
                                 if sensor_job:self.sensor_engine.dispatched(name,action,coordinator,eid,value)

@@ -63,6 +63,17 @@ class EventLogTests(unittest.TestCase):
             self.assertEqual(self.log.snapshot()["rows"],[])
             self.assertEqual(self.log.pending,{})
         self.assertTrue(self.log.snapshot(100,"different")["reset"])
+    def test_profile_parameters_are_requested_not_confirmed(self):
+        rid=self.log.press("global","Режим дома","Профиль: Ночь",[EID])
+        params={"brightness_pct":40,"rgb_color":[0,255,0],"transition":2}
+        self.log.sent(rid,EID,ROUTE,"on","on",accepted_only=True,parameters=params)
+        params["rgb_color"][1]=0
+        self.log.observe(ROUTE,"on")
+        target=self.row(rid)["targets"][EID]
+        self.assertEqual(target["status"],"accepted")
+        self.assertEqual(target["parameters"],{"brightness_pct":40,"rgb_color":[0,255,0],"transition":2})
+        self.assertFalse(self.log.active_target(EID))
+
     def test_skip_never_becomes_confirmed(self):
         rid=self.log.press("net","button","single",[EID])
         self.log.skip(rid,EID,"offline")
