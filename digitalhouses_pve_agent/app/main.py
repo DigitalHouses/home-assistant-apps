@@ -544,8 +544,8 @@ def run(config: AppConfig, *, state_dir: Path = DEFAULT_STATE_DIR,
                         process_usage, agent_cpu.overloaded,
                         online=initialized and bridge.connected.is_set(),
                     )
-                    if bridge.connected.is_set():
-                        bridge.publish_agent_process_cpu(agent_cpu.snapshot())
+                if bridge.connected.is_set():
+                    bridge.publish_agent_process_cpu(agent_cpu.snapshot())
             debug_reconnected = bridge.reconnect_requested.is_set()
             while not bridge.ups_debug_updates.empty():
                 ups_debug.set_enabled(bridge.ups_debug_updates.get_nowait())

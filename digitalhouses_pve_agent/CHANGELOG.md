@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.5.106
+
+- Fix the UPS setup inspection self-rescheduling loop: successful and failed inspections respect the 120-second interval, while explicit setup operations and driver selections still trigger refresh. Failed inspection cannot authorize stale setup actions. Native NUT and emergency shutdown checks are unchanged.
+- Measure whole-agent systemd cgroup v2 CPU including subprocesses rather than Python alone; keep existing sensor identity, per-core units and overload hysteresis, and publish unknown when the counter is unavailable.
+- Use read-only journald lifecycle events for VM/LXC refresh, bounded current-boot shutdown history retries, and 300-second reconciliation with 60-second fallback. Preserve independent UPS budget refresh.
+- Extend existing backup history with job coverage and per-guest durations, preserving previous history and notification behavior. Views remain compatible with released agents; no missed-schedule alerts are introduced.
+- Regression tests cover the inspection cadence, errors, explicit actions and cgroup sampling. Full live lifecycle/shutdown acceptance of the newly integrated event-driven runtime remains pending; the heating defect is validated separately on the host.
+
 ## 0.5.105
 
 - Simplify the aggregate status card: keep foreground presentation in memory, start clean after process restart, and observe the authoritative independent update worker without matching timestamps or restoring UI transactions. Existing checkpoint files are ignored; no manual cleanup required.

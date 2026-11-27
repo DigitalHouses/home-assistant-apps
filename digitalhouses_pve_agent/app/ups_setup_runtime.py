@@ -78,10 +78,21 @@ class UpsSetupManager:
             self.future = None
             self.kind = None
             self.stage = None
+            # Throttle completed inspections even when the preflight fails.
+            # Only a completed explicit apply or driver selection requests an
+            # immediate refresh; an inspection must never schedule itself.
+            if previous == "inspect":
+                self.last_inspected = current
+            elif previous == "apply":
+                self.force_refresh = True
             try:
                 response = future.result()
             except Exception as exc:
                 LOG.warning("UPS setup %s: %s", stage, exc)
+                if previous == "inspect":
+                    # A failed read cannot authorize a stale setup action.
+                    self.latest = {"ready": False, "state": "blocked", "actions": {},
+                                   "issues": ["Preflight UPS/NUT недоступен"]}
                 try:
                     persisted = StateStore(self.state_dir / "ups_setup_operation.json").load()
                     message = str(persisted.get("message") or "Невозможно выполнить операцию")
@@ -99,8 +110,6 @@ class UpsSetupManager:
                         restart_required = True
                 elif isinstance(response, dict):
                     self.latest = response
-                    self.last_inspected = current
-            self.force_refresh = True
             self._publish()
 
         requested: str | None = None

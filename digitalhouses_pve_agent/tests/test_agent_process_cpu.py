@@ -144,3 +144,34 @@ def test_runtime_stores_offline_problem_state_without_queuing_stale_events():
     runtime.observe_agent_cpu(93.0, True, online=True)
     assert len(runtime._pending_problem_transitions) == 1
     assert runtime._pending_problem_transitions[0].current.problem_id == 'agent_cpu_overload'
+
+
+def test_service_cgroup_usage_counts_children_without_subprocesses(tmp_path):
+    from app.agent_process_cpu import service_cpu_reader
+    membership = tmp_path / "cgroup"
+    membership.write_text("0::/system.slice/digitalhouses_pve_agent.service\n")
+    group = tmp_path / "system.slice/digitalhouses_pve_agent.service"
+    group.mkdir(parents=True)
+    stat = group / "cpu.stat"
+    stat.write_text("usage_usec 1000000\nuser_usec 800000\nsystem_usec 200000\n")
+    cpu = AgentProcessCpu(cpu_reader=service_cpu_reader(membership=membership, root=tmp_path))
+    assert cpu.observe(now=0) is None
+    stat.write_text("usage_usec 8500000\n")
+    assert cpu.observe(now=10) == 75
+    assert cpu.snapshot()["measurement_scope"] == "service_cgroup_v2"
+    stat.unlink()
+    assert cpu.observe(now=20) is None
+    assert cpu.snapshot()["overloaded"] is None
+    stat.write_text("usage_usec 9000000\n")
+    assert cpu.observe(now=30) is None  # no mixing counters after a gap
+    stat.write_text("usage_usec 10000000\n")
+    assert cpu.observe(now=40) == 10
+
+
+def test_service_cgroup_never_measures_root_or_other_service(tmp_path):
+    from app.agent_process_cpu import service_cpu_reader
+    membership = tmp_path / "cgroup"
+    (tmp_path / "cpu.stat").write_text("usage_usec 9999999\n")
+    for name in ("/", "/user.slice/session.scope", "/system.slice/other.service"):
+        membership.write_text(f"0::{name}\n")
+        assert service_cpu_reader(membership=membership, root=tmp_path)() is None
