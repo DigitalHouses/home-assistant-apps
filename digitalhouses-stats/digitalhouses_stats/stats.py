@@ -1,42 +1,9 @@
 from __future__ import annotations
 
-import json
-
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from .products import PRODUCTS, PRODUCT_SUCCESSORS, canonical_product, product_name
-
-
-# Read-only normalized relations. A shared UUID within one lineage is one
-# installation; distinct UUIDs remain distinct even if they share a country.
-_NORMALIZED = """
-WITH lineage AS (
-    SELECT key AS original, value AS canonical
-    FROM jsonb_each_text(CAST(:lineage AS jsonb))
-),
-normalized_installations AS (
-    SELECT coalesce(l.canonical, i.product) AS product, i.installation_id,
-           min(i.created_at) AS created_at
-    FROM installations i LEFT JOIN lineage l ON l.original = i.product
-    GROUP BY 1, 2
-),
-normalized_heartbeats AS (
-    SELECT coalesce(l.canonical, h.product) AS product, h.installation_id,
-           h.product AS original_product, h.id, h.received_at,
-           h.version, h.country
-    FROM heartbeats h LEFT JOIN lineage l ON l.original = h.product
-)
-"""
-
-
-def _execute(db: Session, sql: str, params: dict | None = None, *, raw: bool = False):
-    sql = sql.lstrip()
-    if sql.startswith("WITH "):
-        sql = _NORMALIZED + ", " + sql[5:]
-    else:
-        sql = _NORMALIZED + sql
-    return db.execute(text(sql), {"lineage": json.dumps({} if raw else PRODUCT_SUCCESSORS), **(params or {})})
+from .products import PRODUCTS, product_name
 
 
 def _rows(result) -> list[dict[str, object]]:
@@ -44,28 +11,30 @@ def _rows(result) -> list[dict[str, object]]:
 
 
 def summary(db: Session) -> dict[str, object]:
-    row = _execute(db,
+    row = db.execute(
+        text(
             """
             SELECT
-                (SELECT count(*) FROM normalized_installations) AS observed_installations,
+                (SELECT count(*) FROM installations) AS observed_installations,
                 (
                     SELECT count(DISTINCT (product, installation_id))
-                    FROM normalized_heartbeats
+                    FROM heartbeats
                     WHERE received_at >= now() - interval '24 hours'
                 ) AS active_24h,
                 (
                     SELECT count(DISTINCT (product, installation_id))
-                    FROM normalized_heartbeats
+                    FROM heartbeats
                     WHERE received_at >= now() - interval '7 days'
                 ) AS active_7d,
                 (
                     SELECT count(DISTINCT (product, installation_id))
-                    FROM normalized_heartbeats
+                    FROM heartbeats
                     WHERE received_at >= now() - interval '30 days'
                 ) AS active_30d,
-                (SELECT count(*) FROM normalized_heartbeats) AS heartbeats,
-                (SELECT max(received_at) FROM normalized_heartbeats) AS last_heartbeat
+                (SELECT count(*) FROM heartbeats) AS heartbeats,
+                (SELECT max(received_at) FROM heartbeats) AS last_heartbeat
             """
+        )
     ).mappings().one()
 
     last_heartbeat = row["last_heartbeat"]
@@ -81,15 +50,16 @@ def summary(db: Session) -> dict[str, object]:
     }
 
 
-def products(db: Session, *, raw: bool = False) -> list[dict[str, object]]:
-    result = _execute(db,
+def products(db: Session) -> list[dict[str, object]]:
+    result = db.execute(
+        text(
             """
             WITH last_seen AS (
                 SELECT
                     product,
                     installation_id,
                     max(received_at) AS last_seen
-                FROM normalized_heartbeats
+                FROM heartbeats
                 GROUP BY product, installation_id
             )
             SELECT
@@ -104,19 +74,18 @@ def products(db: Session, *, raw: bool = False) -> list[dict[str, object]]:
                 count(*) FILTER (
                     WHERE l.last_seen >= now() - interval '30 days'
                 ) AS active_30d
-            FROM normalized_installations AS i
+            FROM installations AS i
             LEFT JOIN last_seen AS l
               ON l.product = i.product
              AND l.installation_id = i.installation_id
             GROUP BY i.product
-            """, raw=raw
+            """
+        )
     )
     observed = {row["product"]: row for row in _rows(result)}
 
     rows: list[dict[str, object]] = []
     for product in PRODUCTS:
-        if not raw and product.superseded_by is not None:
-            continue
         row = observed.get(product.identifier)
         rows.append(
             {
@@ -138,16 +107,16 @@ def versions(
     *,
     product: str | None = None,
 ) -> list[dict[str, object]]:
-    result = _execute(db,
+    result = db.execute(
+        text(
             """
             WITH latest AS (
                 SELECT DISTINCT ON (product, installation_id)
                     product,
                     installation_id,
                     version,
-                    original_product,
                     received_at
-                FROM normalized_heartbeats
+                FROM heartbeats
                 WHERE (CAST(:product AS text) IS NULL OR product = CAST(:product AS text))
                 ORDER BY
                     product,
@@ -158,7 +127,6 @@ def versions(
             SELECT
                 product,
                 version,
-                original_product <> product AS legacy,
                 count(*) AS observed_installations,
                 count(*) FILTER (
                     WHERE received_at >= now() - interval '7 days'
@@ -167,15 +135,14 @@ def versions(
                     WHERE received_at >= now() - interval '30 days'
                 ) AS active_30d
             FROM latest
-            GROUP BY product, version, legacy
+            GROUP BY product, version
             ORDER BY product, observed_installations DESC, version
-            """,
-        {"product": canonical_product(product) if product else None},
+            """
+        ),
+        {"product": product},
     )
     rows = _rows(result)
     for row in rows:
-        if not row["legacy"]:
-            row.pop("legacy")
         row["name"] = product_name(str(row["product"]))
         for key in ("observed_installations", "active_7d", "active_30d"):
             row[key] = int(row[key])
@@ -189,7 +156,8 @@ def countries(
 ) -> list[dict[str, object]]:
     # Group the latest report from each installation by both country and
     # product, so totals and the per-product breakdown share identical rules.
-    result = _execute(db,
+    result = db.execute(
+        text(
             """
             WITH latest AS (
                 SELECT DISTINCT ON (product, installation_id)
@@ -197,7 +165,7 @@ def countries(
                     installation_id,
                     country,
                     received_at
-                FROM normalized_heartbeats
+                FROM heartbeats
                 WHERE (CAST(:product AS text) IS NULL OR product = CAST(:product AS text))
                 ORDER BY
                     product,
@@ -207,7 +175,7 @@ def countries(
             ),
             first_seen AS (
                 SELECT country, min(received_at) AS first_seen
-                FROM normalized_heartbeats
+                FROM heartbeats
                 GROUP BY country
             )
             SELECT
@@ -225,8 +193,9 @@ def countries(
             JOIN first_seen AS f ON f.country = l.country
             GROUP BY l.country, l.product, f.first_seen
             ORDER BY l.country, observed_installations DESC, l.product
-            """,
-        {"product": canonical_product(product) if product else None},
+            """
+        ),
+        {"product": product},
     )
     by_country: dict[str, dict[str, object]] = {}
     counters = ("observed_installations", "active_7d", "active_30d")
@@ -265,7 +234,8 @@ def history(
     days: int,
     product: str | None = None,
 ) -> list[dict[str, object]]:
-    result = _execute(db,
+    result = db.execute(
+        text(
             """
             WITH series AS (
                 SELECT generate_series(
@@ -280,7 +250,7 @@ def history(
                     count(DISTINCT (product, installation_id))
                         AS active_installations,
                     count(*) AS heartbeats
-                FROM normalized_heartbeats
+                FROM heartbeats
                 WHERE received_at >= (
                     CURRENT_DATE - (:days - 1)
                 )::timestamptz
@@ -297,8 +267,9 @@ def history(
             FROM series AS s
             LEFT JOIN daily AS d USING (day)
             ORDER BY s.day
-            """,
-        {"days": days, "product": canonical_product(product) if product else None},
+            """
+        ),
+        {"days": days, "product": product},
     )
     rows = _rows(result)
     for row in rows:
@@ -315,7 +286,8 @@ def installation_history(db: Session, *, days: int = 7) -> list[dict[str, object
     not an assumed future midnight. Only currently retained registrations can
     be reconstructed: explicitly deleted installations have been removed.
     """
-    result = _execute(db,
+    result = db.execute(
+        text(
             """
             WITH days AS (
                 SELECT generate_series(
@@ -337,18 +309,19 @@ def installation_history(db: Session, *, days: int = 7) -> list[dict[str, object
                 c.day,
                 (
                     SELECT count(*)
-                    FROM normalized_installations i
+                    FROM installations i
                     WHERE i.created_at < c.cutoff
                 ) AS total_installations,
                 (
                     SELECT count(DISTINCT (h.product, h.installation_id))
-                    FROM normalized_heartbeats h
+                    FROM heartbeats h
                     WHERE h.received_at >= c.cutoff - interval '7 days'
                       AND h.received_at < c.cutoff
                 ) AS active_installations
             FROM cutoffs c
             ORDER BY c.day
-            """,
+            """
+        ),
         {"days": days},
     )
     return [
