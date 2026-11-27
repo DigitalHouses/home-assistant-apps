@@ -78,3 +78,9 @@ def test_unavailable_journal_stream_keeps_fallback_possible(monkeypatch):
 
 def test_scheduled_backup_with_empty_upid_id():
     assert guest_events.event_kind("end task UPID:pve:1:2:3:4:vzdump::root@pam: OK") == "backup"
+
+def test_real_pve_84_scheduler_messages_and_bulk_guest_task():
+    for message in ("INFO: Backup job finished successfully", "INFO: Backup job finished with errors"):
+        assert guest_events.event_kind(message) == "backup"
+        assert re.search(guest_events._JOURNAL_GREP, message)
+    assert guest_events.event_kind("<root@pam> end task UPID:pve:1:2:3:startall::root@pam: OK") == "guests"

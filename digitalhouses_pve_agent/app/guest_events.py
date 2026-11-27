@@ -15,11 +15,13 @@ _TASK = (
     r"\bend task UPID:.*?:(?P<kind>qmstart|qmstop|qmshutdown|qmreboot|"
     r"qmreset|qmsuspend|qmresume|qmcreate|qmclone|qmdestroy|qmigrate|"
     r"vzstart|vzstop|vzshutdown|vzreboot|vzsuspend|vzresume|"
-    r"vzcreate|vzclone|vzdestroy|vzmigrate|vzdump):[^:]*:"
+    r"vzcreate|vzclone|vzdestroy|vzmigrate|startall|stopall|vzdump):[^:]*:"
 )
 _TASK_RE = re.compile(_TASK, re.IGNORECASE)
 _QEMU_EXIT_RE = re.compile(r"\bFinished cleanup for\s+\d+\b", re.IGNORECASE)
-_JOURNAL_GREP = rf"(?i)(?:{_TASK}|\bFinished cleanup for\s+\d+\b)"
+_BACKUP_FINISH = r"^INFO: Backup job finished (?:successfully|with errors)\b"
+_BACKUP_FINISH_RE = re.compile(_BACKUP_FINISH, re.IGNORECASE)
+_JOURNAL_GREP = rf"(?i)(?:{_TASK}|\bFinished cleanup for\s+\d+\b|{_BACKUP_FINISH})"
 
 
 def event_kind(message: str) -> str | None:
@@ -27,6 +29,8 @@ def event_kind(message: str) -> str | None:
     task = _TASK_RE.search(message)
     if task is not None:
         return "backup" if task.group("kind").lower() == "vzdump" else "guests"
+    if _BACKUP_FINISH_RE.search(message):
+        return "backup"
     if _QEMU_EXIT_RE.search(message):
         return "guests"
     return None
