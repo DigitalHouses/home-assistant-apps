@@ -1,0 +1,13 @@
+configuration:
+  telemetry_enabled:
+    name: Статистика DigitalHouses
+    description: Согласие на передачу статистики (название приложения, версия, случайный идентификатор установки). https://github.com/DigitalHouses/home-assistant-apps/blob/main/docs/standards/PRODUCT_TELEMETRY_POLICY.md
+  log_level:
+    name: Уровень журнала
+    description: Подробность журнала приложения.
+  auto_scan_interval:
+    name: Интервал сканирования, мин
+    description: 0 отключает периодическое сканирование; первый Scan при запуске и ручной Scan остаются.
+  auto_day_night:
+    name: Автопереход День/Ночь
+    description: При смене внешнего режима обновлять параметры уже работающих устройств с профилем День/Ночь. Не включать выключенные светильники и не запускать музыку.

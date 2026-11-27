@@ -18,7 +18,8 @@ class ScopeTests(unittest.TestCase):
                          {"stats-server"})
 
     def test_shared_day_night(self):
-        for directory in ("digitalhouses_aqara_switch_app",
+        for directory in ("digitalhouses_actions_app",
+                          "digitalhouses_aqara_switch_app",
                           "digitalhouses_system_globals_app"):
             self.assertEqual(select_jobs([directory + "/config.yaml"]),
                              {"aqara-switch-app", "system-globals-app",

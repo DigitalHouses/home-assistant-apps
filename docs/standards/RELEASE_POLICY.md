@@ -307,7 +307,7 @@ New releases are published automatically by the repository integration workflow 
 
 ### 10.1 Dependency-aware validation
 
-The CI scope is determined from the exact tested Git revision and its base. Repository contract and release readiness checks remain mandatory for PRs. Existing product check names are preserved; unrelated product jobs may be skipped only when the complete diff is confined to explicitly mapped product directories. Changes to shared files, the product registry, CI tooling, unknown paths, or an unverifiable/empty diff trigger the full suite. Product changes also validate DH Sync and Stats consumer contracts; Electrica and System Globals are validated together. Renames include both old and new paths. No release provenance, exact revision, or artifact checks are relaxed.
+The CI scope is determined from the exact tested Git revision and its base. Repository contract and release readiness checks remain mandatory for PRs. Existing product check names are preserved; unrelated product jobs may be skipped only when the complete diff is confined to explicitly mapped product directories. Changes to shared files, the product registry, CI tooling, unknown paths, or an unverifiable/empty diff trigger the full suite. Product changes also validate DH Sync and Stats consumer contracts; Actions and System Globals are validated together. Renames include both old and new paths. No release provenance, exact revision, or artifact checks are relaxed.
 
 ### 10.2 Release candidate validation
 

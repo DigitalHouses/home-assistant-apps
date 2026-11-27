@@ -1,0 +1,400 @@
+# Changelog — DigitalHouses Actions App
+
+Historical releases below were published as DigitalHouses Aqara Switch App; their identifiers are retained.
+
+## 0.3.0
+
+- First DigitalHouses Actions App release; canonical identity, new slug, GHCR image, MQTT discovery, telemetry, DH Sync and HA entity prefix. Existing Aqara releases and LAB entity identities remain unchanged.
+- Physical/logical keys, verified Mode Keeper, reusable entity picker, explicit light/switch/cover/climate/media assignments, window guards and observed-state LOG.
+- Day/Night profiles from System Globals with independent CCT and RGB; dual-capability lights prefer valid CCT. Optional adjustment of already active dynamic targets.
+- Motion/presence with Lux condition, confirmed ownership and Auto-OFF; explicit logical and physical key timers.
+- Daily time/sunrise/sunset schedules with offsets and optional one-shot missed ON/OFF recovery after fresh readiness, bounded to 24 hours.
+- Common-action editor and bulk all-lights OFF are excluded pending agreement. HA native groups and hardware acceptance remain limited; experimental, manual start.
+- Migration from Aqara: export bindings JSON before stopping the old app and disabling autostart; install Actions, import JSON, Scan and verify targets before enabling control. Do not run both controllers against the same devices. New slug creates separate HAOS data; retain old app/backup until acceptance. Existing historical artifacts remain immutable.
+
+Historical Aqara releases:
+
+## 0.2.3
+
+- Discover Zigbee2MQTT groups from bridge/groups, exact HA MQTT unique ID and verified member endpoints; support one direct group MQTT command with no HA fallback.
+- Limit configurable brightness/CCT/RGB to the intersection of member light capabilities. Observe group state or derive the initial toggle state from fresh member states; never issue group GET.
+- Group availability and live identity are checked before dispatch. Invalidate stale state/confirmation on membership changes; display a group icon and group-level observed-state confirmation.
+- Existing binding JSON and individual-light transport remain unchanged.
+
+## 0.2.2
+
+- Ingress: export, import and view/copy the app-owned JSON bindings, validated before atomic replacement; no restart.
+- Add toggleable right-half LOG panel, one non-wrapping row per key press, per-target send and observed-state confirmation, HA timezone, and 2-second action highlights.
+- Bounded RAM journal: 500 presses or 24 hours, 90-second confirmation deadline, latest in-flight target only. No persistence, Recorder or additional MQTT writes.
+- Physical Z2M confirmation is a fresh reported state (not physical delivery proof); HA confirmation requires a state change newer than dispatch. Unverified routes, including unsupported direct Z2M groups, remain fail-closed.
+- Existing action routing and Mode Keeper policies unchanged.
+
+## 0.2.1
+
+- Align both Ingress screens with the actual DH Network App 0.1.32 dark-blue visual design (header, typography, buttons, controls and status colors).
+- Retain full-width device rows, horizontal wrapping action summaries and header Scan. Use consistent light-type and relay icons.
+- UI-only release: no changes to binding storage, supported device filtering, action engine, Mode Keeper, MQTT or DH Sync.
+
+## 0.2.0
+
+- Add app-owned Ingress with a full-width device list, actual actions, per-target light/switch assignments, optional brightness, RGB, Kelvin and transition.
+- Start with empty atomic /data/bindings.json; no import of legacy YAML. Configure assignments in Ingress, preserve existing JSON bindings, including orphaned/disabled assignments. Supervisor configuration contains system parameters only.
+- Add startup and scheduled Scan (auto_scan_interval in minutes, default 60; zero disables periodic scan), manual Scan in Ingress, stable hardware keys across rename and read-only diagnostics.
+- Preserve verified direct Z2M light transport, Mode Keeper, grouped light toggles, telemetry and DH Sync retained contract. HA switch targets exclude relays of adopted Aqara inputs. Newly detected devices require explicit enabling before relay control.
+- Adopt the unified App status card with real Refresh and release Check, Supervisor installation/restart; Dashboard only renders application-published data and no longer exposes Scan or binding editing.
+- Live HAOS Ingress and physical E2E tests remain deployment acceptance checks.
+
+## 0.1.19
+
+- Keep Zigbee/MQTT switch control running if an opted-in telemetry state file is malformed or unreadable. Log the error and preserve the original installation credentials instead of silently regenerating identity.
+- Keep the telemetry worker alive on heartbeat state/persistence errors, retaining its existing retry cadence.
+- Handle telemetry deletion persistence failures in its worker without unhandled exceptions.
+- Extend regression tests for telemetry fault isolation while leaving physical relays, DH Sync, consent and server protocol unchanged.
+
+## 0.1.18
+
+- Add explicit opt-in DigitalHouses Stats protocol-v1/policy-v2 telemetry: HTTPS heartbeat on initial activation and approximately daily thereafter, persistent pseudonymous installation identity/token in `/data/telemetry.json`, authenticated history deletion with identity rotation, retry backoff and network-error isolation.
+- Send only product ID, running release version and random UUID. Country is derived by the server, not sent by the App. Never transmit Zigbee inventory, MQTT devices, HA identity, switches, actions, customer data or secrets.
+- Add HAOS `telemetry_enabled: false` consent option with English/Russian disclosure and public policy link. During the safety-gated transition, previously installed Aqara lighting control continues working when consent has not been accepted; no installation identity or outbound telemetry is created until consent is enabled.
+- Admit Aqara product to the DigitalHouses Stats allowlist; the Stats host must deploy the updated registry for ingestion. DH Sync discovery and physical switching remain unchanged.
+- Add tests for consent, persistence, single heartbeat per interval, upgrade version, deletion, invalid stored credentials and MQTT command safety.
+
+## 0.1.17
+
+DH Sync 0.6.0 publication:
+
+- Publish product identity on each MQTT connect/reconnect via the existing
+  client at `DigitalHouses/Global/digitalhouses_aqara_switch_app/sync`,
+  QoS 1, retained, with version from running `APP_VERSION`.
+- Publish the existing standalone operator View at
+  `dashboards/ru/aqara.yaml` (`path: aqara`) for DH Sync discovery.
+- Keep dashboard placement under DH Sync ownership and the opt-in LAB package
+  under `examples/`; no automatic LAB device creation or physical relay change.
+- Add regression tests for MQTT reconnect, payload and canonical View equality.
+
+### PVE-style four-column dashboard layout (no App version change)
+
+- Ship a separate paste-ready `type: sections` Aqara view with four columns,
+  arranged **1 / 1 / 2**: problems/controls/actions, scan/lights,
+  and a wide verified switch→action→light tree.
+- Preserve the operator's `custom:auto-entities` light list, remove the
+  duplicate Scan button and empty headings, and retain working compact
+  `<pre>` Jinja whitespace mechanics.
+- Keep the full dashboard source in sync with the standalone view; document
+  which YAML editor accepts a view versus a full `views:` dashboard.
+- No App version bump, MQTT changes, new entities or Home Assistant restart.
+
+### UI example update (no App version change)
+
+- Compact `<pre>` Aqara tree now displays each assigned light separately,
+  using live Home Assistant state. ON uses the yellow filled
+  `mdi:lightbulb`; OFF uses the gray `mdi:lightbulb-outline` (no slash);
+  ❔ for unavailable/unknown. The canonical single-card and full-dashboard
+  YAML stay identical. HA-reported state is not an individual Zigbee ACK.
+- Lovelace cards are user-owned; copy the changed Markdown card into
+  the existing HA dashboard. No new sensor, App image or configuration migration.
+
+### PVE-style Lovelace UI update (no App version change)
+
+- Rebuild the maintained Aqara status/control card with PVE Agent-like
+  alignment, a browser-only 1-second running timer, connectivity and
+  hardware-problem priority, Supervisor installation progress and
+  a confirmed Supervisor restart action.
+- Retain only supported controls: Scan, read-only Version, conditional
+  Supervisor Install with backup, and Restart. Do not fabricate the
+  unimplemented App Refresh or GitHub version check.
+- Fix stale last-action UI to distinguish `sent`, `partial`,
+  `skipped`, `queued` and `error`. Never treat MQTT publication
+  as an individual physical Zigbee ACK.
+- Extend the compact switch→action→light tree with configured RGB,
+  Kelvin, brightness and transition without new state entities or
+  large line spacing. Align canonical cards and embedded dashboard.
+- Lovelace cards are user-owned: paste the updated dashboard YAML into
+  HA manually. Existing v0.1.16 runtime, Supervisor options and
+  physical switch behavior are unchanged.
+
+## 0.1.16
+
+- Fix native Zigbee2MQTT light RGB capability detection: Z2M exposes
+  `color_xy` and `color_hs` as composite names with `property: color`;
+  composites may not have their own `access` flag. Check writable
+  nested X/Y or hue/saturation components before permitting RGB output.
+- Replace synthetic test fixture with the actual Z2M composite schema and
+  add XY, HS and read-only capability regression tests.
+- Keep existing MQTT `/set`, switch bindings and safe offline behavior
+  unchanged. Run explicit Scan after upgrading to refresh saved light routes.
+
+## 0.1.15
+
+- Add second-priority **HA-native** light routing for verified non-MQTT `light.*`
+  entities such as `light.tv_switch` (Template Light). When no verified Z2M
+  route exists, read the HA Entity Registry and allow only explicitly enabled,
+  uniquely identified `light.*` entries with a non-MQTT integration platform.
+  No new user YAML fields or mandatory Scan: eligibility is verified lazily,
+  cached for at most 60 seconds, and invalidated on Scan.
+- Keep direct Zigbee2MQTT strictly first priority. Physical MQTT lights with
+  missing routes, offline state, no fresh feedback, or broken coordinators
+  **never** fall back to HA REST; unknown and disabled entries also fail closed.
+- Generalize existing HA LAB state reader and executor to authorized HA-native
+  lights, retaining one shared ON/OFF decision across Z2M + LAB + HA-native,
+  fast-press shadows, maintenance/identity gate and per-member skips.
+  HA command acceptance is not physical state confirmation.
+- Add transport classification, REST-read authorization, mixed group and rapid
+  press regression tests. Preserve all six LAB aliases.
+
+## 0.1.14
+
+- Fix v0.1.13 mixed virtual LAB + physical Z2M toggle regression
+  (`ths_livingroom/single_minus`). Preflight eligible light states on both
+  transports before publishing any light command. If ANY participating lamp
+  is OFF, turn every available lamp ON; otherwise turn all available lamps OFF.
+  No per-light blind toggle; no "disco" for mixed starting states.
+- Cache LAB REST results (including failed reads) once per action outside the
+  MQTT mutex. Recheck adopted Aqara switch authorization, Z2M bridge,
+  hardware route, availability, fresh feedback and in-flight shadow.
+  Fail closed if a Scan changes any toggle routing during dispatch.
+- Actual Z2M lamps remain direct MQTT-only; absent/offline/unknown lamps
+  are skipped, with no HA REST fallback. LAB is restricted to six exact
+  virtual entity IDs. Never claim physical confirmation on MQTT publish.
+- Remove ON-only brightness/color attributes when the synchronized LAB
+  toggle resolves to OFF, preserving optional transition.
+- Add mixed five-light regression tests for both mixed-state directions,
+  all-ON, offline, unmapped and rapid repeat. No YAML migration or relay writes.
+
+## 0.1.13
+
+- Hotfix for v0.1.12 regression: explicitly support the **six fixed virtual
+  `light.dh_aqara_lab_*` entities** using Home Assistant Core REST while
+  keeping real Zigbee2MQTT lights on direct MQTT.
+- Virtual LAB commands now first read the actual HA light state and skip
+  `unavailable`/`unknown` rather than issuing a blind command. The existing
+  per-light brightness, Kelvin, RGB and transition settings are preserved.
+- Plain multi-LAB-light toggle is synchronized: any OFF -> turn all ON,
+  all ON -> turn all OFF. A short-lived command shadow avoids rapid-press
+  inversion based on a stale reported state. Never use `light.toggle`
+  independently on individual LAB targets.
+- Physical Z2M targets without verified routes remain skipped and **never**
+  fall back to HA. Mixed virtual/physical group toggles are rejected rather
+  than producing unsynchronized behavior; explicit ON/OFF may mix.
+- Update tests for the reported `double_plus` -> virtual LAB night light
+  error, offline handling, rapid presses and fallback safety. No YAML
+  migration, relay writes, or modification to input/mode-keeper behavior.
+
+## 0.1.12
+
+- Replace HA Core REST light output with verified **direct Zigbee2MQTT
+  MQTT** `[base]/[friendly_name]/set` commands. Existing button YAML
+  syntax stays unchanged; HA Core is needed only for the explicit Scan
+  entity-registry association, not at press time.
+- Explicit Scan resolves `light.*` to Z2M IEEE/coordinator/topic via HA
+  Device/Entity registries and stores the verified routing map privately in
+  the existing Adopt profile. No guessed entity IDs, no new YAML fields.
+- Subscribe to Z2M bridge online-state, per-light availability and state.
+  Never send a light command to known offline/unknown or unverified devices.
+  Unmapped/multi-endpoint lights fail closed, including HA-only virtual lamps.
+  If Z2M device availability is disabled, no light writes are sent.\n  State-readable lamps are polled through rate-limited Z2M `/get` at startup\n  until an actual (non-retained) state report arrives.
+- Plain multi-light YAML uses a **single synchronized decision**: if any
+  available target is OFF, turn all available targets ON; if all are ON,
+  turn them OFF. Send explicit ON/OFF, never individual TOGGLE.
+- In-flight shadow tracks the intended target state for quick repeated
+  button presses; missing confirmation after 5 seconds blocks the next
+  ambiguous toggle rather than replaying stale states.
+- Support optional per-lamp brightness, Kelvin, RGB (to Z2M XY/HS) and
+  transition with capability/range validation. Never send to physical relay
+  or unsupported attributes. Record skipped lamps and publish MQTT status
+  `sent`, `partial`, or `skipped` without claiming physical confirmation.
+- Keep selective Mode Keeper, scoped Maintenance, and input hardware identity
+  checks; no changes to Aqara device control modes.
+- This version supports Z2M light devices with one unambiguous HA MQTT
+  `light.*` entity and single `state` endpoint. Device light groups and
+  HA-only virtual lights are deliberately not auto-resolved; no unsafe
+  fallback to HA when a Zigbee route cannot be confirmed.
+
+## 0.1.11
+
+- Harden v0.1.10 Mode Keeper: bind queued light jobs to the exact Zigbee
+  base topic, coordinator IEEE and friendly name, then recheck adopted
+  hardware and actual per-key decoupled/ON right before dispatch.
+- Reject wired `*_both` and other button bindings in YAML when the required
+  key(s) are not explicitly declared as `decoupled/ON`. Battery remotes
+  remain exempt and work with action-only exposes.
+- Do not interpret generic baseline settings or intentional Maintenance
+  changes as a Mode Keeper diagnostic mismatch. No unmanaged key writes.
+- Preserve v0.1.10 Supervisor settings, one-time Scan semantics and the
+  read-only retained-state startup gate. Output light commands still use HA.
+
+## 0.1.10
+
+- Automatically adopt `keep_mode` **only** for wired Aqara keys observed in
+  `decoupled` with a writable, reported relay channel; captured policy is
+  `left: decoupled/ON`, `right: decoupled/ON`, or `main: decoupled/ON`.
+  Unmanaged `control_relay` keys are absent; battery/remotes have NO
+  `keep_mode` and can use all their supported action events.
+- Global Supervisor App options `maintenance_mode: false` and
+  `restore_delay: 0.6` (seconds, 0.1–30), with per-switch optional
+  `maintenance_mode` inside the existing multiline `switches` YAML.
+- Global/local Maintenance blocks all App light actions (including battery
+  buttons), and changes only managed wired keys to `control_relay`.
+  Relay state is **never** changed when entering Maintenance.
+- On exiting Maintenance or detecting live drift, restore only explicit
+  `keep_mode` keys: first `decoupled`, then `ON` after reported mode
+  confirmation; delay and 60s per-key retry backoff avoid rapid writes.
+  Following MQTT reconnect, request readable mode/relay state via Z2M `/get`
+  and prohibit `/set` based solely on retained data.
+- A physical key can drive App actions only when its required key(s) are
+  confirmed `decoupled/ON`; `*_both` requires both. Unmanaged wired
+  control_relay never receives App action commands. No hardware mode support
+  means no mode gating, which is correct for battery buttons.
+- Initial Scan is non-actuating and captures a keeper policy once; subsequent
+  Scan never overwrites existing keep_mode or silently restores a manually
+  deleted policy. Existing light configuration/actions remain compatible.
+- Does NOT change the light output transport; bound lights continue using
+  Home Assistant REST until the separate MQTT/Zigbee2MQTT output migration.
+
+## 0.1.9
+
+- Place optional brightness, color temperature, RGB and transition fields
+  **under each individual light target**, not globally for all lights.
+  YAML targets may now mix `- light.name` and `- light.name: {brightness_pct: ...}`.
+- Preserve the existing `service: light.turn_on` / `targets:` action wrapper;
+  `service` applies to the action, attributes apply only to the named lamp.
+- Dispatch separates different light parameters into independent HA calls and
+  coalesces ONLY targets with equal service and equal attribute payload.
+- Validate the full batch before enqueue; maintain MQTT action deduplication,
+  queue ordering, and never operate the Aqara physical relay.
+- Backwards-compatible with plain light target lists and legacy shared
+  v0.1.8 action parameters, but new configs should use per-target options.
+- Existing output is Home Assistant REST; direct Zigbee2MQTT MQTT output is a
+  separate proposed transport change and is **not** implied by this release.
+
+## 0.1.8
+
+- Expand Aqara button actions with native HA smart-light commands:
+  `light.toggle`, `light.turn_on`, `light.turn_off`.
+- Keep existing short YAML list syntax as identical `light.toggle` behavior.
+- Rich action syntax accepts `service`, `targets`, optional
+  `brightness_pct`, `brightness_step_pct`, `color_temp_kelvin`,
+  `rgb_color`, `transition`, validated before dispatch and again by HA
+  client; one allowed service call per press for 1–16 lights.
+- Reject conflicting RGB/Kelvin, combined absolute/step brightness, invalid
+  ranges, turn_off with color attributes, all other service domains,
+  unrecognized options, duplicate and non-light targets.
+- Keep existing manual Scan, hardware Adopt/Mode Keeper, Zigbee action
+  whitelisting, duplicate/replay filtering, and no physical relay switching.
+- Existing v0.1.7 App options remain valid; no options migration needed.
+
+## 0.1.7
+
+- Fix Scan ignoring Aqara battery buttons and climate sensors with press
+  events when HA does not expose a switch.* entity for those devices.
+- Keep all eligible Aqara devices under the same `switch.*` config keys:
+  first reuse the exact existing HA switch entity when unambiguous, otherwise
+  derive a stable **logical-only config key** from Zigbee2MQTT friendly_name.
+  Logical-only keys DO NOT create or claim to be HA entities.
+- Collision guard for multiple Zigbee2MQTT networks and similar friendly
+  names: qualify the logical-only key with a network name or deterministic
+  stable suffix, never a physical IEEE.
+- Manual Scan/Adopt retains exact coordinator, IEEE, model, capability and
+  captured physical mode baseline privately. No Zigbee writes on Scan.
+- Compatible hardware replacement retains logical key and existing action
+  bindings. Invalid replacement profiles fail closed.
+- Repeat Scan is idempotent and restores a config row when the operator
+  cleared the YAML while the device remained adopted.
+- No migration is added: experimental installation can be uninstalled
+  and reinstalled to reset hardware profiles.
+
+## 0.1.6
+
+- Clean-install experimental revision: drop v0.1.4/v0.1.5 migration and
+  separate flat bindings list. User will uninstall and reinstall first.
+- Short switch-keyed YAML mapping under App option `switches`, e.g.
+  `- switch.livingroom_switch: {enabled: true, actions: {single: [light.l1, light.l2]}}`.
+- Manual Scan reads HA Device, Area and Entity registries, resolving the
+  **existing** unique switch.* entity_id via confirmed Zigbee IEEE/device_id;
+  never invents an HA entity. No or ambiguous switch.* causes scan problem.
+- Keep actual coordinator, physical IEEE, captured model/modes internal to
+  /data; bind user assignments to stable HA switch entity_id.
+- Each supported press toggles 1..16 explicit light.* targets in **one**
+  light.toggle HA service request. No physical relay ON/OFF writes.
+- Explicit Scan may re-adopt a compatible replacement whose HA switch entity
+  ID remains the same, preserving existing actions.
+- No automatically created button, event or switch entities in Home Assistant.
+- Supervisor's native form cannot render dynamic multi-level YAML keys;
+  switch assignments are therefore a compact multiline YAML string field.
+
+## 0.1.5
+
+- Replace the opaque, folded `configuration_yaml` text editor with two native
+  Supervisor lists: **Выключатели** (IEEE, Zigbee2MQTT friendly name,
+  enabled) and **Назначения** (switch IEEE, button press, light.*).
+- Explicitly typed UI lists support editing, adding and removing mappings;
+  one valid configured press executes only a single `light.toggle`.
+- Keep adopted hardware fingerprint, model, area and physical mode settings
+  as private persistent App data, not editable by the dashboard or Supervisor
+  UI. New Scan/Adopt appends newly discovered buttons to the structured list.
+- One-time startup migration of v0.1.4 nested room configuration using the
+  raw own-App Supervisor API: back up the original YAML, preserve complete
+  adopted profiles and existing valid light.toggle bindings before committing
+  the new options. Abort without starting MQTT control if migration is unsafe.
+- Never perform automatic Scan, edit physical relay state or trigger lights
+  on installation. Existing App version source and image tag remain immutable.
+
+## 0.1.4
+
+- Fix Scan/Adopt failing with `HA WebSocket authorization failed` due to
+  missing Supervisor Home Assistant Core API access permission.
+- Declare `homeassistant_api: true` in the App manifest, required by
+  `ws://supervisor/core/websocket` Device/Area Registry lookup and by
+  `http://supervisor/core/api/services/light/toggle`.
+- Retain least-privilege `hassio_role: default` and existing MQTT access.
+  No changes to Zigbee device actions, saved adoption data or user bindings.
+- Updating the App reloads its Supervisor permissions; no user tokens,
+  MQTT secrets or Home Assistant configuration changes are necessary.
+
+## 0.1.3
+
+- First installable immutable Home Assistant App release, delivered through
+  GHCR as `ghcr.io/digitalhouses/digitalhouses_aqara_switch_app:0.1.3`
+  for amd64 and aarch64.
+- Enable installation through the DigitalHouses repository in
+  Home Assistant → Settings → Apps → App Store.
+- Preserve explicit user-driven Scan/Adopt, saved physical settings Mode Keeper,
+  and narrowly configured single-light `light.toggle` on Aqara button action.
+- Safe initial options: `rooms: []`, no targets bound, no lighting action
+  until the operator explicitly adds a binding. Manual App boot.
+- Operational limitation: real physical Aqara button-to-light E2E and hardware
+  light confirmation are still pending field acceptance. Existing automation
+  of the same physical press must be disabled before binding a light.
+
+## 0.1.2
+
+- MVP: explicit Scan is Adopt of new Aqara switches and captures confirmed
+  writable mode/settings values as immutable baseline in Supervisor Options.
+- Mode Keeper observes newly reported drift and requests restoration of only
+  those adopted writable configuration keys, with a 60s minimum retry spacing.
+  Never rewrites a physical ON/OFF output or sets unknown settings.
+- Bound event Dispatcher: accepts non-retained matching Aqara action only for
+  the saved coordinator/IEEE/profile; serially calls HA light.toggle for one
+  explicitly configured light entity. Ignores unbound, duplicate/replayed and
+  non-Aqara events.
+- HA diagnostic last_action sensor: queued, accepted (HA call), error.
+  Accepted is NOT proof that the target light physically changed state.
+- No Zigbee group verification, automatic assignment, HA UI binding editor,
+  power recovery, or automatic physical relay control in this MVP.
+
+## 0.1.1
+
+- First executable manual-scan Home Assistant App pilot; boot remains manual.
+- MQTT observes Zigbee2MQTT bridge inventory and device state without Zigbee writes.
+- UI's explicit Scan button imports only new Aqara button devices; known entries are never overwritten.
+- Home Assistant Device/Area Registry matching through Supervisor WebSocket proxy.
+- Store one YAML tree in Supervisor App Options and save last scan results under /data.
+- MQTT Discovery publishes version, scan button, operation state, tree details and problem details.
+- Physical relay Mode Keeper, Maintenance Mode and button Dispatcher remain disabled.
+
+## 0.1.0
+
+- Create canonical HAOS App repository scaffold, translations, icons and test harness.
+- Record manual-only, idempotent scan and declarative Aqara key/action configuration.
+- Document HA Area grouping and the Mode Keeper / Maintenance Mode safety requirements.
+- No active device scan or control in this version; not a functional published release.

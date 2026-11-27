@@ -1,0 +1,39 @@
+name: DigitalHouses Actions App
+version: 0.3.0
+slug: digitalhouses_actions_app
+description: Device actions, Mode Keeper, direct Zigbee2MQTT and verified HA-native light control.
+url: https://github.com/DigitalHouses/home-assistant-apps/tree/main/digitalhouses_actions_app
+arch:
+  - amd64
+  - aarch64
+image: ghcr.io/digitalhouses/digitalhouses_actions_app
+startup: application
+boot: manual
+init: false
+stage: experimental
+backup: cold
+hassio_api: true
+hassio_role: default
+# HA entity metadata, device registry and explicitly assigned HA-native targets.
+homeassistant_api: true
+ingress: true
+ingress_port: 8099
+panel_title: DH Actions
+panel_icon: mdi:light-switch
+panel_admin: true
+services:
+  - mqtt:need
+options:
+  telemetry_enabled: false
+  log_level: info
+  maintenance_mode: false
+  auto_day_night: false
+  auto_scan_interval: 60
+  restore_delay: 0.6
+schema:
+  telemetry_enabled: bool
+  log_level: list(debug|info|warning|error)
+  maintenance_mode: bool
+  auto_day_night: bool
+  auto_scan_interval: int(0,1440)
+  restore_delay: float(0.1,30)

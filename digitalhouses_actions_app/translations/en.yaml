@@ -1,0 +1,13 @@
+configuration:
+  telemetry_enabled:
+    name: DigitalHouses statistics
+    description: Consent to collect statistics (product name, version, random installation ID). https://github.com/DigitalHouses/home-assistant-apps/blob/main/docs/standards/PRODUCT_TELEMETRY_POLICY.md
+  log_level:
+    name: Log level
+    description: Application log verbosity.
+  auto_scan_interval:
+    name: Auto scan interval (minutes)
+    description: 0 disables periodic scanning; startup and manual scans remain available.
+  auto_day_night:
+    name: Automatic Day/Night transition
+    description: On external mode changes, update already active Day/Night targets without switching on lights or starting playback.

@@ -1,0 +1,37 @@
+# Last action is App-owned; sent != physical Zigbee acknowledgement.
+type: markdown
+content: |-
+  {% set e = 'sensor.dh_actions_app_last_action' -%}
+  {% set status = states(e) -%}
+  {% set a = states[e].attributes if states[e] is defined else {} -%}
+  {% if status in ['unknown','unavailable'] -%}
+  ⚪ Нет связи с приложением или данных о последнем нажатии.
+  {% elif status == 'idle' -%}
+  *После запуска ещё не было назначенных нажатий.*
+  {% else -%}
+  {% if status == 'sent' -%}
+  ✅ **Отправлено** · Команда передана выбранным исполнителям.
+  {% elif status == 'partial' -%}
+  🟠 **Частично выполнено** · Некоторые светильники пропущены.
+  {% elif status == 'skipped' -%}
+  ⚠️ **Пропущено** · Команды светильникам не отправлены.
+  {% elif status == 'queued' -%}
+  ⏳ **В очереди** · Ожидается обработка.
+  {% elif status == 'error' -%}
+  🔴 **Ошибка выполнения**
+  {% elif status == 'accepted' -%}
+  ✅ **Команда принята** · Статус устаревшего исполнителя.
+  {% else -%}
+  **Состояние:** {{ status | e }}
+  {% endif %}
+
+  **Выключатель:** `{{ (a.switch or '—') | e }}`  
+  **Нажатие:** `{{ (a.action or '—') | e }}`  
+  **Отправлено:** {{ (a.target or '—') | e }}  
+  **Время:** {{ (a.at or '—') | e }}
+  {% if a.error -%}
+  **Причина:** {{ a.error | e }}
+  {% endif -%}
+
+  *MQTT/HA подтвердили принятие к отправке, но не физическое переключение светильника.*
+  {% endif %}
