@@ -171,7 +171,7 @@ Current maintained reference YAMLs:
 - [PVE Agent](../../digitalhouses_pve_agent/examples/dh_pve_agent_card_ru.yaml)
 - [Plex Agent](../../digitalhouses_plex_agent/examples/lovelace/plex_agent_card_ru.yaml)
 - [Internet App](../../digitalhouses_internet_app/examples/lovelace/internet_app_card_ru.yaml)
-- [Recorder App](../../digitalhouses_recorder_app/examples/lovelace/recorder_app_card_ru.yaml)
+- [Recorder App](../../digitalhouses_recorder_app/dashboards/ru/10_recorder.yaml)
 
 These examples establish the working shape, **not a claim that every implementation already passes every clause**. Observed parity gaps (for example PVE's tenths-of-a-second foreground display and product-specific Refresh implementations) should be aligned during the respective product's next focused change without rewriting already functioning business logic.
 

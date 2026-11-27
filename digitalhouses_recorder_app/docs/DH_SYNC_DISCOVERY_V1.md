@@ -58,7 +58,7 @@ controls and optional telemetry consent are unchanged.
 | Other locales | Not published; DH Sync 0.4 only synchronizes Russian |
 
 The source contains the original maintained Recorder dashboard from
-`examples/lovelace/dh_recorder_app_dashboard.yaml`, with informative comments
+the former Lovelace example (now superseded by `dashboards/ru/10_recorder.yaml`), with informative comments
 at the top. After removing that comment header, the Lovelace body is
 byte-for-byte identical to the maintained example (original Git blob
 `45dd279a425c0165deccdb0b53e6d9fe6b37a8af`). No card, graph, control,

@@ -38,33 +38,23 @@ The completed marker is idempotent. Rolling back from 0.1.16 to bridge release
 0.1.15 does not reactivate the legacy mirror. Releases 0.1.14 and older predate
 the completed-marker behavior and are not safe rollback targets after cleanup.
 
-## DH Sync 0.4 automatic YAML resources (MQTT Discovery v1)
+## DH Sync 0.6 canonical resources
 
 Recorder publishes a retained QoS 1 product source on each MQTT
-connect/reconnect at
-`DigitalHouses/Global/digitalhouses_recorder_app/sync`. Its fixed
-`repository` is `https://github.com/DigitalHouses/home-assistant-apps`,
-and `product_path` is `digitalhouses_recorder_app`.
+connect/reconnect at `DigitalHouses/Global/digitalhouses_recorder_app/sync`.
 The JSON contains `schema`, `product_id`, `type`, `version`,
 `repository`, `product_path`; the running version is informational.
 
-DH Sync 0.4 accepts sources based **only** on GitHub owner
-`DigitalHouses` and automatically synchronizes canonical resources from
-GitHub's default branch on discovery and periodically. Recorder publishes
-`dashboards/ru/10_recorder.yaml` with stable Lovelace `path: recorder`.
-No separate Recorder package exists. `examples/` files are not synchronized.
-Metadata version comments are informational, not compatibility gates.
-The previous pinned-commit / Preview / Apply flow is obsolete.
+The canonical resources are:
 
-DH Sync compares local YAML by view `path`, backs up changes, and atomically
-updates `/config/dashboards/dh/views/` without confirmation; it skips
-conflicts and never writes Lovelace Storage. Existing user-edited YAML
-matching this path can therefore be replaced automatically. No HA restart,
-product update, HACS installation or deletion of missing resources is performed.
-Availability, LWT, MQTT Discovery identities, DB/storage monitoring, and
-telemetry consent are unchanged. See
-[Recorder DH Sync integration](docs/DH_SYNC_DISCOVERY_V1.md) and the
-[resource standard](../docs/standards/DH_SYNC_DEVELOPER_STANDARD.md).
+- [Russian view](dashboards/ru/10_recorder.yaml), stable `path: recorder`.
+- [Common Recorder package](packages/common/dh_recorder_app.yaml).
+- [Russian notification package](packages/locales/ru/dh_recorder_app_notification_package.yaml).
+
+DH Sync discovers canonical YAML from the repository default branch.
+Dashboard placement is owned by DH Sync, not the Recorder App. Resource changes
+must remain compatible with installed App versions. DH Sync is optional.
+See the [current standard](../docs/standards/DH_SYNC_DEVELOPER_STANDARD.md).
 
 ## Common runtime diagnostics
 
@@ -159,7 +149,7 @@ retained-row count remains in the hourly slow group.
 
 For Recorder activity bar charts, use the live period counters directly:
 `db_current_hour_records` grouped by hour and `db_today_records` grouped by
-date. The maintained Lovelace example uses `mini-graph-card` with
+date. The canonical Lovelace view uses `mini-graph-card` with
 `aggregate_func: delta`; the current incomplete period remains visible and
 empty history buckets render as zero.
 
