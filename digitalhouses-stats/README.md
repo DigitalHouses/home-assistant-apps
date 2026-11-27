@@ -79,3 +79,7 @@ timer every minute, independently of ingestion.
 See `deploy/digitalhouses-stats-country-notifier.service`,
 `deploy/digitalhouses-stats-country-notifier.timer`, and
 `integrations/ha_country_notification_package.yaml`.
+
+### Product succession
+
+Actions App supersedes Aqara Switch App. Both IDs remain in the catalog and telemetry allowlist; the historical Aqara ID is deprecated and is not release-managed. Installations and heartbeats remain keyed by the original product ID. Do not rewrite or combine historical records automatically.

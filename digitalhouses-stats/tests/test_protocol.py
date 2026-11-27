@@ -107,6 +107,7 @@ def test_product_registry_is_complete_and_drives_allowlist() -> None:
         "digitalhouses_climate_app",
         "digitalhouses_presence_app",
         "digitalhouses_zigbee_monitor_app",
+        "digitalhouses_aqara_switch_app",
         "digitalhouses_actions_app",
         "digitalhouses_network_app",
         "digitalhouses_sync_app",
@@ -176,3 +177,17 @@ def test_heartbeat_payload_accepts_system_globals_policy_v2() -> None:
     assert payload.product == "digitalhouses_system_globals_app"
     assert payload.telemetry_policy_version == 2
     assert payload.product in ALLOWED_PRODUCTS
+
+@pytest.mark.parametrize("product,version", [
+    ("digitalhouses_aqara_switch_app", "0.2.0"),
+    ("digitalhouses_actions_app", "0.3.0"),
+])
+def test_actions_and_legacy_aqara_accepted_separately(product, version) -> None:
+    payload = HeartbeatPayload(
+        schema=1,
+        telemetry_policy_version=2,
+        installation_id=uuid.uuid4(),
+        product=product,
+        version=version,
+    )
+    assert payload.product == product
