@@ -260,6 +260,8 @@ def build_full_discovery_payload(
     components["agent_process_cpu_usage"] = {
         "platform": "sensor",
         "name": "PVE Agent CPU usage",
+        "json_attributes_topic": f"{topics.base}/agent/process_cpu/state",
+        "json_attributes_template": "{{ {'measurement_scope': value_json.measurement_scope | default('process')} | tojson }}",
         "unique_id": uid("agent_process_cpu_usage"),
         "default_entity_id": "sensor.dh_pve_agent_process_cpu_usage",
         "state_topic": f"{topics.base}/agent/process_cpu/state",
