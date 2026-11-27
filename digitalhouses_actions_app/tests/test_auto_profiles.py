@@ -67,6 +67,9 @@ class AutoProfileTests(unittest.TestCase):
                         app._adapt_home_profile(job[6],job[5])
                         if state=="on":
                             ha.execute.assert_called_once_with({"service":"light.turn_on","target":{"entity_id":[TV]},"data":{"brightness_pct":brightness,**expected}})
+                            logged=next(r["targets"][TV] for r in app.event_log.snapshot()["rows"] if TV in r["targets"])
+                            self.assertEqual(logged["parameters"],{"brightness_pct":brightness,**expected})
+                            self.assertEqual(logged["status"],"accepted")
                         else:ha.execute.assert_not_called()
 
     def test_explicit_conflicting_colors_and_legacy_dual_skip(self):
@@ -210,6 +213,10 @@ class AutoProfileTests(unittest.TestCase):
                 app._adapt_home_profile(app._jobs.get_nowait()[6])
                 payloads=[json.loads(body) for topic,body,_ in app.client.published if topic.endswith("/set")]
                 self.assertEqual(payloads,[{"brightness":102,**expected}] if state=="on" else [])
+                if state=="on":
+                    logged=next(r["targets"][PHYSICAL] for r in app.event_log.snapshot()["rows"] if PHYSICAL in r["targets"])
+                    self.assertEqual(logged["parameters"],{"brightness_pct":40,**({"color_temp_kelvin":2700} if choice=="cct" else {"rgb_color":[0,255,0]})})
+                    self.assertEqual(logged["status"],"accepted")
                 ha.execute.assert_not_called()
 
     def test_group_requires_all_members_online_fresh_on(self):

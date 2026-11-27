@@ -615,6 +615,14 @@ function applyLiveState(){
   for(const wrap of document.querySelectorAll(".light-test"))updateTestControl(wrap);
   for(const [k,v] of recent)if(v<=Date.now())recent.delete(k);
 }
+function logLightParameters(p){
+  const values=[];
+  if(p.brightness_pct!=null)values.push("Яркость "+p.brightness_pct+"%");
+  if(p.color_temp_kelvin!=null)values.push("CCT "+p.color_temp_kelvin+" K");
+  if(Array.isArray(p.rgb_color))values.push("RGB ("+p.rgb_color.join(", ")+")");
+  if(p.transition!=null)values.push("переход "+p.transition+" с");
+  return values.join(" · ");
+}
 function renderLogRow(row){
   const n=el("div",undefined,"log-row");
   n.append(el("span",stamp(row.at),"log-time"),el("span",row.device+" · "+row.action+"."));n.title=row.network;
@@ -623,12 +631,17 @@ function renderLogRow(row){
     const ico=targetIcon(target,eid);markIcon(ico,t.observed||t.before);
     const before=(t.before||"?").toUpperCase(),desired=(t.desired||"?").toUpperCase();
     const confirmed=t.status==="confirmed",sent=["sent","confirmed","timeout","superseded","accepted"].includes(t.status);
-    const change=confirmed?before+" → "+desired:sent?before+" ⇢ "+desired:t.status==="queued"?"…":"пропущено";
+    const params=logLightParameters(t.parameters||{});
+    const change=params&&sent?(before===desired?"":before+" ⇢ "+desired+" · ")+"Запрошено: "+params
+      :confirmed?before+" → "+desired:sent?before+" ⇢ "+desired:t.status==="queued"?"…":"пропущено";
     const mark=confirmed?"✓✓":sent?"✓"+(["timeout","superseded"].includes(t.status)?" ⚠":""):t.status==="queued"?"…":"⚠";
     const check=el("span",mark,"log-check "+(confirmed?"":t.status==="sent"?"sent":"problem"));
     check.title={confirmed:"Получено наблюдаемое состояние; не физический ACK",sent:"Команда отправлена, ожидается состояние",accepted:"Команда принята; завершение не подтверждено",timeout:"Нет подтверждения за 90 сек.",superseded:"Заменена более новой командой",queued:"В очереди",skipped:"Пропущено"}[t.status]||"";
     if(target?.group&&confirmed)check.title="Состояние группы Z2M получено; не подтверждение каждого участника (возможен optimistic state)";
-    item.title=t.reason||check.title;item.append(ico,el("span",eid.split(".")[1]||eid),el("span",change),check);n.append(item);
+    item.title=t.reason||check.title;item.append(ico,el("span",eid.split(".")[1]||eid),el("span",change),check);
+    if(params&&t.status==="accepted")item.append(el("span","параметры не подтверждены","muted"));
+    if(t.status==="skipped"&&t.reason)item.append(el("span",t.reason,"muted"));
+    n.append(item);
   }
   if(row.reason)n.append(el("span",row.reason,"muted"));
   return n;

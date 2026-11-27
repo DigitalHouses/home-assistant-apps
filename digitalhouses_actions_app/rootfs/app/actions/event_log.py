@@ -73,7 +73,7 @@ class EventLog:
                     row["targets"][eid].update(status="skipped",reason=str(reason or "Пропущено")[:160])
             self._touch(row)
 
-    def sent(self, rid, eid, route, before, desired, started=None, sent_at=None, accepted_only=False):
+    def sent(self, rid, eid, route, before, desired, started=None, sent_at=None, accepted_only=False, parameters=None):
         # Called only after accepted dispatch. MQTT runtime holds its mutex.
         with self.lock:
             row = self.rows.get(rid)
@@ -91,6 +91,10 @@ class EventLog:
             row["targets"][eid].update(status="accepted" if accepted_only else "sent",
                 before=before.lower() if before in ("ON","OFF","on","off") else None,
                 desired=desired.lower(), sent_at=sent_at or datetime.now(timezone.utc).isoformat())
+            if parameters:
+                # Requested values, not a claim that the physical light
+                # applied them. Never infer color confirmation from ON.
+                row["targets"][eid]["parameters"]=deepcopy(parameters)
             if not accepted_only:
                 self.pending[route]=(rid,eid,now)
             self._touch(row)
