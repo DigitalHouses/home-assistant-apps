@@ -52,6 +52,7 @@ It is independent of any Home Assistant dashboard.
   fixed/dynamic overlaps, offline targets and groups without all members
   confirmed ON. No retained startup replay or playback start. HA light
   state-check and parameter call are not atomic; live hardware tests remain.
+- **Action LOG:** local SQLite /data/actions_log.sqlite3, latest 500 rows within 24 hours; retained across restarts and upgrades, no pending action replay. Ingress LOG → Выгрузить exports all retained rows as JSON. Profile confirmation requires matching reported brightness and selected color, not only ON; Z2M values are checked in wire units (including XY/HS), HA values in native attributes. Reports may be optimistic; not physical ACK. Uses existing events/observation without extra polling; SQLite failure leaves control working with a visible RAM fallback.
 - **Sensors (DEV):** discover HA binary_sensor
   motion/occupancy/presence and same-device illuminance in lx. Sensor rows
   use the existing versioned JSON bindings store alongside legacy switch rows.

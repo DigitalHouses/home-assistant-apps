@@ -367,6 +367,13 @@ def live_log(app, cursor, generation):
         states = {eid:app.observed_target_state(eid) for eid in ids}
     return {**app.event_log.snapshot(cursor,generation),"states":states}
 
+def export_log(app):
+    # Use the same locked, pruned projection as Ingress. No external reads.
+    snapshot=app.event_log.snapshot()
+    return {"schema":1,"timezone":snapshot["timezone"] or "UTC",
+            "storage":snapshot["storage"],"storage_error":snapshot["storage_error"],
+            "limit":snapshot["limit"],"rows":list(reversed(snapshot["rows"]))}
+
 def browse_media(app,payload):
     if not isinstance(payload,dict) or set(payload) not in ({"entity_id"},{"entity_id","ref"}):
         raise CatalogError("Invalid media browser request")
@@ -410,6 +417,8 @@ def start_ingress(app, port=8099):
                     self.reply(200,snapshot(app))
                 elif path == "/api/bindings":
                     self.reply(200,export_bindings(app))
+                elif path == "/api/log/export":
+                    self.reply(200,export_log(app))
                 elif path == "/api/log":
                     query=parse_qs(urlsplit(self.path).query)
                     cursor=max(0,int(query.get("cursor",["0"])[0]))

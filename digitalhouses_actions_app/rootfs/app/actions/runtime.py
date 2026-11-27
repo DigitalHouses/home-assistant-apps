@@ -27,6 +27,7 @@ from .schedule_engine import ScheduleEngine
 from . import readiness
 from .control import HAClient, light_commands, verified_adopted_switch
 from .mqtt_lights import plan_batch
+from . import profile_feedback
 from .lab_lights import (LAB_LIGHTS, authorized_ha_light_ids,
                          partition_commands, plan_lab, SHADOW_SECONDS as HA_SHADOW_SECONDS)
 from .light_routes import current_route, group_observed_state
@@ -129,7 +130,8 @@ class Application:
     def __init__(self, mqtt_module, *, options: SupervisorOptions | None = None,
                  registry: HARegistryClient | None = None,
                  last_scan_path: Path = Path("/data/last_scan.json"),
-                 version: str | None = None, ha_client: HAClient | None = None):
+                 version: str | None = None, ha_client: HAClient | None = None,
+                 event_log_path: Path | None = None):
         self.version = version if version is not None else os.environ["APP_VERSION"]
         self.options = options or SupervisorOptions()
         self.registry = registry or HARegistryClient(os.environ.get("SUPERVISOR_TOKEN", ""))
@@ -160,7 +162,7 @@ class Application:
         self._stop = threading.Event()
         self._ha_client = ha_client
         self._jobs = queue.Queue(maxsize=64)
-        self.event_log = EventLog()
+        self.event_log = EventLog(event_log_path)
         self._last_action = {"state": "idle", "at": None, "switch": None,
                              "action": None, "target": None, "error": None}
         self._last_action_at = {}
@@ -560,6 +562,7 @@ class Application:
                         self._light_shadows.pop(ident, None)
                         self._light_observed_at.pop(ident, None)
                         self._fresh_fields.discard((base, name, "state"))
+                        self.event_log.invalidate(("z2m",*ident))
             return
         parsed = bridge_path(message.topic)
         if parsed:
@@ -583,6 +586,7 @@ class Application:
                                 self._light_availability.pop(ident, None)
                                 self._light_shadows.pop(ident, None)
                                 self._fresh_fields.discard((base, ident[1], "state"))
+                                self.event_log.invalidate(("z2m",*ident))
                         self.relay_timers.invalidate(base)
                     return
                 if suffix=="groups":
@@ -654,6 +658,12 @@ class Application:
                             self._light_observed_at[ident] = time.monotonic()
                             if not getattr(message, "dup", False):
                                 self.event_log.observe(("z2m", *ident), data["state"])
+                                if (self.event_log.profile_pending(("z2m",*ident))
+                                        and self._light_availability.get(ident)=="online"
+                                        and net.get("bridge_state")=="online"
+                                        and any(r["base_topic"]==base and r["friendly_name"]==name and current_route(r,net)
+                                                for r in self.config.get("light_routes",{}).values())):
+                                    self.event_log.observe_light(("z2m",*ident),data)
                             shadow = self._light_shadows.get(ident)
                             if shadow and shadow["value"] == data["state"]:
                                 self._light_shadows.pop(ident, None)
@@ -939,7 +949,8 @@ class Application:
                             self.sensor_engine.profile_changes.pop(eid,None)
                             raise ActionError("MQTT profile command rejected")
                         handled.update(members)
-                        self.event_log.sent(rid,eid,("z2m",*ident),"on","off" if zero else "on",accepted_only=not zero,parameters=data)
+                        self.event_log.sent(rid,eid,("z2m",*ident),"on","off" if zero else "on",accepted_only=not zero,parameters=data,
+                                            expected_parameters=profile_feedback.z2m_expected(payload) if not zero else None)
                         continue
                 if self._ha_client is None:self._ha_client=HAClient(os.environ.get("SUPERVISOR_TOKEN",""))
                 if eid.startswith("light."):
@@ -968,7 +979,8 @@ class Application:
                     zero=data.get("brightness_pct")==0
                     at=_iso_now()
                     self._ha_client.execute({"service":"light.turn_off" if zero else "light.turn_on","target":{"entity_id":[eid]},"data":{k:v for k,v in data.items() if k=="transition"} if zero else data})
-                    self.event_log.sent(rid,eid,("ha",eid),"on","off" if zero else "on",sent_at=at,accepted_only=not zero,parameters=data)
+                    self.event_log.sent(rid,eid,("ha",eid),"on","off" if zero else "on",sent_at=at,accepted_only=not zero,parameters=data,
+                                        expected_parameters=profile_feedback.ha_expected(data) if not zero else None)
                 else:
                     entities=self.registry.fetch_entities()
                     matches=[e for e in entities if e.get("entity_id")==eid]
@@ -1251,7 +1263,8 @@ class Application:
                                         if route.get("kind")=="group" else net.get("states",{}).get(ident[1],{}).get("state"))
                             self.event_log.sent(rid,plan["light"],("z2m",*ident),previous,plan["state"],
                                 accepted_only=plan["light"] in profile_lights and plan["state"]=="ON",
-                                parameters=profile_parameters.get(plan["light"]) if plan["state"]=="ON" or plan["light"] in zero_profile_lights else None)
+                                parameters=profile_parameters.get(plan["light"]) if plan["state"]=="ON" or plan["light"] in zero_profile_lights else None,
+                                expected_parameters=profile_feedback.z2m_expected(plan["payload"]) if plan["light"] in profile_lights and plan["state"]=="ON" else None)
                             self._light_shadows[ident] = {
                                 "value": plan["state"], "at": time.monotonic()}
                             if sensor_job:self.sensor_engine.dispatched(name,action,coordinator,plan["light"],plan["state"].lower())
@@ -1361,7 +1374,8 @@ class Application:
                             for eid in ids:
                                 self.event_log.sent(rid,eid,("ha",eid),lab_state_cache.get(eid,(False,None))[1] if lab_state_cache.get(eid,(False,None))[0] else None,value, sent_at=dispatched_at,
                                     accepted_only=eid in profile_lights and value=="on",
-                                    parameters=(call.get("data",{}) if value=="on" else profile_parameters.get(eid)) if eid in profile_lights and (value=="on" or eid in zero_profile_lights) else None)
+                                    parameters=(call.get("data",{}) if value=="on" else profile_parameters.get(eid)) if eid in profile_lights and (value=="on" or eid in zero_profile_lights) else None,
+                                    expected_parameters=profile_feedback.ha_expected(call.get("data",{})) if eid in profile_lights and value=="on" else None)
                                 self._ha_shadows[eid] = {
                                     "state":value, "at": time.monotonic()}
                                 if sensor_job:self.sensor_engine.dispatched(name,action,coordinator,eid,value)
@@ -1612,6 +1626,8 @@ class Application:
                 self.schedule_engine.baseline(zone,self.sensor_engine.states.get("sun.sun"))
         def changed(eid,state):
             with self._mutex:
+                if eid.startswith("light.") and isinstance(state,dict) and state.get("entity_id")==eid:
+                    self.event_log.observe_light(("ha",eid),state)
                 self.sensor_engine.changed(eid,state)
                 if eid=="sun.sun":self.schedule_engine.observe_sun(state)
         while not self._stop.is_set():
@@ -1710,5 +1726,6 @@ class Application:
             self._stop.set()
             web.shutdown()
             web.server_close()
+            self.event_log.close()
             if self.telemetry_runner is not None:
                 self.telemetry_runner.stop()

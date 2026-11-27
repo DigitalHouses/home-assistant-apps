@@ -78,7 +78,7 @@ label{display:inline-flex;align-items:center;gap:7px;flex-wrap:wrap;color:#ccd8e
 .workspace.log-open>main{flex:0 0 50%;width:50%}
 #log-panel{position:sticky;top:0;align-self:flex-start;width:50%;min-width:0;background:#0d1724;border-left:1px solid #32475f;height:calc(100vh - 80px);display:flex;flex-direction:column}
 #log-panel[hidden]{display:none}
-.log-header{display:flex;align-items:center;gap:10px;justify-content:space-between;padding:14px 12px;border-bottom:1px solid #304154;background:#192b41}
+.log-header{display:flex;flex-wrap:wrap;align-items:center;gap:10px;justify-content:space-between;padding:14px 12px;border-bottom:1px solid #304154;background:#192b41}
 .log-legend{font-size:11px;padding:7px 12px;color:#aebed1;white-space:normal}
 #log-scroll{overflow:auto;flex:1;min-height:0}
 #log-rows{width:max-content;min-width:100%}

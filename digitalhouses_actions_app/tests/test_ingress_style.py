@@ -118,6 +118,9 @@ for(const domain of ['light','switch','cover','climate','media_player','future_d
         import subprocess
         js=(WEB/"app.js").read_text()
         self.assertIn("logLightParameters(t.parameters||{})",js)
+        self.assertIn("logLightParameters(t.observed_parameters)",js)
+        self.assertIn('api("log/export")',js)
+        self.assertIn('id="export-log"',(WEB/"index.html").read_text())
         self.assertIn('t.status==="accepted"',js)
         self.assertIn('t.status==="skipped"&&t.reason',js)
         if not shutil.which("node"):
