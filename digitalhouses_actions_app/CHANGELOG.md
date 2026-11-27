@@ -2,6 +2,10 @@
 
 Historical releases below were published as DigitalHouses Aqara Switch App; their identifiers are retained.
 
+## 0.3.7
+
+- Record observation timestamps for all confirmed operations, not only profile changes. Expose dispatch_ms (journal event to dispatch timestamp) and confirmation_ms (dispatch to matching observation receipt) in LOG and JSON export. Missing legacy observation timestamps remain unknown; no database migration or invented measurements. Label received parameters as «Подтверждение». No changes to execution or observation cadence.
+
 ## 0.3.6
 
 - Persist the existing bounded action journal in /data/actions_log.sqlite3, preserving the latest 500 rows within 24 hours across restarts and upgrades. No command replay; unfinished rows are marked interrupted. Storage failures fall back to RAM with explicit diagnostic.

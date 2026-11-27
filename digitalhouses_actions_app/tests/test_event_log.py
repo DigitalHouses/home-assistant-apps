@@ -1,7 +1,7 @@
 import unittest
 from unittest.mock import patch
 from datetime import datetime, timezone, timedelta
-from actions.event_log import EventLog
+from actions.event_log import EventLog, elapsed_ms
 
 EID="light.bra"
 ROUTE=("z2m","zigbee2mqtt","bra")
@@ -22,6 +22,10 @@ class EventLogTests(unittest.TestCase):
         self.assertEqual(len(feed["rows"]),1)
         self.assertEqual(feed["rows"][0]["targets"][EID]["status"],"confirmed")
         self.assertEqual(feed["rows"][0]["targets"][EID]["before"],"off")
+        target=feed["rows"][0]["targets"][EID]
+        self.assertIn("observed_at",target)
+        self.assertIsNotNone(target["dispatch_ms"])
+        self.assertIsNotNone(target["confirmation_ms"])
         self.assertEqual(self.log.snapshot(feed["cursor"],self.log.generation)["rows"],[])
     def test_superseded_disconnect_and_timeout(self):
         with patch("actions.event_log.monotonic",return_value=1):
@@ -73,6 +77,25 @@ class EventLogTests(unittest.TestCase):
         self.assertEqual(target["status"],"accepted")
         self.assertEqual(target["parameters"],{"brightness_pct":40,"rgb_color":[0,255,0],"transition":2})
         self.assertFalse(self.log.active_target(EID))
+
+    def test_latency_calculation_and_legacy_missing_confirmation(self):
+        start="2026-11-27T09:18:34.785275+00:00"
+        sent="2026-11-27T09:18:34.794086+00:00"
+        observed="2026-11-27T09:18:34.913357+00:00"
+        self.assertEqual(elapsed_ms(start,sent),9)
+        self.assertEqual(elapsed_ms(sent,observed),119)
+        self.assertIsNone(elapsed_ms(sent,None))
+        self.assertIsNone(elapsed_ms(observed,sent))
+        self.assertIsNone(elapsed_ms("invalid",sent))
+        rid=self.log.press("net","button","single",[EID])
+        self.log.sent(rid,EID,ROUTE,"off","on")
+        self.log.observe(ROUTE,"on")
+        # Simulate a restored 0.3.6 row which lacked the confirmation timestamp.
+        self.log.rows[rid]["targets"][EID].pop("observed_at")
+        target=self.row(rid)["targets"][EID]
+        self.assertEqual(target["status"],"confirmed")
+        self.assertIsNone(target["confirmation_ms"])
+        self.assertIsNotNone(target["dispatch_ms"])
 
     def test_skip_never_becomes_confirmed(self):
         rid=self.log.press("net","button","single",[EID])

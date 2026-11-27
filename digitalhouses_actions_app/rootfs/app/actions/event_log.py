@@ -12,6 +12,17 @@ from .log_storage import LogStorage
 
 LOG=logging.getLogger(__name__)
 
+def elapsed_ms(start,end):
+    """Observed wall-clock interval; missing or reversed timestamps stay unknown."""
+    try:
+        a,b=(datetime.fromisoformat(v.replace("Z","+00:00")) for v in (start,end))
+        if a.tzinfo is None or b.tzinfo is None:return None
+        ms=(b-a).total_seconds()*1000
+        return round(ms) if ms>=0 else None
+    except (AttributeError,TypeError,ValueError,OverflowError):
+        return None
+
+
 class EventLog:
     LIMIT = 500
     MAX_AGE = 86400
@@ -226,7 +237,8 @@ class EventLog:
                     return
             except (KeyError,ValueError,TypeError,AttributeError):
                 return
-            target.update(status="confirmed",observed=actual)
+            target.update(status="confirmed",observed=actual,
+                          observed_at=datetime.now(timezone.utc).isoformat())
             self.pending.pop(("ha",eid),None)
             self._touch(row)
 
@@ -265,7 +277,8 @@ class EventLog:
                 return  # profile must match actual attributes, not just ON
             if state.lower()!=t["desired"]:
                 return
-            t.update(status="confirmed", observed=state.lower())
+            t.update(status="confirmed", observed=state.lower(),
+                     observed_at=datetime.now(timezone.utc).isoformat())
             self.pending.pop(route,None)
             self._touch(row)
 
@@ -345,7 +358,12 @@ class EventLog:
             rows=[]
             for row in self.rows.values():
                 if reset or row["revision"]>cursor:
-                    rows.append(deepcopy({k:v for k,v in row.items() if k!="_created"}))
+                    exported=deepcopy({k:v for k,v in row.items() if k!="_created"})
+                    for target in exported["targets"].values():
+                        target["dispatch_ms"]=elapsed_ms(exported["at"],target.get("sent_at"))
+                        target["confirmation_ms"]=(elapsed_ms(target.get("sent_at"),target.get("observed_at"))
+                                                   if target["status"]=="confirmed" else None)
+                    rows.append(exported)
             return {"generation":self.generation,"cursor":self.seq,"reset":reset,
                     "oldest":next(iter(self.rows),self.seq+1),"timezone":self.timezone,
                     "rows":rows,"limit":self.LIMIT,
