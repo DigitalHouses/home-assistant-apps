@@ -1,5 +1,5 @@
 name: DigitalHouses Actions App
-version: 0.3.3
+version: 0.3.4
 slug: digitalhouses_actions_app
 description: Device actions, Mode Keeper, direct Zigbee2MQTT and verified HA-native light control.
 url: https://github.com/DigitalHouses/home-assistant-apps/tree/main/digitalhouses_actions_app

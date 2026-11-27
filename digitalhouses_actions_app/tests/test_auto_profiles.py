@@ -30,7 +30,7 @@ class AutoProfileTests(unittest.TestCase):
         app._accept_home_profile(deepcopy(SNAP))
         self.assertEqual(app._jobs.qsize(),1)
         job=app._jobs.get_nowait()
-        app._adapt_home_profile(job[6])
+        app._adapt_home_profile(job[6],job[5])
         app._jobs.task_done()
 
     def test_native_on_updates_off_does_not(self):
@@ -40,7 +40,7 @@ class AutoProfileTests(unittest.TestCase):
             if state=="on":
                 ha.execute.assert_called_once_with({"service":"light.turn_on","target":{"entity_id":[TV]},
                                                     "data":{"brightness_pct":30,"color_temp_kelvin":2700}})
-                self.assertEqual(app.event_log.snapshot()["rows"][0]["targets"][TV]["status"],"accepted")
+                self.assertEqual(next(r for r in app.event_log.snapshot()["rows"] if TV in r["targets"])["targets"][TV]["status"],"accepted")
             else:ha.execute.assert_not_called()
 
     def test_transition_color_matrix_both_directions(self):
@@ -64,7 +64,7 @@ class AutoProfileTests(unittest.TestCase):
                         app._accept_home_profile({**deepcopy(snap),"mode":"night" if mode=="day" else "day"},retained=True)
                         app._accept_home_profile({**deepcopy(snap),"mode":mode})
                         job=app._jobs.get_nowait()
-                        app._adapt_home_profile(job[6])
+                        app._adapt_home_profile(job[6],job[5])
                         if state=="on":
                             ha.execute.assert_called_once_with({"service":"light.turn_on","target":{"entity_id":[TV]},"data":{"brightness_pct":brightness,**expected}})
                         else:ha.execute.assert_not_called()
@@ -127,6 +127,24 @@ class AutoProfileTests(unittest.TestCase):
             self.assertTrue(any(expected in line for line in logs.output))
             self.assertEqual(app._jobs.qsize(),int(enabled and not maintenance and not missing))
 
+    def test_ingress_journal_includes_transition_even_when_disabled_or_no_targets(self):
+        for enabled in (False,True):
+            app,ha,sw=self.app(enabled=enabled)
+            sw["bindings"]={}
+            app._accept_home_profile({**deepcopy(SNAP),"mode":"day"},retained=True)
+            self.assertFalse(app.event_log.snapshot()["rows"])
+            app._accept_home_profile(deepcopy(SNAP))
+            app._accept_home_profile(deepcopy(SNAP))
+            if enabled:
+                job=app._jobs.get_nowait()
+                app._adapt_home_profile(job[6],job[5])
+            rows=app.event_log.snapshot()["rows"]
+            self.assertEqual(len(rows),1)
+            self.assertEqual(rows[0]["device"],"Режим дома")
+            self.assertEqual(rows[0]["action"],"День → Ночь")
+            self.assertEqual(rows[0]["reason"],"Нет назначений День/Ночь" if enabled else "Автоприменение отключено (auto_day_night)")
+            ha.execute.assert_not_called()
+
     def test_conflict_and_disabled_binding(self):
         app,ha,sw=self.app()
         sw["bindings"]["single"]=parse_rule({"assignments":[binding(TV,"day")]})
@@ -151,7 +169,7 @@ class AutoProfileTests(unittest.TestCase):
         app._accept_home_profile(deepcopy(SNAP))
         job=app._jobs.get_nowait()
         app._accept_home_profile({**SNAP,"mode":"day"})
-        app._adapt_home_profile(job[6])
+        app._adapt_home_profile(job[6],job[5])
         ha.execute.assert_not_called()
         app.globals["maintenance_mode"]=True
         app._adapt_home_profile(app._home_profile)
@@ -238,7 +256,7 @@ class AutoProfileTests(unittest.TestCase):
         state(b"on")
         self.assertEqual(app._jobs.qsize(),1)
         job=app._jobs.get_nowait()
-        app._adapt_home_profile(job[6])
+        app._adapt_home_profile(job[6],job[5])
         self.assertEqual(ha.execute.call_args.args[0]["data"]["brightness_pct"],40)
         state(b"")
         state(b"off")

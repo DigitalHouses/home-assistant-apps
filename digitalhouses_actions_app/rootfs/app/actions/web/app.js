@@ -666,7 +666,10 @@ async function pollLog(){
       }
     }
     if(logOpen&&changedZone)renderAllLog();
-    document.querySelector("#log-info").textContent=journal.size+" / "+data.limit+" · "+(logTimezone||"UTC (HA timezone недоступен)");
+    const mode=({day:"День",night:"Ночь"})[model?.home_mode]||"режим неизвестен";
+    const globals=model?.home_profiles_ready?"профили OK":"нет профилей";
+    const auto=model?.auto_day_night?"авто ON":"авто OFF";
+    document.querySelector("#log-info").textContent=journal.size+" / "+data.limit+" · "+(logTimezone||"UTC (HA timezone недоступен)")+" · "+mode+" · "+globals+" · "+auto;
     applyLiveState();
   }catch(e){document.querySelector("#log-info").textContent="Нет связи: "+e.message}
   finally{logBusy=false}
