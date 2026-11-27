@@ -14,7 +14,7 @@ import threading
 
 S="binary_sensor.room_presence"
 L="sensor.room_illuminance"
-A={"entity_id":"light.rgb","operation":"on","data":{"profile":"current"},"off_delay_seconds":60}
+A={"entity_id":"light.rgb","operation":"on","data":{"profile":"current","color_source":"rgb"},"off_delay_seconds":60}
 ROW={"entity_id":S,"enabled":True,"lux_entity_id":L,"lux_threshold":70,"assignments":[A]}
 
 def states(now):
@@ -62,7 +62,7 @@ class SensorTests(unittest.TestCase):
         self.assertEqual(projected["rooms"][0]["switches"][0]["bindings"]["single"]["targets"],["light.bra"])
         self.assertEqual(projected["orphan_bindings"],[])
         self.assertEqual(sensor_rules.commands(ROW,{"light.rgb"},"on"),[{
-            "service":"light.turn_on","target":{"entity_id":["light.rgb"]},"data":{"profile":"current"}}])
+            "service":"light.turn_on","target":{"entity_id":["light.rgb"]},"data":{"profile":"current","color_source":"rgb"}}])
         self.assertEqual(sensor_rules.commands(ROW,{"light.rgb"},"off"),[{
             "service":"light.turn_off","target":{"entity_id":["light.rgb"]}}])
 

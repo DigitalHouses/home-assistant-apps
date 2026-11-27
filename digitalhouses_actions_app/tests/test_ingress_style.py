@@ -105,6 +105,14 @@ for(const domain of ['light','switch','cover','climate','media_player','future_d
         self.assertIn('if(!(t.brightness||t.cct||t.rgb)&&!Object.keys(a.data).length)return',js)
         self.assertIn('if(a.operation==="volume"&&profileSelect(a,t,p,action,true))',js)
 
+    def test_explicit_global_color_source_in_shared_editor(self):
+        js=(WEB/"app.js").read_text()
+        self.assertIn("if(!volume&&t.cct&&t.rgb)",js)
+        self.assertIn('color.value=a.data.color_source||""',js)
+        self.assertIn("color.required=true",js)
+        self.assertIn('a.data.color_source=color.value',js)
+        self.assertIn('main.querySelector(".params select:invalid")',js)
+
     def test_minutes_seconds_duration_controls(self):
         import shutil
         import subprocess

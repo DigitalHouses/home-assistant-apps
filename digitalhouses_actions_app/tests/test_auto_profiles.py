@@ -16,7 +16,7 @@ class AutoProfileTests(unittest.TestCase):
                 registry=[{"entity_id":TV,"platform":"template"},{"entity_id":MEDIA,"platform":"cast"}])
         app.globals["auto_day_night"]=enabled
         sw=app.config["rooms"][0]["switches"][0]
-        sw["bindings"]["double"]=parse_rule({"assignments":[binding(eid,"current","volume" if eid==MEDIA else "toggle")]})
+        sw["bindings"]["double"]=parse_rule({"assignments":[binding(eid,"current","volume" if eid==MEDIA else "toggle",color="cct" if eid==TV else None)]})
         app.target_catalog={eid:{**CAP,"operations":["volume"],"integration":"template"}}
         app._target_registries=([],[],[{"entity_id":TV,"platform":"template"}])
         ha.read_domain_state.return_value={"entity_id":eid,"state":state,"attributes":{
@@ -42,6 +42,44 @@ class AutoProfileTests(unittest.TestCase):
                                                     "data":{"brightness_pct":30,"color_temp_kelvin":2700}})
                 self.assertEqual(app.event_log.snapshot()["rows"][0]["targets"][TV]["status"],"accepted")
             else:ha.execute.assert_not_called()
+
+    def test_transition_color_matrix_both_directions(self):
+        snap=deepcopy(SNAP)
+        snap["day"].update(brightness=100,rgb_color=[255,255,255])
+        snap["night"].update(brightness=40,rgb_color=[0,255,0])
+        for modes,choice,expected_day,expected_night in (
+            (["brightness"],None,{},{}),
+            (["color_temp"],None,{"color_temp_kelvin":4300},{"color_temp_kelvin":2700}),
+            (["rgb"],None,{"rgb_color":[255,255,255]},{"rgb_color":[0,255,0]}),
+            (["color_temp","rgb"],"cct",{"color_temp_kelvin":4300},{"color_temp_kelvin":2700}),
+            (["color_temp","rgb"],"rgb",{"rgb_color":[255,255,255]},{"rgb_color":[0,255,0]}),
+        ):
+            for mode,brightness,expected in (("day",100,expected_day),("night",40,expected_night)):
+                for state in ("on","off","unavailable"):
+                    with self.subTest(modes=modes,choice=choice,mode=mode,state=state):
+                        app,ha,sw=self.app(state=state)
+                        sw["bindings"]["double"]=parse_rule({"assignments":[binding(TV,"current",color=choice)]})
+                        app.target_catalog[TV]={**CAP,"cct":"color_temp" in modes,"rgb":"rgb" in modes}
+                        ha.read_domain_state.return_value["attributes"]["supported_color_modes"]=modes
+                        app._accept_home_profile({**deepcopy(snap),"mode":"night" if mode=="day" else "day"},retained=True)
+                        app._accept_home_profile({**deepcopy(snap),"mode":mode})
+                        job=app._jobs.get_nowait()
+                        app._adapt_home_profile(job[6])
+                        if state=="on":
+                            ha.execute.assert_called_once_with({"service":"light.turn_on","target":{"entity_id":[TV]},"data":{"brightness_pct":brightness,**expected}})
+                        else:ha.execute.assert_not_called()
+
+    def test_explicit_conflicting_colors_and_legacy_dual_skip(self):
+        app,ha,sw=self.app()
+        sw["bindings"]["single"]=parse_rule({"assignments":[binding(TV,"current",color="rgb")]})
+        self.assertEqual(profiles.adaptation_targets(app.config),([], [TV]))
+        self.transition(app)
+        ha.execute.assert_not_called()
+        app,ha,sw=self.app()
+        sw["bindings"]["double"]=parse_rule({"assignments":[binding(TV,"current")]})
+        ha.read_domain_state.return_value["attributes"]["supported_color_modes"]=["color_temp","rgb"]
+        self.transition(app)
+        ha.execute.assert_not_called()
 
     def test_no_initial_replay_duplicate_or_disabled_auto_transition(self):
         app,ha,_=self.app()
@@ -99,6 +137,28 @@ class AutoProfileTests(unittest.TestCase):
             messages=[json.loads(body) for topic,body,_ in app.client.published if topic.endswith("/set")]
             self.assertEqual(messages,[{"brightness":76}] if state=="on" else [])
             ha.execute.assert_not_called()
+
+    def test_z2m_dual_color_selection_for_transition(self):
+        from actions.light_routes import _light_features
+        from actions.mqtt_lights import _xy
+        from test_mqtt_light_output import light
+        for choice,expected in (("cct",{"color_temp":370}),("rgb",{"color":_xy(0,255,0)})):
+            for state in ("on","off"):
+                app,ha,sw=self.app(PHYSICAL,state=state,route=True)
+                dev=light(PHYSICAL_DEVICE["ieee_address"],PHYSICAL_DEVICE["friendly_name"])
+                route=app.config["light_routes"][PHYSICAL]
+                route["features"]=_light_features(dev)
+                app._on_message(None,None,packet(BASE+"/bridge/devices",[{"type":"Coordinator","ieee_address":COORD},DEVICE,dev],True))
+                app.target_catalog[PHYSICAL]=CAP
+                sw["bindings"]["double"]=parse_rule({"assignments":[binding(PHYSICAL,"current",color=choice)]})
+                snap=deepcopy(SNAP)
+                snap["night"].update(brightness=40,rgb_color=[0,255,0])
+                app._accept_home_profile({**deepcopy(snap),"mode":"day"},retained=True)
+                app._accept_home_profile(snap)
+                app._adapt_home_profile(app._jobs.get_nowait()[6])
+                payloads=[json.loads(body) for topic,body,_ in app.client.published if topic.endswith("/set")]
+                self.assertEqual(payloads,[{"brightness":102,**expected}] if state=="on" else [])
+                ha.execute.assert_not_called()
 
     def test_group_requires_all_members_online_fresh_on(self):
         route={"base_topic":BASE,"members":[{"friendly_name":"a"},{"friendly_name":"b"}]}

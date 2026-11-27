@@ -93,6 +93,8 @@ def parse_rule(value: object) -> dict:
             data = entry.get("data", {})
             if isinstance(data, Mapping) and "profile" in data:
                 profiles.source(data)
+                if "color_source" in data and not eid.startswith("light."):
+                    raise CatalogError("Color source requires light")
                 if not ((eid.startswith("light.") and operation in ("on","toggle")) or
                         (eid.startswith("media_player.") and operation=="volume")):
                     raise CatalogError("Profile not permitted for this operation")

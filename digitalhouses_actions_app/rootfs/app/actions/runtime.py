@@ -863,28 +863,25 @@ class Application:
         def eligible(eid):
             return (self._home_profile is snapshot and self.globals.get("auto_day_night")
                     and not self.globals["maintenance_mode"]
-                    and (eid in profiles.adaptation_targets(self.config)[0] or self.sensor_engine.dynamic_owner(eid))
+                    and profiles.adaptation_plan(self.config,self.sensor_engine.dynamic_owner)[0].get(eid)==policies.get(eid)
+                    and eid in policies
                     and not self.event_log.active_target(eid,exclude=rid))
         with self._mutex:
             if self._home_profile is not snapshot or not self.globals.get("auto_day_night") or self.globals["maintenance_mode"]:return
-            candidates,conflicts=profiles.adaptation_targets(self.config)
-            # A confirmed sensor-owned dynamic ON resolves the otherwise
-            # ambiguous fixed/manual assignment to the same individual light.
-            owned=[eid for eid in conflicts if self.sensor_engine.dynamic_owner(eid)]
-            candidates+=owned
-            conflicts=[eid for eid in conflicts if eid not in owned]
+            policies,conflicts=profiles.adaptation_plan(self.config,self.sensor_engine.dynamic_owner)
+            candidates=list(policies)
             # Groups first; successful group command covers its member routes.
             candidates.sort(key=lambda eid:(self.config.get("light_routes",{}).get(eid,{}).get("kind")!="group",eid))
         handled=set()
         for eid in candidates+conflicts:
             rid=self.event_log.press("global","Режим дома","День/Ночь: "+snapshot["mode"],[eid])
             try:
-                if eid in conflicts:raise ActionError("Conflicting fixed and dynamic assignments")
+                if eid in conflicts:raise ActionError("Conflicting profile or color-source assignments")
                 with self._mutex:
                     if not eligible(eid):raise ActionError("Profile, assignment or pending command changed")
                     route=deepcopy(self.config.get("light_routes",{}).get(eid))
                     target=self.target_catalog.get(eid,{})
-                    data=profiles.resolve({"profile":"current"},target,snapshot,eid.split(".")[0])
+                    data=profiles.resolve(policies[eid],target,snapshot,eid.split(".")[0])
                     if eid.startswith("light.") and route:
                         base,name=route["base_topic"],route["friendly_name"]
                         ident=(base,name)
@@ -929,7 +926,7 @@ class Application:
                         regs=self._target_registries
                     if regs is None:raise ActionError("HA catalog unavailable")
                     live=target_catalog(regs,[state],self.config).get(eid,{})
-                    data=profiles.resolve({"profile":"current"},live,snapshot,"light")
+                    data=profiles.resolve(policies[eid],live,snapshot,"light")
                     with self._mutex:
                         shadow=self._ha_shadows.get(eid)
                         if (not eligible(eid) or eid in self.config.get("light_routes",{})

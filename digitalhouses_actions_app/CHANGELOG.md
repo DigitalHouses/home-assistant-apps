@@ -2,6 +2,13 @@
 
 Historical releases below were published as DigitalHouses Aqara Switch App; their identifiers are retained.
 
+## 0.3.2
+
+- Use System Globals brightness and independent CCT/RGB profiles without duplicating values. Single-color targets use their capability automatically; dual-capability lights require explicit color_source cct or rgb in the global profile assignment, never automatic fallback.
+- Apply that same choice to enabled Day/Night targets on an actual mode transition when auto_day_night is enabled. Already ON lights receive new brightness and chosen color; OFF/unavailable targets remain untouched. Keys, sensors and schedules share the editor and resolver; conflicting assignments are skipped and logged.
+- Preserve existing binding documents. Legacy dual-capability global-profile assignments require selecting CCT or RGB in Ingress before profile ON/adaptation; OFF remains independent. Existing verified transport, group and timer safety checks are unchanged.
+- Rename the existing auto_day_night option label to "Apply parameters on Day/Night transition".
+
 ## 0.3.1
 
 - Replace legacy Aqara product wording in startup and generic runtime/telemetry logs; keep Aqara-specific device diagnostics.
