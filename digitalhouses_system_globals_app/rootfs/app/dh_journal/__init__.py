@@ -1,4 +1,4 @@
-"""DH Journal 1.0.1: bounded local, append-only diagnostic events."""
+"""DH Journal 1.0.2: bounded local, append-only diagnostic events."""
 from collections import deque
 from datetime import datetime, timezone
 from pathlib import Path
@@ -8,10 +8,15 @@ import json
 import logging
 import re
 import sqlite3
+import time
 import uuid
 
-VERSION = "1.0.1"
+VERSION = "1.0.2"
 LIMIT = 3000
+MAX_RECORD_BYTES = 8192
+MAX_PARAMS_BYTES = MAX_RECORD_BYTES - 256
+MAX_DEPTH = 5
+MAX_NODES = 128
 LEVELS = ("debug", "info", "success", "pending", "warning", "error", "lifecycle")
 ICONS = dict(zip(LEVELS, ("🔍", "ℹ️", "✅", "⏳", "⚠️", "❌", "🔄")))
 ROOT = Path(__file__).parent
@@ -21,17 +26,61 @@ CODE = re.compile(r"^[a-z][a-z0-9_.-]{0,79}$")
 
 
 def clean(value):
-    # Callers must pass explicit safe facts, never arbitrary requests or credentials.
-    if isinstance(value, dict):
-        return {str(k)[:80]: "[REDACTED]" if SECRET.search(str(k)) else clean(v)
-                for k, v in list(value.items())[:32]}
-    if isinstance(value, (list, tuple)):
-        return [clean(v) for v in value[:32]]
-    if value is None or isinstance(value, (bool, int)):
-        return value
-    if isinstance(value, float):
-        return value if abs(value) < float("inf") else None
-    return str(value).replace("\r", " ").replace("\n", " ")[:500]
+    """Bound nesting and work; never stringify arbitrary objects."""
+    remaining = MAX_NODES
+    def visit(v, depth):
+        nonlocal remaining
+        remaining -= 1
+        if remaining < 0 or depth > MAX_DEPTH:
+            return "[TRUNCATED]"
+        if type(v) is dict:
+            out = {}
+            for i, (k, item) in enumerate(v.items()):
+                if i >= 32 or remaining <= 0:
+                    out["_truncated"] = True
+                    break
+                if type(k) is not str or len(k)>80:
+                    out["_truncated"] = True
+                    continue
+                key = k[:80].encode("utf-8", errors="replace").decode("utf-8")
+                out[key] = "[REDACTED]" if SECRET.search(k[:500]) else visit(item, depth+1)
+            return out
+        if type(v) in (list, tuple):
+            out = []
+            for i, item in enumerate(v):
+                if i >= 32 or remaining <= 0:
+                    out.append("[TRUNCATED]")
+                    break
+                out.append(visit(item, depth+1))
+            return out
+        if v is None or type(v) is bool:
+            return v
+        if type(v) is int:
+            return v if v.bit_length() <= 256 else "[TRUNCATED]"
+        if type(v) is float:
+            return v if abs(v) < float("inf") else None
+        if type(v) is str:
+            return v[:500].replace("\r", " ").replace("\n", " ").encode("utf-8", errors="replace").decode("utf-8")
+        return "[UNSUPPORTED]"
+    return visit(value, 0)
+
+
+def encode_params(params):
+    """Retain complete safe fields, never partial invalid JSON."""
+    safe = clean(params)
+    def encode(v):
+        return json.dumps(v, ensure_ascii=False, allow_nan=False, separators=(",", ":"))
+    raw = encode(safe)
+    if len(raw.encode("utf-8")) <= MAX_PARAMS_BYTES:
+        return safe, raw
+    limited = {"_truncated": True}
+    for key, value in safe.items():
+        if key == "_truncated":
+            continue
+        limited[key] = value
+        if len(encode(limited).encode("utf-8")) > MAX_PARAMS_BYTES:
+            del limited[key]
+    return limited, encode(limited)
 
 
 class Journal:
@@ -51,11 +100,17 @@ class Journal:
         self.ram = deque(maxlen=LIMIT)
         self.seq = 0
         self.storage = "sqlite"
+        self.rejected = 0
+        self.last_error_log = -float("inf")
         self.messages = {}
         for lang in ("ru", "en"):
-            common = json.loads((ROOT / "locales" / (lang + ".json")).read_text())
-            common.update((locales or {}).get(lang, {}))
-            self.messages[lang] = common
+            try:
+                common = json.loads((ROOT / "locales" / (lang + ".json")).read_text())
+                common.update((locales or {}).get(lang, {}))
+                self.messages[lang] = common
+            except Exception:
+                self.messages[lang] = {}
+                self.report_failure()
         try:
             self.db = sqlite3.connect(str(path), timeout=.15, check_same_thread=False)
             self.db.execute("PRAGMA journal_mode=WAL")
@@ -78,7 +133,7 @@ class Journal:
     def _fallback(self):
         if self.db is not None:
             try:
-                self.ram.extend(self._decode(r) for r in self.db.execute("SELECT id,ts,level,code,params FROM events ORDER BY id"))
+                self.ram.extend(self._decode(r) for r in self.db.execute("SELECT id,ts,level,code,params FROM (SELECT id,ts,level,code,params FROM events ORDER BY id DESC LIMIT 3000) ORDER BY id"))
                 self.seq = max(self.seq, self.ram[-1]["id"] if self.ram else 0)
             except (sqlite3.Error, ValueError):
                 pass
@@ -91,45 +146,80 @@ class Journal:
         self.generation = uuid.uuid4().hex
         LOG.warning("DH Journal SQLite unavailable; RAM only until next restart")
 
-    def record(self, level, code, **params):
-        if level == "debug" and not self.debug_enabled:
-            return
-        if level not in LEVELS or not CODE.fullmatch(code):
+    def report_failure(self):
+        """Rate-limited internal diagnostics, without event contents."""
+        try:
+            with self.lock:
+                self.rejected += 1
+                now = time.monotonic()
+                if now - self.last_error_log >= 60:
+                    self.last_error_log = now
+                    LOG.warning("DH Journal event rejected; application continues (total=%d)", self.rejected)
+        except Exception:
+            pass
+
+    def record(self, level=None, code=None, /, **params):
+        """Best effort: malformed events never interrupt product operations."""
+        try:
+            return self._record(level, code, params)
+        except Exception:
+            self.report_failure()
+            return False
+
+    def _record(self, level, code, params):
+        if type(level) is not str or level not in LEVELS or type(code) is not str or not CODE.fullmatch(code):
             raise ValueError("Invalid journal event")
-        ts = self.clock().astimezone(timezone.utc).isoformat(timespec="milliseconds")
-        params = clean(params)
-        raw = json.dumps(params, ensure_ascii=False, allow_nan=False, separators=(",", ":"))
+        if level == "debug" and not self.debug_enabled:
+            return False
+        params, raw = encode_params(params)
         with self.lock:
+            ts = self.clock().astimezone(timezone.utc).isoformat(timespec="milliseconds")
             if self.db is not None:
                 try:
                     with self.db:
                         cur = self.db.execute("INSERT INTO events(ts,level,code,params) VALUES(?,?,?,?)", (ts, level, code, raw))
                         self._prune()
                     self.seq = cur.lastrowid
-                    return
+                    return True
                 except (sqlite3.Error, OSError):
                     self._fallback()
             self.seq += 1
             self.ram.append({"id": self.seq, "ts": ts, "level": level, "code": code, "params": params})
+            return True
 
     def start(self, version):
-        self.app_version = version
+        self.app_version = clean(version)
         self.record("lifecycle", "app_started", product_name=self.product_name, version=version, journal=VERSION)
 
     def stop(self):
         self.record("lifecycle", "app_stopped")
 
     def clear(self):
+        """Acknowledge only after committed disk deletion; refuse RAM-only clear."""
         with self.lock:
-            if self.db is not None:
-                try:
-                    with self.db:
-                        self.db.execute("DELETE FROM events")
-                except (sqlite3.Error, OSError):
-                    self._fallback()
+            if self.db is None:
+                return False
+            try:
+                ts = self.clock().astimezone(timezone.utc).isoformat(timespec="milliseconds")
+                self.db.execute("PRAGMA synchronous=FULL")
+                with self.db:
+                    self.db.execute("DELETE FROM events")
+                    cur = self.db.execute("INSERT INTO events(ts,level,code,params) VALUES(?,?,?,?)",
+                                          (ts, "info", "journal_cleared", "{}"))
+                self.seq = cur.lastrowid
+            except (sqlite3.Error, OSError):
+                self._fallback()
+                return False
+            except Exception:
+                self.report_failure()
+                return False
             self.ram.clear()
             self.generation = uuid.uuid4().hex
-            self.record("info", "journal_cleared")
+            try:
+                self.db.execute("PRAGMA synchronous=NORMAL")
+            except (sqlite3.Error, OSError):
+                self._fallback()
+            return True
 
     def snapshot(self, after=0, generation=None):
         with self.lock:
@@ -148,7 +238,7 @@ class Journal:
                 newest = self.ram[-1]["id"] if count else 0
                 rows = [dict(r) for r in self.ram if r["id"] > after]
             return dict(generation=self.generation, oldest=oldest, newest=newest, count=count,
-                        limit=LIMIT, storage=self.storage, rows=rows, version=VERSION)
+                        limit=LIMIT, storage=self.storage, rows=rows, version=VERSION, rejected=self.rejected, can_clear=self.db is not None)
 
     def message(self, row, lang):
         template = self.messages.get(lang, self.messages["en"]).get(row["code"])
@@ -161,12 +251,12 @@ class Journal:
                     if isinstance(params.get(key), str):
                         params[key] = values.get(params[key], params[key])
                 return template.format(**params)
-            except (KeyError, ValueError):
+            except Exception:
                 pass
         return row["code"] + " " + json.dumps(row["params"], ensure_ascii=False)
 
     def icon(self, row):
-        return self.icons.get(row["code"], ICONS[row["level"]])
+        return self.icons.get(row["code"], ICONS.get(row["level"], "ℹ️"))
 
     @staticmethod
     def zone(name):
@@ -188,12 +278,22 @@ class Journal:
     def close(self):
         with self.lock:
             if self.db is not None:
-                self.db.close()
-                self.db = None
+                try:
+                    self.db.close()
+                except Exception:
+                    self.report_failure()
+                finally:
+                    self.db = None
 
 
 def _level(name):
-    return lambda self, code, **params: self.record(name, code, **params)
+    def emit(self, code=None, /, **params):
+        try:
+            return self._record(name, code, params)
+        except Exception:
+            self.report_failure()
+            return False
+    return emit
 
 
 for _name in LEVELS:

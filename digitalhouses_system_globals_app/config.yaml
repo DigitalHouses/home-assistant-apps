@@ -1,5 +1,5 @@
 name: DigitalHouses System Globals App
-version: 0.1.7
+version: 0.1.8
 slug: digitalhouses_system_globals_app
 description: Global day/night modes, shared profiles, and dynamic system readiness.
 url: https://github.com/DigitalHouses/home-assistant-apps/tree/main/digitalhouses_system_globals_app

@@ -130,7 +130,10 @@ class Service:
                         "mqtt_connected":self.session is not None}
             view=self._view if self.journal_observer else None
         if self.journal_observer and observe_journal:
-            self.journal_observer.observe(view)
+            try:
+                self.journal_observer.observe(view)
+            except Exception:
+                self.journal.report_failure()
 
     def view(self):
         with self.view_lock:
@@ -463,8 +466,12 @@ def main():
     engine=Engine(Store("/data/state.json"))
     if engine.state["config"]["timezone"] is None and os.environ.get("TZ"):
         engine.command(PRODUCT+"/config/set",{"timezone":os.environ["TZ"]},utcnow())
-    journal=Journal("/data/journal.sqlite3",product=ID,product_name=PRODUCT_NAME,locales=LOCALES,value_locales=VALUE_LOCALES,icons=ICONS,debug=opts.get("journal_debug",False))
-    journal.start(os.environ["APP_VERSION"])
+    journal=None
+    try:
+        journal=Journal("/data/journal.sqlite3",product=ID,product_name=PRODUCT_NAME,locales=LOCALES,value_locales=VALUE_LOCALES,icons=ICONS,debug=opts.get("journal_debug",False))
+        journal.start(os.environ["APP_VERSION"])
+    except Exception:
+        LOG.warning("DH Journal initialization failed; application continues")
     svc=Service(engine,os.environ["APP_VERSION"],opts,journal=journal)
     stop=threading.Event()
     signal.signal(signal.SIGTERM,lambda *_:stop.set())
@@ -478,15 +485,18 @@ def main():
     try:
         svc.run(os.environ["MQTT_HOST"],int(os.environ["MQTT_PORT"]),os.environ.get("MQTT_USERNAME"),os.environ.get("MQTT_PASSWORD"),stop.is_set)
     except BaseException:
-        journal.error("app_failed")
+        if journal:
+            journal.error("app_failed")
         raise
     else:
-        journal.stop()
+        if journal:
+            journal.stop()
     finally:
         server.shutdown()
         if telemetry:
             telemetry.stop()
-        journal.close()
+        if journal:
+            journal.close()
 
 
 if __name__=="__main__":

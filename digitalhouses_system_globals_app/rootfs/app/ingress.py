@@ -65,8 +65,10 @@ def serve(service,*,host,port,allowed):
                     data=json.loads(self.rfile.read(int(self.headers["Content-Length"])))
                     if not isinstance(data,dict) or set(data)!={"confirm"} or data["confirm"] is not True:
                         raise ValueError()
-                    service.journal.clear()
-                    self.output(200,{"ok":True})
+                    if service.journal.clear():
+                        self.output(200,{"ok":True})
+                    else:
+                        self.output(409,{"error":"journal_clear_unavailable"})
                 except (ValueError,OSError):
                     self.output(400,{"error":"Invalid clear request"})
                 return

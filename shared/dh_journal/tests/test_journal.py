@@ -1,11 +1,12 @@
 import json
+from contextlib import closing
 import sqlite3
 import tempfile
 import unittest
 from datetime import datetime, timezone
 from pathlib import Path
 
-from dh_journal import Journal, LIMIT
+from dh_journal import Journal, LIMIT, MAX_RECORD_BYTES
 from dh_journal.http import get
 
 NOW = datetime(2026,11,28,12,15,32,123000,tzinfo=timezone.utc)
@@ -42,7 +43,7 @@ class JournalTests(unittest.TestCase):
         delta=j.snapshot(d["newest"],d["generation"])
         self.assertEqual(len(delta["rows"]),1)
         self.assertGreater(delta["oldest"],d["oldest"])
-        with sqlite3.connect(self.path) as db:
+        with closing(sqlite3.connect(self.path)) as db, db:
             self.assertEqual(db.execute("SELECT count(*) FROM events").fetchone()[0],LIMIT)
 
     def test_locale_export_and_safe_fields(self):
@@ -93,8 +94,8 @@ class JournalTests(unittest.TestCase):
         self.assertEqual(s["rows"][0]["params"]["value"],2)
         get(j,"/api/log?lang=en","UTC")
         self.assertNotIn("message",j.snapshot()["rows"][0])
-        j.clear()
-        self.assertEqual(j.snapshot()["count"],1)
+        self.assertFalse(j.clear())
+        self.assertEqual(j.snapshot()["count"],LIMIT)
 
     def test_runtime_database_failure(self):
         self.j.info("example",value=1)
@@ -110,3 +111,55 @@ class JournalTests(unittest.TestCase):
         for url in ("/api/log?lang=bad","/api/log?after=-1","/api/log?after=abc"):
             with self.assertRaises(ValueError):
                 get(self.j,url,"UTC")
+
+    def test_malformed_events_isolated_and_bounded(self):
+        class Bad:
+            def __str__(self):
+                raise RuntimeError("never stringify unknown values")
+        self.assertFalse(self.j.record("bad","example"))
+        self.assertFalse(self.j.info(None))
+        self.assertFalse(self.j.info())
+        self.assertEqual(self.j.snapshot()["rejected"],3)
+        cycle=[]
+        cycle.append(cycle)
+        self.assertTrue(self.j.info("example",value=Bad(),cycle=cycle,huge=2**100000,
+                                   unicode="\ud800",level="data"))
+        self.assertEqual(self.j.snapshot()["rows"][-1]["params"]["value"],"[UNSUPPORTED]")
+        self.assertTrue(self.j.info("example",value="keep",**{f"field{i}":"💡"*500 for i in range(30)}))
+        row=self.j.snapshot()["rows"][-1]
+        self.assertTrue(row["params"]["_truncated"])
+        self.assertEqual(row["params"]["value"],"keep")
+        self.assertLessEqual(len(json.dumps(row,ensure_ascii=False,separators=(",",":")).encode()),MAX_RECORD_BYTES)
+        self.j.clock=lambda: (_ for _ in ()).throw(RuntimeError("clock broken"))
+        self.assertFalse(self.j.info("example",value=5))
+        self.assertEqual(self.j.snapshot()["rejected"],4)
+        self.j.clock=lambda:NOW
+        self.assertTrue(self.j.info("example",value=6))
+
+    def test_clear_failure_never_acknowledged_and_restart(self):
+        self.j.info("example",value="old")
+        with closing(sqlite3.connect(self.path)) as blocker, blocker:
+            blocker.execute("BEGIN IMMEDIATE")
+            self.assertFalse(self.j.clear())
+            self.assertEqual(self.j.snapshot()["storage"],"ram")
+            self.assertFalse(self.j.snapshot()["can_clear"])
+            self.assertFalse(self.j.clear())
+            self.assertEqual(self.j.snapshot()["rows"][0]["params"]["value"],"old")
+        self.j.close()
+        j=self.open()
+        self.addCleanup(j.close)
+        self.assertEqual(j.snapshot()["rows"][0]["params"]["value"],"old")
+        self.assertTrue(j.clear())
+        j.close()
+        reopened=self.open()
+        self.addCleanup(reopened.close)
+        self.assertEqual([r["code"] for r in reopened.snapshot()["rows"]],["journal_cleared"])
+
+    def test_atomic_clear_marker_rollback(self):
+        self.j.info("example",value="old")
+        with self.j.db:
+            self.j.db.execute("CREATE TRIGGER fail_clear BEFORE INSERT ON events WHEN NEW.code='journal_cleared' BEGIN SELECT RAISE(ABORT,'failure'); END")
+        self.assertFalse(self.j.clear())
+        self.assertEqual(self.j.snapshot()["rows"][0]["params"]["value"],"old")
+        with closing(sqlite3.connect(self.path)) as db, db:
+            self.assertEqual(db.execute("SELECT code FROM events").fetchall(),[("example",)])
