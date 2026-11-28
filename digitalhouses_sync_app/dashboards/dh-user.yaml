@@ -15,9 +15,3 @@ views:
     title: Internet
     icon: mdi:web
     show_icon_and_title: true
-
-  - product: digitalhouses_system_globals_app
-    path: system-globals
-    title: System Globals (Full)
-    icon: mdi:state-machine
-    show_icon_and_title: true
