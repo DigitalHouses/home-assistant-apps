@@ -451,7 +451,15 @@ class AutoSync:
                             report["issues"].append("Packages quick reload: " + str(exc)[:150])
                     else:
                         report["packages"]["reload"] = "Not available"
-                if self.publisher is not None:
+                if self.publisher is not None and issues:
+                    # An incomplete Git snapshot is not an authoritative list of
+                    # absent Views. Preserve every existing panel (also on restart).
+                    # A later successful scan can still apply intentional removals.
+                    report["dashboard"] = {
+                        "state": "Deferred", "dashboards": [], "issues": [], "resources": [],
+                    }
+                    LOG.warning("Dashboard synchronization deferred: incomplete Git source snapshot")
+                elif self.publisher is not None:
                     try:
                         panels = self._panels()
                         available = {(r["product"], r["identity"]): r
