@@ -94,6 +94,8 @@ sections: []
 
 ### Packages
 
+**Часовой пояс не требует Package.** HAOS App сам получает IANA timezone через штатный HA Core API (`GET http://supervisor/core/api/config`, `SUPERVISOR_TOKEN`, поле `time_zone`). Не создавать ради этого sensor, helper, automation, MQTT Discovery или отдельный издатель. DH Sync не определяет timezone для других продуктов. См. [обязательный общий контракт](DIGITALHOUSES_APP_STANDARD.md#111-mandatory-home-assistant-timezone-contract).
+
 `packages/common/*.yaml` — переносимые пакеты; `packages/locales/ru/*.yaml` — русские локализованные пакеты (включая уведомления). **Один уникальный верхнеуровневый package key на файл**. Не меняйте устоявшиеся `entity_id` и automation IDs без действительной необходимости.
 
 Не включайте в канонический Package адреса конкретного дома, секреты, персональные `notify.*`, частные скрипты и неподдерживаемые зависимости. Для событий и уведомлений также действует [DigitalHouses Events & Notifications Standard](EVENTS_AND_NOTIFICATIONS_STANDARD.md).
