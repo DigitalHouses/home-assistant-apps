@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.1.13
+- Pin DH Lib UI 0.1.2 and DH Lib Journal 2.0.2. Compact header, separate Status section, shared RU/EN preference with HA language fallback, and live relabeling without remounting drafts or Toast.
+
 ## 0.1.12
 - Pilot DH Lib UI 0.1.0: stable Ingress shell, real readiness and telemetry status, common settings, local theme preference, and existing LOG/Toast. Preserve schedule/profile drafts, MQTT contracts and HA-owned journal timezone. DH Sync receipt remains unknown until an authoritative acknowledgement exists.
 

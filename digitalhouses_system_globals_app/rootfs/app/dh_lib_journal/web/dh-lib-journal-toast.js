@@ -13,7 +13,8 @@
     const endpoint=options.endpoint||"./api/log/toasts";
     const onEvents=typeof options.onEvents==="function"?options.onEvents:null;
     const onTimezone=typeof options.onTimezone==="function"?options.onTimezone:null;
-    const language=()=>((typeof options.language==="function"?options.language():options.language)||doc.documentElement.lang)==="ru"?"ru":"en";
+    let selectedLanguage=null;
+    const language=()=>((selectedLanguage||(typeof options.language==="function"?options.language():options.language)||doc.documentElement.lang))==="ru"?"ru":"en";
     const t=()=>labels[language()];
     const key="dh-journal-toasts:"+product;
     let settings={...defaults};
@@ -65,7 +66,7 @@
       node.append(icon,body,close);
       // DOM and visual order: latest on top, oldest anchored at bottom.
       stack.prepend(node);
-      active.set(row.id,{node,time,ts:row.ts,localTime:row.local_time,shown:Date.now(),timer:null});
+      active.set(row.id,{node,time,close,ts:row.ts,localTime:row.local_time,shown:Date.now(),timer:null});
       schedule(row.id);
     }
     async function poll(){
@@ -98,7 +99,7 @@
         displayBaseline=false;
       }catch{}finally{busy=false;if(!disposed&&current!==epoch)poll()}
     }
-    let controls=null,enabledInput=null,minutesInput=null;
+    let controls=null,enabledInput=null,minutesInput=null,enabledText=null,minutesText=null;
     function syncControls(){if(enabledInput){enabledInput.checked=settings.enabled;minutesInput.value=String(settings.minutes);minutesInput.disabled=!settings.enabled}}
     function configure(next={}){
       if(disposed)return {...settings};
@@ -124,17 +125,30 @@
     if(options.settingsTarget){
       controls=doc.createElement("div");controls.className="dh-lib-journal-toast-settings dh-toast-settings";
       const enabledLabel=doc.createElement("label");enabledInput=doc.createElement("input");enabledInput.type="checkbox";
-      const enabledText=doc.createElement("span");enabledText.textContent=t().enabled;enabledLabel.append(enabledInput,enabledText);
-      const minutesLabel=doc.createElement("label");const minutesText=doc.createElement("span");minutesText.textContent=t().duration;
+      enabledText=doc.createElement("span");enabledText.textContent=t().enabled;enabledLabel.append(enabledInput,enabledText);
+      const minutesLabel=doc.createElement("label");minutesText=doc.createElement("span");minutesText.textContent=t().duration;
       minutesInput=doc.createElement("input");minutesInput.type="number";minutesInput.min="1";minutesInput.max="1440";minutesInput.step="1";minutesLabel.append(minutesText,minutesInput);
       enabledInput.onchange=()=>configure({enabled:enabledInput.checked});
       minutesInput.onchange=()=>configure({minutes:Number(minutesInput.value)});
       controls.append(enabledLabel,minutesLabel);options.settingsTarget.append(controls);syncControls();
     }
+    function setLanguage(value){
+      if(disposed)return;
+      selectedLanguage=value==="ru"?"ru":"en";
+      stack.setAttribute("aria-label",t().region);
+      if(enabledText)enabledText.textContent=t().enabled;
+      if(minutesText)minutesText.textContent=t().duration;
+      for(const item of active.values()){
+        item.close.setAttribute("aria-label",t().close);
+        renderTime(item.time,item.ts,item.localTime);
+      }
+      // Invalidate an old-language request; preserve cursor, nodes and timers.
+      epoch++;poll();
+    }
     function onVisibility(){if(!doc.hidden){for(const id of active.keys())schedule(id);poll()}}
     const interval=global.setInterval(poll,5000);
     doc.addEventListener("visibilitychange",onVisibility);poll();
-    return {configure,settings:()=>({...settings}),poll,destroy(){
+    return {configure,setLanguage,settings:()=>({...settings}),poll,destroy(){
       if(disposed)return;disposed=true;epoch++;global.clearInterval(interval);doc.removeEventListener("visibilitychange",onVisibility);
       for(const id of active.keys())dismiss(id);stack.remove();if(controls)controls.remove();
     }};

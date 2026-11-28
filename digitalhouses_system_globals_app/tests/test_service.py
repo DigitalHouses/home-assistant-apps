@@ -92,7 +92,7 @@ class ContractTests(unittest.TestCase):
             def do_GET(self):
                 if self.headers.get("Authorization")!="Bearer test":
                     self.send_error(401);return
-                data={"state":"RUNNING","time_zone":"Asia/Almaty"} if self.path=="/config" else {"state":current["value"]}
+                data={"state":"RUNNING","time_zone":"Asia/Almaty","language":"ru"} if self.path=="/config" else {"state":current["value"]}
                 b=json.dumps(data).encode();self.send_response(200);self.end_headers();self.wfile.write(b)
             def log_message(self,*a):pass
         h=ThreadingHTTPServer(("127.0.0.1",0),H)
@@ -103,6 +103,7 @@ class ContractTests(unittest.TestCase):
         current["value"]="fresh"
         self.assertTrue(ha_probe(url,"test","fresh","sensor.probe").nonce_seen)
         self.assertEqual(ha_probe(url,"test","fresh","sensor.probe").time_zone,"Asia/Almaty")
+        self.assertEqual(ha_probe(url,"test","fresh","sensor.probe").language,"ru")
 
 
 @unittest.skipUnless(os.environ.get("DH_TEST_MOSQUITTO"),"isolated broker binary not configured")

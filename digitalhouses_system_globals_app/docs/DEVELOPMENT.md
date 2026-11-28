@@ -74,3 +74,11 @@ Restart/install actions are omitted because this App does not expose them.
 The main workspace and settings are mounted once; Journal/Toast remain independent.
 Run the existing Chromium test on DEV; production Ingress/theme validation is
 still required before accepting the shared library's pilot.
+
+## DH Lib UI 0.1.2 / Journal 2.0.2 (App 0.1.13)
+
+Status is a separate workspace. RU/EN language selection is shared by the shell,
+settings, LOG and Toast; the initial fallback is HA Core language, then English.
+Language and theme are browser-local preferences. Active toasts retain their
+original messages; changing language never resets their expiry or form drafts.
+The MQTT and storage contracts are unchanged. Real HAOS acceptance is pending.
