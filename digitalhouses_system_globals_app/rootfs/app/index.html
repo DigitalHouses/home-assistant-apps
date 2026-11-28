@@ -7,13 +7,25 @@
 <main class="dh-lib-ui-main" id="workspace">
 <div id="feedback" role="status"><output id="result"></output><small id="card"></small></div>
 <div id="overview">
-<section class="dh-lib-ui-panel"><h2>День / Ночь</h2><p id="mode"></p><div class="row"><button id="day">День</button><button id="night">Ночь</button></div><form id="config"><label>Автоматическое переключение<select name="auto_switch"><option value="">Не задано</option><option value="true">Вкл.</option><option value="false">Выкл.</option></select></label><label>Начало ночи<input name="night_start" type="time"></label><label>Конец ночи<input name="night_end" type="time"></label><label>Часовой пояс расписания<input name="timezone" placeholder="Asia/Almaty"></label><button class="primary">Сохранить расписание</button></form></section>
+<section class="dh-lib-ui-panel"><h2>День / Ночь</h2><div class="mode-grid"><div class="mode-control"><small>Текущий режим</small><p id="mode"></p><div class="row"><button id="day" type="button" aria-pressed="false">День</button><button id="night" type="button" aria-pressed="false">Ночь</button></div></div><form id="config"><label>Автоматическое переключение<select name="auto_switch"><option value="">Не задано</option><option value="true">Вкл.</option><option value="false">Выкл.</option></select></label><label>Начало ночи<input name="night_start" type="time"></label><label>Конец ночи<input name="night_end" type="time"></label><label>Часовой пояс расписания<input name="timezone" placeholder="Asia/Almaty"></label><button class="primary">Сохранить расписание</button></form></div></section>
 <section class="dh-lib-ui-panel"><h2>Профили</h2><div class="grid" id="profiles"></div></section>
+</div><div id="status-page" hidden>
+<div id="service-status"></div>
+<div id="system-diagnostics">
 <section class="dh-lib-ui-panel"><h2>Готовность системы</h2><div id="gates"></div></section>
 <section class="dh-lib-ui-panel"><h2>Жизненный цикл HA</h2><pre id="lifecycle"></pre></section>
-
-</div><div id="status-page" hidden></div><div id="settings-page" hidden><div id="app-settings"></div></div>
+</div></div><div id="settings-page" hidden><div id="app-settings"></div></div>
 <div id="toast-settings" hidden></div><input id="file" type="file" accept=".json,application/json" hidden>
+<dialog id="mode-confirm" aria-labelledby="mode-confirm-title" aria-describedby="mode-confirm-message">
+<form method="dialog">
+<h2 id="mode-confirm-title">Подтверждение переключения</h2>
+<p id="mode-confirm-message"></p>
+<div class="dh-lib-ui-actions">
+<button class="dh-lib-ui-button" value="cancel" autofocus>Отмена</button>
+<button class="dh-lib-ui-button dh-lib-ui-primary" value="confirm">Подтвердить</button>
+</div>
+</form>
+</dialog>
 </main></div>
 <script src="./dh-lib-ui.js"></script><script src="./dh-lib-journal-toast.js"></script><script src="./globals-ui.js"></script>
 </body></html>

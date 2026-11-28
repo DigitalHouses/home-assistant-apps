@@ -23,6 +23,11 @@ def main():
             ha_timezone=SimpleNamespace(snapshot=lambda: "Asia/Almaty")
             def __init__(self,journal):
                 self.journal=journal
+            def submit(self,topic,payload):
+                assert topic=="DigitalHouses/Global/night_mode/set"
+                assert payload in ("on","off")
+                state["night_mode"]=payload
+                return self.view()
             def view(self):
                 return {"state":state,"version":"0.1.10","latest_version":None,"card":{"state":"idle"},"zigbee_bridges":{},"lifecycle":{},**facts}
         server=serve(Service(journal),host="127.0.0.1",port=0,allowed={"127.0.0.1"})

@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.1.14
+- Compact two-column mode/schedule layout with responsive stacking, active Day/Night indication and localized confirmation before manual mode commands. Move readiness and HA lifecycle to Status, suppress idle feedback. Existing profile, scheduling and MQTT contracts are unchanged.
+
 ## 0.1.13
 - Pin DH Lib UI 0.1.2 and DH Lib Journal 2.0.2. Compact header, separate Status section, shared RU/EN preference with HA language fallback, and live relabeling without remounting drafts or Toast.
 
