@@ -2,12 +2,14 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import Depends, FastAPI, HTTPException, Query, status
+from fastapi import Depends, FastAPI, HTTPException, Query, Request, status
 from sqlalchemy.orm import Session
+from starlette.concurrency import run_in_threadpool
 
 from .config import get_settings
 from .db import get_db
 from .protocol import ALLOWED_PRODUCTS
+from .journal import APP_VERSION, dashboard_proxy, require_confirmation
 from .stats import countries, history, installation_history, products, summary, versions
 
 
@@ -16,7 +18,7 @@ logging.basicConfig(level=settings.log_level.upper())
 
 app = FastAPI(
     title="DigitalHouses Stats Local API",
-    version="0.4.4",
+    version=APP_VERSION,
     docs_url=None,
     redoc_url=None,
 )
@@ -77,3 +79,19 @@ def stats_installation_history(
     db: Session = Depends(get_db),
 ) -> list[dict[str, object]]:
     return installation_history(db, days=days)
+
+
+@app.get("/v1/stats/log")
+def stats_log(request: Request):
+    return dashboard_proxy(settings, "/log", request.url.query)
+
+
+@app.get("/v1/stats/log/export")
+def stats_log_export(request: Request):
+    return dashboard_proxy(settings, "/log/export", request.url.query)
+
+
+@app.post("/v1/stats/log/clear")
+async def stats_log_clear(request: Request):
+    await require_confirmation(request)
+    return await run_in_threadpool(dashboard_proxy, settings, "/log/clear", clear=True)

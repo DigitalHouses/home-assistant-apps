@@ -8,6 +8,8 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     database_url: str
     log_level: str = "INFO"
+    journal_path: str = "/var/lib/digitalhouses-stats/journal.sqlite3"
+    journal_timezone: str = "Asia/Almaty"
 
     model_config = SettingsConfigDict(
         env_file=".env",

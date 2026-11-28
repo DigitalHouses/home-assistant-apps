@@ -83,3 +83,23 @@ See `deploy/digitalhouses-stats-country-notifier.service`,
 ### Product succession
 
 Actions App supersedes Aqara Switch App. Both IDs remain in the catalog and telemetry allowlist; the historical Aqara ID is deprecated and is not release-managed. Installations and heartbeats remain keyed by the original product ID. Do not rewrite or combine historical records automatically.
+
+## Local event journal (0.4.5)
+
+The dashboard's **LOG** opens DH Journal 1.0.3 (RU/EN, search, level filter,
+export and confirmed journal-only clear). It starts collecting on deployment;
+historical heartbeats are not replayed. A routine unchanged heartbeat produces
+no journal row. New registrations, upgrades/downgrades, country changes,
+reporting resumed after at least seven days, and rate-limited validation
+rejections are shown. A rejection records only safe field names, not payload
+values. The derived journal contains product, version, country and event time,
+not installation IDs, tokens, IPs or raw requests. Clearing the journal does
+not alter PostgreSQL. Existing authenticated deletion semantics are unchanged.
+
+SQLite is stored at /var/lib/digitalhouses-stats/journal.sqlite3 (3000 records).
+The ingestion process owns the journal; the dashboard uses a fixed loopback
+bridge authenticated by a rotating service-account-only key file. No journal
+access is available through the public telemetry protocol. The LAN dashboard
+is the trusted administrative surface; do not expose it publicly.
+JOURNAL_PATH and JOURNAL_TIMEZONE may be set in the service environment
+(default Asia/Almaty). Journal failures do not stop telemetry ingestion.

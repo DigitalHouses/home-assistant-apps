@@ -174,3 +174,8 @@ button:focus-visible { outline:2px solid #b4d8ff; outline-offset:2px; }
 footer { padding-top:8px; }
 @media(max-width:980px) { .visual-grid,.grid { grid-template-columns:1fr; } }
 @media(max-width:560px) { .country-chart-layout { grid-template-columns:1fr; } .donut { width:160px; } .page { width:calc(100% - 20px); } }
+
+.header-actions { display:flex; align-items:center; gap:8px; flex-wrap:wrap; justify-content:flex-end; }
+.log-button { color:#b4d8ff; background:#283747; border:1px solid #516277; border-radius:7px; padding:8px 14px; font-size:13px; font-weight:700; text-decoration:none; }
+.log-button:hover { background:#304154; }
+.log-button:focus-visible { outline:2px solid #b4d8ff; outline-offset:2px; }
