@@ -137,3 +137,7 @@ and update. No HA API, HA package, MQTT timezone topic, token, cache or separate
 timezone setting is required. LOG, export, toast and dashboard use this zone;
 invalid system timezone falls back to UTC. Database sessions, historical
 timestamps and UTC aggregate boundaries remain UTC.
+
+### Browser favicon (0.4.10)
+
+The LAN dashboard serves a deep-blue analytics favicon at /favicon.ico (16 and 32 px). The main page declares it explicitly; the shared LOG page uses the browser's standard root favicon lookup. No shared library changes.

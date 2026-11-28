@@ -27,7 +27,7 @@ from .products import product_name
 from .local_timezone import local_zone
 
 LOG = logging.getLogger(__name__)
-APP_VERSION = "0.4.9"
+APP_VERSION = "0.4.10"
 RETURN_AFTER = timedelta(days=7)
 LOCALES = {
     "ru": {
