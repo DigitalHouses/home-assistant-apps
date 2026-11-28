@@ -36,6 +36,16 @@ MESSAGES = {
 }
 LOCALES = {lang: {code: words[i] + "{detail_suffix}" for code, words in MESSAGES.items()}
            for i, lang in enumerate(("ru", "en"))}
+LOCALES["ru"].update({
+    "sync_result": "Синхронизация завершена · изменено Views: {views} · Packages: {packages} · Dashboards: {dashboards}",
+    "sync_partial": "Синхронизация с предупреждениями ({issues}) · Views: {views} · Packages: {packages} · Dashboards: {dashboards}",
+    "sync_failed": "Ошибка синхронизации ({issues}) · подробности в статусе DH Sync",
+})
+LOCALES["en"].update({
+    "sync_result": "Synchronization completed · changed Views: {views} · Packages: {packages} · Dashboards: {dashboards}",
+    "sync_partial": "Synchronization completed with warnings ({issues}) · Views: {views} · Packages: {packages} · Dashboards: {dashboards}",
+    "sync_failed": "Synchronization failed ({issues}) · see DH Sync status for details",
+})
 SUCCESS = {"package_updated", "dashboard_created", "dashboard_updated", "view_updated",
            "backup_created", "package_reload_requested", "mqtt_connected"}
 SAFE_DETAIL = re.compile(r"[A-Za-z0-9_. /·→:=+-]{0,350}\Z")
@@ -114,11 +124,11 @@ class EventJournal:
         else:
             self.backend = open_journal(path, debug)
 
-    def record(self, event, detail="", *, product=PRODUCT, level="info"):
+    def record(self, event, detail="", *, product=PRODUCT, level="info", notify=False, **params):
         if event in SUCCESS and level == "info":
             level = "success"
         try:
-            return self.backend.record(level, event, **facts(event, detail, product))
+            return self.backend.record(level, event, notify=notify, **facts(event, detail, product), **params)
         except Exception:
             self.backend.report_failure()
             return False

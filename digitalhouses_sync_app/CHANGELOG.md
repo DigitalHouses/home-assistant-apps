@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.8
+
+- Pin DH Journal 1.1.0 from dh-app-libraries; preserve existing SQLite history with native schema migration.
+- Standard Toast notifications for meaningful sync outcomes only; shared browser preferences and RU/EN via LOG.
+- One summary per sync, with confirmed View, Package and Dashboard change counts. Suppress unchanged automatic results and repeated identical failures.
+
 ## 0.6.7
 
 - Compact full-width Ingress with manual synchronization and LOG in the header.

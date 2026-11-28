@@ -72,3 +72,15 @@ document.addEventListener("visibilitychange", () => {
   if (!document.hidden) refresh();
 });
 refresh();
+
+// Standard DH Journal settings and toast stack. Language follows the LOG preference.
+if (globalThis.DHJournalToast) {
+  let language = "ru";
+  try { if (localStorage.getItem("dh-journal-language") === "en") language = "en"; } catch (_) {}
+  DHJournalToast.mount({
+    product: "digitalhouses_sync_app",
+    endpoint: "./api/log/toasts",
+    language,
+    settingsTarget: document.getElementById("toast-settings")
+  });
+}

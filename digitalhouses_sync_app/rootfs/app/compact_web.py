@@ -13,7 +13,7 @@ main{margin:0 auto;padding:12px 20px;max-width:none}a{color:#8dcaf1}button,.log{
 button:disabled{opacity:.55;cursor:wait}.log{background:#242b30;border:1px solid #465159}
 .metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}.metric{background:#242b30;border-radius:7px;padding:10px 12px;min-width:0}.metric strong{font-size:24px;display:block;font-variant-numeric:tabular-nums;line-height:1.2}
 .ok{color:#87d59c}.warn{color:#ffcf86}.error{color:#ff9999}.status{padding:12px 0}.status-line{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.status-line strong{font-size:15px}.time{margin-left:auto}.status ul{margin:6px 0 0;padding-left:24px;overflow-wrap:anywhere}.status li{margin:2px 0}
-section,details{border-top:1px solid #343d43;padding:10px 0;margin:0}h2{font-size:15px;margin:0 0 5px}summary{cursor:pointer;font-weight:600;padding:3px 0}summary small{font-weight:400;margin-left:10px}
+section:not(.dh-toast-stack),details{border-top:1px solid #343d43;padding:10px 0;margin:0}h2{font-size:15px;margin:0 0 5px}summary{cursor:pointer;font-weight:600;padding:3px 0}summary small{font-weight:400;margin-left:10px}
 table{width:100%;border-collapse:collapse;table-layout:auto}th,td{text-align:left;padding:5px 8px;border-bottom:1px solid #30383d;vertical-align:top;overflow-wrap:anywhere}th{font-size:12px;font-weight:500}tbody tr:last-child td{border-bottom:0}td.num,th.num{text-align:right;white-space:nowrap}.packages{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap}.table-wrap{overflow-x:auto}.technical{padding-top:6px;color:#a8b3ba}.technical p{margin:3px 0}
 @media(max-width:560px){header,main{padding:10px}.metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.time{margin-left:0;width:100%}h1{font-size:17px}th,td{padding:4px}.metric strong{font-size:21px}}
 """
@@ -116,7 +116,7 @@ def render(records, report, *, running=False, failure=""):
     resource_rows = "".join(f'<tr><td>{resource_line(r)}</td><td class="{css_status(r.get("status"))}">{h(result_text(r.get("status","")))}</td></tr>' for r in resources)
     if not resource_rows:
         resource_rows = '<tr><td colspan="2" class="muted">Нет данных</td></tr>'
-    technical = '<p>Источник реестра: MQTT retained /sync</p><p>Источник ресурсов: GitHub DigitalHouses</p><p>DH Journal 1.0.3 · SQLite · 3000 записей</p><p>Home Assistant автоматически не перезапускается. Новые интеграции в пакетах могут требовать обычного перезапуска HA.</p>'
+    technical = '<p>Источник реестра: MQTT retained /sync</p><p>Источник ресурсов: GitHub DigitalHouses</p><p>DH Journal 1.1.0 · SQLite · 3000 записей</p><p>Home Assistant автоматически не перезапускается. Новые интеграции в пакетах могут требовать обычного перезапуска HA.</p>'
     repos = sorted({(str(x.get("repository","")),str(x.get("product_path",""))) for x in records.values()})
     if repos:
         technical += '<p>Источники продуктов:</p>' + "".join(f'<p>{h(repo)} / {h(path)}</p>' for repo,path in repos)
@@ -129,7 +129,10 @@ def page(version, token, fragments, *, can_sync, can_log, running=False):
     f = fragments
     button = f'<button id="sync" type="button" data-token="{h(token)}"{" disabled" if running else ""}>⟳ {"Выполняется проверка…" if running else "Проверить и обновить"}</button>' if can_sync else ""
     log = '<a class="log" href="./log">LOG</a>' if can_log else ""
-    return f'''<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>DH Sync</title><link rel="stylesheet" href="./sync-ui.css"></head><body>
+    toast_css = '<link rel="stylesheet" href="./toast.css?v=1.1.0">' if can_log else ""
+    toast_settings = '<div id="toast-settings"></div><p class="muted">Язык уведомлений / Notification language: RU / EN в LOG</p>' if can_log else ""
+    toast_js = '<script src="./toast.js?v=1.1.0"></script>' if can_log else ""
+    return f'''<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>DH Sync</title><link rel="stylesheet" href="./sync-ui.css">{toast_css}</head><body>
 <header><div class="heading"><h1>DigitalHouses Sync</h1><small>v{h(version)}</small></div>{button}{log}</header>
 <main><div id="metrics" class="metrics">{f["metrics"]}</div>
 <div class="status"><div id="status" role="status" aria-live="polite">{f["status"]}</div><div id="request_error" class="error" role="alert"></div></div>
@@ -137,5 +140,5 @@ def page(version, token, fragments, *, can_sync, can_log, running=False):
 <section id="packages" class="packages">{f["packages"]}</section>
 <details><summary>Продукты (<span id="product_count">{f["product_count"]}</span>) <small>MQTT /sync</small></summary><div class="table-wrap"><table><thead><tr><th>Продукт</th><th>Версия</th><th>Тип</th><th>Instance</th></tr></thead><tbody id="product_rows">{f["product_rows"]}</tbody></table></div></details>
 <details><summary>Все ресурсы (<span id="resource_count">{f["resource_count"]}</span>)</summary><table><thead><tr><th>Ресурс</th><th>Состояние</th></tr></thead><tbody id="resource_rows">{f["resource_rows"]}</tbody></table></details>
-<details><summary>Техническая информация</summary><div id="technical" class="technical">{f["technical"]}</div></details>
-</main><script src="./sync-ui.js"></script></body></html>'''
+<details><summary>Техническая информация</summary><div id="technical" class="technical">{f["technical"]}</div>{toast_settings}</details>
+</main>{toast_js}<script src="./sync-ui.js"></script></body></html>'''

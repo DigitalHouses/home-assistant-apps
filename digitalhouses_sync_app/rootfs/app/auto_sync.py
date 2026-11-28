@@ -383,10 +383,6 @@ class AutoSync:
     def sync(self, claims: dict, *, refresh: bool = False) -> dict:
         with self.lock:
             self._event('sync_started', 'manual' if refresh else 'automatic', level='info' if refresh else 'debug')
-            if refresh:
-                invalidate = getattr(self.backend, "invalidate", None)
-                if callable(invalidate):
-                    invalidate()
             report = {
                 "last_run": "", "trigger": "manual" if refresh else "automatic",
                 "state": "OK", "updated": 0, "unchanged": 0,
@@ -394,6 +390,10 @@ class AutoSync:
                 "packages": None,
             }
             try:
+                if refresh:
+                    invalidate = getattr(self.backend, "invalidate", None)
+                    if callable(invalidate):
+                        invalidate()
                 self._check_root()
                 self.recover()
                 resources, issues = self._published(claims)
@@ -470,12 +470,26 @@ class AutoSync:
                 report["state"] = "Error"
                 report["issues"].append(str(exc)[:200])
                 LOG.exception("Automatic sync failed")
-            if refresh or report["issues"] != self.report["issues"]:
-                if report["issues"]:
-                    self._event("sync_issue", f"issues={len(report['issues'])}", level="warning")
-            self._event("sync_finished", f"{report['state']} · updated={report['updated']} · current={report['unchanged']} · issues={len(report['issues'])}",
-                        level=("success" if report["state"] == "OK" else "warning")
-                        if refresh or report["updated"] or report["state"] != self.report["state"] or report["issues"] != self.report["issues"] else "debug")
+            # One notification per meaningful result, never per resource.
+            # Identical recurring failures are retained only as DEBUG unless a
+            # manual check is requested or resources have actually changed.
+            attention = report["state"] != self.report["state"] or report["issues"] != self.report["issues"]
+            changed = [r for r in report["resources"] if r["status"] in ("Updated", "Removed")]
+            counts = {key: sum(r.get("kind") == kind for r in changed)
+                      for key, kind in (("views", "View"), ("packages", "Package"), ("dashboards", "Dashboard"))}
+            if report["state"] == "OK":
+                code, level = "sync_result", "success"
+                notify = bool(changed)
+            elif report["state"] == "Partial":
+                code, level = "sync_partial", "warning"
+                notify = bool(refresh or changed or attention)
+            else:
+                code, level = "sync_failed", "error"
+                notify = bool(refresh or changed or attention)
+            if not (notify or refresh or attention):
+                level = "debug"
+            self._event(code, level=level, notify=notify, **counts,
+                        issues=len(report["issues"]), unchanged=report["unchanged"])
             report["last_run"] = datetime.now(timezone.utc).isoformat()
             self.report = report
             LOG.info("Auto-sync %s: updated=%s current=%s issues=%s",

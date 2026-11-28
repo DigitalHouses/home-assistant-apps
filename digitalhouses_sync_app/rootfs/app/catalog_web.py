@@ -201,7 +201,7 @@ def make_server(sources: ProductSources, inventory=None, *, version: str = 'deve
                 return
             journal_allowed = (self.client_address[0] == "172.30.32.2"
                                or (port == 0 and self.client_address[0] == "127.0.0.1"))
-            if journal is not None and path in (*ASSETS, "/api/log", "/api/log/export"):
+            if journal is not None and path in (*ASSETS, "/api/log", "/api/log/export", "/api/log/toasts"):
                 if not journal_allowed:
                     self.send_error(403)
                     return

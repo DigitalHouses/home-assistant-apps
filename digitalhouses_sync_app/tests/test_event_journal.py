@@ -39,6 +39,23 @@ class JournalTests(unittest.TestCase):
             self.assertEqual([r["code"] for r in j.backend.snapshot()["rows"]], ["journal_cleared"])
             j.backend.close()
 
+    def test_upgrade_103_in_place_and_no_historical_toasts(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "journal.db"
+            with closing(sqlite3.connect(path)) as db, db:
+                db.execute("CREATE TABLE events (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT NOT NULL, level TEXT NOT NULL, code TEXT NOT NULL, params TEXT NOT NULL)")
+                db.execute("INSERT INTO events VALUES (7,?,?,?,?)", ("2026-11-28T10:00:00.000+00:00", "success", "sync_finished", '{"detail_suffix":" · old"}'))
+            journal = EventJournal(path)
+            self.assertEqual(journal.backend.snapshot()["rows"][0]["id"], 7)
+            self.assertEqual(journal.backend.toast_snapshot(0)["rows"], [])
+            journal.record("sync_result", level="success", notify=True, views=2, packages=1, dashboards=0, issues=0)
+            self.assertEqual(journal.backend.toast_snapshot(7)["rows"][0]["id"], 8)
+            journal.backend.close()
+            journal = EventJournal(path)
+            self.assertEqual(journal.backend.snapshot()["count"], 2)
+            self.assertEqual(journal.backend.toast_snapshot()["rows"], [])
+            journal.backend.close()
+
     def test_retention_and_debug(self):
         with tempfile.TemporaryDirectory() as tmp:
             j = EventJournal(Path(tmp) / "journal.db")
@@ -66,10 +83,24 @@ class JournalTests(unittest.TestCase):
             base = f"http://127.0.0.1:{server.server_port}"
             try:
                 self.assertIn(b"LOG", urlopen(base + "/log").read())
-                self.assertIn(b"./log", urlopen(base + "/").read())
+                page = urlopen(base + "/").read()
+                self.assertIn(b"./log", page)
+                self.assertIn(b"./toast.js?v=1.1.0", page)
+                self.assertIn(b"toast-settings", page)
+                self.assertIn(b"DHJournalToast.mount", urlopen(base + "/sync-ui.js").read())
+                self.assertIn(b"DHJournalToast", urlopen(base + "/toast.js").read())
+                self.assertIn(b"dh-toast-stack", urlopen(base + "/toast.css").read())
+                cursor = json.load(urlopen(base + "/api/log/toasts"))["cursor"]
+                j.record("sync_result", level="success", notify=True, views=2, packages=1, dashboards=0)
+                for lang, message in (("ru", "Синхронизация завершена"), ("en", "Synchronization completed")):
+                    data = json.load(urlopen(base + f"/api/log/toasts?lang={lang}&after={cursor}"))
+                    self.assertEqual(len(data["rows"]), 1)
+                    self.assertIn(message, data["rows"][0]["message"])
+                    self.assertIn("Views: 2", data["rows"][0]["message"])
+                self.assertEqual(json.load(urlopen(base + "/api/log/toasts"))["rows"], [])
                 self.assertIn(b"function", urlopen(base + "/journal.js").read())
                 data = json.load(urlopen(base + "/api/log?lang=en"))
-                self.assertEqual(data["count"], 1)
+                self.assertEqual(data["count"], 2)
                 self.assertIn("APPLICATION START", data["rows"][0]["message"])
                 export = urlopen(base + "/api/log/export?lang=en")
                 self.assertIn(".log", export.headers["Content-Disposition"])
