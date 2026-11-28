@@ -309,6 +309,7 @@ sections:
       show_icon: false
       show_name: false
       show_state: false
+      disable_kbd: true
       tap_action:
         action: none
       hold_action:
@@ -318,12 +319,15 @@ sections:
       styles:
         card:
         - padding: 4px 16px
+        - pointer-events: auto
+        - cursor: default
         grid:
         - grid-template-areas: '"picker"'
         - grid-template-columns: 1fr
         custom_fields:
           picker:
           - width: 100%
+          - pointer-events: auto
       custom_fields:
         picker: |
           [[[
@@ -350,7 +354,8 @@ sections:
               save(configured ? '' : value)?.catch(() => {});
             };
             return html`
-              <div style="display:flex;align-items:center;gap:10px;min-height:40px">
+              <div style="display:flex;align-items:center;gap:10px;min-height:40px;pointer-events:auto"
+                @mousedown=${stop} @mouseup=${stop} @touchstart=${stop} @touchend=${stop} @touchcancel=${stop} @keydown=${stop}>
                 <span style="flex:1;text-align:left;white-space:normal">RGB color</span>
                 <span style="color:var(--secondary-text-color);font-size:12px">${available ? (configured ? '' : 'Not set') : 'Unavailable'}</span>
                 <input type="color" aria-label="RGB color" title="RGB color"
@@ -385,6 +390,7 @@ sections:
       show_icon: false
       show_name: false
       show_state: false
+      disable_kbd: true
       tap_action:
         action: none
       hold_action:
@@ -394,12 +400,15 @@ sections:
       styles:
         card:
         - padding: 4px 16px
+        - pointer-events: auto
+        - cursor: default
         grid:
         - grid-template-areas: '"picker"'
         - grid-template-columns: 1fr
         custom_fields:
           picker:
           - width: 100%
+          - pointer-events: auto
       custom_fields:
         picker: |
           [[[
@@ -426,7 +435,8 @@ sections:
               save(configured ? '' : value)?.catch(() => {});
             };
             return html`
-              <div style="display:flex;align-items:center;gap:10px;min-height:40px">
+              <div style="display:flex;align-items:center;gap:10px;min-height:40px;pointer-events:auto"
+                @mousedown=${stop} @mouseup=${stop} @touchstart=${stop} @touchend=${stop} @touchcancel=${stop} @keydown=${stop}>
                 <span style="flex:1;text-align:left;white-space:normal">RGB color</span>
                 <span style="color:var(--secondary-text-color);font-size:12px">${available ? (configured ? '' : 'Not set') : 'Unavailable'}</span>
                 <input type="color" aria-label="RGB color" title="RGB color"
