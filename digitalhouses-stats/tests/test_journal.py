@@ -74,7 +74,7 @@ def test_accepted_heartbeat_journal_and_private_routes(tmp_path, monkeypatch):
         response = client.get("/internal/journal/log?lang=en", headers=internal)
         assert response.status_code == 200
         data = response.json()
-        assert data["app_version"] == "0.4.9"
+        assert data["app_version"] == "0.4.10"
         assert [r["code"] for r in data["rows"]] == [
             "app_started", "installation_new", "country_new_installation", "version_upgraded", "telemetry_rejected"]
         toasts = client.get("/internal/journal/log/toasts?lang=en&after=1", headers=internal).json()
