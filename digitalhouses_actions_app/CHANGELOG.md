@@ -2,6 +2,13 @@
 
 Historical releases below were published as DigitalHouses Aqara Switch App; their identifiers are retained.
 
+## 0.3.12
+
+- Add Ingress Lights tab with explicit per-light Day/Night and Adaptive CCT settings. Brightness-only lights support Day/Night; RGB+CCT targets require a color selection; RGB disables Adaptive. Preserve all existing key/sensor/schedule bindings and the live global auto_day_night switch. New adaptation settings default off, including upgrades: select the participating lights explicitly.
+- Day/Night applies the global profile to explicitly selected, already-ON lights independently of who turned them on; key, fixed and presence assignments no longer produce false global light-profile conflicts. Preserve existing media adaptation and presence-owned mode-specific actions for targets not selected for explicit Day/Night; mode-disallowed presence targets retain their verified OFF lifecycle.
+- Adaptive CCT uses the day/night CCT endpoints from DH System Globals and HA sun.sun sunrise, solar noon and sunset with a normalized cosine curve, corrected at most once per 30 minutes. No brightness/RGB commands, no separate settings or polling. Combined Day/Night and Adaptive use the solar CCT by day and the night endpoint during the home night mode. HA only provides future sun events: on a cold midday start, the missing elapsed anchor is estimated from the next day's local wall time until observed anchors are available.
+- Reuse verified Z2M/HA dispatch, profile confirmation and ownership safeguards; skip already matching or OFF/unavailable targets, reject overlapping selected groups/members, keep Auto-OFF timers when a confirmed adaptation changes parameters. Store Lights configuration atomically in /data/lights.json, separate from the existing bindings-only JSON import/export. No installation or binding migration required.
+
 ## 0.3.11
 
 - Align the active checkbox beside the Day/Night heading, rather than at the far edge.

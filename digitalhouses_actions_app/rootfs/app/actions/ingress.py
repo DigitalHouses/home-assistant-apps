@@ -7,7 +7,7 @@ from pathlib import Path
 from urllib.parse import urlsplit, parse_qs
 
 from .catalog import CatalogError
-from . import climate_rules, media_rules, profiles, sensor_rules, schedule_rules
+from . import climate_rules, media_rules, profiles, sensor_rules, schedule_rules, lights
 from .binding_store import binding_document, validate_document, decode_json
 from .entity_options import parse_rows, render_rows, project
 from .ingress_catalog import normalize, supported_actions, required_keep
@@ -56,6 +56,8 @@ def snapshot(app):
         schedule_timezone=getattr(scheduler.zone,"key",None) if scheduler and scheduler.ready else None
         global_mode = getattr(app,"_home_profile",None)
         auto_day_night = getattr(app,"globals",{}).get("auto_day_night",False)
+        light_settings=deepcopy(getattr(app,"light_settings",{}))
+        lights_error=getattr(app,"light_settings_error",None)
     rows = parse_rows(app.options.read())
     indexed = {r["entity_id"]:r for r in rows if not sensor_rules.is_source(r["entity_id"]) and not schedule_rules.is_schedule(r["entity_id"])}
     sensor_rows={r["entity_id"]:r for r in rows if sensor_rules.is_source(r["entity_id"])}
@@ -92,7 +94,7 @@ def snapshot(app):
                         "status":"missing","reason":"Не найден в каталоге","relay_timers":row.get("relay_timers",{}),
                         "enabled":row["enabled"],"disabled_actions":row.get("disabled_actions",[]),"actions":[],
                         "bindings":{k:normalize(v) for k,v in row["actions"].items()}})
-    return {"devices":devices,"sensors":sensors,"schedules":[r for r in rows if schedule_rules.is_schedule(r["entity_id"])],"schedule_timezone":schedule_timezone,"sensor_runtime_ready":sensor_runtime_ready,"sensor_deadlines":sensor_deadlines,"targets":list(targets.values()),"scan":scan,
+    return {"lights":light_settings,"lights_revision":revision(light_settings),"lights_error":lights_error,"devices":devices,"sensors":sensors,"schedules":[r for r in rows if schedule_rules.is_schedule(r["entity_id"])],"schedule_timezone":schedule_timezone,"sensor_runtime_ready":sensor_runtime_ready,"sensor_deadlines":sensor_deadlines,"targets":list(targets.values()),"scan":scan,
             "report":report,"revision":revision(rows),"version":app.version,"maintenance_mode":maintenance,"home_mode":global_mode["mode"] if global_mode else None,"auto_day_night":auto_day_night,"home_profiles_ready":bool(global_mode and "day" in global_mode and "night" in global_mode)}
 
 def validate_assignment(assignment, targets):
@@ -251,6 +253,29 @@ def save_sensor(app,payload):
             app.options.write(options)
             app.config=projected
     finally:app._scan_lock.release()
+
+def save_lights(app,payload):
+    if not isinstance(payload,dict) or set(payload)!={"revision","lights"}:
+        raise CatalogError("Некорректные настройки Lights")
+    rows=lights.validate(payload["lights"])
+    if not app._scan_lock.acquire(blocking=False):raise CatalogError("Идёт сканирование")
+    try:
+        with app._mutex:
+            if payload["revision"]!=revision(app.light_settings):
+                raise CatalogError("Настройки изменились — обновите страницу")
+            for eid,row in rows.items():
+                if row!=app.light_settings.get(eid):
+                    target=app.target_catalog.get(eid,{})
+                    lights.validate_target(eid,row,target)
+                    if target.get("integration")=="group" and not target.get("group"):
+                        raise CatalogError("Состав HA-группы не подтверждён: "+eid)
+            conflicts=lights.overlaps(rows,app.config.get("light_routes",{}))
+            if conflicts:
+                raise CatalogError("Пересечение групп/светильников: "+", ".join(sorted(conflicts)))
+            app.light_settings=lights.write(app._lights_path,rows)
+            app.light_settings_error=None
+    finally:app._scan_lock.release()
+
 
 def save_schedule(app,payload):
     if not isinstance(payload,dict) or set(payload)!={"revision","config"}:
@@ -457,6 +482,8 @@ def start_ingress(app, port=8099):
                 elif path == "/api/browse-media":
                     self.reply(200,browse_media(app,payload))
                     return
+                elif path == "/api/save-lights":
+                    save_lights(app,payload)
                 elif path == "/api/save-schedule":
                     save_schedule(app,payload)
                 elif path == "/api/delete-schedule":
