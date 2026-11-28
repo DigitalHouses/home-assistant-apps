@@ -45,6 +45,20 @@ STATES=[
 ]
 
 class IngressTests(unittest.TestCase):
+    def test_system_globals_pickers_excluded_from_catalog_and_transport(self):
+        from actions.lab_lights import authorized_ha_light_ids
+        entries=[
+            {"entity_id":"light.dh_system_globals_app_day_rgb_picker","platform":"template"},
+            {"entity_id":"light.dh_system_globals_app_night_rgb_picker","platform":"template"},
+            {"entity_id":"light.renamed_picker","platform":"template",
+             "unique_id":"dh_system_globals_app_day_rgb_picker"},
+            {"entity_id":"light.real_template_rgb","platform":"template","unique_id":"other_rgb"},
+        ]
+        states=[{"entity_id":e["entity_id"],"state":"on","attributes":{"supported_color_modes":["rgb"]}} for e in entries]
+        catalog=target_catalog(([],[],entries),states,{"rooms":[]})
+        self.assertEqual(set(catalog),{"light.real_template_rgb"})
+        self.assertEqual(authorized_ha_light_ids(entries,{e["entity_id"] for e in entries}),set(catalog))
+
     def test_individual_operations_and_domains(self):
         rule=parse_rule({"assignments":ASSIGNMENTS})
         sw={"fingerprint":{"actions":["single"]},"bindings":{"single":rule}}

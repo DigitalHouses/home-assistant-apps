@@ -12,6 +12,7 @@ from .binding_store import binding_document, validate_document, decode_json
 from .entity_options import parse_rows, render_rows, project
 from .ingress_catalog import normalize, supported_actions, required_keep
 from .light_rules import parse_rule
+from .lab_lights import is_profile_picker
 from .mode_keeper import action_channels, validate_keep_mode, PHYSICAL
 
 WEB = Path(__file__).with_name("web")
@@ -56,7 +57,12 @@ def snapshot(app):
         schedule_timezone=getattr(scheduler.zone,"key",None) if scheduler and scheduler.ready else None
         global_mode = getattr(app,"_home_profile",None)
         auto_day_night = getattr(app,"globals",{}).get("auto_day_night",False)
-        light_settings=deepcopy(getattr(app,"light_settings",{}))
+        saved_lights=deepcopy(getattr(app,"light_settings",{}))
+        light_revision=revision(saved_lights)
+        registries=getattr(app,"_target_registries",None)
+        entries={e["entity_id"]:e for e in registries[2]} if registries else {}
+        light_settings={eid:row for eid,row in saved_lights.items()
+                        if not is_profile_picker(eid,entries.get(eid))}
         lights_error=getattr(app,"light_settings_error",None)
     rows = parse_rows(app.options.read())
     indexed = {r["entity_id"]:r for r in rows if not sensor_rules.is_source(r["entity_id"]) and not schedule_rules.is_schedule(r["entity_id"])}
@@ -94,7 +100,7 @@ def snapshot(app):
                         "status":"missing","reason":"Не найден в каталоге","relay_timers":row.get("relay_timers",{}),
                         "enabled":row["enabled"],"disabled_actions":row.get("disabled_actions",[]),"actions":[],
                         "bindings":{k:normalize(v) for k,v in row["actions"].items()}})
-    return {"lights":light_settings,"lights_revision":revision(light_settings),"lights_error":lights_error,"devices":devices,"sensors":sensors,"schedules":[r for r in rows if schedule_rules.is_schedule(r["entity_id"])],"schedule_timezone":schedule_timezone,"sensor_runtime_ready":sensor_runtime_ready,"sensor_deadlines":sensor_deadlines,"targets":list(targets.values()),"scan":scan,
+    return {"lights":light_settings,"lights_revision":light_revision,"lights_error":lights_error,"devices":devices,"sensors":sensors,"schedules":[r for r in rows if schedule_rules.is_schedule(r["entity_id"])],"schedule_timezone":schedule_timezone,"sensor_runtime_ready":sensor_runtime_ready,"sensor_deadlines":sensor_deadlines,"targets":list(targets.values()),"scan":scan,
             "report":report,"revision":revision(rows),"version":app.version,"maintenance_mode":maintenance,"home_mode":global_mode["mode"] if global_mode else None,"auto_day_night":auto_day_night,"home_profiles_ready":bool(global_mode and "day" in global_mode and "night" in global_mode)}
 
 def validate_assignment(assignment, targets):
