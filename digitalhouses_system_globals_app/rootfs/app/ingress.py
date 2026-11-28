@@ -9,6 +9,12 @@ from core import ContractError, GLOBAL, PRODUCT
 from discovery import CTRL, OPS
 
 HTML=Path(__file__).with_name("index.html")
+UI_ASSETS={
+    "/dh-lib-ui.css": ("dh_lib_ui/dh-lib-ui.css","text/css"),
+    "/dh-lib-ui.js": ("dh_lib_ui/dh-lib-ui.js","application/javascript"),
+    "/globals-ui.css": ("globals-ui.css","text/css"),
+    "/globals-ui.js": ("globals-ui.js","application/javascript"),
+}
 ALLOWED={"internal/import",GLOBAL+"/set",PRODUCT+"/config/set",PRODUCT+"/profiles/set"}|{CTRL+o for o in OPS}
 
 
@@ -39,6 +45,9 @@ def serve(service,*,host,port,allowed):
                 return
             if self.path in ("/","/index.html"):
                 self.output(200,HTML.read_bytes(),"text/html")
+            elif self.path in UI_ASSETS:
+                path,mime=UI_ASSETS[self.path]
+                self.output(200,(HTML.parent/path).read_bytes(),mime)
             elif self.path=="/api/state":
                 self.output(200,service.view())
             elif getattr(service,"journal",None) is not None:

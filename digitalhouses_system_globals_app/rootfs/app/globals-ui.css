@@ -1,0 +1,16 @@
+body{margin:0;background:var(--dh-lib-ui-bg);color:var(--dh-lib-ui-text)}
+#workspace{max-width:1100px;margin:auto}
+#overview section{margin-bottom:14px}
+#overview h2{font-size:18px;margin:0 0 12px}#overview h3{font-size:16px}
+#overview button,#overview input,#overview select{font:inherit;border-radius:6px;padding:8px;border:1px solid var(--dh-lib-ui-border);background:var(--dh-lib-ui-surface);color:var(--dh-lib-ui-text);min-width:0;max-width:100%}
+#overview button{cursor:pointer}#overview button:disabled{opacity:.5;cursor:not-allowed}
+#overview button.primary{background:var(--dh-lib-ui-primary);color:var(--dh-lib-ui-primary-text);display:block;margin-inline-start:auto}
+#overview :is(button,input,select):focus-visible{outline:2px solid var(--dh-lib-ui-focus);outline-offset:2px}
+#overview label{display:grid;grid-template-columns:1fr minmax(100px,150px);gap:8px;align-items:center;margin:8px 0}
+#overview input[type=color]{width:100%;height:38px;padding:2px}
+#overview input[type=checkbox]{justify-self:end}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:16px}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.good{color:var(--dh-lib-ui-success)}.bad{color:var(--dh-lib-ui-error)}
+small{color:var(--dh-lib-ui-muted)}pre{white-space:pre-wrap;overflow-wrap:anywhere}
+#feedback{margin-bottom:12px;overflow-wrap:anywhere}#result{display:block}#result:empty{display:none}
