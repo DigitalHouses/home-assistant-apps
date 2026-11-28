@@ -3,13 +3,17 @@ from __future__ import annotations
 import logging
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request, Response, status
-from sqlalchemy.exc import IntegrityError
+from fastapi.exceptions import RequestValidationError
+from fastapi.exception_handlers import request_validation_exception_handler
+from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from .config import get_settings
 from .country import country_from_cloudflare
 from .db import get_db
 from .models import Heartbeat, Installation
+from .journal import APP_VERSION, lifespan_for, observe, rejected, internal_get, clear_internal
 from .protocol import DeletePayload, HeartbeatPayload
 from .security import bearer_token, token_hash, token_matches
 
@@ -19,7 +23,8 @@ logging.basicConfig(level=settings.log_level.upper())
 
 app = FastAPI(
     title="DigitalHouses Stats",
-    version="0.4.4",
+    version=APP_VERSION,
+    lifespan=lifespan_for(settings),
     docs_url=None,
     redoc_url=None,
 )
@@ -62,7 +67,7 @@ def _load_installation(
     product: str,
     installation_id: object,
 ) -> Installation | None:
-    return db.get(Installation, (product, installation_id))
+    return db.get(Installation, (product, installation_id), with_for_update=True)
 
 
 @app.get("/healthz")
@@ -89,6 +94,7 @@ def heartbeat(
         installation_id=payload.installation_id,
     )
 
+    new = installation is None
     if installation is None:
         installation = Installation(
             product=payload.product,
@@ -99,6 +105,7 @@ def heartbeat(
         try:
             db.flush()
         except IntegrityError:
+            new = False
             db.rollback()
             installation = _load_installation(
                 db,
@@ -118,6 +125,20 @@ def heartbeat(
             detail="installation token mismatch",
         )
 
+    journal = getattr(request.app.state, "journal", None)
+    previous = None
+    if journal is not None and not new:
+        # An optional diagnostic read must not poison the heartbeat transaction.
+        try:
+            with db.begin_nested():
+                previous = db.execute(select(Heartbeat).where(
+                    Heartbeat.product == payload.product,
+                    Heartbeat.installation_id == payload.installation_id,
+                ).order_by(Heartbeat.received_at.desc(), Heartbeat.id.desc()).limit(1)).scalar_one_or_none()
+        except SQLAlchemyError:
+            journal.report_failure()
+            journal = None
+
     db.add(
         Heartbeat(
             product=payload.product,
@@ -128,6 +149,8 @@ def heartbeat(
         )
     )
     db.commit()
+    observe(journal, product=payload.product, version=payload.version, country=country,
+            previous=previous, new=new)
 
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
@@ -165,3 +188,26 @@ def delete_installation(
 
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_error(request: Request, exc: RequestValidationError):
+    if request.url.path == "/v1/heartbeat":
+        rejected(getattr(request.app.state, "journal", None), exc.errors(),
+                 country_from_cloudflare(request.headers.get("cf-ipcountry")))
+    return await request_validation_exception_handler(request, exc)
+
+
+@app.get("/internal/journal/log", include_in_schema=False)
+def internal_log(request: Request):
+    return internal_get(request, settings, "/api/log")
+
+
+@app.get("/internal/journal/log/export", include_in_schema=False)
+def internal_export(request: Request):
+    return internal_get(request, settings, "/api/log/export")
+
+
+@app.post("/internal/journal/log/clear", include_in_schema=False)
+async def internal_clear(request: Request):
+    return await clear_internal(request)
