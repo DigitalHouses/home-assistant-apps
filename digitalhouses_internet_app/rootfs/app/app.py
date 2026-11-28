@@ -49,6 +49,8 @@ from recovery import (
     target_by_name,
 )
 from speedtest import (
+    RATE_LIMIT_PAUSE_SECONDS,
+    is_rate_limit_error,
     list_servers,
     load_last_result,
     load_servers_state,
@@ -782,6 +784,8 @@ class InternetApp:
             self.log.info("Speedtest operation is already running")
             return
         try:
+            if self._speedtest_paused():
+                return
             try:
                 latest = sample(
                     self.config.router_ip,
@@ -799,7 +803,9 @@ class InternetApp:
             try:
                 servers = list_servers()
             except RuntimeError as exc:
-                self.servers["error"] = str(exc)
+                if is_rate_limit_error(str(exc)):
+                    self._pause_speedtest()
+                self.servers["error"] = "Server refresh failed"
                 save_servers_state(SERVERS_FILE, self.servers)
                 self._publish_servers()
                 self.log.error("Ookla server refresh failed: %s", exc)
@@ -821,13 +827,21 @@ class InternetApp:
             if source == "automatic":
                 self.speedtest["automatic_failure_streak"] += 1
                 save_last_result(SPEEDTEST_FILE, self.speedtest)
-            streak = self.speedtest["automatic_failure_streak"]
-        self._event(
-            "speedtest_failed",
-            reason=reason,
-            source=source,
-            automatic_failure_streak=streak,
+        self.log.warning("Speedtest %s failed: %s", source, reason)
+
+    def _speedtest_paused(self) -> bool:
+        until = self.speedtest.get("rate_limit_until")
+        return until is not None and now_local().timestamp() < until
+
+    def _pause_speedtest(self) -> None:
+        with self.lock:
+            self.speedtest["rate_limit_until"] = (
+                now_local().timestamp() + RATE_LIMIT_PAUSE_SECONDS
+            )
+        self._set_speedtest_status(
+            "idle", error="Rate limited", last_result="error"
         )
+        self.log.warning("Ookla rate limit: Speedtest paused for 24 hours")
 
     def _run_speedtest(self, *, source: str) -> None:
         if source not in {"manual", "automatic"}:
@@ -836,6 +850,8 @@ class InternetApp:
             self.log.info("Speedtest is already running")
             return
         try:
+            if self._speedtest_paused():
+                return
             try:
                 latest = sample(
                     self.config.router_ip,
@@ -845,7 +861,7 @@ class InternetApp:
                 message = f"Connectivity probe failed: {exc}"
                 self._set_speedtest_status(
                     "idle",
-                    error=message,
+                    error="Speedtest unavailable",
                     last_result="error",
                 )
                 self._record_speedtest_failure(message, source=source)
@@ -869,6 +885,7 @@ class InternetApp:
                 candidates.append(None)
 
             errors: list[str] = []
+            rate_limited = False
             result: dict[str, Any] | None = None
             for server_id in candidates:
                 selection = "automatic" if server_id is None else f"server {server_id}"
@@ -886,13 +903,17 @@ class InternetApp:
                         selection,
                         exc,
                     )
+                    if is_rate_limit_error(str(exc)):
+                        rate_limited = True
+                        break
             if result is None:
                 message = " | ".join(errors)[-1800:]
-                self._set_speedtest_status(
-                    "idle",
-                    error=message,
-                    last_result="error",
-                )
+                if rate_limited:
+                    self._pause_speedtest()
+                else:
+                    self._set_speedtest_status(
+                        "idle", error="Speedtest unavailable", last_result="error"
+                    )
                 self._record_speedtest_failure(message, source=source)
                 return
 

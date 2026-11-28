@@ -24,7 +24,6 @@ NOTIFICATION_EVENTS = (
     "recovery_stopped",
     "recovery_exhausted",
     "recovery_error",
-    "speedtest_failed",
     "performance_problem_started",
     "performance_problem_recovered",
     "performance_problem_updated",
@@ -37,7 +36,6 @@ NOTIFICATION_REQUIRED_FIELDS = {
     "recovery_stopped": ("reason",),
     "recovery_exhausted": ("cycles", "cooldown_seconds"),
     "recovery_error": ("error",),
-    "speedtest_failed": ("reason", "source", "automatic_failure_streak"),
     "performance_problem_started": (
         "reasons",
         "download_mbps",
@@ -211,21 +209,9 @@ class PresentationTests(unittest.TestCase):
             self.assertNotIn("default(", content)
             self.assertNotIn("int(0)", content)
 
-    def test_speedtest_failure_notifications_use_five_failure_threshold(self) -> None:
+    def test_speedtest_failures_are_not_user_notifications(self) -> None:
         for path in notification_paths():
-            content = path.read_text(encoding="utf-8")
-            self.assertIn(
-                "trigger.to_state.attributes.source == 'manual'",
-                content,
-            )
-            self.assertIn(
-                "trigger.to_state.attributes.source == 'automatic'",
-                content,
-            )
-            self.assertIn(
-                "trigger.to_state.attributes.automatic_failure_streak == 5",
-                content,
-            )
+            self.assertNotIn("speedtest_failed", path.read_text(encoding="utf-8"))
 
     def test_incident_events_follow_retained_state_publication(self) -> None:
         source = (APP_DIR / "app.py").read_text(encoding="utf-8")

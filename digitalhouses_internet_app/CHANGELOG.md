@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.28
+
+- Remove technical Speedtest failures from user notifications; preserve connectivity and quality alerts.
+- Stop fallback on Ookla rate limits and persist a 24-hour protective pause. Keep last valid measurements and show a concise diagnostic status.
+
 ## 0.1.27
 
 - Keep traffic acquisition and persistent accounting at 60 seconds; publish cumulative totals, monthly totals and traffic history on a 15-minute cadence, with fresh startup/month-boundary snapshots.
