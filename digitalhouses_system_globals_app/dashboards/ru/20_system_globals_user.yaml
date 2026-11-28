@@ -84,6 +84,11 @@ sections:
         action: more-info
     - type: custom:mushroom-template-card
       entity: sensor.dh_system_globals_app_active_rgb_color
+      color: >-
+        {% set rgb = states(entity) | from_json(default=none) %}
+        {{ '#%02X%02X%02X' | format(rgb[0], rgb[1], rgb[2])
+           if rgb is sequence and rgb is not string and rgb is not mapping and rgb | count == 3
+           and rgb[0] is integer and rgb[1] is integer and rgb[2] is integer else 'disabled' }}
       primary: Цвет RGB
       icon: mdi:palette
       secondary: >-
@@ -109,6 +114,7 @@ sections:
   - type: grid
     grid_options:
       columns: full
+      rows: auto
     columns: 2
     square: false
     cards:
