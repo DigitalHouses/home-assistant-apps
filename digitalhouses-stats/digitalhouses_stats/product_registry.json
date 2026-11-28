@@ -176,7 +176,11 @@
       "entity_prefix": "dh_network_app",
       "display_name": "Network App",
       "telemetry_allowed": true,
-      "release": null,
+      "release": {
+        "title": "DigitalHouses Network App",
+        "version_source": "haos_config",
+        "policy_baseline": "0.1.32"
+      },
       "repository_directory": "digitalhouses_network_app",
       "haos_slug": "digitalhouses_network_app"
     },

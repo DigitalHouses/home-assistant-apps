@@ -4,7 +4,7 @@ from __future__ import annotations
 import struct
 from pathlib import Path
 
-from validators.common import fail, require_files
+from validators.common import fail, load_yaml, require_files
 
 
 def validate_network(root: Path, app: Path, context: dict) -> None:
@@ -17,15 +17,18 @@ def validate_network(root: Path, app: Path, context: dict) -> None:
         fail("Network App requires dynamically assigned Supervisor Ingress port")
     if config.get("panel_admin") is not True:
         fail("Network App settings require an HA administrator")
-    if config.get("image"):
-        fail("Network App foundation must use Supervisor source build, not an unpublished image")
+    if context["version"] == "0.1.32":
+        if config.get("image"):
+            fail("Historical Network App 0.1.32 uses a Supervisor source build")
+    elif config.get("image") != "ghcr.io/digitalhouses/digitalhouses_network_app":
+        fail("Network App requires the canonical immutable GHCR image")
     if (config.get("full_access") or config.get("docker_api")
             or config.get("host_pid")
             or config.get("host_dbus") or config.get("apparmor") is False
             or config.get("map")
             or config.get("ports") or config.get("ports_description")):
         fail("Foundation preview cannot request host privileges or expose ports")
-    if context["version"] != "0.1.32":
+    if context["version"] not in {"0.1.32", "0.1.33"}:
         fail("Network App pilot security policy requires review for every new version")
     if config.get("homeassistant_api") is not True:
         fail("Network App requires HA Core API via Supervisor proxy")
@@ -47,6 +50,18 @@ def validate_network(root: Path, app: Path, context: dict) -> None:
         fail("Network App telemetry consent must default to false")
     if config.get("schema", {}).get("telemetry_enabled") != "bool":
         fail("Network App must expose one boolean telemetry consent option")
+    if context["version"] == "0.1.33":
+        for language in ("en", "ru"):
+            path = app / "translations" / f"{language}.yaml"
+            fields = load_yaml(path, root).get("configuration")
+            if not isinstance(fields, dict) or fields.keys() != config["schema"].keys():
+                fail(f"Network App {language} translations must cover the Supervisor schema")
+            for key, field in fields.items():
+                if not isinstance(field, dict) or not all(
+                    isinstance(field.get(part), str) and field[part].strip()
+                    for part in ("name", "description")
+                ):
+                    fail(f"Network App {language} translation for {key} requires a name and description")
     launcher = (app / "rootfs/run.sh").read_text(encoding="utf-8")
     if (
         "bashio::config.true 'telemetry_enabled'" not in launcher

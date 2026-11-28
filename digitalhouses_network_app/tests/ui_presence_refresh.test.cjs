@@ -120,6 +120,6 @@ test('Settings summary has diagnostics but no duplicate polling interval cards',
  assert.doesNotMatch(main,/id="interval"|id="arp-interval"/);
  assert.match(main,/id="export"/);
  assert.match(main,/id="reset"/);
- assert.match(html,/\['poll_interval_seconds','Home Assistant \/ роутеры'/);
- assert.match(html,/\['scan_interval_seconds','ARP · локальная сеть'/);
+ assert.match(html,/\['poll_interval_seconds',tr\('home_assistant_routers'\)/);
+ assert.match(html,/\['scan_interval_seconds',tr\('arp_local_network'\)/);
 });

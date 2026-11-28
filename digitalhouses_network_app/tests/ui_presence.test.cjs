@@ -13,7 +13,7 @@ const ctx=vm.createContext({
 });
 vm.runInContext(script.slice(0,bootstrap),ctx);
 test('top navigation contains settings/help and no monitoring YAML tab',()=>{
- const nav=html.slice(html.indexOf('<nav aria-label="Разделы приложения">'),html.indexOf('</nav>'));
+ const nav=html.slice(html.indexOf('<nav aria-label="Разделы приложения"'),html.indexOf('</nav>'));
  for(const tab of ['devices','sources','events','settings','help'])assert.match(nav,new RegExp('data-page="'+tab+'"'));
  assert.doesNotMatch(nav,/data-page="monitoring"/);
  assert.match(nav,/Журнал событий/);
@@ -39,7 +39,8 @@ test('contextual address menus expose watches and copy, never per-target interva
 });
 test('friendly Presence name is exposed in menu, watch tooltip and event journal',()=>{
  assert.match(script,/id="menu-name"/);
- assert.match(script,/placeholder="Например, Мой ноутбук"/);
+ assert.equal(vm.runInContext("tr('for_example_my_laptop')",ctx),"Например, Мой ноутбук");
+ assert.match(script,/placeholder=".*tr\('for_example_my_laptop'\)/);
  assert.match(script,/id="menu-save"/);
  assert.match(script,/payload\.label=label/);
  assert.match(script,/data-presence-kind/);
@@ -85,8 +86,8 @@ test('global settings forms include all five scanner intervals and shared hyster
   'ssdp_interval_seconds','wsd_interval_seconds','confirm_successes','confirm_failures']){
    assert.match(script,new RegExp(key));
  }
- assert.match(script,/api\/settings/);
- assert.match(script,/api\/presence/);
+ assert.match(script,/request\('settings'/);
+ assert.match(script,/request\('presence'/);
  assert.match(script,/read\('event-log'\)/);
 });
 test('help explains green eye, first census and MQTT delivery limitations',()=>{

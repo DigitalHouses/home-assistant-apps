@@ -45,7 +45,7 @@ test('numeric IPv4 descending, missing addresses still last', () => {
  assert.deepEqual(rows(),['thirty','ten','two','blank']);
 });
 test('all seven headers allow sorting and keep selected ARIA direction', () => {
- const names=Array.from(vm.runInContext('deviceColumns.map(x=>x[0])',ctx));
+ const names=Array.from(vm.runInContext('deviceColumns().map(x=>x[0])',ctx));
  assert.deepEqual(names,['name','ip','mac','presence','sources','last_seen','note']);
  assert.match(vm.runInContext('sortedHeaders()',ctx),/^<th scope="col" class="index-col"[^>]*>№<\/th>/);
  for(const key of names){
@@ -153,7 +153,7 @@ test('compact single header keeps navigation visible and all cards collapsed by 
  assert.ok(headerStart>0 && headerEnd>headerStart && main>headerEnd);
  const header=html.slice(headerStart,headerEnd);
  assert.match(header, /<h1>DigitalHouses Network App<\/h1>/);
- assert.match(header, /<nav aria-label="Разделы приложения">/);
+ assert.match(header, /<nav aria-label="Разделы приложения"[^>]*>/);
  for (const tab of ['devices','sources','events']) {
   assert.match(header,new RegExp('data-page="'+tab+'"'));
  }
@@ -186,14 +186,14 @@ test('metrics, download and destructive Reset are fully in Settings, never top d
  assert.match(script,/download\s+link|Запрошен JSON-файл у сервера/);
  assert.doesNotMatch(script,/URL\.createObjectURL\(/);
  assert.match(script,/ICMP ping не выполняется/);
- assert.equal(vm.runInContext('deviceColumns[3][1]',ctx),'Наблюдение');
+ assert.equal(vm.runInContext('deviceColumns()[3][1]',ctx),'Наблюдение');
 });
 test('search is immediately to the right of device count, in the same flex row', () => {
  const main=html.slice(html.indexOf('<main>'),html.indexOf('</main>'));
- assert.match(main,/<div id="devices-tools" class="devices-tools" hidden><h2 id="devices-count">Устройства \(—\)<\/h2><div id="filterarea"><\/div><\/div>/);
+ assert.match(main,/<div id="devices-tools" class="devices-tools" hidden><h2 id="devices-count"[^>]*>Устройства \(—\)<\/h2><div id="filterarea"><\/div><\/div>/);
  assert.match(html,/\.devices-tools\{display:flex;align-items:center;/);
  assert.match(html,/\.devices-tools\[hidden\]\{display:none\}/);
- assert.match(script,/devicesCount.textContent='Устройства \('\+found.length\+'\)'/);
+ assert.match(script,/devicesCount.textContent=tr\('devices_3'\)\+found.length\+'\)'/);
  assert.match(script,/devicesTools.hidden=false/);
  assert.match(script,/devicesTools.hidden=true/);
  assert.doesNotMatch(script,/body.innerHTML='<h2>Устройства/);
@@ -215,7 +215,7 @@ test('destructive inventory reset is within Settings and requires typed confirma
  assert.match(script,/word!=='RESET'/);
  assert.match(script,/if\(!confirm\(/);
  assert.match(script,/method:'POST'/);
- assert.match(script,/api\/inventory\/reset/);
+ assert.match(script,/request\('inventory\/reset'/);
  assert.match(script,/confirmation:word/);
  assert.match(script,/filter='';page='devices';sortKey='ip';sortDirection='asc'/);
  assert.match(script,/await load\(\)/);
@@ -249,3 +249,55 @@ test('NEW badge lasts exactly 24h from first positive evidence and never renews 
  assert.match(script,/deviceBirths=await read\('device-births'\)/);
  vm.runInContext('deviceBirths={}',ctx);
 });
+
+// Independent internationalization fixtures, run by the existing Network App CI job.
+{
+'use strict';
+const test=require('node:test'),assert=require('node:assert/strict');
+const fs=require('node:fs'),path=require('node:path'),vm=require('node:vm');
+const html=fs.readFileSync(path.resolve(__dirname,'../cmd/dh-network/ui/index.html'),'utf8');
+const script=html.split('<script>')[1].split('</script>')[0];
+const bootstrap=script.indexOf("document.getElementById('export').addEventListener");
+assert.ok(bootstrap>0);
+const body={innerHTML:'',textContent:'',hidden:false,querySelector:()=>null,querySelectorAll:()=>[]};
+const storage=new Map();
+const ctx=vm.createContext({document:{getElementById:()=>body},localStorage:{getItem:k=>storage.get(k),setItem:(k,v)=>storage.set(k,v)},Intl,Date});
+vm.runInContext(script.slice(0,bootstrap),ctx);
+function evaluate(code){return vm.runInContext(code,ctx)}
+test('every explicit translation key has nonempty RU and EN strings',()=>{
+ const keys=new Set([...html.matchAll(/data-i18n(?:-aria-label)?="([^"]+)"/g),...script.matchAll(/\btr\('([^']+)'\)/g)].map(m=>m[1]));
+ const catalog=JSON.parse(evaluate('JSON.stringify(messages)'));
+ for(const key of keys){assert.ok(Object.hasOwn(catalog,key),key);assert.equal(catalog[key].length,2,key);assert.ok(catalog[key].every(v=>typeof v==='string'&&v.trim()),key)}
+ for(const [key,value] of Object.entries(catalog))assert.doesNotMatch(value[1],/[\u0400-\u04ff]/,key);
+});
+test('RU remains default; a saved EN preference is loaded independently of the inventory',()=>{
+ storage.clear();assert.equal(evaluate('loadLanguage()'),'ru');
+ storage.set('dh-network-language-v1','en');assert.equal(evaluate('loadLanguage()'),'en');
+ storage.set('dh-network-language-v1','invalid');assert.equal(evaluate('loadLanguage()'),'ru');
+});
+test('rendered device labels and help localize without changing notes, identifiers or event codes',()=>{
+ ctx.devicesFixture=[{id:'unchanged-uuid',display_name:'Мой ноутбук',ipv4:'192.168.11.2',mac:'02:00:00:00:00:02',presence:'online',last_seen:'2026-10-29T12:00:01Z',note:'Моя заметка'}];
+ evaluate("devices=devicesFixture;language='en';renderTable()");
+ assert.match(body.innerHTML,/Discovered via/);
+ assert.match(body.innerHTML,/Last online/);
+ assert.match(body.innerHTML,/Мой ноутбук/);
+ assert.match(body.innerHTML,/Моя заметка/);
+ assert.equal(ctx.devicesFixture[0].id,'unchanged-uuid');
+ assert.equal(ctx.devicesFixture[0].presence,'online');
+ evaluate('renderHelp()');
+ assert.doesNotMatch(body.innerHTML,/[\u0400-\u04ff]/);
+ evaluate("language='ru';renderTable()");
+ assert.match(body.innerHTML,/Наблюдение/);
+ assert.match(body.innerHTML,/Моя заметка/);
+});
+test('known errors, status, dates and destructive reset text translate while RESET stays canonical',()=>{
+ evaluate("language='en'");
+ assert.equal(evaluate("statusTitle('online')"),'Online');
+ assert.equal(evaluate("sourceTitle('HA Router')"),'HA router');
+ assert.match(evaluate("tr('reset_permanently_deletes_all_devices')"),/RESET/);
+ assert.doesNotMatch(evaluate("tr('reset_permanently_deletes_all_devices')"),/[\u0400-\u04ff]/);
+ assert.match(evaluate("exactTime('2026-10-29T12:00:01Z')"),/2026/);
+ evaluate("language='ru'");
+});
+
+}
