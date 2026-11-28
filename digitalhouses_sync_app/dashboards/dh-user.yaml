@@ -9,3 +9,9 @@ views:
     title: System Globals
     icon: mdi:theme-light-dark
     show_icon_and_title: true
+
+  - product: digitalhouses_internet_app
+    path: internet
+    title: Internet
+    icon: mdi:web
+    show_icon_and_title: true
