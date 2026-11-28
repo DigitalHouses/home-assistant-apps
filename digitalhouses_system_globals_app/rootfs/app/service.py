@@ -22,7 +22,7 @@ from discovery import (ID, PREFIX, AVAIL, LEASE, PROBE, LOOP, DISCOVERY, HA_STAT
 from gates import Gates, Z2MRegistry, ha_probe
 from lifecycle import Lifecycle
 from ingress import serve
-from journal_events import GlobalsJournal, LOCALES
+from journal_events import GlobalsJournal, LOCALES, PRODUCT_NAME, VALUE_LOCALES, ICONS
 from dh_journal import Journal
 
 LOG = logging.getLogger(ID)
@@ -75,7 +75,7 @@ def empty_operation(state="idle"):
 class Service:
     def __init__(self, engine, version, opts, *, clock=time.monotonic, ha_fn=ha_probe, release_fn=latest_release, journal=None):
         self.journal=journal
-        self.journal_observer=GlobalsJournal(journal) if journal else None
+        self.journal_observer=GlobalsJournal(journal, clock=clock) if journal else None
         self.mqtt_failure_logged=False
         self.engine=engine
         self.version=version
@@ -463,7 +463,7 @@ def main():
     engine=Engine(Store("/data/state.json"))
     if engine.state["config"]["timezone"] is None and os.environ.get("TZ"):
         engine.command(PRODUCT+"/config/set",{"timezone":os.environ["TZ"]},utcnow())
-    journal=Journal("/data/journal.sqlite3",product=ID,locales=LOCALES,debug=opts.get("journal_debug",False))
+    journal=Journal("/data/journal.sqlite3",product=ID,product_name=PRODUCT_NAME,locales=LOCALES,value_locales=VALUE_LOCALES,icons=ICONS,debug=opts.get("journal_debug",False))
     journal.start(os.environ["APP_VERSION"])
     svc=Service(engine,os.environ["APP_VERSION"],opts,journal=journal)
     stop=threading.Event()

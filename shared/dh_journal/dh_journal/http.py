@@ -29,7 +29,10 @@ def get(journal, url, tz):
     zone = journal.zone(tz)
     for row in data["rows"]:
         row["message"] = journal.message(row, lang)
+        row["icon"] = journal.icon(row)
         row["local_time"] = datetime.fromisoformat(row["ts"]).astimezone(zone).strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
     data["product"] = journal.product
+    data["product_name"] = journal.product_name
+    data["app_version"] = journal.app_version
     data["timezone"] = str(zone)
     return data, "application/json", None

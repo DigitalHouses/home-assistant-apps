@@ -1,5 +1,5 @@
 """System Globals domain event catalog; no secrets or raw requests."""
-from dh_journal import Journal
+import time
 
 LOCALES = {
     "ru": {
@@ -10,8 +10,8 @@ LOCALES = {
         "gate_not_ready": "{gate} → OFF · {reason}",
         "bridge_ready": "Zigbee2MQTT · {bridge} → ON",
         "bridge_not_ready": "Zigbee2MQTT · {bridge} → OFF",
-        "night_mode_on": "🌙 Ночной режим включён",
-        "night_mode_off": "☀️ Дневной режим включён",
+        "night_mode_on": "Ночной режим включён",
+        "night_mode_off": "Дневной режим включён",
         "night_mode_unset": "Режим дома не задан",
         "config_changed": "Расписание / конфигурация изменены",
         "profiles_changed": "Профили освещения и звука изменены",
@@ -35,8 +35,8 @@ LOCALES = {
         "gate_not_ready": "{gate} → OFF · {reason}",
         "bridge_ready": "Zigbee2MQTT · {bridge} → ON",
         "bridge_not_ready": "Zigbee2MQTT · {bridge} → OFF",
-        "night_mode_on": "🌙 Night mode enabled",
-        "night_mode_off": "☀️ Day mode enabled",
+        "night_mode_on": "Night mode enabled",
+        "night_mode_off": "Day mode enabled",
         "night_mode_unset": "House mode not configured",
         "config_changed": "Schedule / configuration changed",
         "profiles_changed": "Light and sound profiles changed",
@@ -54,13 +54,58 @@ LOCALES = {
     },
 }
 
+PRODUCT_NAME = "DigitalHouses System Globals"
+ICONS = {"night_mode_on":"🌙", "night_mode_off":"☀️"}
+VALUE_LOCALES = {
+    "ru": {
+        "reason": {
+            "awaiting_probe":"ожидание проверки",
+            "required_components":"ожидание обязательных компонентов",
+            "bridge_not_ready":"ожидание готовности Zigbee2MQTT",
+            "no_bridges_discovered":"мосты Zigbee2MQTT не обнаружены",
+            "ha_probe_not_confirmed":"проверка HA не подтверждена",
+            "ha_offline":"HA сообщил об отключении",
+            "ha_online":"HA подключён, ожидание проверки",
+            "ha_probe_timeout":"истекло время проверки HA",
+            "roundtrip_timeout":"истекло время проверки MQTT",
+            "probe_expired":"подтверждение готовности устарело",
+            "ready":"готов",
+        },
+        "operation":{"refresh":"обновление состояния","check":"проверка версии"},
+        "state":{"RUNNING":"работает","STARTING":"запускается","STOPPING":"останавливается","NOT_RUNNING":"не запущен","STOPPED":"остановлен"},
+    },
+    "en": {
+        "reason": {
+            "awaiting_probe":"awaiting probe",
+            "required_components":"awaiting required components",
+            "bridge_not_ready":"awaiting Zigbee2MQTT readiness",
+            "no_bridges_discovered":"no Zigbee2MQTT bridges discovered",
+            "ha_probe_not_confirmed":"HA probe not confirmed",
+            "ha_offline":"HA reported offline",
+            "ha_online":"HA online, awaiting probe",
+            "ha_probe_timeout":"HA probe timed out",
+            "roundtrip_timeout":"MQTT round-trip timed out",
+            "probe_expired":"readiness confirmation expired",
+            "ready":"ready",
+        },
+        "operation":{"refresh":"refresh state","check":"check version"},
+        "state":{"RUNNING":"running","STARTING":"starting","STOPPING":"stopping","NOT_RUNNING":"not running","STOPPED":"stopped"},
+    },
+}
+STARTUP_GRACE_SECONDS = 20
+
 GATE_NAMES = {"mqtt_ready":"MQTT Ready", "ha_ready":"HA Ready", "zigbee_ready":"Zigbee Ready", "system_ready":"System Ready"}
 
 class GlobalsJournal:
     """Observe meaningful changes to an already computed service snapshot."""
-    def __init__(self, journal):
+    def __init__(self, journal, clock=time.monotonic):
         self.journal = journal
         self.previous = None
+        self.clock = clock
+        self.startup_deadline = clock() + STARTUP_GRACE_SECONDS
+        self.ready_seen = set()
+        self.gate_levels = {}
+        self.bridge_levels = {}
 
     def observe(self, view):
         j = self.journal
@@ -71,17 +116,27 @@ class GlobalsJournal:
                 j.success("mqtt_connected")
             elif old is not None:
                 j.warning("mqtt_disconnected")
+        initializing = self.clock() < self.startup_deadline
         for key, ready in view["gates"].items():
             d = view["diagnostics"].get(key, {})
-            if old is None or old["gates"].get(key) != ready or (not ready and (old["diagnostics"].get(key,{}) or {}).get("reason")!=d.get("reason")):
-                j.record("success" if ready else "pending" if old is None else "warning",
+            level = "success" if ready else "pending" if initializing and key not in self.ready_seen else "warning"
+            if ready:
+                self.ready_seen.add(key)
+            if old is None or self.gate_levels.get(key) != level or old["gates"].get(key) != ready or (not ready and (old["diagnostics"].get(key,{}) or {}).get("reason")!=d.get("reason")):
+                j.record(level,
                          "gate_ready" if ready else "gate_not_ready", gate=GATE_NAMES.get(key,key),
                          reason=d.get("reason","required_components"))
+            self.gate_levels[key] = level
         for base, bridge in view["zigbee_bridges"].items():
             ready=bridge.get("ready",False)
             previous=(old or {}).get("zigbee_bridges",{}).get(base)
-            if previous is None or previous.get("ready") != ready:
-                j.record("success" if ready else "warning","bridge_ready" if ready else "bridge_not_ready",bridge=base)
+            key = ("bridge", base)
+            level = "success" if ready else "pending" if initializing and key not in self.ready_seen else "warning"
+            if ready:
+                self.ready_seen.add(key)
+            if previous is None or previous.get("ready") != ready or self.bridge_levels.get(base) != level:
+                j.record(level,"bridge_ready" if ready else "bridge_not_ready",bridge=base)
+            self.bridge_levels[base] = level
         state=view["state"]
         before=(old or {}).get("state",{})
         if old is None or before.get("night_mode") != state["night_mode"]:
