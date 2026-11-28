@@ -3,3 +3,9 @@
 .entry details{font-size:12px;color:var(--muted);margin-top:3px}.entry pre{margin:4px 0;white-space:pre-wrap;overflow-wrap:anywhere}
 
 button:disabled{opacity:.5;cursor:not-allowed}
+
+/* Reserve space for Close even when the toolbar wraps on narrow screens. */
+.dh-lib-journal-header{position:relative;padding-right:64px;min-height:60px}
+.dh-lib-journal-close{position:absolute;top:10px;right:16px;width:40px;height:40px;display:grid;place-items:center;border:1px solid #516277;border-radius:6px;color:var(--fg);background:#283747;font-size:26px;line-height:1;text-decoration:none}
+.dh-lib-journal-close:hover{background:#394b5e}
+.dh-lib-journal-close:focus-visible{outline:2px solid #b4d8ff;outline-offset:2px}
