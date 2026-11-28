@@ -17,13 +17,17 @@ Network App combines these independent sources without treating every report as 
 - Sortable, searchable device table, NEW badges, event journal and JSON diagnostics.
 - Optional IP/MAC Presence watches using confirmed global ARP scans, with configurable confirmation thresholds.
 - Optional MQTT machine events and DH Sync announcement. MQTT is not required for local discovery.
-- Russian and English Ingress UI in the internationalization candidate; change the language in the header. The browser remembers the choice. Device names, notes and machine identifiers are not translated.
+- Russian and English Ingress UI; change the language in the header. The browser remembers the choice. Device names, notes and machine identifiers are not translated.
 
 **Online is not ping.** It means a positive observation from ARP, the local interface or a Home Assistant router tracker. Presence watches use fresh successful ARP scans; failed or ambiguous scans do not establish absence.
 
 ## Screenshots
 
-English screenshots from a real HAOS installation will be added after candidate acceptance. No simulated device inventory is presented as a live installation.
+### Device inventory — English interface
+
+![DigitalHouses Network App device inventory in English, showing device discovery sources and online status](images/devices-en.png)
+
+*Actual Home Assistant OS Ingress, v0.1.33. Device names and network identifiers have been anonymized for privacy; discovery sources, statuses and device count are retained.*
 
 ## Installation
 
@@ -34,7 +38,7 @@ Requires Home Assistant OS. The app supports amd64 and aarch64.
 3. Install **DigitalHouses Network App** and start it.
 4. Select **Open Web UI**; optionally enable **Show in sidebar**.
 
-Version 0.1.33 is the internationalization release using immutable GHCR delivery. The maintainer approved a direct stable release; final live HAOS acceptance and reviewed English screenshots remain pending. Do not replace an existing installation by deleting or recreating it.
+Version 0.1.33 is the internationalization release using immutable GHCR delivery. The maintainer approved a direct stable release; final live HAOS acceptance remains pending. The English device inventory screenshot is available above. Do not replace an existing installation by deleting or recreating it.
 
 ## How to use
 
