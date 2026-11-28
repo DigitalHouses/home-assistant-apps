@@ -1,6 +1,6 @@
 "use strict";
 let model, editing=null, draft=null, dirty=false, busy=false, section="keys";
-let parametersBusy=false, parametersError="";
+let parametersBusy=false, parametersError="",intervalDraft=null;
 let lightsDraft=null,lightsRevision=null,lightsBusy=false,lightsError="";
 const lightsFilter=document.querySelector("#lights-filter"), smartLightsOnly=document.querySelector("#smart-lights-only");
 const main=document.querySelector("#main"), notice=document.querySelector("#notice"), scan=document.querySelector("#scan");
@@ -173,7 +173,7 @@ function renderLights(){
     table.append(item);
   }
   if(!targets.length)table.append(el("p","Нет светильников, соответствующих фильтру.","muted"));
-  panel.append(el("p","День/Ночь — глобальные параметры. Adaptive CCT — только цветовая температура по солнцу каждые 30 минут. Только включённые светильники.","muted"),table);
+  panel.append(el("p","День/Ночь — глобальные параметры. Adaptive CCT — только цветовая температура по солнцу каждые "+(model.adaptive_interval_minutes??30)+" мин. Только включённые светильники.","muted"),table);
   if(model.lights_error)panel.append(el("p",model.lights_error,"problem"));
   if(lightsError)panel.append(el("p",lightsError,"problem"));
   const toolbar=el("div",undefined,"toolbar"),saveButton=button("Сохранить изменения",async()=>{
@@ -206,13 +206,32 @@ function renderParameters(){
     finally{parametersBusy=false;await load();if(section==="parameters")renderParameters()}
   };
   label.append(description,check);panel.append(label);
+  const intervalRow=el("div",undefined,"live-parameter adaptive-interval-row"),intervalDescription=el("div"),controls=el("div",undefined,"adaptive-interval-controls");
+  intervalDescription.append(el("strong","Интервал Adaptive CCT"),el("div","Минуты между коррекциями (1–1440). Изменяется без перезапуска.","muted"));
+  const interval=el("input");interval.type="number";interval.min="1";interval.max="1440";interval.step="1";
+  interval.setAttribute("aria-label","Интервал Adaptive CCT, мин");
+  interval.value=intervalDraft??model.adaptive_interval_minutes??30;interval.disabled=parametersBusy;
+  const apply=button("Применить",async()=>{
+    const minutes=Number(interval.value);
+    if(!interval.checkValidity()||!Number.isInteger(minutes)||minutes<1||minutes>1440)return;
+    parametersBusy=true;parametersError="";renderParameters();
+    try{
+      const result=await api("parameters",{adaptive_interval_minutes:minutes});
+      model.adaptive_interval_minutes=result.adaptive_interval_minutes;intervalDraft=null;
+    }catch(e){parametersError=e.message}
+    finally{parametersBusy=false;await load();if(section==="parameters")renderParameters()}
+  },"save");
+  const refreshApply=()=>{apply.disabled=parametersBusy||!interval.checkValidity()||interval.value===""||Number(interval.value)===(model.adaptive_interval_minutes??30)};
+  interval.oninput=()=>{intervalDraft=interval.value;refreshApply()};
+  refreshApply();
+  controls.append(interval,el("span","мин","muted"),apply);intervalRow.append(intervalDescription,controls);panel.append(intervalRow);
   if(parametersBusy)panel.append(el("div","Сохранение…","muted"));
   if(parametersError)panel.append(el("div",parametersError,"problem"));
   main.replaceChildren(panel);
 }
 function renderList(){
 if(section==="lights"){if(!dirty&&!lightsBusy){lightsDraft=null;renderLights()}return}
-if(section==="parameters"){renderParameters();return}
+if(section==="parameters"){if(!parametersBusy&&intervalDraft===null&&!main.contains(document.activeElement))renderParameters();else if(!main.querySelector(".adaptive-interval-row"))renderParameters();return}
 if(section==="schedules"){renderSchedules();return}
 if(section==="sensors"){renderSensors();return}
 const focused=main.contains(document.activeElement)?document.activeElement.dataset.deviceId:null;
@@ -566,7 +585,7 @@ scan.onclick=async()=>{busy=true;scan.disabled=true;try{await api("scan",{});not
 function selectSection(next){
   if(lightsBusy)return;
   if(dirty&&!confirm("Отменить несохранённые изменения?"))return;
-  section=next;editing=null;draft=null;dirty=false;lightsDraft=null;lightsError="";
+  section=next;editing=null;draft=null;dirty=false;lightsDraft=null;lightsError="";intervalDraft=null;
   lightsFilter.hidden=next!=="lights";
   document.querySelector("#devices-nav").classList.toggle("active",next==="keys");
   document.querySelector("#sensors-nav").classList.toggle("active",next==="sensors");

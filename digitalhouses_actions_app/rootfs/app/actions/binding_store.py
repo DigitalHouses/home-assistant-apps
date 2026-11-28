@@ -101,6 +101,15 @@ class BindingStore:
                 settings["auto_day_night"] = enabled
                 self.supervisor.write(settings)
 
+    def set_adaptive_interval(self, minutes):
+        from .lights import interval_minutes, DEFAULT_INTERVAL_MINUTES
+        minutes=interval_minutes(minutes)
+        with self.lock:
+            settings=dict(self.supervisor.read())
+            if settings.get("adaptive_interval_minutes",DEFAULT_INTERVAL_MINUTES)!=minutes:
+                settings["adaptive_interval_minutes"]=minutes
+                self.supervisor.write(settings)
+
     def write(self, options):
         with self.lock:
             self._save(parse_rows(options))

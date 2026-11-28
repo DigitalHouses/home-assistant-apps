@@ -57,6 +57,7 @@ def snapshot(app):
         schedule_timezone=getattr(scheduler.zone,"key",None) if scheduler and scheduler.ready else None
         global_mode = getattr(app,"_home_profile",None)
         auto_day_night = getattr(app,"globals",{}).get("auto_day_night",False)
+        adaptive_interval_minutes = getattr(app,"globals",{}).get("adaptive_interval_minutes",lights.DEFAULT_INTERVAL_MINUTES)
         saved_lights=deepcopy(getattr(app,"light_settings",{}))
         light_revision=revision(saved_lights)
         registries=getattr(app,"_target_registries",None)
@@ -101,7 +102,7 @@ def snapshot(app):
                         "enabled":row["enabled"],"disabled_actions":row.get("disabled_actions",[]),"actions":[],
                         "bindings":{k:normalize(v) for k,v in row["actions"].items()}})
     return {"lights":light_settings,"lights_revision":light_revision,"lights_error":lights_error,"devices":devices,"sensors":sensors,"schedules":[r for r in rows if schedule_rules.is_schedule(r["entity_id"])],"schedule_timezone":schedule_timezone,"sensor_runtime_ready":sensor_runtime_ready,"sensor_deadlines":sensor_deadlines,"targets":list(targets.values()),"scan":scan,
-            "report":report,"revision":revision(rows),"version":app.version,"maintenance_mode":maintenance,"home_mode":global_mode["mode"] if global_mode else None,"auto_day_night":auto_day_night,"home_profiles_ready":bool(global_mode and "day" in global_mode and "night" in global_mode)}
+            "report":report,"revision":revision(rows),"version":app.version,"maintenance_mode":maintenance,"home_mode":global_mode["mode"] if global_mode else None,"auto_day_night":auto_day_night,"adaptive_interval_minutes":adaptive_interval_minutes,"home_profiles_ready":bool(global_mode and "day" in global_mode and "night" in global_mode)}
 
 def validate_assignment(assignment, targets):
     rule = parse_rule({"assignments":[assignment]})
@@ -475,6 +476,9 @@ def start_ingress(app, port=8099):
                     if not app.request_scan(foreground=False):
                         raise CatalogError("Сканирование уже выполняется")
                 elif path == "/api/parameters":
+                    if isinstance(payload,dict) and set(payload)=={"adaptive_interval_minutes"}:
+                        self.reply(200,app.set_adaptive_interval(payload["adaptive_interval_minutes"]))
+                        return
                     if not isinstance(payload,dict) or set(payload)!={"auto_day_night"} or type(payload["auto_day_night"]) is not bool:
                         raise CatalogError("Ожидается логический параметр auto_day_night")
                     self.reply(200,app.set_auto_day_night(payload["auto_day_night"]))

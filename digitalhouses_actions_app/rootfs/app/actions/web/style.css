@@ -184,3 +184,8 @@ label{display:inline-flex;align-items:center;gap:7px;flex-wrap:wrap;color:#ccd8e
 
 #lights-filter[hidden]{display:none}
 #lights-filter{margin-left:4px;font-size:13px}
+
+.adaptive-interval-row{border-top:1px solid var(--line);padding-top:14px;margin-top:14px}
+.adaptive-interval-row .adaptive-interval-controls{display:flex;align-items:center;gap:8px;flex:0 0 auto}
+.adaptive-interval-controls input{width:85px}
+@media(max-width:560px){.adaptive-interval-row{flex-wrap:wrap}.adaptive-interval-row .adaptive-interval-controls{flex-wrap:wrap}}

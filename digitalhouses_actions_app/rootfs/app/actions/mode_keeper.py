@@ -55,7 +55,10 @@ def global_policy(options: Mapping) -> dict:
     auto=options.get("auto_day_night",False)
     if type(auto) is not bool:
         raise CatalogError("auto_day_night must be boolean")
-    return {"maintenance_mode": mode, "restore_delay": float(delay), "auto_day_night":auto}
+    from .lights import interval_minutes, DEFAULT_INTERVAL_MINUTES
+    interval=interval_minutes(options.get("adaptive_interval_minutes",DEFAULT_INTERVAL_MINUTES))
+    return {"maintenance_mode": mode, "restore_delay": float(delay), "auto_day_night":auto,
+            "adaptive_interval_minutes":interval}
 
 
 def capabilities(device: Mapping) -> dict:
