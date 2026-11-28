@@ -26,8 +26,6 @@ dh_internet_app_global_package:
         - sensor.dh_internet_app_recovery_cycle
         - sensor.dh_internet_app_problems
         - sensor.dh_internet_app_router_wan_status
-        - sensor.dh_internet_app_router_download_rate
-        - sensor.dh_internet_app_router_upload_rate
         - sensor.dh_internet_app_traffic_download_total
         - sensor.dh_internet_app_traffic_upload_total
         - sensor.dh_internet_app_traffic_download_month

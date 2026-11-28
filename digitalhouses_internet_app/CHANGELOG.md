@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.27
+
+- Keep traffic acquisition and persistent accounting at 60 seconds; publish cumulative totals, monthly totals and traffic history on a 15-minute cadence, with fresh startup/month-boundary snapshots.
+- Keep live router rates and WAN state responsive; deduplicate unchanged traffic messages and republish the cached cumulative snapshot on MQTT reconnect or manual Refresh.
+- Remove live router rates from the canonical Recorder whitelist; preserve entity IDs, MQTT topics, persisted traffic and recovery behavior.
+
 ## 0.1.26
 
 - Align retained `/sync` with DH Sync 0.6.0: remove the obsolete `dashboard` field; leave only the running product identity and GitHub source.

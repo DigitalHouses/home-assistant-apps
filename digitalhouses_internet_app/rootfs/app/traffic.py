@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import time
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -441,3 +442,40 @@ def traffic_payload(state: dict[str, Any], *, when: datetime | None = None) -> d
         "source_changes": state["source_changes"],
         "source": dict(state["source"]),
     }
+
+
+TRAFFIC_PUBLISH_SECONDS = 15 * 60
+
+
+class TrafficPublication:
+    """Keep accounting samples separate from the retained presentation snapshot."""
+
+    def __init__(self) -> None:
+        self._snapshot: dict[str, Any] | None = None
+        self._published_at: float | None = None
+
+    def payload(
+        self,
+        state: dict[str, Any],
+        router: dict[str, Any],
+        *,
+        available: bool,
+        when: datetime | None = None,
+        monotonic: float | None = None,
+    ) -> dict[str, Any]:
+        when = when or now_local()
+        now = time.monotonic() if monotonic is None else monotonic
+        if (
+            self._snapshot is None
+            or self._snapshot["month"] != month_key(when)
+            or (
+                available
+                and (
+                    self._published_at is None
+                    or now - self._published_at >= TRAFFIC_PUBLISH_SECONDS
+                )
+            )
+        ):
+            self._snapshot = traffic_payload(state, when=when)
+            self._published_at = now if available else None
+        return {**self._snapshot, "router": dict(router)}
