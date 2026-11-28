@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.1.33
+## 0.1.33-rc.1
 
 - Internationalization candidate: add RU/EN language selection in Ingress, browser-local language preference, localized UI labels, settings, errors, event descriptions and help. Retain machine identifiers and user-provided data.
 - Complete English and Russian Supervisor configuration translations.

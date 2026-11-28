@@ -1,6 +1,6 @@
 # International release acceptance
 
-Status: draft checklist, not evidence of completed acceptance.
+Status: draft checklist, not evidence of completed acceptance. The first candidate is 0.1.33-rc.1; the intended stable version is 0.1.33.
 
 ## Upgrade on an existing test HAOS installation
 

@@ -28,7 +28,7 @@ def validate_network(root: Path, app: Path, context: dict) -> None:
             or config.get("map")
             or config.get("ports") or config.get("ports_description")):
         fail("Foundation preview cannot request host privileges or expose ports")
-    if context["version"] not in {"0.1.32", "0.1.33"}:
+    if context["version"] not in {"0.1.32", "0.1.33-rc.1"}:
         fail("Network App pilot security policy requires review for every new version")
     if config.get("homeassistant_api") is not True:
         fail("Network App requires HA Core API via Supervisor proxy")
@@ -50,7 +50,7 @@ def validate_network(root: Path, app: Path, context: dict) -> None:
         fail("Network App telemetry consent must default to false")
     if config.get("schema", {}).get("telemetry_enabled") != "bool":
         fail("Network App must expose one boolean telemetry consent option")
-    if context["version"] == "0.1.33":
+    if context["version"] == "0.1.33-rc.1":
         for language in ("en", "ru"):
             path = app / "translations" / f"{language}.yaml"
             fields = load_yaml(path, root).get("configuration")

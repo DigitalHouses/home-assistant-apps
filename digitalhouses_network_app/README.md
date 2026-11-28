@@ -34,7 +34,7 @@ Requires Home Assistant OS. The app supports amd64 and aarch64.
 3. Install **DigitalHouses Network App** and start it.
 4. Select **Open Web UI**; optionally enable **Show in sidebar**.
 
-The currently deployed experimental version is 0.1.32. The 0.1.33 internationalization candidate is configured for immutable GHCR delivery, but is not yet published or accepted on HAOS. Stable promotion requires real HAOS acceptance. Do not replace an existing installation by deleting or recreating it.
+Version 0.1.33-rc.1 is an experimental internationalization release candidate using immutable GHCR delivery. Stable promotion to 0.1.33 requires real HAOS acceptance. Do not replace an existing installation by deleting or recreating it.
 
 ## How to use
 

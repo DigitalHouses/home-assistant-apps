@@ -1,5 +1,16 @@
 # DH Network App — architecture and implementation notes
 
+## Current release candidate (0.1.33-rc.1)
+
+This candidate adds English and Russian Ingress localization and completes the HAOS configuration translations. Select the language in the Ingress header; the preference is stored in the browser, not in SQLite. Existing notes, device names, Presence labels, API values and MQTT identifiers retain their original values. The journal uses localized presentation labels without changing event types.
+
+The canonical image repository is `ghcr.io/digitalhouses/digitalhouses_network_app`. The shared release workflow builds amd64 and aarch64 images on native runners. The candidate remains experimental until live HAOS acceptance. Install and update through the HAOS App Store; keep the persistent `/data` directory and take an app backup before updating.
+
+The primary private IPv4 Ethernet subnet (/24 through /30) is supported; IPv6, VLAN and larger subnets remain out of scope. Source reconciliation, scanner timing, Presence, retention and database schema are unchanged. MQTT remains optional; the DH Sync announcement is retained with QoS 1. Installation statistics remain explicitly opt-in (policy v1, disabled by default). No network inventory is transmitted to DH Stats.
+
+See [README](README.md) for current user-facing behavior and [acceptance checklist](INTERNATIONAL_ACCEPTANCE.md) for verification. The following sections are historical implementation notes; descriptions of older UI layouts and release stages are not the current user interface.
+
+
 ## 0.1.26 — resource efficiency and retention
 
 The default discovery intervals are unchanged (HA 60s, ARP 180s, Bonjour/SSDP/WSD 300s); IP/MAC Presence is still based on completed independent ARP scans.
