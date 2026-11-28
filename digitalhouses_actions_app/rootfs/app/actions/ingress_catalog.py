@@ -3,6 +3,7 @@ from .ha_registry import _matched_devices
 from .mode_keeper import validate_action_policy
 from .catalog import CatalogError
 from .light_rules import parse_rule
+from .lab_lights import is_profile_picker
 from . import cover_rules, climate_rules, media_rules
 
 def safe_switch_targets(registries, config):
@@ -34,6 +35,8 @@ def target_catalog(registries, states, config, temperature_unit=None):
                 (eid.startswith("binary_sensor.") and cover_rules.window_sensor(state))):
             continue
         e = registry[eid]
+        if is_profile_picker(eid, e):
+            continue
         a = state.get("attributes", {})
         modes = set(a.get("supported_color_modes") or [])
         rgb = bool(modes & {"hs", "xy", "rgb", "rgbw", "rgbww"})

@@ -18,6 +18,22 @@ LAB_LIGHTS = frozenset({
     "light.dh_aqara_lab_led_strip",
     "light.dh_aqara_lab_night_light",
 })
+# These template lights are configuration controls, not lighting loads.
+_PROFILE_PICKER_IDS = frozenset({
+    "dh_system_globals_app_day_rgb_picker",
+    "dh_system_globals_app_night_rgb_picker",
+})
+
+
+def is_profile_picker(eid, registry_entry=None):
+    if eid in {"light." + uid for uid in _PROFILE_PICKER_IDS}:
+        return True
+    return (isinstance(eid, str) and eid.startswith("light.")
+            and isinstance(registry_entry, Mapping)
+            and registry_entry.get("platform") == "template"
+            and registry_entry.get("unique_id") in _PROFILE_PICKER_IDS)
+
+
 SHADOW_SECONDS = 5.0
 _LIGHT_ID = re.compile(r"^light\.[a-z0-9_]+$")
 
@@ -44,7 +60,7 @@ def authorized_ha_light_ids(entities: object, requested: set[str]) -> set[str]:
     approved = set()
     for eid, row in by_id.items():
         platform = row.get("platform")
-        if (eid not in duplicates and row.get("disabled_by") is None
+        if (eid not in duplicates and not is_profile_picker(eid, row) and row.get("disabled_by") is None
                 and isinstance(platform, str) and re.fullmatch(r"[a-z0-9_]+", platform)
                 and platform not in ("mqtt", "zigbee2mqtt")):
             approved.add(eid)

@@ -2,6 +2,10 @@
 
 Historical releases below were published as DigitalHouses Aqara Switch App; their identifiers are retained.
 
+## 0.3.13
+
+- Exclude System Globals Day/Night RGB picker template lights from the Actions target catalog (including Lights) and HA-native command authorization, including renamed picker entities identified by their stable unique IDs. They are configuration controls, not physical lighting loads. Leave the System Globals package and picker controls unchanged.
+
 ## 0.3.12
 
 - Add Ingress Lights tab with explicit per-light Day/Night and Adaptive CCT settings. Brightness-only lights support Day/Night; RGB+CCT targets require a color selection; RGB disables Adaptive. Preserve all existing key/sensor/schedule bindings and the live global auto_day_night switch. New adaptation settings default off, including upgrades: select the participating lights explicitly.
