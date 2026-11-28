@@ -57,7 +57,7 @@ function formatSiteTime(value) {
   }).format(new Date(value));
 }
 function timezoneLabel() {
-  return siteTimezone + (timezoneFallback ? " (temporary: HA timezone unavailable)" : "");
+  return siteTimezone + (timezoneFallback ? " (fallback: LXC timezone unavailable)" : "");
 }
 function updateTimezone(data) {
   const changed = siteTimezone !== data.timezone || timezoneFallback !== Boolean(data.timezone_fallback);

@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from starlette.concurrency import run_in_threadpool
 
 from .config import get_settings
-from .ha_timezone import zone_metadata
+from .local_timezone import zone_metadata
 from .db import get_db
 from .protocol import ALLOWED_PRODUCTS
 from .journal import APP_VERSION, dashboard_proxy, require_confirmation
@@ -41,7 +41,7 @@ def healthz() -> dict[str, str]:
 
 @app.get("/v1/stats/summary")
 def stats_summary(db: Session = Depends(get_db)) -> dict[str, object]:
-    return {**summary(db), **zone_metadata(settings)}
+    return {**summary(db), **zone_metadata()}
 
 
 @app.get("/v1/stats/products")
