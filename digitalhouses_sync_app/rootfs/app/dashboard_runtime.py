@@ -147,11 +147,11 @@ class DashboardPublisher:
             result["icon"] = panel["icon"]
         return result
 
-    def _publish(self, ws, entries: list, panel: dict, views: list[dict]) -> str:
+    def _publish(self, ws, entries: list, panel: dict, views: list[dict], refs: dict) -> tuple[str, list[dict]]:
         slug = panel["slug"]
         entry = self._entry(entries, slug)
         if entry is None and not views:
-            return "No active views"
+            return "No active views", []
         metadata_updated = False
         if entry is not None:
             if entry.get("mode") != "storage":
@@ -172,30 +172,46 @@ class DashboardPublisher:
             if isinstance(response, dict) and "id" in response:
                 entry["id"] = response["id"]
             entries.append(entry)
+            metadata_updated = True
             LOG.info("Created panel %s", slug)
             if self.journal is not None:
                 self.journal.record("dashboard_created", slug)
 
         old = self._config(ws, slug)
         new = {**old, "views": views}
-        if old == new:
-            return "Updated" if metadata_updated else "Current"
-        ws.request("lovelace/config/save", url_path=slug, config=new)
-        if ws.request("lovelace/config", url_path=slug, force=True) != new:
-            raise DashboardError("Panel save not confirmed: " + slug)
-        if self.journal is not None:
-            old_views = {v.get("path"): v for v in old["views"] if isinstance(v, dict)}
-            for ref in panel["views"]:
-                for view in views:
-                    if view["path"] == ref["path"] and old_views.get(ref["path"]) != view:
-                        self.journal.record("view_updated", slug + "/" + ref["path"], product=ref["product"])
-        return "Updated"
+        if old != new:
+            ws.request("lovelace/config/save", url_path=slug, config=new)
+            if ws.request("lovelace/config", url_path=slug, force=True) != new:
+                raise DashboardError("Panel save not confirmed: " + slug)
+        # Report the confirmed configuration using the same before/after data;
+        # never make additional HA calls for UI counters.
+        old_views = {v["path"]: v for v in old["views"]
+                     if isinstance(v, dict) and isinstance(v.get("path"), str)}
+        new_views = {v["path"]: v for v in views}
+        old_order = [k for k in old_views if k in new_views]
+        new_order = [k for k in new_views if k in old_views]
+        changes = []
+        for path, view in new_views.items():
+            changed = old_views.get(path) != view
+            changes.append({"name": refs[path] + " / " + slug + "/" + path,
+                            "kind": "View", "status": "Updated" if changed else "Current"})
+            if changed and self.journal is not None:
+                self.journal.record("view_updated", slug + "/" + path, product=refs[path])
+        for path in sorted(old_views.keys() - new_views.keys()):
+            changes.append({"name": slug + "/" + path, "kind": "View", "status": "Removed"})
+        # Panel metadata/order is a separate resource, not a duplicate view update.
+        panel_changed = metadata_updated or old_order != new_order
+        if old != new and not any(r["status"] != "Current" for r in changes):
+            panel_changed = True
+        changes.append({"name": slug, "kind": "Dashboard",
+                        "status": "Updated" if panel_changed else "Current"})
+        return ("Updated" if old != new or metadata_updated else "Current"), changes
 
     def sync(self, panels: list[dict], sources: dict) -> dict:
         """YAML alone controls panel contents; no legacy routes or view migrations."""
         if not panels:
-            return {"state": "No panel YAML", "url": "", "dashboards": [], "issues": []}
-        results, issues = [], []
+            return {"state": "No panel YAML", "url": "", "dashboards": [], "issues": [], "resources": []}
+        results, issues, resources = [], [], []
         transport = self.transport() if isinstance(self.transport, type) else self.transport
         with transport.session() as ws:
             entries = ws.request("lovelace/dashboards/list")
@@ -205,7 +221,10 @@ class DashboardPublisher:
                 slug = panel["slug"]
                 try:
                     views = self._render(panel, sources)
-                    state = self._publish(ws, entries, panel, views)
+                    refs = {ref["path"]: ref["product"] for ref in panel["views"]
+                            if (ref["product"], ref["path"]) in sources}
+                    state, panel_resources = self._publish(ws, entries, panel, views, refs)
+                    resources.extend(panel_resources)
                     results.append({"slug": slug, "url": "/" + slug + "/",
                                     "state": state, "views": len(views)})
                     if state == "Updated" and self.journal is not None:
@@ -217,4 +236,4 @@ class DashboardPublisher:
         updated = any(r["state"] == "Updated" for r in results)
         return {"state": "Partial" if issues else "Updated" if updated else "Current",
                 "url": results[0]["url"] if len(results) == 1 else "",
-                "dashboards": results, "issues": issues}
+                "dashboards": results, "issues": issues, "resources": resources}

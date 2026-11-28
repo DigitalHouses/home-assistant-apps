@@ -171,8 +171,14 @@ class AutoSync:
             self.journal.record(event, detail, **kwargs)
 
     def status(self) -> dict:
-        with self.lock:
-            return json.loads(json.dumps(self.report, ensure_ascii=False))
+        # A completed report is replaced atomically and never modified in place.
+        # The Ingress can read it without waiting for Git or HA network I/O.
+        idle = self.lock.acquire(blocking=False)
+        if idle:
+            self.lock.release()
+        result = json.loads(json.dumps(self.report, ensure_ascii=False))
+        result["running"] = not idle
+        return result
 
     def _check_root(self) -> None:
         if not self.root.is_dir() or self.root.is_symlink():
@@ -382,7 +388,7 @@ class AutoSync:
                 if callable(invalidate):
                     invalidate()
             report = {
-                "last_run": datetime.now(timezone.utc).isoformat(),
+                "last_run": "", "trigger": "manual" if refresh else "automatic",
                 "state": "OK", "updated": 0, "unchanged": 0,
                 "issues": [], "resources": [], "dashboard": None,
                 "packages": None,
@@ -432,7 +438,7 @@ class AutoSync:
                         outcome = "Skipped: " + str(exc)[:150]
                         report["issues"].append(label + ": " + str(exc)[:150])
                         self._event("package_error", label + ": " + type(exc).__name__, product=source["product"], level="error")
-                    report["resources"].append({"name": label, "status": outcome})
+                    report["resources"].append({"name": label, "kind": "Package", "status": outcome})
                 if changed_packages or (report["packages"] and
                                         report["packages"]["loader"] == "Configured"):
                     if self.reloader is not None:
@@ -452,6 +458,10 @@ class AutoSync:
                                      for r in resources if r["kind"] == "view"}
                         report["dashboard"] = self.publisher.sync(panels, available)
                         report["issues"].extend(report["dashboard"].get("issues", []))
+                        panel_resources = report["dashboard"].get("resources", [])
+                        report["resources"].extend(panel_resources)
+                        report["updated"] += sum(r["status"] in ("Updated", "Removed") for r in panel_resources)
+                        report["unchanged"] += sum(r["status"] == "Current" for r in panel_resources)
                     except Exception as exc:
                         report["issues"].append("DigitalHouses panels: " + str(exc)[:150])
                 if report["issues"]:
@@ -466,6 +476,7 @@ class AutoSync:
             self._event("sync_finished", f"{report['state']} · updated={report['updated']} · current={report['unchanged']} · issues={len(report['issues'])}",
                         level=("success" if report["state"] == "OK" else "warning")
                         if refresh or report["updated"] or report["state"] != self.report["state"] or report["issues"] != self.report["issues"] else "debug")
+            report["last_run"] = datetime.now(timezone.utc).isoformat()
             self.report = report
             LOG.info("Auto-sync %s: updated=%s current=%s issues=%s",
                      report["state"], report["updated"], report["unchanged"],

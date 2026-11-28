@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import http.client
 import re
+import json
+import time
 from urllib.parse import urlencode
 import tempfile
 import threading
@@ -73,78 +75,81 @@ class CatalogTests(unittest.TestCase):
                 server.server_close()
                 thread.join(timeout=4)
 
-    def test_manual_button_runs_sync_without_confirmation(self):
-        with tempfile.TemporaryDirectory() as directory:
-            sources = ProductSources(Path(directory) / "sources.json")
-            calls = []
+    def test_manual_button_runs_sync_without_navigation(self):
+        sources = ProductSources()
+        calls = []
+        started, finish = threading.Event(), threading.Event()
+        report = {"state": "OK", "updated": 0, "unchanged": 7, "resources": []}
 
-            def manual_sync():
-                calls.append("fresh")
-                return {"state": "OK", "updated": 2, "unchanged": 5,
-                        "dashboard": {"state": "Updated"}, "issues": []}
+        def manual_sync():
+            calls.append("fresh")
+            started.set()
+            finish.wait(3)
+            report.update({"last_run": "2026-11-28T14:30:00+00:00",
+                           "trigger": "manual", "updated": 2, "unchanged": 5,
+                           "resources": [{"name": "example", "kind": "Package", "status": "Updated"},
+                                         {"name": "example / dh-system/test", "kind": "View", "status": "Updated"}]})
+            return report
 
-            server = make_server(
-                sources, version="0.6.1", port=0,
-                auto_status=lambda: {"state": "OK", "updated": 0,
-                                     "unchanged": 7, "resources": []},
-                auto_sync=manual_sync)
-            thread = threading.Thread(target=server.serve_forever, daemon=True)
-            try:
-                thread.start()
-                code, page = fetch(server)
-                self.assertEqual(code, 200)
-                self.assertIn("Проверить и обновить", page)
-                self.assertNotIn("Обновление без кнопок", page)
-                self.assertNotIn("name='confirm'", page)
-                match = re.search(r"name='token' value='([^']+)'", page)
-                self.assertIsNotNone(match)
-                fields = urlencode({"op": "sync", "token": match.group(1)})
-                conn = http.client.HTTPConnection(
-                    "127.0.0.1", server.server_port, timeout=3)
+        server = make_server(sources, version="0.6.7", port=0,
+                             auto_status=lambda: dict(report), auto_sync=manual_sync)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            code, page = fetch(server)
+            self.assertEqual(code, 200)
+            self.assertLess(page.index("Проверить и обновить"), page.index("Продукты ("))
+            self.assertEqual(page.count("<details>"), 3)
+            self.assertNotIn("<details open", page)
+            self.assertNotIn("name='confirm'", page)
+            self.assertIn("./sync-ui.js", page)
+            token = re.search(r'data-token="([^"]+)"', page).group(1)
+
+            def submit(token):
+                conn = http.client.HTTPConnection("127.0.0.1", server.server_port, timeout=3)
                 try:
-                    conn.request("POST", "/", body=fields,
-                                 headers={"Content-Type": "application/x-www-form-urlencoded"})
+                    conn.request("POST", "/api/sync", body=json.dumps({"token": token}),
+                                 headers={"Content-Type": "application/json"})
                     resp = conn.getresponse()
-                    result = resp.read().decode("utf-8")
-                    self.assertEqual(resp.status, 200)
-                    self.assertIn("Проверка GitHub завершена", result)
-                    self.assertIn("Обновлено: 2", result)
-                    self.assertIn("Без изменений: 5", result)
-                    self.assertEqual(calls, ["fresh"])
+                    return resp.status, json.loads(resp.read())
                 finally:
                     conn.close()
-            finally:
-                server.shutdown()
-                server.server_close()
-                thread.join(timeout=4)
 
-    def test_manual_sync_rejects_wrong_token_without_running(self):
-        with tempfile.TemporaryDirectory() as directory:
-            calls = []
-            server = make_server(
-                ProductSources(Path(directory) / "sources.json"),
-                version="0.6.1", port=0,
-                auto_status=lambda: {"state": "OK", "resources": []},
-                auto_sync=lambda: calls.append(True))
-            thread = threading.Thread(target=server.serve_forever, daemon=True)
-            try:
-                thread.start()
-                fields = urlencode({"op": "sync", "token": "invalid"})
-                conn = http.client.HTTPConnection(
-                    "127.0.0.1", server.server_port, timeout=3)
-                try:
-                    conn.request("POST", "/", body=fields,
-                                 headers={"Content-Type": "application/x-www-form-urlencoded"})
-                    response = conn.getresponse()
-                    self.assertEqual(response.status, 409)
-                    response.read()
-                    self.assertEqual(calls, [])
-                finally:
-                    conn.close()
-            finally:
-                server.shutdown()
-                server.server_close()
-                thread.join(timeout=4)
+            self.assertEqual(submit("invalid")[0], 400)
+            self.assertEqual(calls, [])
+            self.assertEqual(submit(token)[0], 202)
+            self.assertTrue(started.wait(2))
+            self.assertEqual(submit(token)[0], 409)
+            data = json.loads(fetch(server, path="/api/sync/status")[1])
+            self.assertTrue(data["running"])
+            self.assertIn("Выполняется проверка", data["fragments"]["status"])
+            finish.set()
+            for _ in range(100):
+                data = json.loads(fetch(server, path="/api/sync/status")[1])
+                if not data["running"]:
+                    break
+                time.sleep(.01)
+            self.assertFalse(data["running"])
+            self.assertIn("Обновлено: 2 ресурсов", data["fragments"]["status"])
+            self.assertIn("example / dh-system/test", data["fragments"]["status"])
+            self.assertEqual(calls, ["fresh"])
+            self.assertIn("fetch", fetch(server, path="/sync-ui.js")[1])
+        finally:
+            finish.set()
+            server.shutdown()
+            server.server_close()
+            thread.join(timeout=4)
+
+    def test_status_shows_errors_and_escapes_untrusted_text(self):
+        from compact_web import render
+        data = render({}, {"state": "Error", "last_run": "2026-11-28T14:30:00+00:00",
+                           "issues": ["<script>bad</script>"], "resources": []})
+        self.assertIn("с ошибками", data["status"])
+        self.assertIn("&lt;script&gt;", data["status"])
+        self.assertNotIn("<script>", data["status"])
+        data = render({}, {"state": "OK", "last_run": "2026-11-28T14:30:00+00:00",
+                           "resources": [{"name": "test", "kind": "View", "status": "Current"}]})
+        self.assertIn("Все ресурсы актуальны", data["status"])
 
     def test_catalog_does_not_consult_availability(self):
         import json
