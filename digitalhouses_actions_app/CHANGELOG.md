@@ -4,6 +4,8 @@ Historical releases below were published as DigitalHouses Aqara Switch App; thei
 
 ## 0.3.13
 
+- Add a checked-by-default Lights toolbar filter for lights with brightness, CCT or RGB capabilities. Show visible/total counts; filtering never modifies saved settings.
+
 - Exclude System Globals Day/Night RGB picker template lights from the Actions target catalog (including Lights) and HA-native command authorization, including renamed picker entities identified by their stable unique IDs. They are configuration controls, not physical lighting loads. Leave the System Globals package and picker controls unchanged.
 
 ## 0.3.12
