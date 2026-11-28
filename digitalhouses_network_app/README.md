@@ -1,120 +1,73 @@
-## Optional DH Stats telemetry (0.1.32)
+# DigitalHouses Network App
 
-Network App supports **explicitly opt-in** installation statistics, following
-the working DigitalHouses PVE Agent telemetry policy-v1 approach. The Home
-Assistant App configuration has one switch, `telemetry_enabled`, initially
-`false` both on new installs and existing upgrades.
+A local network inventory and device presence monitor for Home Assistant OS.
 
-- With the switch **off**, Network App runs all LAN scanning, Ingress, MQTT
-  events, DH Sync and Presence normally. It creates no new telemetry identity
-  and sends no installation heartbeat. Turning it off later prevents further
-  reporting on the next App restart and retains the local identity.
-- With the switch **on**, an independent HTTPS worker sends only the five
-  protocol-v1 fields `schema`, `telemetry_policy_version` (1),
-  `installation_id` (random UUIDv4), `product`
-  (`digitalhouses_network_app`), and `version` to
-  `https://telemetry.digitalhouses.vip/v1/heartbeat`. Its token is an HTTPS
-  Authorization credential and is never in the payload.
-- The identity and token are persisted in `/data/telemetry.json` with owner-only
-  permissions; the periodic heartbeat has 24-hour cadence with jitter and
-  backed-off retries. Failure to reach the Stats server does not affect LAN
-  monitoring.
-- To erase the remote installation record, run
-  `python3 /app/telemetry.py --delete` from the App container. Deletion
-  authenticates with the persisted secret and replaces the local identity.
-  If the optional switch remains enabled, subsequent reporting uses the new
-  identity. Turning the switch off is how to stop reporting.
+## Why this app exists
 
-The standard <https://github.com/DigitalHouses/home-assistant-apps/blob/main/docs/standards/PRODUCT_TELEMETRY_POLICY.md>
-describes the target policy v2. This experimental release uses **policy v1
-opt-in**, not mandatory v2, so existing Network App installations are never
-stopped over missing telemetry consent. Production immutable-image provenance
-and the policy-v2 privacy/legal rollout remain separate work.
+A smart home may contain dozens of network devices. Router trackers, ARP observations and advertised service names do not always agree: DHCP addresses change, old router entries remain, and some devices never answer ICMP ping.
 
-The DH Stats product registry includes Network App, but an already deployed
-Stats backend must reload/deploy the changed registry before it will accept
-this product's heartbeat. After updating the App, enable the option explicitly
-and restart it to test. MQTT `/sync` is only the DH Sync resource announcement,
-not a Stats heartbeat.
+Network App combines these independent sources without treating every report as equally reliable. It retains a persistent inventory and helps you understand what was discovered, why it was associated with a device, and when the device was last positively observed.
 
-## DH Sync 0.6.0 discovery (0.1.31)
+## Features
 
-When the existing optional MQTT worker connects or reconnects, the App publishes
-`DigitalHouses/Global/digitalhouses_network_app/sync` with QoS 1 and retain.
-The message identifies the running App and points DH Sync at its canonical
-`digitalhouses_network_app` directory in
-`https://github.com/DigitalHouses/home-assistant-apps`.
-The announcement does not contain Dashboard/View placement, credentials,
-site addresses or network inventory. MQTT Event and Home Assistant Discovery
-topics are unchanged.
+- Bounded ARP discovery on the primary local Ethernet interface, independently of HA router integrations.
+- Read-only import of existing Home Assistant router device trackers.
+- Bonjour/mDNS, SSDP and WS-Discovery enrichment with source attribution and conservative identity matching.
+- Persistent SQLite inventory: stable device IDs, MAC/IP history, notes and positive observations.
+- Sortable, searchable device table, NEW badges, event journal and JSON diagnostics.
+- Optional IP/MAC Presence watches using confirmed global ARP scans, with configurable confirmation thresholds.
+- Optional MQTT machine events and DH Sync announcement. MQTT is not required for local discovery.
+- Russian and English Ingress UI in the internationalization candidate; change the language in the header. The browser remembers the choice. Device names, notes and machine identifiers are not translated.
 
-The App's full management interface remains in Home Assistant Ingress. No
-canonical Lovelace Views or automatically installed HA Packages are currently
-published for DH Sync. The optional local notification package remains under
-`examples/` and is not part of DH Sync's automatic installation.
+**Online is not ping.** It means a positive observation from ARP, the local interface or a Home Assistant router tracker. Presence watches use fresh successful ARP scans; failed or ambiguous scans do not establish absence.
 
-## Current state (0.1.16 NEW badges and machine events)
+## Screenshots
 
-Available now:
-- `NEW` badge appears beside a device name for 24 hours after the first positive ARP/HA/local-interface evidence (not merely a router's `not_home` entry). Repeat observations, IP changes and name enrichments do not renew the badge.
-- After the quiet first-census window (120 seconds on initial database initialization and after confirmed Reset), each newly positively discovered UUID produces **one** `device_discovered` MQTT Event (QoS 1, non-retained), with `device_id`, `observed_at`, `detection_source` and any known MAC/IP/name. Discovery config is retained for HA startup; event delivery retries from a SQLite outbox after MQTT failure.
-- Machine event entity `event.dh_network_app_network`, diagnostic `sensor.dh_network_app_version` and `sensor.dh_network_app_started_at`. MQTT broker service is optional; network discovery works without MQTT and pending events are not falsely marked delivered.
-- Custom method-grouped `monitored_devices` with multilingual optional `label` is the **approved next phase**, not yet active in version 0.1.16; arbitrary nested keys require Supervisor config UI compatibility verification.
-- The Reset confirmation dialog uses a real line break between the irreversible-data-loss warning and the `RESET` instruction, not a literal `\n`.
-- In the expandable `Показатели` panel, a destructive **Reset — очистить инвентарь…** button. A typed `RESET` challenge **and** final confirmation are required. Only the authenticated Home Assistant Ingress (admin-only panel) can use the JSON API endpoint `POST /api/inventory/reset`. It deletes all 16 discovery and inventory table contents in a single SQLite transaction, including device identities/UUIDs, Notes, events and protocol records. The SQLite schema, `schema_version`, Supervisor options, and host settings stay intact. There is no data backup or undo inside the App; download the diagnostic JSON before Reset if history is needed.
-- Reset invalidates responses from scans started earlier (generation gate), then starts a new ordered discovery pass (HA Router, primary LAN interface/ARP, then mDNS/SSDP/WSD). Ordinary poll cycles continue. The App never edits router, HA or other devices as part of Reset.
-- standard installation from the **DigitalHouses Home Assistant Apps repository** (no copying files into HAOS);
-- authenticated Home Assistant Ingress Web UI, optionally shown on the HA sidebar;
-- Go process, persistent SQLite at `/data/network.sqlite3`;
-- Device list heading `Устройства (N)` and search field share one horizontal row (search immediately to the right of the count; wraps on narrow screens). Export confirmation no longer requests sharing the file in a chat. The metrics dropdown no longer contains the orange explanatory notice.
-- UI sections for Devices, Sources and Events in a single persistent Ingress header. A native keyboard-accessible `Показатели` disclosure keeps the 11 metric cards, source explanation and diagnostic JSON export hidden by default, but accessible in the top bar on demand; the device table and search are visible immediately. REST status/devices/sources/events endpoints and note updates for records that exist;
-- periodic read-only import of Home Assistant `device_tracker` entities with `source_type: router` using the official Supervisor Core API proxy;
-- persistent MAC/HA tracker identities, IP address histories and last positive sighting; **Online represents positive ARP/HA router tracker/local interface evidence, not successful ICMP ping**. ICMP availability is not implemented and is not inferred from the current Presence field;
-- source health, last successful poll and import counts. A working HA API with no router trackers is reported as `empty`, not a scan failure.
-- independent bounded ARP probing of the **primary LAN Ethernet interface** at a configurable interval (default 180 s), without Nmap or installing tools into HAOS;
-- reconciliation of ARP-positive MACs with router-discovered MACs; stable UUIDs, notes and IP address histories are preserved;
-- source diagnostics distinguish errors, no responses and Proxy ARP ambiguities; no automatic Offline inference;
-- an empty inventory until real router trackers or ARP replies are observed; no fabricated devices or presence data;
-- **Download diagnostics (.json)** on every Ingress tab: version, time, all devices and notes, source status/counts, events (up to 200), MAC/IP identity history, latest ARP-positive timestamps, and the browser's active tab/search/visible row IDs.
-- **Обнаружен через / Discovered via** column: per-device HA Router and ARP associations, with hoverable last-reported timestamps. A source badge means historical association, not guaranteed current presence;
-- additive source-scoped IPv4 evidence database: live ARP mapping outranks a conflicting HA router-reported IP, while historical DHCP/HA claims and notes remain intact;
-- current IPv4 is blank when neither source has fresh positive evidence. The diagnostic JSON exposes all IPv4 evidence and conflicts with timestamps/MACs; the Web UI shows conflict counts and separate last-ARP-scan versus historically seen ARP hosts.
+English screenshots from a real HAOS installation will be added after candidate acceptance. No simulated device inventory is presented as a live installation.
 
-- Bonjour/mDNS discovery from the App itself: published hostnames and DNS-SD service types/ports are stored only for devices with a fresh, unique ARP-verified address/MAC association. A verified change to a Bonjour-sourced hostname automatically refreshes that device's displayed name without replacing UUID, MAC, Notes or Presence. Meaningful router and verified WSD labels take priority.
-- Ingress displays detected service types, source attribution and counts. Exported JSON contains linked records plus unlinked announcements without inventing device identities.
+## Installation
 
-- Compact **IP-first device table** with sortable column headers; numeric IPv4 ordering and unknown addresses always last. Bonjour services appear on hovering/focusing a compact `mDNS · N` discovery badge rather than in a wide column.
-- JSON diagnostics record the selected sort and exact displayed order of devices alongside the existing complete inventory.
+Requires Home Assistant OS. The app supports amd64 and aarch64.
 
-- Local source discrepancies (including Media Bridge router tracker vs direct ARP) are recorded **once per change** in the Events tab, not emitted as HA alerts. The current IPv4 continues to prefer fresh direct ARP evidence.
-- Experimental SSDP/M-SEARCH discovery on the primary LAN enriches only uniquely fresh ARP-confirmed devices, without fetching remote XML documents, creating fake hosts or altering Notes and Presence. SSDP service badges have details on hover and diagnostics export includes all matched/unmatched metadata.
+1. Open **Settings → Apps → App store → Repositories** in Home Assistant.
+2. Add [DigitalHouses Home Assistant Apps](https://github.com/DigitalHouses/home-assistant-apps).
+3. Install **DigitalHouses Network App** and start it.
+4. Select **Open Web UI**; optionally enable **Show in sidebar**.
 
-- A numbered, single-line device table (№, Name, IP, MAC, Presence, sources, last Online, Note) removes fallback MACs from the Name column. A missing discovered name is displayed as a dash without changing the stored identity.
-- Notes use a clickable inline label when present and a small `Добавить` action when absent. The complete text is retained in SQLite, shown on hover and editable with one click.
+Version 0.1.33 is the internationalization release using immutable GHCR delivery. The maintainer approved a direct stable release; final live HAOS acceptance and reviewed English screenshots remain pending. Do not replace an existing installation by deleting or recreating it.
 
-- The primary Linux default-route LAN interface is **positive direct OS evidence** (MAC and IPv4, no invented name). Own HAOS address is registered even though an ARP scanner cannot query itself. Local-interface claims outrank router claims and are journaled on conflict.
-- WS-Discovery sends a bounded local UDP 3702 multicast Probe for DPWS devices and records ProbeMatches only when the reply references the unique sent MessageID. Response IPs are joined to existing devices **only** with fresh unique ARP or local interface identity; unmatched identifiers remain metadata. This pilot does **not** issue HTTP metadata Get or infer a device name from WSD UUID/Types/Scopes.
+## How to use
 
-- Verified Windows / Linux wsdd2 computer names are obtained only from bounded HTTP SOAP GetResponse `pub:Computer` records, bound to the exact WSD endpoint and a fresh direct ARP/MAC identity. Supported explicit WSD computer-name forms include `name/NotJoined`, `name/Workgroup:...` and `name/Domain:...`. The system does not infer names from service categories or generic WSD FriendlyName. Existing meaningful labels and user Notes are preserved. A strict same-IPv4, WSD-advertised local HTTP port 5357 or 3702 policy blocks SSRF, proxies and redirects. The verified name and source are retained in SQLite schema v7.
+- **Devices:** search and sort the inventory, add notes, inspect discovery sources and enable a Presence watch from an IP/MAC cell.
+- **Sources:** check scan health and distinguish empty results from errors.
+- **Event log:** inspect new-device and monitored-availability events and copy HA automation trigger templates.
+- **Settings:** configure shared scan intervals, confirmation thresholds and retention; export JSON diagnostics.
+- **Help:** read explanations of positive evidence, Presence and MQTT event delivery.
 
-**Not yet implemented:** IPv6 NDP, SSDP, full device registry enrichment, HA Event publication or verified Offline. `online` means either a router reports `home` or a device answers ARP. The Web UI identifies these as planned.
+The first discovery census is quiet for 120 seconds. After that, first positive discovery of a new device can generate a non-retained MQTT event. MQTT delivery acknowledgement means the broker accepted the event, not that a notification was delivered.
 
-## Install / update (only through standard HA App Store)
+## Data, security and privacy
 
-1. In Home Assistant open **Settings → Apps → App store → Repositories**.
-2. Add `https://github.com/DigitalHouses/home-assistant-apps` once, if not already present.
-3. Refresh the App Store and install **DigitalHouses Network App**.
-4. Start it and use **Open Web UI**; optionally enable **Show in sidebar**.
-5. Future updates must also be installed by the Home Assistant App Store.
+The inventory lives in `/data/network.sqlite3`. In-place updates must retain the App data directory. The app has a cold-backup policy; take a Home Assistant App backup before updates and never use Reset to perform an upgrade. Reset is destructive and requires explicit typed confirmation.
 
-Do **not** install using `/local_apps`, arbitrary `docker run`, a separate web port, or manual copying into HAOS. This experimental build has no published GHCR image, so Supervisor builds it from the repository. Production immutable images will be added before the first stable release following the common DigitalHouses release policy.
+The management interface is administrator-only Supervisor Ingress. Host networking and NET_RAW are needed for on-link ARP discovery; no standalone management port is exposed. The app reads HA device trackers through the Supervisor API, does not require router credentials, and does not configure routers or other devices.
 
-## Security and compatibility
+Diagnostics contain local device identifiers, addresses, notes, source details and event history. Review and redact them before sharing.
 
-Ingress is the only allowed Web UI entry point. For on-link ARP the App uses `host_network: true` and **only** `NET_RAW`; Supervisor assigns a dynamic Ingress port and the HTTP server rejects requests not originating from Supervisor (172.30.32.2). No mapped host port, `NET_ADMIN`, `full_access`, Docker socket or host mounts are requested. Data survives App restart/upgrade in `/data`; generated code and images do not belong there. No dependency on Nmap, an MQTT broker, remote telemetry or a database server. IPv4 auto-scan intentionally refuses non-private, larger-than-/24 or ambiguous networks instead of silently scanning only part of a subnet. `homeassistant_api: true` is necessary and carries administrator-level Core API access; the token is never exposed in the Web UI.
+Optional DH Stats telemetry is disabled by default (`telemetry_enabled: false`). If explicitly enabled, the policy-v1 HTTPS heartbeat contains only schema, telemetry policy version, a random installation UUID, product ID and version. The inventory, IP/MAC addresses, device names, notes and credentials are not included. The server can observe the public connection IP as with any HTTPS service. Telemetry failures do not interrupt discovery. See [telemetry policy](../docs/standards/PRODUCT_TELEMETRY_POLICY.md) and [technical documentation](DOCS.md) for identity retention and deletion.
 
-**Privacy:** exported files contain potentially identifying network addresses, hostnames and user notes; treat them as private. Supervisor API tokens, passwords, and runtime environment are not read by the export. However a password manually written in a note will be exported verbatim. The file is created locally by your browser; the App does not upload, email or persist a separate diagnostic copy.
+## Limitations
 
-No existing NetAlertX, Presence App, Internet App or HA entities are modified.
+- Primary private IPv4 subnet only, /24 through /30; no VLAN discovery, IPv6 or networks larger than /24.
+- No universal availability guarantee: sleeping devices, isolated Wi-Fi clients, proxy ARP and router tracker errors can limit accuracy.
+- Service discovery enriches positively identified devices and does not establish presence by itself.
+- Not a port scanner, traffic analysis tool, replacement for a network management system or a security vulnerability scanner.
 
-See [DOCS.md](DOCS.md) for design boundaries and [CHANGELOG.md](CHANGELOG.md) for status.
+## Documentation and feedback
+
+- [Technical documentation](DOCS.md)
+- [Changelog](CHANGELOG.md)
+- [International release acceptance checklist](INTERNATIONAL_ACCEPTANCE.md)
+- [Report an issue](https://github.com/DigitalHouses/home-assistant-apps/issues)
+
+Feedback on real-world discovery accuracy, router integrations and false positives is welcome.

@@ -1,15 +1,16 @@
 name: DigitalHouses Network App
-version: 0.1.32
+version: 0.1.33
 slug: digitalhouses_network_app
 description: Network inventory and source-verified monitored device availability.
 url: https://github.com/DigitalHouses/home-assistant-apps/tree/main/digitalhouses_network_app
 arch:
   - amd64
   - aarch64
+image: ghcr.io/digitalhouses/digitalhouses_network_app
 startup: application
 boot: auto
 init: false
-stage: experimental
+stage: stable
 backup: cold
 ingress: true
 ingress_port: 0

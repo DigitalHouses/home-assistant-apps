@@ -117,46 +117,364 @@ input{font:inherit;padding:10px;color:#f0f4f9;background:#203147;border:1px soli
 .settings-overview h2{display:flex;align-items:center;gap:12px}
 .settings-overview .overview-panel{position:static;right:auto;top:auto;width:100%;max-height:none;overflow:visible;box-sizing:border-box;box-shadow:none;transform:none}
 .settings-overview .stats{grid-template-columns:repeat(auto-fit,minmax(145px,1fr))}
+.language-picker{display:flex;align-items:center;gap:8px}
+.language-picker select{font:inherit;color:#f0f4f9;background:#203147;border:1px solid #526d86;border-radius:8px;padding:6px}
 </style></head>
 <body>
 <header class="app-header">
-  <div class="brand"><h1>DigitalHouses Network App</h1><small>Устройства и наблюдение за сетью · <span id="app-version">v…</span></small></div>
-  <nav aria-label="Разделы приложения"><button class="active" data-page="devices">Устройства</button><button data-page="sources">Источники</button><button data-page="events">Журнал событий</button><button data-page="settings">Параметры</button><button data-page="help">Помощь</button></nav>
+  <div class="brand"><h1>DigitalHouses Network App</h1><small><span data-i18n="devices_and_network_monitoring">Устройства и наблюдение за сетью · </span><span id="app-version">v…</span></small></div>
+  <nav aria-label="Разделы приложения" data-i18n-aria-label="app_sections"><button class="active" data-page="devices" data-i18n="devices">Устройства</button><button data-page="sources" data-i18n="sources">Источники</button><button data-page="events" data-i18n="event_log">Журнал событий</button><button data-page="settings" data-i18n="settings">Параметры</button><button data-page="help" data-i18n="help">Помощь</button></nav>
+  <label class="language-picker"><span data-i18n="language">Язык</span>
+    <select id="language"><option value="ru" lang="ru">Русский</option><option value="en" lang="en">English</option></select>
+  </label>
 
 </header>
 <main>
-<section id="settings-overview" class="settings-overview" aria-label="Состояние сети и диагностика" hidden>
-    <h2>Состояние сети и диагностика <span id="health" class="tag">Подключение…</span></h2>
-    <div class="overview-panel" role="region" aria-label="Показатели и диагностика">
-      <p class="description">Сводка источников, диагностика и экспорт. Статус Online не означает ответ на ICMP ping.</p>
-      <div class="stats"><div class="stat"><strong id="known">—</strong><span>Устройств в реестре</span></div><div class="stat"><strong id="online">—</strong><span>Online (ARP / HA, не ping)</span></div><div class="stat"><strong id="last-arp">—</strong><span>Последний ARP-скан</span></div><div class="stat"><strong id="known-arp">—</strong><span>Ранее найдено ARP</span></div><div class="stat"><strong id="ip-conflicts">—</strong><span>Расхождений IPv4 (включая источники)</span></div><div class="stat"><strong id="mdns-hosts">—</strong><span>Хостов с Bonjour</span></div><div class="stat"><strong id="mdns-services">—</strong><span>Bonjour сервисов</span></div><div class="stat"><strong id="ssdp-hosts">—</strong><span>Хостов с SSDP</span></div><div class="stat"><strong id="ssdp-services">—</strong><span>SSDP сервисов</span></div></div>
+<section id="settings-overview" class="settings-overview" aria-label="Состояние сети и диагностика" data-i18n-aria-label="network_status_and_diagnostics" hidden>
+    <h2><span data-i18n="network_status_and_diagnostics_2">Состояние сети и диагностика </span><span id="health" class="tag" data-i18n="connecting">Подключение…</span></h2>
+    <div class="overview-panel" role="region" aria-label="Показатели и диагностика" data-i18n-aria-label="metrics_and_diagnostics">
+      <p class="description"><span data-i18n="source_summary_diagnostics_and_export">Сводка источников, диагностика и экспорт. Статус Online не означает ответ на ICMP ping.</span></p>
+      <div class="stats"><div class="stat"><strong id="known">—</strong><span data-i18n="devices_in_inventory">Устройств в реестре</span></div><div class="stat"><strong id="online">—</strong><span data-i18n="online_arp_ha_evidence">Online (ARP / HA, не ping)</span></div><div class="stat"><strong id="last-arp">—</strong><span data-i18n="last_arp_scan">Последний ARP-скан</span></div><div class="stat"><strong id="known-arp">—</strong><span data-i18n="previously_found_by_arp">Ранее найдено ARP</span></div><div class="stat"><strong id="ip-conflicts">—</strong><span data-i18n="ipv4_discrepancies_including_source_disagreements">Расхождений IPv4 (включая источники)</span></div><div class="stat"><strong id="mdns-hosts">—</strong><span data-i18n="bonjour_hosts">Хостов с Bonjour</span></div><div class="stat"><strong id="mdns-services">—</strong><span data-i18n="bonjour_services">Bonjour сервисов</span></div><div class="stat"><strong id="ssdp-hosts">—</strong><span data-i18n="ssdp_hosts">Хостов с SSDP</span></div><div class="stat"><strong id="ssdp-services">—</strong><span data-i18n="ssdp_services">SSDP сервисов</span></div></div>
       
-      <div class="toolbar"><a id="export" class="export" href="api/diagnostics/download" target="_blank" rel="noopener noreferrer">Сохранить диагностику (.json)</a><button id="export-preview" type="button">Показать JSON</button><small id="export-status" role="status" aria-live="polite">Расширенный отчёт: IP, MAC, Notes, Presence, очередь MQTT и последние события. Пароли и токены не экспортируются. Проверь данные перед отправкой.</small></div>
-      <div id="diagnostic-json-preview" hidden><p class="description">Если загрузка файла заблокирована браузером или Ingress, скопируй JSON ниже либо выдели текст вручную (Ctrl+A / Ctrl+C).</p><div class="toolbar"><button id="export-copy" type="button">Скопировать весь JSON</button><small id="export-copy-status" role="status" aria-live="polite"></small></div><textarea id="diagnostic-json-text" readonly spellcheck="false" aria-label="Полный диагностический JSON для копирования"></textarea></div>
+      <div class="toolbar"><a id="export" class="export" href="api/diagnostics/download" target="_blank" rel="noopener noreferrer" data-i18n="download_diagnostics_json">Сохранить диагностику (.json)</a><button id="export-preview" type="button" data-i18n="show_json">Показать JSON</button><small id="export-status" role="status" aria-live="polite" data-i18n="extended_report_with_ips_macs">Расширенный отчёт: IP, MAC, Notes, Presence, очередь MQTT и последние события. Пароли и токены не экспортируются. Проверь данные перед отправкой.</small></div>
+      <div id="diagnostic-json-preview" hidden><p class="description"><span data-i18n="if_the_browser_or_ingress">Если загрузка файла заблокирована браузером или Ingress, скопируй JSON ниже либо выдели текст вручную (Ctrl+A / Ctrl+C).</span></p><div class="toolbar"><button id="export-copy" type="button" data-i18n="copy_all_json">Скопировать весь JSON</button><small id="export-copy-status" role="status" aria-live="polite"></small></div><textarea id="diagnostic-json-text" readonly spellcheck="false" aria-label="Полный диагностический JSON для копирования" data-i18n-aria-label="full_diagnostic_json_for_copying"></textarea></div>
       <div class="reset-area">
-        <button id="reset" class="reset-danger" type="button">Reset — очистить инвентарь…</button>
-        <small>Безвозвратно удаляет устройства, UUID, Notes, источники и историю. Настройки и схема БД сохраняются. После подтверждения обнаружение начинается с нуля.</small>
+        <button id="reset" class="reset-danger" type="button" data-i18n="reset_inventory">Reset — очистить инвентарь…</button>
+        <small data-i18n="permanently_deletes_devices_uuids_notes">Безвозвратно удаляет устройства, UUID, Notes, источники и историю. Настройки и схема БД сохраняются. После подтверждения обнаружение начинается с нуля.</small>
         <small id="reset-status" role="status" aria-live="polite"></small>
       </div>
     </div>
 </section>
 <div id="ip-conflict-summary" class="notice" style="display:none"></div>
-<div id="devices-tools" class="devices-tools" hidden><h2 id="devices-count">Устройства (—)</h2><div id="filterarea"></div></div>
-<section id="body">Загрузка…</section>
-<div id="copy-feedback" class="copy-feedback" role="status" aria-live="polite" hidden></div><div id="presence-menu" class="presence-menu" role="dialog" aria-label="Параметры Presence" hidden></div>
+<div id="devices-tools" class="devices-tools" hidden><h2 id="devices-count" data-i18n="devices_2">Устройства (—)</h2><div id="filterarea"></div></div>
+<section id="body" data-i18n="loading">Загрузка…</section>
+<div id="copy-feedback" class="copy-feedback" role="status" aria-live="polite" hidden></div><div id="presence-menu" class="presence-menu" role="dialog" aria-label="Параметры Presence" data-i18n-aria-label="presence_settings" hidden></div>
 </main>
 <script>
+// Only UI copy is localized. API data, clipboard values and exports retain their original values.
+const messages={
+ "app_sections":["Разделы приложения", "App sections"],
+ "network_status_and_diagnostics":["Состояние сети и диагностика", "Network status and diagnostics"],
+ "metrics_and_diagnostics":["Показатели и диагностика", "Metrics and diagnostics"],
+ "full_diagnostic_json_for_copying":["Полный диагностический JSON для копирования", "Full diagnostic JSON for copying"],
+ "presence_settings":["Параметры Presence", "Presence settings"],
+ "devices_and_network_monitoring":["Устройства и наблюдение за сетью · ", "Devices and network monitoring · "],
+ "devices":["Устройства", "Devices"],
+ "sources":["Источники", "Sources"],
+ "event_log":["Журнал событий", "Event log"],
+ "settings":["Параметры", "Settings"],
+ "help":["Помощь", "Help"],
+ "network_status_and_diagnostics_2":["Состояние сети и диагностика ", "Network status and diagnostics "],
+ "connecting":["Подключение…", "Connecting…"],
+ "source_summary_diagnostics_and_export":["Сводка источников, диагностика и экспорт. Статус Online не означает ответ на ICMP ping.", "Source summary, diagnostics and export. Online status does not indicate an ICMP ping response."],
+ "devices_in_inventory":["Устройств в реестре", "Devices in inventory"],
+ "online_arp_ha_evidence":["Online (ARP / HA, не ping)", "Online (ARP / HA evidence)"],
+ "last_arp_scan":["Последний ARP-скан", "Last ARP scan"],
+ "previously_found_by_arp":["Ранее найдено ARP", "Previously found by ARP"],
+ "ipv4_discrepancies_including_source_disagreements":["Расхождений IPv4 (включая источники)", "IPv4 discrepancies (including source disagreements)"],
+ "bonjour_hosts":["Хостов с Bonjour", "Bonjour hosts"],
+ "bonjour_services":["Bonjour сервисов", "Bonjour services"],
+ "ssdp_hosts":["Хостов с SSDP", "SSDP hosts"],
+ "ssdp_services":["SSDP сервисов", "SSDP services"],
+ "download_diagnostics_json":["Сохранить диагностику (.json)", "Download diagnostics (.json)"],
+ "show_json":["Показать JSON", "Show JSON"],
+ "extended_report_with_ips_macs":["Расширенный отчёт: IP, MAC, Notes, Presence, очередь MQTT и последние события. Пароли и токены не экспортируются. Проверь данные перед отправкой.", "Extended report with IPs, MACs, notes, Presence, the MQTT queue and recent events. Passwords and tokens are excluded. Review the data before sharing."],
+ "if_the_browser_or_ingress":["Если загрузка файла заблокирована браузером или Ingress, скопируй JSON ниже либо выдели текст вручную (Ctrl+A / Ctrl+C).", "If the browser or Ingress blocks the download, copy the JSON below or select the text manually (Ctrl+A / Ctrl+C)."],
+ "copy_all_json":["Скопировать весь JSON", "Copy all JSON"],
+ "reset_inventory":["Reset — очистить инвентарь…", "Reset inventory…"],
+ "permanently_deletes_devices_uuids_notes":["Безвозвратно удаляет устройства, UUID, Notes, источники и историю. Настройки и схема БД сохраняются. После подтверждения обнаружение начинается с нуля.", "Permanently deletes devices, UUIDs, notes, sources and history. Settings and the database schema are retained. Discovery starts from scratch after confirmation."],
+ "devices_2":["Устройства (—)", "Devices (—)"],
+ "loading":["Загрузка…", "Loading…"],
+ "name":["Имя", "Name"],
+ "presence":["Наблюдение", "Presence"],
+ "discovered_via":["Обнаружен через", "Discovered via"],
+ "last_online":["Последний Online", "Last online"],
+ "copied":["Скопировано: ", "Copied: "],
+ "could_not_copy":["Не удалось скопировать ", "Could not copy "],
+ "value":["значение", "value"],
+ "no_data":["Нет данных", "No data"],
+ "no_confirmed_observations":["Нет подтверждений", "No confirmed observations"],
+ "last_positive_online_observation":["Последнее положительное подтверждение Online: ", "Last positive online observation: "],
+ "source_arp_and_or_home":["\nИсточник: ARP и/или Home Assistant (роутер)", "\nSource: ARP and/or Home Assistant (router)"],
+ "this_is_the_time_of":["\nICMP ping не выполняется; это время последнего принятого наблюдения.", "\nThis is the time of the latest accepted observation. The app does not use ICMP ping."],
+ "no_timestamp":["нет даты", "no timestamp"],
+ "bonjour_services_2":["Bonjour-сервисы (", "Bonjour services ("],
+ "ssdp_services_2":["SSDP-сервисы (", "SSDP services ("],
+ "verified_name":[" · Подтвержденное имя: ", " · Verified name: "],
+ "add":["Добавить", "Add"],
+ "edit_note":["Редактировать заметку: ", "Edit note: "],
+ "add_note":["Добавить заметку", "Add note"],
+ "row_number_in_the_current":["Порядковый номер в текущей сортировке", "Row number in the current sort order"],
+ "descending":["убывание", "descending"],
+ "ascending":["возрастание", "ascending"],
+ "drag_to_resize_double_click":["Потяните для изменения ширины; двойной щелчок — сброс; стрелки ← → — изменение с клавиатуры", "Drag to resize, double-click to reset, or use the left and right arrow keys"],
+ "search_by_name_mac_ip":["Поиск по имени, MAC, IP, заметке…", "Search by name, MAC, IP or note…"],
+ "first_discovered_in_the_last":["Впервые обнаружено за последние 24 часа", "First discovered in the last 24 hours"],
+ "on_demand_scan_in_progress":["Working — выполняется внеочередное сканирование", "On-demand scan in progress"],
+ "detected_confirming":["Обнаружен — подтверждение", "Detected — confirming"],
+ "not_detected_confirming":["Не обнаружен — подтверждение", "Not detected — confirming"],
+ "of":[" из ", " of "],
+ "detected_confirmed":["Обнаружен · подтверждено", "Detected · confirmed"],
+ "not_detected_confirmed":["Не обнаружен · подтверждено", "Not detected · confirmed"],
+ "scan_source_unavailable":["Источник сканирования недоступен", "Scan source unavailable"],
+ "ambiguous_scan_result":["Неоднозначный результат сканирования", "Ambiguous scan result"],
+ "state_unknown":["Состояние неизвестно", "State unknown"],
+ "label":["Название: ", "Label: "],
+ "presence_enabled_state":["Presence включён\nСостояние: ", "Presence enabled\nState: "],
+ "last_check":["\nПоследняя проверка: ", "\nLast check: "],
+ "last_detection":["\nПоследнее обнаружение: ", "\nLast detection: "],
+ "last_change":["\nПоследняя смена: ", "\nLast change: "],
+ "confirming":["Подтв.", "Confirming"],
+ "copy_and_presence":["Копирование и Presence", "Copy and Presence"],
+ "presence_is_off":["Наблюдение выключено", "Presence is off"],
+ "track_address":["Отслеживать адрес", "Track address"],
+ "dh_notifications":["Уведомления DH", "DH notifications"],
+ "notification_label":["Название для уведомлений", "Notification label"],
+ "for_example_my_laptop":["Например, Мой ноутбук", "For example, My laptop"],
+ "optional_the_label_belongs_to":["Необязательно. Название привязано к этому IP/MAC Presence и попадёт в события HA. Для локальных уведомлений нужен HA package.", "Optional. The label belongs to this IP or MAC watch and appears in HA events. Local notifications require an HA package."],
+ "save":["Сохранить", "Save"],
+ "presence_disabled":["Presence выключен", "Presence disabled"],
+ "presence_enabled_on_demand_scan":["Presence включён · внеочередное сканирование запущено", "Presence enabled · on-demand scan started"],
+ "presence_settings_saved":["Настройки Presence сохранены", "Presence settings saved"],
+ "could_not_save":["Не сохранено: ", "Could not save: "],
+ "devices_3":["Устройства (", "Devices ("],
+ "no_devices_yet_check_sources":["Устройств пока нет. Проверь вкладку «Источники». В Home Assistant могут отсутствовать доступные ", "No devices yet. Check Sources. Home Assistant may have no available router "],
+ "entities":[" от роутеров.", " entities."],
+ "name_2":["имя", "name"],
+ "presence_2":["наблюдение", "presence"],
+ "sources_2":["источники", "sources"],
+ "last_online_2":["последний Online", "last online"],
+ "note_for":["Заметка для ", "Note for "],
+ "could_not_save_2":["Не удалось сохранить: ", "Could not save: "],
+ "error":["Ошибка: ", "Error: "],
+ "responses":["Ответов: ", "Responses: "],
+ "linked":[" · Привязано: ", " · Linked: "],
+ "without_direct_confirmation":[" · Без прямого подтверждения: ", " · Without direct confirmation: "],
+ "interface":[" · Интерфейс: ", " · Interface: "],
+ "subnet":[" · Сеть: ", " · Subnet: "],
+ "records":[" · Записей: ", " · Records: "],
+ "without_arp":[" · Без ARP: ", " · Without ARP: "],
+ "services":[" · Сервисов: ", " · Services: "],
+ "hosts_with_a_records":["Хостов A: ", "Hosts with A records: "],
+ "responses_2":[" · Ответов: ", " · Responses: "],
+ "last_arp_scan_2":["Последний ARP: ", "Last ARP scan: "],
+ "observations":[" · Наблюдений: ", " · Observations: "],
+ "ipv4_conflicts":[" · Конфликтов IPv4: ", " · IPv4 conflicts: "],
+ "total":["Всего: ", "Total: "],
+ "mac_conflicts":[" · Конфликтов MAC: ", " · MAC conflicts: "],
+ "no_details":["Нет подробностей", "No details"],
+ "home_assistant_routers":["Home Assistant / роутеры", "Home Assistant / routers"],
+ "how_often_to_refresh_data":["Частота обновления данных от интеграций HA", "How often to refresh data from HA integrations"],
+ "arp_local_network":["ARP · локальная сеть", "ARP · local network"],
+ "shared_discovery_and_ip_mac":["Общий цикл IP/MAC Presence и обнаружения", "Shared discovery and IP/MAC Presence cycle"],
+ "discover_names_and_services":["Поиск имён и сервисов", "Discover names and services"],
+ "discover_upnp_services":["Обнаружение UPnP-сервисов", "Discover UPnP services"],
+ "discover_devices_through_ws_discovery":["Обнаружение устройств через WS-Discovery", "Discover devices through WS-Discovery"],
+ "confirm_detection":["Подтвердить появление", "Confirm detection"],
+ "number_of_successful_arp_scans":["Количество успешных ARP-сканов", "Number of successful ARP scans"],
+ "confirm_absence":["Подтвердить отсутствие", "Confirm absence"],
+ "number_of_successful_scans_without":["Количество успешных сканов без обнаружения", "Number of successful scans without a detection"],
+ "history_retention_in_days":["Глубина истории в днях", "History retention in days"],
+ "how_long_to_keep_events":["Срок хранения событий, наблюдений и старых адресов; по умолчанию 30 дней", "How long to keep events, observations and old addresses. Default is 30 days."],
+ "remove_absent_devices_after_this":["Удалять отсутствующие устройства через, дней", "Remove absent devices after this many days"],
+ "entries_with_notes_or_active":["Не удаляются записи с Notes или активным Presence; по умолчанию 30 дней", "Entries with notes or active Presence are kept. Default is 30 days."],
+ "global_settings":["Глобальные параметры", "Global settings"],
+ "intervals_apply_to_the_whole":["Единые интервалы для всей сети. Настройки действуют после сохранения и сохраняются при перезапуске приложения. Никаких индивидуальных интервалов.", "Intervals apply to the whole network and take effect when saved. The app retains them across restarts."],
+ "save_settings":["Сохранить параметры", "Save settings"],
+ "checks_run_in_the_background":["Проверки выполняются глобально в фоне. Presence использует результаты завершённых ARP-сканов. Недоступность сканера не считается отсутствием устройства.", "Checks run in the background for the whole network. Presence uses completed ARP scans. An unavailable scanner does not count as a device absence."],
+ "saving":["Сохранение…", "Saving…"],
+ "global_settings_saved":["Глобальные параметры сохранены.", "Global settings saved."],
+ "help_network_app":["Помощь · Network App", "Help · Network App"],
+ "the_app_automatically_discovers_devices":["Приложение автоматически обнаруживает устройства в локальной сети и показывает адреса, имена и историю. Для просмотра устройств ничего настраивать не нужно.", "The app automatically discovers devices on the local network and shows their addresses, names and history. Open Devices to see what it has found."],
+ "what_does_online_mean":["Что означает Online?", "What does Online mean?"],
+ "online_uses_the_latest_arp":["Это состояние по последним данным ARP или подключённой интеграции роутера. Оно не гарантирует, что устройство прямо сейчас отвечает на Ping. Если источник недоступен, отсутствие ответа нельзя считать отключением устройства.", "Online uses the latest ARP or router integration evidence. It does not guarantee that the device responds to ping. If a source is unavailable, a lack of response does not establish absence."],
+ "how_do_i_enable_ip":["Как включить IP Presence?", "How do I enable IP Presence?"],
+ "in_devices_select_next_to":["В разделе «Устройства» нажми ⋮ рядом с IP и включи «Отслеживать адрес». Приложение будет наблюдать за этим адресом на основе фонового обнаружения и генерировать события при подтверждённом изменении. Для IP вне локального сегмента ARP-наблюдение не подходит.", "In Devices, select ⋮ next to an IP and enable Track address. The app watches the address using background discovery and generates events when it confirms a change. ARP cannot watch addresses outside the local segment."],
+ "how_do_i_enable_mac":["Как включить MAC Presence?", "How do I enable MAC Presence?"],
+ "select_next_to_a_mac":["Нажми ⋮ рядом с MAC. MAC Presence следит за оборудованием по физическому адресу, даже если IP изменился. Для некоторых телефонов со случайным MAC наблюдение может быть нестабильным.", "Select ⋮ next to a MAC address. MAC Presence follows hardware by its physical address even if the IP changes. Phones that randomize their MAC address may be harder to track."],
+ "what_does_the_green_eye":["Что означает зелёный глаз?", "What does the green eye mean?"],
+ "a_presence_watch_is_enabled":["Подписка Presence включена. Наведи курсор или поставь фокус на значок: увидишь время проверки, последнее обнаружение и изменение состояния. Зелёный глаз не означает Online.", "A Presence watch is enabled. Hover or focus on the icon to see the last check, detection and state change. The green eye indicates the watch is enabled, regardless of device state."],
+ "where_do_i_change_the":["Где менять интервалы?", "Where do I change the intervals?"],
+ "open_settings_to_adjust_discovery":["Все интервалы общие. Открой верхнюю вкладку «Параметры» и настрой частоту обнаружения и пороги подтверждения. Сканирование происходит независимо от числа подписок.", "Open Settings to adjust discovery intervals and confirmation thresholds for the whole network. Scans run regardless of how many watches are enabled."],
+ "what_does_new_mean":["Что такое NEW DEVICE?", "What does NEW mean?"],
+ "the_app_has_detected_a":["Ранее неизвестное устройство впервые обнаружено в сети. Отметка NEW видна 24 часа. Первый запуск не отправляет лавину уведомлений о всех существующих устройствах.", "The app has detected a previously unknown device. The NEW badge stays visible for 24 hours. The initial census suppresses discovery notifications for existing devices."],
+ "how_do_i_write_a":["Как написать автоматизацию Home Assistant?", "How do I write a Home Assistant automation?"],
+ "find_the_event_in_the":["В «Журнале событий» найди нужное событие. Скопируй точный event_type или шаблон триггера HA и при необходимости настрой реакцию. Технические события передаются через MQTT Event entity event.dh_network_app_network.", "Find the event in the Event log. Copy the exact event_type or HA trigger template and configure the action you want. The app publishes via the MQTT Event entity event.dh_network_app_network."],
+ "what_do_the_delivery_statuses":["Что означают статусы доставки?", "What do the delivery statuses mean?"],
+ "mqtt_acknowledged_means_the_broker":["«Передано MQTT» означает подтверждение от брокера (PUBACK), но не подтверждение запуска автоматизации или доставки сообщения. При отсутствии связи события сохраняются в очереди.", "MQTT acknowledged means the broker returned PUBACK. Events stay queued while the broker is unavailable. Automation execution and notification delivery are handled separately by Home Assistant."],
+ "how_do_dh_notifications_work":["Как работают уведомления DH?", "How do DH notifications work?"],
+ "enable_this_option_when_using":["Это опция для локального пакета Home Assistant, устанавливаемого отдельно. Сам Network App не отправляет сообщения в Telegram и не выдаёт публикацию MQTT за доставленное уведомление.", "Enable this option when using the separately installed Home Assistant package. The package handles notification delivery."],
+ "how_do_i_copy_values":["Как скопировать значения?", "How do I copy values?"],
+ "use_copy_in_the_menu":["В меню ⋮ рядом с IP/MAC есть «Скопировать». Для имени, Note и других заполненных ячеек иконка копирования появляется при наведении.", "Use Copy in the ⋮ menu beside an IP or MAC address. For names, notes and other populated cells, hover or focus to reveal the copy icon."],
+ "new_device":["Новое устройство", "New device"],
+ "ip_became_reachable":["IP стал доступен", "IP became reachable"],
+ "ip_no_longer_detected":["IP перестал обнаруживаться", "IP no longer detected"],
+ "mac_detected":["MAC появился", "MAC detected"],
+ "mac_no_longer_detected":["MAC перестал обнаруживаться", "MAC no longer detected"],
+ "queued":["В очереди", "Queued"],
+ "retrying":["Повторная попытка", "Retrying"],
+ "mqtt_acknowledged":["Передано MQTT", "MQTT acknowledged"],
+ "events_intended_for_home_assistant":["Только события, предназначенные Home Assistant. Имя event_type можно скопировать для собственного обработчика. Статус «Передано MQTT» означает подтверждение брокера, но не обработку Home Assistant.", "Events intended for Home Assistant. Copy the event_type for your own handler. MQTT acknowledged means the broker accepted the event."],
+ "ip_mac_or_event_name":["IP, MAC или имя события…", "IP, MAC or event name…"],
+ "search_event_log":["Поиск по журналу", "Search event log"],
+ "delivery_status":["Статус доставки", "Delivery status"],
+ "all_statuses":["Все статусы", "All statuses"],
+ "time":["Время", "Time"],
+ "event_address":["Событие / адрес", "Event / address"],
+ "delivery":["Доставка", "Delivery"],
+ "details":["Детали", "Details"],
+ "copy_event_type":["Скопировать event_type", "Copy event_type"],
+ "ha_trigger":["триггер HA", "HA trigger"],
+ "copy_ha_trigger":["Скопировать триггер HA", "Copy HA trigger"],
+ "event_json":["JSON события", "event JSON"],
+ "copy_event_json":["Скопировать JSON события", "Copy event JSON"],
+ "copy_json":["Скопировать JSON", "Copy JSON"],
+ "no_matching_events_yet":["Подходящих событий пока нет.", "No matching events yet."],
+ "version_unavailable":["версия недоступна", "version unavailable"],
+ "conflicting_arp_ipv4_claims":["Обнаружены противоречивые ARP/IPv4: ", "Conflicting ARP/IPv4 claims: "],
+ "the_app_withholds_disputed_addresses":[". Спорные адреса не присваиваются обоим устройствам. Подробности — в JSON-экспорте.", ". The app withholds disputed addresses from both devices. See the JSON export for details."],
+ "source":["Источник", "Source"],
+ "status":["Статус", "Status"],
+ "last_successful_poll":["Последний успешный опрос", "Last successful poll"],
+ "api_error":["Ошибка API: ", "API error: "],
+ "the_json_download_was_requested":["Запрошен JSON-файл у сервера. Если браузер или Ingress запретил загрузку, нажми «Показать JSON» и скопируй его вручную.", "The JSON download was requested. If the browser or Ingress blocks it, select Show JSON and copy the text manually."],
+ "reading_diagnostics":["Чтение диагностических данных…", "Reading diagnostics…"],
+ "hide_json":["Скрыть JSON", "Hide JSON"],
+ "json_ready":["JSON готов (", "JSON ready ("],
+ "characters_you_can_select_all":[" символов). Можно выделить весь текст вручную.", " characters). You can select all the text manually."],
+ "could_not_load_json":["Не удалось получить JSON: ", "Could not load JSON: "],
+ "select_show_json_first":["Сначала нажми «Показать JSON».", "Select Show JSON first."],
+ "diagnostic_json":["диагностика JSON", "diagnostic JSON"],
+ "the_browser_blocked_copying_press":["Копирование запрещено браузером. Текст выделен — нажми Ctrl+C.", "The browser blocked copying. Press Ctrl+C to copy the selected text."],
+ "diagnostic_json_copied":["Диагностический JSON скопирован.", "Diagnostic JSON copied."],
+ "reset_permanently_deletes_all_devices":["Сброс удалит ВСЕ устройства, UUID, Notes, историю и события без возможности восстановления.\nДля подтверждения введи RESET:", "Reset permanently deletes ALL devices, UUIDs, notes, history and events.\nType RESET to confirm:"],
+ "reset_canceled_enter_reset_exactly":["Сброс отменён: нужно ввести RESET без изменений.", "Reset canceled. Enter RESET exactly as shown."],
+ "permanently_clear_the_network_inventory":["Окончательно очистить весь сетевой инвентарь и немедленно начать новое обнаружение?", "Permanently clear the network inventory and start discovery again now?"],
+ "clearing_inventory":["Очистка инвентаря…", "Clearing inventory…"],
+ "the_server_did_not_confirm":["сервер не подтвердил сброс", "the server did not confirm the reset"],
+ "inventory_cleared":["Инвентарь очищен (", "Inventory cleared ("],
+ "devices_discovery_has_restarted":[" устройств). Новое обнаружение запущено.", " devices). Discovery has restarted."],
+ "reset_failed":["Ошибка сброса: ", "Reset failed: "],
+ "language":["Язык", "Language"],
+ "copy":["Скопировать ", "Copy "],
+ "sort":["Сортировать: ", "Sort: "],
+ "column_width":["Ширина колонки ", "Column width: "],
+ "settings_for":["Параметры ", "Settings for "],
+ "scanning":["Working", "Scanning"],
+ "note":["Заметка", "Note"],
+ "wsd_endpoints":["WSD endpoints (", "WSD endpoints ("],
+ "endpoints":[" · Endpoints: ", " · Endpoints: "],
+ "home":[" · Home: ", " · Home: "],
+ "away":[" · Not home: ", " · Away: "],
+ "unknown":[" · Unknown: ", " · Unknown: "],
+ "api_unavailable":["API недоступен", "API unavailable"],
+ "new_badge":["НОВОЕ", "NEW"],
+ "attempts":["Попыток: ", "Attempts: "],
+ "technical_details":["Технические подробности", "Technical details"],
+ "source_failed":["Не удалось получить данные от источника.", "The source could not collect data."],
+ "request_failed":["Запрос не выполнен", "Request failed"],
+ "network_error":["Не удалось связаться с приложением.", "Could not reach the app."],
+ "invalid_response":["Некорректный ответ приложения.", "The app returned an invalid response."],
+ "allowed_range":["Допустимый диапазон", "Allowed range"],
+};
+const statuses={
+ "ready":["Готова", "Ready"],
+ "online":["В сети", "Online"],
+ "not_observed":["Не обнаружено", "Not observed"],
+ "unknown":["Неизвестно", "Unknown"],
+ "ok":["Работает", "Working"],
+ "empty":["Нет наблюдений", "No observations"],
+ "degraded":["Частично доступен", "Degraded"],
+ "error":["Ошибка", "Error"],
+ "pending":["Ожидание опроса", "Awaiting poll"],
+ "planned":["Запланировано", "Planned"],
+};
+const sourcesByName={
+ "Home Assistant router trackers":["Трекеры роутеров Home Assistant", "Home Assistant router trackers"],
+ "HA Router":["Роутер HA", "HA router"],
+ "LAN ARP":["ARP локальной сети", "LAN ARP"],
+ "Local Interface":["Локальный интерфейс", "Local interface"],
+};
+const requestErrors={
+ "invalid JSON":["Некорректный JSON.", "Invalid JSON."],
+ "unexpected JSON":["Лишние данные после JSON.", "Unexpected data after JSON."],
+ "Ingress JSON required":["Требуется JSON-запрос через Ingress.", "A JSON request through Ingress is required."],
+ "settings unavailable":["Параметры недоступны.", "Settings are unavailable."],
+ "presence save unavailable":["Не удалось записать параметры Presence.", "Could not write Presence settings."],
+ "valid unicast IPv4 required":["Требуется корректный одноадресный IPv4.", "A valid unicast IPv4 address is required."],
+ "valid unicast MAC required":["Требуется корректный одноадресный MAC.", "A valid unicast MAC address is required."],
+ "kind must be ip or mac":["Требуется тип ip или mac.", "The type must be ip or mac."],
+ "label must be at most 80 characters":["Название должно содержать не более 80 символов.", "The label must be at most 80 characters."],
+ "label must not contain control characters":["Название не должно содержать управляющие символы.", "The label must not contain control characters."],
+ "note too long":["Заметка слишком длинная.", "The note is too long."],
+ "device not found":["Устройство не найдено.", "Device not found."],
+ "database unavailable":["База данных недоступна.", "The database is unavailable."],
+ "inventory reset failed":["Не удалось очистить инвентарь.", "Could not clear the inventory."],
+ "confirmation must be RESET":["Для подтверждения введите RESET.", "Enter RESET to confirm."],
+};
+const languageStorageKey='dh-network-language-v1';
+function loadLanguage(){
+ try{return localStorage.getItem(languageStorageKey)==='en'?'en':'ru'}catch(_){return 'ru'}
+}
+let language=loadLanguage();
+function localized(entries,key){
+ return Object.hasOwn(entries,key)?entries[key][language==='en'?1:0]:key;
+}
+function tr(key){return localized(messages,key)}
+function statusTitle(code){return localized(statuses,code)}
+function sourceTitle(name){return localized(sourcesByName,name)}
+async function checkResponse(response, fields=[]){
+ if(response.ok)return;
+ const detail=(await response.text().catch(()=>'' )).trim();
+ const known=Object.hasOwn(requestErrors,detail);
+ const range=/^(\w+) must be (\d+)\.\.(\d+)$/.exec(detail);
+ const field=range&&fields.find(([key])=>key===range[1]);
+ if(field)throw new Error(field[1]+'. '+tr('allowed_range')+' '+range[2]+'–'+range[3]);
+ throw new Error(known?localized(requestErrors,detail):tr('request_failed')+' (HTTP '+response.status+')');
+}
+async function request(path, options){
+ try{return await fetch('api/'+path,options)}catch(_){throw new Error(tr('network_error'))}
+}
+async function responseJSON(response){
+ try{return await response.json()}catch(_){throw new Error(tr('invalid_response'))}
+}
+function applyLanguage(){
+ document.documentElement.lang=language;
+ document.getElementById('language').value=language;
+ document.querySelectorAll('[data-i18n]').forEach(el=>{el.textContent=tr(el.dataset.i18n)});
+ document.querySelectorAll('[data-i18n-aria-label]').forEach(el=>{
+  el.setAttribute('aria-label',tr(el.dataset.i18nAriaLabel));
+ });
+}
+function changeLanguage(next){
+ if(next!=='ru'&&next!=='en')return;
+ const settings=body.querySelector('#global-settings');
+ const draft=settings&&Object.fromEntries(Array.from(settings.elements)
+   .filter(input=>input.name).map(input=>[input.name,input.value]));
+ language=next;
+ try{localStorage.setItem(languageStorageKey,language)}catch(_){}
+ closePresenceMenu();
+ applyLanguage();
+ document.getElementById('copy-feedback').hidden=true;
+ document.getElementById('reset-status').textContent='';
+ document.getElementById('export-copy-status').textContent='';
+ document.getElementById('diagnostic-json-preview').hidden=true;
+ filterArea.innerHTML='';
+ if(page==='settings'&&globalSettings)renderSettings(draft);
+ return load();
+}
 const body=document.getElementById('body'),health=document.getElementById('health'),filterArea=document.getElementById('filterarea');
 const settingsOverview=document.getElementById('settings-overview');
 const devicesTools=document.getElementById('devices-tools'),devicesCount=document.getElementById('devices-count');
+let appStatus;
 let page='devices',devices=[],origins=[],mdnsServices=[],ssdpServices=[],wsdEndpoints=[],filter='',deviceBirths={};
 let presenceSubscriptions=[],presenceSelection=null,globalSettings=null;
 let sortKey='ip',sortDirection='asc';
-const deviceColumns=[['name','Имя'],['ip','IP'],['mac','MAC'],['presence','Наблюдение'],['sources','Обнаружен через'],['last_seen','Последний Online'],['note','Note']];
+function deviceColumns(){return [['name',tr('name')],['ip','IP'],['mac','MAC'],['presence',tr('presence')],['sources',tr('discovered_via')],['last_seen',tr('last_online')],['note',tr('note')]]}
 const widthDefaults={index:42,name:230,ip:116,mac:148,presence:110,sources:272,last_seen:157,note:135};
 const widthMinimums={name:110,ip:92,mac:120,presence:105,sources:115,last_seen:125,note:90};
 const widthStorageKey='dh-network-device-column-widths-v1';
-const widthKeys=deviceColumns.map(x=>x[0]);
+const widthKeys=deviceColumns().map(x=>x[0]);
 function clampWidth(key,value){
  const number=Number(value);
  if(!Number.isFinite(number))return widthDefaults[key];
@@ -226,7 +544,7 @@ const copyIcon='<svg aria-hidden="true" viewBox="0 0 24 24" width="14" height="1
 function copyAction(value,label){
  const text=String(value??'');
  if(!text||text==='—')return '';
- return '<button class="copy-action" type="button" data-copy="'+esc(text)+'" title="Скопировать '+esc(label)+'" aria-label="Скопировать '+esc(label)+'">'+copyIcon+'</button>';
+ return '<button class="copy-action" type="button" data-copy="'+esc(text)+'" title="'+tr('copy')+esc(label)+'" aria-label="'+tr('copy')+esc(label)+'">'+copyIcon+'</button>';
 }
 function legacyClipboardCopy(text){
  const node=document.createElement('textarea');
@@ -248,33 +566,38 @@ async function copyText(text,label){
   try{await navigator.clipboard.writeText(text);copied=true}catch(_){}
  }
  if(!copied){try{copied=legacyClipboardCopy(text)}catch(_){}}
- showCopyFeedback(copied?'Скопировано: '+label:'Не удалось скопировать '+label);
+ showCopyFeedback(copied?tr('copied')+label:tr('could_not_copy')+label);
  return copied;
 }
 function enableCellCopy(){
  body.querySelectorAll('button[data-copy]').forEach(button=>{
   button.addEventListener('click',event=>{
    event.stopPropagation();
-   const label=button.dataset.copyLabel||(button.getAttribute('title')||button.getAttribute('aria-label')||'значение').replace(/^Скопировать\s+/,'');
+   const label=button.dataset.copyLabel||(button.getAttribute('title')||button.getAttribute('aria-label')||tr('value')).replace(tr('copy'),'');
    copyText(button.dataset.copy,label);
   });
  });
 }
 const nameCollator=new Intl.Collator('ru',{numeric:true,sensitivity:'base'});
 function esc(t){return String(t??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
-async function read(kind){const r=await fetch('api/'+kind,{cache:'no-store'});if(!r.ok)throw new Error('HTTP '+r.status);return r.json()}
-function noteTime(t){return t?new Date(t).toLocaleString('ru-RU'):'Нет данных'}
-function exactTime(t){
- if(!t)return 'Нет подтверждений';
+async function read(kind){
+ const response=await request(kind,{cache:'no-store'});
+ await checkResponse(response);
+ return responseJSON(response);
+}
+function noteTime(t){return formatTime(t, 'no_data')}
+function exactTime(t){return formatTime(t, 'no_confirmed_observations')}
+function formatTime(t, fallback){
+ if(!t)return tr(fallback);
  const date=new Date(t);
  return Number.isFinite(date.getTime())
-  ?date.toLocaleString('ru-RU',{year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit'})
-  :'Нет подтверждений';
+  ?date.toLocaleString(language === 'en' ? 'en-US' : 'ru-RU',{year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit'})
+  :tr(fallback);
 }
 function onlineTooltip(d){
- return 'Последнее положительное подтверждение Online: '+exactTime(d.last_seen)+
-  '\nИсточник: ARP и/или Home Assistant (роутер)'+
-  '\nICMP ping не выполняется; это время последнего принятого наблюдения.';
+ return tr('last_positive_online_observation')+exactTime(d.last_seen)+
+  tr('source_arp_and_or_home')+
+  tr('this_is_the_time_of');
 }
 function originsForDevice(id) {
  return origins.filter(o=>o.device_id===id).sort((a,b)=>a.source.localeCompare(b.source));
@@ -300,15 +623,15 @@ function sourcesForDisplay(id) {
   const services=name==='mDNS'?mdnsForDevice(id):[];
   const ssdp=name==='SSDP'?ssdpForDevice(id):[];
   const wsd=name==='WSD'?wsdForDevice(id):[];
-  const evidence=matching.map(x=>x.source+(x.reference?' ('+x.reference+')':'')+': '+(x.last_reported_at||'нет даты')).join('; ');
+  const evidence=matching.map(x=>sourceTitle(x.source)+(x.reference?' ('+x.reference+')':'')+': '+(x.last_reported_at ? noteTime(x.last_reported_at) : tr('no_timestamp'))).join('; ');
   const newline=String.fromCharCode(10);
-  const details=services.length?newline+'Bonjour-сервисы ('+services.length+'):'+newline+services.map(s=>s.instance+' — '+s.type+' :'+s.port+' ['+s.target+']').join(newline):'';
-  const extra=ssdp.length?newline+'SSDP-сервисы ('+ssdp.length+'):'+newline+ssdp.map(s=>s.st+' · '+s.usn+' ['+s.server+']').join(newline):'';
-  const wsdDetails=wsd.length?newline+'WSD endpoints ('+wsd.length+'):'+newline+wsd.map(x=>x.endpoint+' ['+x.types+'] '+x.scopes+(x.computer_name?' · Подтвержденное имя: '+x.computer_name:'')).join(newline):'';
+  const details=services.length?newline+tr('bonjour_services_2')+services.length+'):'+newline+services.map(s=>s.instance+' — '+s.type+' :'+s.port+' ['+s.target+']').join(newline):'';
+  const extra=ssdp.length?newline+tr('ssdp_services_2')+ssdp.length+'):'+newline+ssdp.map(s=>s.st+' · '+s.usn+' ['+s.server+']').join(newline):'';
+  const wsdDetails=wsd.length?newline+tr('wsd_endpoints')+wsd.length+'):'+newline+wsd.map(x=>x.endpoint+' ['+x.types+'] '+x.scopes+(x.computer_name?tr('verified_name')+x.computer_name:'')).join(newline):'';
   const hint=evidence+details+extra+wsdDetails;
   const caption=name==='mDNS'&&services.length?'mDNS · '+services.length:
      name==='SSDP'&&ssdp.length?'SSDP · '+ssdp.length:
-     name==='WSD'&&wsd.length?'WSD · '+wsd.length:name;
+     name==='WSD'&&wsd.length?'WSD · '+wsd.length:sourceTitle(name);
   return '<span class="tag source-tag" tabindex="0" title="'+esc(hint)+'" aria-label="'+esc(hint)+'">'+esc(caption)+'</span>';
  }).join('');
 }
@@ -337,9 +660,9 @@ function visibleDeviceName(d){
 function noteAction(d){
  const note=String(d.note||'');
  const hasNote=note.trim().length>0;
- const label=hasNote?note:'Добавить';
+ const label=hasNote?note:tr('add');
  const className=hasNote?'note-filled':'note-empty';
- const tooltip=hasNote?'Редактировать заметку: '+note:'Добавить заметку';
+ const tooltip=hasNote?tr('edit_note')+note:tr('add_note');
  return '<button type="button" class="note-action '+className+'" data-id="'+esc(d.id)+'" title="'+esc(tooltip)+'" aria-label="'+esc(tooltip)+'">'+esc(label)+'</button>';
 }
 function deviceValue(d,column){
@@ -393,22 +716,22 @@ function sortedDeviceRows(){
 }
 function visibleDeviceIDs(){return sortedDeviceRows().map(d=>d.id)}
 function changeSort(column){
- if(!deviceColumns.some(([id])=>id===column))return;
+ if(!deviceColumns().some(([id])=>id===column))return;
  if(sortKey===column)sortDirection=sortDirection==='asc'?'desc':'asc';
  else{sortKey=column;sortDirection='asc'}
  renderTable();
 }
 function sortedHeaders(){
- return '<th scope="col" class="index-col" title="Порядковый номер в текущей сортировке">№</th>'+deviceColumns.map(([key,title])=>{
+ return '<th scope="col" class="index-col" title="'+tr('row_number_in_the_current')+'">№</th>'+deviceColumns().map(([key,title])=>{
   const active=sortKey===key;
   const direction=active?(sortDirection==='asc'?'ascending':'descending'):'none';
   const symbol=active?(sortDirection==='asc'?'↑':'↓'):'↕';
-  const action=active&&sortDirection==='asc'?'убывание':'возрастание';
-  return '<th scope="col" aria-sort="'+direction+'"><button type="button" data-sort="'+esc(key)+'" title="Сортировать: '+esc(action)+'">'+esc(title)+' <span class="sort-arrow" aria-hidden="true">'+symbol+'</span></button><span class="col-resizer" role="separator" aria-orientation="vertical" tabindex="0" data-resize="'+esc(key)+'" aria-label="Ширина колонки '+esc(title)+'" aria-valuemin="'+widthMinimums[key]+'" aria-valuemax="1000" aria-valuenow="'+columnWidths[key]+'" title="Потяните для изменения ширины; двойной щелчок — сброс; стрелки ← → — изменение с клавиатуры"></span></th>';
+  const action=active&&sortDirection==='asc'?tr('descending'):tr('ascending');
+  return '<th scope="col" aria-sort="'+direction+'"><button type="button" data-sort="'+esc(key)+'" title="'+tr('sort')+esc(action)+'">'+esc(title)+' <span class="sort-arrow" aria-hidden="true">'+symbol+'</span></button><span class="col-resizer" role="separator" aria-orientation="vertical" tabindex="0" data-resize="'+esc(key)+'" aria-label="'+tr('column_width')+esc(title)+'" aria-valuemin="'+widthMinimums[key]+'" aria-valuemax="1000" aria-valuenow="'+columnWidths[key]+'" title="'+tr('drag_to_resize_double_click')+'"></span></th>';
  }).join('');
 }
 function renderDevices(){
- filterArea.innerHTML='<input id="search" type="search" placeholder="Поиск по имени, MAC, IP, заметке…" value="'+esc(filter)+'">';
+ filterArea.innerHTML='<input id="search" type="search" placeholder="'+tr('search_by_name_mac_ip')+'" value="'+esc(filter)+'">';
  filterArea.querySelector('input').addEventListener('input',e=>{filter=e.target.value;renderTable()});
  renderTable();
 }
@@ -419,39 +742,39 @@ function isNewDevice(d, now=Date.now()){
  return Number.isFinite(at)&&now>=at&&now-at<24*60*60*1000;
 }
 function newBadge(d){
- return isNewDevice(d)?'<span class="tag new-device" title="Впервые обнаружено за последние 24 часа">NEW</span>':'';
+ return isNewDevice(d)?'<span class="tag new-device" title="'+tr('first_discovered_in_the_last')+'">'+tr('new_badge')+'</span>':'';
 }
 const eyeIcon='<svg aria-hidden="true" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg>';
 function activePresence(kind,target){
  return presenceSubscriptions.find(x=>x.kind===kind&&x.target===target&&x.enabled);
 }
 function readablePresenceState(w){
- if(w.state==='working')return 'Working — выполняется внеочередное сканирование';
+ if(w.state==='working')return tr('on_demand_scan_in_progress');
  if(w.state==='confirming'){
   const found=w.reason==='confirmed_by_arp';
   const count=found?w.successes:w.failures,needed=found?w.needed_successes:w.needed_failures;
-  return (found?'Обнаружен — подтверждение':'Не обнаружен — подтверждение')+
-   (needed?' ('+count+' из '+needed+')':'');
+  return (found?tr('detected_confirming'):tr('not_detected_confirming'))+
+   (needed?' ('+count+tr('of')+needed+')':'');
  }
- if(w.state==='reachable'||w.state==='present')return 'Обнаружен · подтверждено';
- if(w.state==='unreachable'||w.state==='absent')return 'Не обнаружен · подтверждено';
- if(w.reason==='source_unavailable')return 'Источник сканирования недоступен';
- if(w.reason==='ambiguous_arp_scan')return 'Неоднозначный результат сканирования';
- return 'Состояние неизвестно';
+ if(w.state==='reachable'||w.state==='present')return tr('detected_confirmed');
+ if(w.state==='unreachable'||w.state==='absent')return tr('not_detected_confirmed');
+ if(w.reason==='source_unavailable')return tr('scan_source_unavailable');
+ if(w.reason==='ambiguous_arp_scan')return tr('ambiguous_scan_result');
+ return tr('state_unknown');
 }
 function presenceTooltip(w){
- return (w.label?'Название: '+w.label+'\n':'')+'Presence включён\nСостояние: '+readablePresenceState(w)+
-  '\nПоследняя проверка: '+exactTime(w.last_check)+
-  '\nПоследнее обнаружение: '+exactTime(w.last_positive)+
-  '\nПоследняя смена: '+exactTime(w.last_changed);
+ return (w.label?tr('label')+w.label+'\n':'')+tr('presence_enabled_state')+readablePresenceState(w)+
+  tr('last_check')+exactTime(w.last_check)+
+  tr('last_detection')+exactTime(w.last_positive)+
+  tr('last_change')+exactTime(w.last_changed);
 }
 function presenceCellAction(kind,target){
  if(!target||(kind==='ip'&&target.includes(':')))return '';
  const watch=activePresence(kind,target);
  return '<span class="presence-controls">'+
   (watch?'<span class="presence-eye" tabindex="0" title="'+esc(presenceTooltip(watch))+'" aria-label="'+esc(presenceTooltip(watch))+'">'+eyeIcon+'</span>'+
-    (watch.state==='working'||watch.state==='confirming'?'<span class="presence-progress" title="'+esc(readablePresenceState(watch))+'">'+(watch.state==='working'?'Working':'Подтв.')+'</span>':''):'')+
-  '<button type="button" class="presence-trigger" data-presence-kind="'+esc(kind)+'" data-presence-target="'+esc(target)+'" title="Копирование и Presence" aria-label="Параметры '+esc(kind.toUpperCase())+' '+esc(target)+'">⋮</button></span>';
+    (watch.state==='working'||watch.state==='confirming'?'<span class="presence-progress" title="'+esc(readablePresenceState(watch))+'">'+(watch.state==='working'?tr('scanning'):tr('confirming'))+'</span>':''):'')+
+  '<button type="button" class="presence-trigger" data-presence-kind="'+esc(kind)+'" data-presence-target="'+esc(target)+'" title="'+tr('copy_and_presence')+'" aria-label="'+tr('settings_for')+esc(kind.toUpperCase())+' '+esc(target)+'">⋮</button></span>';
 }
 function closePresenceMenu(){
  document.getElementById('presence-menu').hidden=true;
@@ -461,15 +784,15 @@ function openPresenceMenu(button,kind,target){
  const el=document.getElementById('presence-menu'),watch=activePresence(kind,target);
  presenceSelection={kind,target};
  const check=watch?' checked':'',notify=watch&&watch.notifications?' checked':'';
- const summary=watch?presenceTooltip(watch):'Наблюдение выключено';
+ const summary=watch?presenceTooltip(watch):tr('presence_is_off');
  el.innerHTML='<div class="menu-heading">'+(kind==='ip'?'IP Presence':'MAC Presence')+' · '+esc(target)+'</div>'+
-  '<button type="button" id="menu-copy">Скопировать '+kind.toUpperCase()+'</button>'+
-  '<label for="menu-presence">Отслеживать адрес<input id="menu-presence" type="checkbox"'+check+'></label>'+
-  '<label for="menu-notify">Уведомления DH<input id="menu-notify" type="checkbox"'+notify+'></label>'+
-  '<label class="menu-name-label" for="menu-name">Название для уведомлений</label>'+
-  '<input id="menu-name" type="text" maxlength="80" placeholder="Например, Мой ноутбук" autocomplete="off" value="'+esc(watch?.label||'')+'">'+
-  '<small>Необязательно. Название привязано к этому IP/MAC Presence и попадёт в события HA. Для локальных уведомлений нужен HA package.</small>'+
-  '<div class="toolbar"><button id="menu-save" type="button">Сохранить</button></div>'+
+  '<button type="button" id="menu-copy">'+tr('copy')+kind.toUpperCase()+'</button>'+
+  '<label for="menu-presence">'+tr('track_address')+'<input id="menu-presence" type="checkbox"'+check+'></label>'+
+  '<label for="menu-notify">'+tr('dh_notifications')+'<input id="menu-notify" type="checkbox"'+notify+'></label>'+
+  '<label class="menu-name-label" for="menu-name">'+tr('notification_label')+'</label>'+
+  '<input id="menu-name" type="text" maxlength="80" placeholder="'+tr('for_example_my_laptop')+'" autocomplete="off" value="'+esc(watch?.label||'')+'">'+
+  '<small>'+tr('optional_the_label_belongs_to')+'</small>'+
+  '<div class="toolbar"><button id="menu-save" type="button">'+tr('save')+'</button></div>'+
   '<div class="menu-info" id="presence-summary">'+esc(summary).replace(/\n/g,'<br>')+'</div>';
  el.hidden=false;
  const r=button.getBoundingClientRect();
@@ -491,15 +814,15 @@ async function savePresence(kind,target,enabled,notifications,label='',includeLa
  try{
   const payload={kind,target,enabled,notifications:enabled&&notifications};
   if(includeLabel)payload.label=label;
-  const response=await fetch('api/presence',{method:'PUT',headers:{'Content-Type':'application/json','X-DH-UI':'1'},
+  const response=await request('presence',{method:'PUT',headers:{'Content-Type':'application/json','X-DH-UI':'1'},
     body:JSON.stringify(payload)});
-  if(!response.ok)throw Error((await response.text()).trim());
-  const outcome=await response.json();
+  await checkResponse(response);
+  const outcome=await responseJSON(response);
   presenceSubscriptions=await read('presence');
   renderTable();closePresenceMenu();
-  showCopyFeedback(!enabled?'Presence выключен':outcome.scan_requested?'Presence включён · внеочередное сканирование запущено':'Настройки Presence сохранены');
+  showCopyFeedback(!enabled?tr('presence_disabled'):outcome.scan_requested?tr('presence_enabled_on_demand_scan'):tr('presence_settings_saved'));
  }catch(err){
-  showCopyFeedback('Не сохранено: '+err.message);
+  showCopyFeedback(tr('could_not_save')+err.message);
   menu.querySelectorAll('input,button#menu-save').forEach(x=>x.disabled=false);
  }
 }
@@ -526,8 +849,8 @@ function connectPresenceMenus(){
 }
 function renderTable(){
  const found=sortedDeviceRows();
- devicesCount.textContent='Устройства ('+found.length+')';
- if(!devices.length){body.innerHTML='<p>Устройств пока нет. Проверь вкладку «Источники». В Home Assistant могут отсутствовать доступные <code>device_tracker</code> от роутеров.</p>';return}
+ devicesCount.textContent=tr('devices_3')+found.length+')';
+ if(!devices.length){body.innerHTML='<p>'+tr('no_devices_yet_check_sources')+'<code>device_tracker</code>'+tr('entities')+'</p>';return}
  body.innerHTML='<div class="grid-scroll"><table class="devices-table" style="width:'+columnTotalWidth()+'px">'+columnGroup()+'<thead><tr>'+sortedHeaders()+'</tr></thead><tbody>'+
  found.map((d,index)=>{
   const name=visibleDeviceName(d);
@@ -535,13 +858,13 @@ function renderTable(){
   const time=d.last_seen?noteTime(d.last_seen):'';
   const from=sourcesForSort(d.id);
   return '<tr><td class="num-cell">'+(index+1)+'</td>'+
-   '<td class="name-cell"><div class="name-content"><strong class="name-value" title="'+esc(name)+'">'+esc(name||'—')+'</strong>'+newBadge(d)+'</div>'+copyAction(name,'имя')+'</td>'+
+   '<td class="name-cell"><div class="name-content"><strong class="name-value" title="'+esc(name)+'">'+esc(name||'—')+'</strong>'+newBadge(d)+'</div>'+copyAction(name,tr('name_2'))+'</td>'+
    '<td class="ip-cell">'+esc(d.ipv4||d.ipv6||'—')+(d.ipv4&&d.ipv6?'<small> / '+esc(d.ipv6)+'</small>':'')+presenceCellAction('ip',d.ipv4)+'</td>'+
    '<td class="mac-cell">'+esc(d.mac||'—')+presenceCellAction('mac',d.mac)+'</td>'+
-   '<td><span class="tag '+esc(d.presence)+'" tabindex="0" title="'+esc(onlineTooltip(d))+'" aria-label="'+esc(d.presence+'. '+onlineTooltip(d))+'">'+esc(d.presence)+'</span>'+copyAction(d.presence,'наблюдение')+'</td>'+
-   '<td class="source-cell">'+sourcesForDisplay(d.id)+copyAction(from,'источники')+'</td>'+
-   '<td class="time-cell">'+esc(noteTime(d.last_seen))+copyAction(time,'последний Online')+'</td>'+
-   '<td class="note-cell">'+noteAction(d)+copyAction(d.note,'Note')+'</td></tr>';
+   '<td><span class="tag '+esc(d.presence)+'" tabindex="0" title="'+esc(onlineTooltip(d))+'" aria-label="'+esc(statusTitle(d.presence)+'. '+onlineTooltip(d))+'">'+esc(statusTitle(d.presence))+'</span>'+copyAction(d.presence,tr('presence_2'))+'</td>'+
+   '<td class="source-cell">'+sourcesForDisplay(d.id)+copyAction(from,tr('sources_2'))+'</td>'+
+   '<td class="time-cell">'+esc(noteTime(d.last_seen))+copyAction(time,tr('last_online_2'))+'</td>'+
+   '<td class="note-cell">'+noteAction(d)+copyAction(d.note,tr('note'))+'</td></tr>';
  }).join('')+'</tbody></table></div>';
  body.querySelectorAll('button[data-sort]').forEach(b=>b.addEventListener('click',()=>changeSort(b.dataset.sort)));
  body.querySelectorAll('button[data-id]').forEach(b=>b.addEventListener('click',()=>edit(b.dataset.id)));
@@ -551,73 +874,73 @@ function renderTable(){
 }
 async function edit(id){
  const d=devices.find(x=>x.id===id);if(!d)return;
- const note=prompt('Note для '+(visibleDeviceName(d)||d.ipv4||d.mac||d.id),d.note||'');
+ const note=prompt(tr('note_for')+(visibleDeviceName(d)||d.ipv4||d.mac||d.id),d.note||'');
  if(note===null)return;
  try{
-  const r=await fetch('api/devices/'+encodeURIComponent(id)+'/note',{method:'PUT',headers:{'Content-Type':'application/json','X-DH-UI':'1'},body:JSON.stringify({note})});
-  if(!r.ok)throw new Error('HTTP '+r.status);
+  const r=await request('devices/'+encodeURIComponent(id)+'/note',{method:'PUT',headers:{'Content-Type':'application/json','X-DH-UI':'1'},body:JSON.stringify({note})});
+  await checkResponse(r);
   devices=await read('devices');
   deviceBirths=await read('device-births');renderTable();
- }catch(e){alert('Не удалось сохранить: '+e.message)}
+ }catch(e){alert(tr('could_not_save_2')+e.message)}
 }
 function sourceDescription(s){
  if(!s.details_json)return '';
- try{const v=JSON.parse(s.details_json);if(v.error)return 'Ошибка: '+esc(v.error);
-  if(s.kind==='wsd')return 'Ответов: '+esc(v.responses??0)+' · Endpoints: '+esc(v.endpoints??0)+' · Привязано: '+esc(v.linked_devices??0)+' · Без прямого подтверждения: '+esc(v.unmatched??0)+' · '+esc(v.interface||'');
-  if(s.kind==='local_interface')return 'MAC: '+esc(v.mac||'')+' · IPv4: '+esc(v.ipv4||'')+' · Интерфейс: '+esc(v.interface||'')+' · Сеть: '+esc(v.subnet||'');
-   if(s.kind==='ssdp')return 'Ответов: '+esc(v.responses??0)+' · Записей: '+esc(v.valid_records??0)+' · Привязано: '+esc(v.matched_devices??0)+' · Без ARP: '+esc(v.unmatched_records??0)+' · Сервисов: '+esc(v.services??0)+' · '+esc(v.interface||'');
-  if(s.kind==='mdns')return 'Хостов A: '+esc(v.hosts_with_a??0)+' · Привязано: '+esc(v.matched??0)+' · Без ARP: '+esc(v.unmatched??0)+' · Сервисов: '+esc(v.services??0)+' · Ответов: '+esc(v.response_packets??0)+' · '+esc(v.interface||'');
-  if(s.kind==='lan_arp')return 'Последний ARP: '+esc(v.last_scan_hosts??v.observations)+' · Наблюдений: '+esc(v.observations)+' · Конфликтов IPv4: '+esc(v.ipv4_conflicts??0)+' · Proxy ARP: '+esc(v.ambiguous_proxy_arp)+' · '+esc(v.interface)+' '+esc(v.subnet);
-  return 'Всего: '+esc(v.trackers)+' · Home: '+esc(v.home)+' · Not home: '+esc(v.not_home)+' · Unknown: '+esc(v.unknown)+' · Конфликтов MAC: '+esc(v.conflicts)+' · Конфликтов IPv4: '+esc(v.ipv4_conflicts??0)
- }catch(_){return 'Нет подробностей'}
+ try{const v=JSON.parse(s.details_json);if(v.error)return tr('source_failed')+'<details><summary>'+tr('technical_details')+'</summary><code>'+esc(v.error)+'</code></details>';
+  if(s.kind==='wsd')return tr('responses')+esc(v.responses??0)+''+tr('endpoints')+esc(v.endpoints??0)+tr('linked')+esc(v.linked_devices??0)+tr('without_direct_confirmation')+esc(v.unmatched??0)+' · '+esc(v.interface||'');
+  if(s.kind==='local_interface')return 'MAC: '+esc(v.mac||'')+' · IPv4: '+esc(v.ipv4||'')+tr('interface')+esc(v.interface||'')+tr('subnet')+esc(v.subnet||'');
+   if(s.kind==='ssdp')return tr('responses')+esc(v.responses??0)+tr('records')+esc(v.valid_records??0)+tr('linked')+esc(v.matched_devices??0)+tr('without_arp')+esc(v.unmatched_records??0)+tr('services')+esc(v.services??0)+' · '+esc(v.interface||'');
+  if(s.kind==='mdns')return tr('hosts_with_a_records')+esc(v.hosts_with_a??0)+tr('linked')+esc(v.matched??0)+tr('without_arp')+esc(v.unmatched??0)+tr('services')+esc(v.services??0)+tr('responses_2')+esc(v.response_packets??0)+' · '+esc(v.interface||'');
+  if(s.kind==='lan_arp')return tr('last_arp_scan_2')+esc(v.last_scan_hosts??v.observations)+tr('observations')+esc(v.observations)+tr('ipv4_conflicts')+esc(v.ipv4_conflicts??0)+' · Proxy ARP: '+esc(v.ambiguous_proxy_arp)+' · '+esc(v.interface)+' '+esc(v.subnet);
+  return tr('total')+esc(v.trackers)+''+tr('home')+esc(v.home)+''+tr('away')+esc(v.not_home)+''+tr('unknown')+esc(v.unknown)+tr('mac_conflicts')+esc(v.conflicts)+tr('ipv4_conflicts')+esc(v.ipv4_conflicts??0)
+ }catch(_){return tr('no_details')}
 }
 
-async function renderSettings(){
+async function renderSettings(draft){
  if(!globalSettings)globalSettings=await read('settings');
  if(body.querySelector('#global-settings'))return;
  const fields=[
-  ['poll_interval_seconds','Home Assistant / роутеры',15,3600,'Частота обновления данных от интеграций HA'],
-  ['scan_interval_seconds','ARP · локальная сеть',60,3600,'Общий цикл IP/MAC Presence и обнаружения'],
-  ['mdns_interval_seconds','Bonjour / mDNS',120,3600,'Поиск имён и сервисов'],
-  ['ssdp_interval_seconds','SSDP',120,3600,'Обнаружение UPnP-сервисов'],
-  ['wsd_interval_seconds','WSD',120,3600,'Обнаружение устройств через WS-Discovery'],
-  ['confirm_successes','Подтвердить появление',1,5,'Количество успешных ARP-сканов'],
-  ['confirm_failures','Подтвердить отсутствие',1,8,'Количество успешных сканов без обнаружения'],
-  ['history_days','Глубина истории в днях',1,3650,'Срок хранения событий, наблюдений и старых адресов; по умолчанию 30 дней'],
-  ['absent_device_days','Удалять отсутствующие устройства через, дней',1,3650,'Не удаляются записи с Notes или активным Presence; по умолчанию 30 дней']
+  ['poll_interval_seconds',tr('home_assistant_routers'),15,3600,tr('how_often_to_refresh_data')],
+  ['scan_interval_seconds',tr('arp_local_network'),60,3600,tr('shared_discovery_and_ip_mac')],
+  ['mdns_interval_seconds','Bonjour / mDNS',120,3600,tr('discover_names_and_services')],
+  ['ssdp_interval_seconds','SSDP',120,3600,tr('discover_upnp_services')],
+  ['wsd_interval_seconds','WSD',120,3600,tr('discover_devices_through_ws_discovery')],
+  ['confirm_successes',tr('confirm_detection'),1,5,tr('number_of_successful_arp_scans')],
+  ['confirm_failures',tr('confirm_absence'),1,8,tr('number_of_successful_scans_without')],
+  ['history_days',tr('history_retention_in_days'),1,3650,tr('how_long_to_keep_events')],
+  ['absent_device_days',tr('remove_absent_devices_after_this'),1,3650,tr('entries_with_notes_or_active')]
  ];
- body.innerHTML='<div class="settings-panel"><h2>Глобальные параметры</h2><p class="description">Единые интервалы для всей сети. Настройки действуют после сохранения и сохраняются при перезапуске приложения. Никаких индивидуальных интервалов.</p>'+
+ body.innerHTML='<div class="settings-panel"><h2>'+tr('global_settings')+'</h2><p class="description">'+tr('intervals_apply_to_the_whole')+'</p>'+
   '<form id="global-settings"><div class="settings-grid">'+
-  fields.map(([key,title,min,max,help])=>'<label>'+esc(title)+'<input type="number" required step="1" name="'+key+'" min="'+min+'" max="'+max+'" value="'+globalSettings[key]+'" title="'+esc(help)+'"><small>'+esc(help)+'</small></label>').join('')+
-  '</div><div class="toolbar"><button type="submit" id="settings-save">Сохранить параметры</button><span id="settings-status" role="status" aria-live="polite"></span></div></form>'+
-  '<p class="description">Проверки выполняются глобально в фоне. Presence использует результаты завершённых ARP-сканов. Недоступность сканера не считается отсутствием устройства.</p></div>';
+  fields.map(([key,title,min,max,help])=>'<label>'+esc(title)+'<input type="number" required step="1" name="'+key+'" min="'+min+'" max="'+max+'" value="'+esc(draft?.[key] ?? globalSettings[key])+'" title="'+esc(help)+'"><small>'+esc(help)+'</small></label>').join('')+
+  '</div><div class="toolbar"><button type="submit" id="settings-save">'+tr('save_settings')+'</button><span id="settings-status" role="status" aria-live="polite"></span></div></form>'+
+  '<p class="description">'+tr('checks_run_in_the_background')+'</p></div>';
  body.querySelector('#global-settings').addEventListener('submit',async event=>{
   event.preventDefault();
   const form=event.currentTarget,button=form.querySelector('button'),status=form.querySelector('#settings-status');
   const input={};
   for(const [key] of fields)input[key]=Number(form.elements.namedItem(key).value);
-  button.disabled=true;status.textContent='Сохранение…';
+  button.disabled=true;status.textContent=tr('saving');
   try{
-   const result=await fetch('api/settings',{method:'PUT',headers:{'Content-Type':'application/json','X-DH-UI':'1'},body:JSON.stringify(input)});
-   if(!result.ok)throw Error((await result.text()).trim());
-   globalSettings=await read('settings');status.textContent='Глобальные параметры сохранены.';
-  }catch(error){status.textContent='Ошибка: '+error.message}
+   const result=await request('settings',{method:'PUT',headers:{'Content-Type':'application/json','X-DH-UI':'1'},body:JSON.stringify(input)});
+   await checkResponse(result, fields);
+   globalSettings=await read('settings');status.textContent=tr('global_settings_saved');
+  }catch(error){status.textContent=tr('error')+error.message}
   finally{button.disabled=false}
  });
 }
 function renderHelp(){
- body.innerHTML='<section class="help-section"><h2>Помощь · Network App</h2>'+
-  '<p>Приложение автоматически обнаруживает устройства в локальной сети и показывает адреса, имена и историю. Для просмотра устройств ничего настраивать не нужно.</p>'+
-  '<details open><summary>Что означает Online?</summary><p>Это состояние по последним данным ARP или подключённой интеграции роутера. Оно не гарантирует, что устройство прямо сейчас отвечает на Ping. Если источник недоступен, отсутствие ответа нельзя считать отключением устройства.</p></details>'+
-  '<details><summary>Как включить IP Presence?</summary><p>В разделе «Устройства» нажми ⋮ рядом с IP и включи «Отслеживать адрес». Приложение будет наблюдать за этим адресом на основе фонового обнаружения и генерировать события при подтверждённом изменении. Для IP вне локального сегмента ARP-наблюдение не подходит.</p></details>'+
-  '<details><summary>Как включить MAC Presence?</summary><p>Нажми ⋮ рядом с MAC. MAC Presence следит за оборудованием по физическому адресу, даже если IP изменился. Для некоторых телефонов со случайным MAC наблюдение может быть нестабильным.</p></details>'+
-  '<details><summary>Что означает зелёный глаз?</summary><p>Подписка Presence включена. Наведи курсор или поставь фокус на значок: увидишь время проверки, последнее обнаружение и изменение состояния. Зелёный глаз не означает Online.</p></details>'+
-  '<details><summary>Где менять интервалы?</summary><p>Все интервалы общие. Открой верхнюю вкладку «Параметры» и настрой частоту обнаружения и пороги подтверждения. Сканирование происходит независимо от числа подписок.</p></details>'+
-  '<details><summary>Что такое NEW DEVICE?</summary><p>Ранее неизвестное устройство впервые обнаружено в сети. Отметка NEW видна 24 часа. Первый запуск не отправляет лавину уведомлений о всех существующих устройствах.</p></details>'+
-  '<details><summary>Как написать автоматизацию Home Assistant?</summary><p>В «Журнале событий» найди нужное событие. Скопируй точный event_type или шаблон триггера HA и при необходимости настрой реакцию. Технические события передаются через MQTT Event entity event.dh_network_app_network.</p></details>'+
-  '<details><summary>Что означают статусы доставки?</summary><p>«Передано MQTT» означает подтверждение от брокера (PUBACK), но не подтверждение запуска автоматизации или доставки сообщения. При отсутствии связи события сохраняются в очереди.</p></details>'+
-  '<details><summary>Как работают уведомления DH?</summary><p>Это опция для локального пакета Home Assistant, устанавливаемого отдельно. Сам Network App не отправляет сообщения в Telegram и не выдаёт публикацию MQTT за доставленное уведомление.</p></details>'+
-  '<details><summary>Как скопировать значения?</summary><p>В меню ⋮ рядом с IP/MAC есть «Скопировать». Для имени, Note и других заполненных ячеек иконка копирования появляется при наведении.</p></details>'+
+ body.innerHTML='<section class="help-section"><h2>'+tr('help_network_app')+'</h2>'+
+  '<p>'+tr('the_app_automatically_discovers_devices')+'</p>'+
+  '<details open><summary>'+tr('what_does_online_mean')+'</summary><p>'+tr('online_uses_the_latest_arp')+'</p></details>'+
+  '<details><summary>'+tr('how_do_i_enable_ip')+'</summary><p>'+tr('in_devices_select_next_to')+'</p></details>'+
+  '<details><summary>'+tr('how_do_i_enable_mac')+'</summary><p>'+tr('select_next_to_a_mac')+'</p></details>'+
+  '<details><summary>'+tr('what_does_the_green_eye')+'</summary><p>'+tr('a_presence_watch_is_enabled')+'</p></details>'+
+  '<details><summary>'+tr('where_do_i_change_the')+'</summary><p>'+tr('open_settings_to_adjust_discovery')+'</p></details>'+
+  '<details><summary>'+tr('what_does_new_mean')+'</summary><p>'+tr('the_app_has_detected_a')+'</p></details>'+
+  '<details><summary>'+tr('how_do_i_write_a')+'</summary><p>'+tr('find_the_event_in_the')+'</p></details>'+
+  '<details><summary>'+tr('what_do_the_delivery_statuses')+'</summary><p>'+tr('mqtt_acknowledged_means_the_broker')+'</p></details>'+
+  '<details><summary>'+tr('how_do_dh_notifications_work')+'</summary><p>'+tr('enable_this_option_when_using')+'</p></details>'+
+  '<details><summary>'+tr('how_do_i_copy_values')+'</summary><p>'+tr('use_copy_in_the_menu')+'</p></details>'+
   '</section>';
 }
 let eventLogFilter='',eventLogStatus='all';
@@ -626,8 +949,12 @@ function eventTemplate(item){
  return 'triggers:\n  - trigger: event.received\n    target:\n      entity_id: event.dh_network_app_network\n    options:\n      event_type:\n        - '+type+'\nconditions: []\nactions: []\n';
 }
 function eventTitle(type){
- return ({device_discovered:'Новое устройство',tracked_device_reachable:'IP стал доступен',tracked_device_unreachable:'IP перестал обнаруживаться',
- tracked_device_present:'MAC появился',tracked_device_absent:'MAC перестал обнаруживаться'})[type]||type;
+ const titles={
+  device_discovered:'new_device',tracked_device_reachable:'ip_became_reachable',
+  tracked_device_unreachable:'ip_no_longer_detected',tracked_device_present:'mac_detected',
+  tracked_device_absent:'mac_no_longer_detected'
+ };
+ return Object.hasOwn(titles,type)?tr(titles[type]):type;
 }
 let eventLogRows=[];
 async function renderEventLog(){
@@ -636,25 +963,25 @@ async function renderEventLog(){
 }
 function showEventLog(){
  const events=eventLogRows;
- const statuses={queued:'В очереди',retrying:'Повторная попытка',broker_acked:'Передано MQTT'};
+ const statuses={queued:tr('queued'),retrying:tr('retrying'),broker_acked:tr('mqtt_acknowledged')};
  const visible=events.filter(item=>{
-  const text=[item.event_type,item.payload_json,item.event_id].join(' ').toLowerCase();
+  const text=[item.event_type,eventTitle(item.event_type),item.payload_json,item.event_id].join(' ').toLowerCase();
   return text.includes(eventLogFilter.toLowerCase())&&(eventLogStatus==='all'||item.status===eventLogStatus);
  });
- body.innerHTML='<h2>Журнал событий</h2><p class="description">Только события, предназначенные Home Assistant. Имя event_type можно скопировать для собственного обработчика. Статус «Передано MQTT» означает подтверждение брокера, но не обработку Home Assistant.</p>'+
-  '<div class="event-tools"><input id="log-search" placeholder="IP, MAC или имя события…" value="'+esc(eventLogFilter)+'" aria-label="Поиск по журналу">'+
-  '<select id="log-status" aria-label="Статус доставки"><option value="all">Все статусы</option><option value="broker_acked">Передано MQTT</option><option value="queued">В очереди</option><option value="retrying">Повторная попытка</option></select></div>'+
-  (visible.length?'<div class="grid-scroll"><table class="event-log"><thead><tr><th>Время</th><th>Событие / адрес</th><th>Доставка</th><th>Детали</th></tr></thead><tbody>'+
+ body.innerHTML='<h2>'+tr('event_log')+'</h2><p class="description">'+tr('events_intended_for_home_assistant')+'</p>'+
+  '<div class="event-tools"><input id="log-search" placeholder="'+tr('ip_mac_or_event_name')+'" value="'+esc(eventLogFilter)+'" aria-label="'+tr('search_event_log')+'">'+
+  '<select id="log-status" aria-label="'+tr('delivery_status')+'"><option value="all">'+tr('all_statuses')+'</option><option value="broker_acked">'+tr('mqtt_acknowledged')+'</option><option value="queued">'+tr('queued')+'</option><option value="retrying">'+tr('retrying')+'</option></select></div>'+
+  (visible.length?'<div class="grid-scroll"><table class="event-log"><thead><tr><th>'+tr('time')+'</th><th>'+tr('event_address')+'</th><th>'+tr('delivery')+'</th><th>'+tr('details')+'</th></tr></thead><tbody>'+
   visible.map(item=>{
    let d={};try{d=JSON.parse(item.payload_json||'{}')}catch(_){}
    const target=d.ip||d.mac||d.ipv4||d.device_id||'—';
    const friendly=d.label?d.label+' · '+target:target;
    const code=eventTemplate(item);
    return '<tr><td>'+esc(noteTime(item.occurred_at))+'</td><td><strong>'+esc(eventTitle(item.event_type))+'</strong><small style="display:block">'+esc(friendly)+'</small>'+
-    '<code>'+esc(item.event_type)+'</code><button class="small-copy" data-copy="'+esc(item.event_type)+'" type="button" title="Скопировать event_type" aria-label="Скопировать event_type">⧉</button></td>'+
-    '<td><span class="tag '+(item.status==='broker_acked'?'ok':'unknown')+'">'+esc(statuses[item.status]||item.status)+'</span><small style="display:block">Попыток: '+esc(item.attempts)+'</small></td>'+
-    '<td><details><summary>Детали</summary><small>event_id: '+esc(item.event_id)+'</small><p><button type="button" class="small-copy" data-copy="'+esc(code)+'" data-copy-label="триггер HA" title="Скопировать триггер HA">Скопировать триггер HA</button> <button type="button" class="small-copy" data-copy="'+esc(JSON.stringify(d,null,2))+'" data-copy-label="JSON события" title="Скопировать JSON события">Скопировать JSON</button></p><pre>'+esc(JSON.stringify(d,null,2))+'</pre></details></td></tr>';
-  }).join('')+'</tbody></table></div>':'<p>Подходящих событий пока нет.</p>');
+    '<code>'+esc(item.event_type)+'</code><button class="small-copy" data-copy="'+esc(item.event_type)+'" type="button" title="'+tr('copy_event_type')+'" aria-label="'+tr('copy_event_type')+'">⧉</button></td>'+
+    '<td><span class="tag '+(item.status==='broker_acked'?'ok':'unknown')+'">'+esc(statuses[item.status]||item.status)+'</span><small style="display:block">'+tr('attempts')+esc(item.attempts)+'</small></td>'+
+    '<td><details><summary>'+tr('details')+'</summary><small>event_id: '+esc(item.event_id)+'</small><p><button type="button" class="small-copy" data-copy="'+esc(code)+'" data-copy-label="'+tr('ha_trigger')+'" title="'+tr('copy_ha_trigger')+'">'+tr('copy_ha_trigger')+'</button> <button type="button" class="small-copy" data-copy="'+esc(JSON.stringify(d,null,2))+'" data-copy-label="'+tr('event_json')+'" title="'+tr('copy_event_json')+'">'+tr('copy_json')+'</button></p><pre>'+esc(JSON.stringify(d,null,2))+'</pre></details></td></tr>';
+  }).join('')+'</tbody></table></div>':'<p>'+tr('no_matching_events_yet')+'</p>');
  body.querySelector('#log-search').addEventListener('input',e=>{
   eventLogFilter=e.target.value;
   const cursor=e.target.selectionStart;
@@ -669,8 +996,8 @@ function showEventLog(){
 async function load(){
  try{
   settingsOverview.hidden=page!=='settings';
-  const status=await read('status');health.textContent='SQLite: '+status.database;
-  document.getElementById('app-version').textContent=status.version?'v'+status.version:'версия недоступна';
+  const status=await read('status');appStatus=status;health.textContent='SQLite: '+statusTitle(status.database);
+  document.getElementById('app-version').textContent=status.version?'v'+status.version:tr('version_unavailable');
   // One inventory snapshot per refresh; full diagnostics are export-only.
   const view=await read('ui-inventory');
   deviceBirths=await read('device-births');
@@ -696,7 +1023,7 @@ async function load(){
   const realConflicts=conflicts.filter(x=>x.resolution!=='arp_over_router'&&x.resolution!=='local_interface_over_other');
   summary.style.display=realConflicts.length?'block':'none';
   summary.textContent=realConflicts.length
-   ?'Обнаружены противоречивые ARP/IPv4: '+realConflicts.map(x=>x.ipv4+' ('+x.claims.map(c=>c.source+': '+c.mac).join(' / ')+')').join('; ')+'. Спорные адреса не присваиваются обоим устройствам. Подробности — в JSON-экспорте.'
+   ?tr('conflicting_arp_ipv4_claims')+realConflicts.map(x=>x.ipv4+' ('+x.claims.map(c=>sourceTitle(c.source)+': '+c.mac).join(' / ')+')').join('; ')+tr('the_app_withholds_disputed_addresses')
    :'';
 
   if(page==='devices'){
@@ -713,10 +1040,10 @@ async function load(){
   if(page==='events'){await renderEventLog();return;}
   if(page==='sources'){
    const sources=await read('sources');
-   body.innerHTML='<h2>Источники</h2><div class="grid-scroll"><table><thead><tr><th>Источник</th><th>Статус</th><th>Последний успешный опрос</th><th>Детали</th></tr></thead><tbody>'+
-   sources.map(s=>'<tr><td>'+esc(s.name)+'</td><td><span class="tag '+esc(s.status)+'">'+esc(s.status)+'</span></td><td>'+esc(noteTime(s.last_success))+'</td><td>'+sourceDescription(s)+'</td></tr>').join('')+'</tbody></table></div>';return;
+   body.innerHTML='<h2>'+tr('sources')+'</h2><div class="grid-scroll"><table><thead><tr><th>'+tr('source')+'</th><th>'+tr('status')+'</th><th>'+tr('last_successful_poll')+'</th><th>'+tr('details')+'</th></tr></thead><tbody>'+
+   sources.map(s=>'<tr><td>'+esc(sourceTitle(s.name))+'</td><td><span class="tag '+esc(s.status)+'">'+esc(statusTitle(s.status))+'</span></td><td>'+esc(noteTime(s.last_success))+'</td><td>'+sourceDescription(s)+'</td></tr>').join('')+'</tbody></table></div>';return;
   }
- }catch(e){health.textContent='API unavailable';body.textContent='Ошибка API: '+e.message}
+ }catch(e){health.textContent=tr('api_unavailable');body.textContent=tr('api_error')+e.message}
 }
 async function diagnosticWithBrowserView(){
  const selectedTab=page,selectedFilter=filter;
@@ -729,12 +1056,12 @@ async function diagnosticWithBrowserView(){
    visible_device_count:shown.length,
    sort_column:selectedTab==='devices'?sortKey:null,
    sort_direction:selectedTab==='devices'?sortDirection:null,
-   displayed_columns:selectedTab==='devices'?['№',...deviceColumns.map(([key,title])=>title)]:[],
+   displayed_columns:selectedTab==='devices'?['№',...deviceColumns().map(([key,title])=>title)]:[],
    counters_as_displayed:{
     devices:document.getElementById('known').textContent,
     online:document.getElementById('online').textContent,
-    ha_poll_seconds:document.getElementById('interval').textContent,
-    arp_poll_seconds:document.getElementById('arp-interval').textContent,
+    ha_poll_seconds:String(appStatus?.poll_interval_seconds ?? '—'),
+    arp_poll_seconds:String(appStatus?.scan_interval_seconds ?? '—'),
     mdns_matched:document.getElementById('mdns-hosts').textContent,
     mdns_services:document.getElementById('mdns-services').textContent,
     ssdp_matched:document.getElementById('ssdp-hosts').textContent,
@@ -750,53 +1077,53 @@ async function diagnosticWithBrowserView(){
 // The browser may restrict downloads in the HA iframe; always offer JSON preview.
 function exportDiagnostic(){
  document.getElementById('export-status').textContent=
-  'Запрошен JSON-файл у сервера. Если браузер или Ingress запретил загрузку, нажми «Показать JSON» и скопируй его вручную.';
+  tr('the_json_download_was_requested');
 }
 async function showDiagnosticPreview(){
  const button=document.getElementById('export-preview');
  const container=document.getElementById('diagnostic-json-preview');
  const status=document.getElementById('export-copy-status');
- if(!container.hidden){container.hidden=true;button.textContent='Показать JSON';return}
+ if(!container.hidden){container.hidden=true;button.textContent=tr('show_json');return}
  button.disabled=true;
- status.textContent='Чтение диагностических данных…';
+ status.textContent=tr('reading_diagnostics');
  try{
   const report=await diagnosticWithBrowserView();
   const text=JSON.stringify(report,null,2);
   document.getElementById('diagnostic-json-text').value=text;
-  container.hidden=false;button.textContent='Скрыть JSON';
-  status.textContent='JSON готов ('+text.length+' символов). Можно выделить весь текст вручную.';
- }catch(e){status.textContent='Не удалось получить JSON: '+e.message;container.hidden=false}
+  container.hidden=false;button.textContent=tr('hide_json');
+  status.textContent=tr('json_ready')+text.length+tr('characters_you_can_select_all');
+ }catch(e){status.textContent=tr('could_not_load_json')+e.message;container.hidden=false}
  finally{button.disabled=false}
 }
 async function copyDiagnosticPreview(){
  const field=document.getElementById('diagnostic-json-text');
  const label=document.getElementById('export-copy-status');
- if(!field.value){label.textContent='Сначала нажми «Показать JSON».';return}
- const ok=await copyText(field.value,'диагностика JSON');
+ if(!field.value){label.textContent=tr('select_show_json_first');return}
+ const ok=await copyText(field.value,tr('diagnostic_json'));
  if(!ok){
   field.focus();field.select();
-  label.textContent='Копирование запрещено браузером. Текст выделен — нажми Ctrl+C.';
- }else label.textContent='Диагностический JSON скопирован.';
+  label.textContent=tr('the_browser_blocked_copying_press');
+ }else label.textContent=tr('diagnostic_json_copied');
 }
 async function resetInventoryFromUI(){
  const button=document.getElementById('reset'),message=document.getElementById('reset-status');
  if(button.disabled)return;
- const word=prompt('Сброс удалит ВСЕ устройства, UUID, Notes, историю и события без возможности восстановления.\nДля подтверждения введи RESET:');
+ const word=prompt(tr('reset_permanently_deletes_all_devices'));
  if(word===null)return;
- if(word!=='RESET'){alert('Сброс отменён: нужно ввести RESET без изменений.');return}
- if(!confirm('Окончательно очистить весь сетевой инвентарь и немедленно начать новое обнаружение?'))return;
- button.disabled=true;message.textContent='Очистка инвентаря…';
+ if(word!=='RESET'){alert(tr('reset_canceled_enter_reset_exactly'));return}
+ if(!confirm(tr('permanently_clear_the_network_inventory')))return;
+ button.disabled=true;message.textContent=tr('clearing_inventory');
  try{
-  const r=await fetch('api/inventory/reset',{method:'POST',headers:{'Content-Type':'application/json','X-DH-UI':'1'},body:JSON.stringify({confirmation:word}),cache:'no-store'});
-  if(!r.ok)throw new Error('HTTP '+r.status);
-  const result=await r.json();
-  if(!result.reset)throw new Error('сервер не подтвердил сброс');
+  const r=await request('inventory/reset',{method:'POST',headers:{'Content-Type':'application/json','X-DH-UI':'1'},body:JSON.stringify({confirmation:word}),cache:'no-store'});
+  await checkResponse(r);
+  const result=await responseJSON(r);
+  if(!result.reset)throw new Error(tr('the_server_did_not_confirm'));
   filter='';page='devices';sortKey='ip';sortDirection='asc';
   document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('active',b.dataset.page==='devices'));
   filterArea.innerHTML='';
-  message.textContent='Инвентарь очищен ('+Number(result.previous_devices||0)+' устройств). Новое обнаружение запущено.';
+  message.textContent=tr('inventory_cleared')+Number(result.previous_devices||0)+tr('devices_discovery_has_restarted');
   await load();
- }catch(e){message.textContent='Ошибка сброса: '+e.message}
+ }catch(e){message.textContent=tr('reset_failed')+e.message}
  finally{button.disabled=false}
 }
 document.getElementById('export').addEventListener('click',exportDiagnostic);
@@ -829,6 +1156,10 @@ document.querySelectorAll('[data-page]').forEach(b=>b.addEventListener('click',(
  document.querySelectorAll('nav button').forEach(a=>a.classList.remove('active'));
  b.classList.add('active');page=b.dataset.page;filter='';closePresenceMenu();load();
 }));
+if(document.documentElement){
+ applyLanguage();
+ document.getElementById('language').addEventListener('change',event=>changeLanguage(event.target.value));
+}
 load();
 setInterval(load,30000);
 </script></body></html>

@@ -7,7 +7,13 @@ configuration:
     description: Read existing Home Assistant router device_trackers periodically.
   scan_interval_seconds:
     name: LAN ARP scan interval (seconds)
-    description: Periodic bounded ARP discovery on the primary Ethernet interface; networks larger than /24 are not scanned.
+    description: Periodic bounded ARP discovery on the primary Ethernet interface; only private IPv4 subnets from /24 through /30 are scanned.
   mdns_interval_seconds:
     name: Bonjour/mDNS poll interval (seconds)
-    description: LAN service discovery; names attach only through fresh ARP evidence.
+    description: LAN service discovery; names are associated only through fresh, unique ARP or local interface evidence.
+  ssdp_interval_seconds:
+    name: SSDP discovery interval (seconds)
+    description: Discover UPnP services on the primary LAN.
+  wsd_interval_seconds:
+    name: WS-Discovery interval (seconds)
+    description: Discover WS-Discovery endpoints and verify eligible computer names.

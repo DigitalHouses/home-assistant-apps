@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.33
+
+- Internationalization candidate: add RU/EN language selection in Ingress, browser-local language preference, localized UI labels, settings, errors, event descriptions and help. Retain machine identifiers and user-provided data.
+- Complete English and Russian Supervisor configuration translations.
+- Add localization regression coverage and public-facing documentation.
+- Register the candidate for the shared immutable GHCR delivery pipeline on amd64 and aarch64.
+- No scanner, data schema, Presence engine, MQTT contract or telemetry participation changes. Stable release approved by the maintainer without a separate release candidate; final live HAOS acceptance remains pending.
+
 ## 0.1.32
 
 - Add **optional, explicitly enabled** DH Stats HTTPS telemetry using the same wire schema 1 and legacy telemetry policy 1 currently used by DigitalHouses PVE Agent. New and upgraded Network App installations have `telemetry_enabled: false` by default; when disabled, no installation ID is created, no heartbeat is sent and LAN discovery, Presence, MQTT and Ingress continue normally.

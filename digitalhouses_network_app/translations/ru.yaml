@@ -7,7 +7,13 @@ configuration:
     description: Периодически читать device_tracker интеграций роутеров из Home Assistant.
   scan_interval_seconds:
     name: Интервал сканирования LAN ARP (секунды)
-    description: Периодический ARP-опрос основной Ethernet-сети. Диапазоны больше /24 пока не сканируются.
+    description: Периодический ARP-опрос основной Ethernet-сети. Поддерживаются частные подсети IPv4 от /24 до /30.
   mdns_interval_seconds:
     name: Интервал Bonjour/mDNS (секунды)
-    description: Поиск сервисов в LAN, привязка имён только по подтверждённому ARP.
+    description: Поиск сервисов в LAN, имена привязываются по свежим однозначным данным ARP или локального интерфейса.
+  ssdp_interval_seconds:
+    name: Интервал обнаружения SSDP (секунды)
+    description: Поиск сервисов UPnP в основной локальной сети.
+  wsd_interval_seconds:
+    name: Интервал WS-Discovery (секунды)
+    description: Поиск узлов WS-Discovery и проверка имён компьютеров при наличии прямого подтверждения.
