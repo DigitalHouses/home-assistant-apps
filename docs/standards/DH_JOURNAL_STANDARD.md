@@ -19,7 +19,7 @@ Materialize the shared files into the product Docker context using `python scrip
 
 ## Mandatory timezone authority
 
-All consumers must follow the [common Home Assistant timezone contract](DIGITALHOUSES_APP_STANDARD.md#111-mandatory-home-assistant-timezone-contract). This document describes the legacy bundled 1.0.3 snapshot; the [external DH Journal standard](https://github.com/DigitalHouses/dh-app-libraries/blob/main/dh_journal/STANDARD.md) is authoritative for independently versioned releases. The product resolves the HA IANA timezone and passes it to LOG and export. Stored UTC timestamps remain unchanged.
+All consumers must follow the [common Home Assistant timezone contract](DIGITALHOUSES_APP_STANDARD.md#111-mandatory-home-assistant-timezone-contract). This document describes the legacy bundled 1.0.3 snapshot; the [external DH Journal standard](https://github.com/DigitalHouses/dh-app-libraries/blob/main/dh_journal/STANDARD.md) is authoritative for independently versioned releases. The product (not DH Journal) resolves the HA IANA timezone using the native HA configuration API for HAOS Apps and passes the validated value to LOG and export (and Toast in versions supporting it). The library does not query HA, obtain credentials or create HA Packages/entities. Stored UTC timestamps remain unchanged.
 
 ## Full-screen Ingress
 

@@ -349,14 +349,51 @@ Project-specific integration belongs in explicit local adapters, passports, conf
 
 ## 11.1 Mandatory Home Assistant timezone contract
 
-Every DigitalHouses product, including Apps, Agents and server components, must use the timezone of the Home Assistant installation it serves for all site-local human-readable time and calendar semantics. Home Assistant is the sole authoritative source; this applies also to products maintained in separate repositories.
+Home Assistant is the sole authority for the IANA timezone of each site. This contract applies to every DigitalHouses App, Agent and server component, including products in separate repositories. It is a **product runtime responsibility, not a DH Journal, DH Sync or Home Assistant Package responsibility**.
 
-- Resolve the IANA timezone from the associated Home Assistant instance (HA Core configuration `time_zone` or the Supervisor-provided equivalent for HAOS Apps, e.g. `bashio::supervisor.timezone`). Reuse the existing integration/configuration channel for Agents and external components. A multi-site component must use the timezone of the relevant HA instance, not assume all sites share one timezone. A central administrative UI uses its designated HA instance for local presentation; global machine aggregates explicitly defined in UTC remain UTC.
-- Do not hard-code a geographic timezone, infer it from IP/country, use browser or host timezone as an independent authority, or offer a separate user-editable timezone setting. Cache the last valid HA value; refresh on startup and on HA configuration changes or the existing configuration refresh/reconnect path. Do not add a dedicated high-frequency poll. If no valid HA value is available, use UTC temporarily and visibly identify the fallback; recover automatically once HA supplies its timezone. Do not overwrite a cached valid HA timezone on transient failure.
-- Store event timestamps, database timestamps and machine protocol timestamps in UTC with explicit timezone information. Convert at the presentation boundary using the authoritative IANA timezone and its historical DST rules. All human-readable timestamps, LOG, Toast Notifications, Ingress, exports (including filenames), reports and site-local scheduling/calendar boundaries must follow HA. Explicit UTC protocol/aggregate fields remain unchanged and clearly labeled.
-- Product tests must verify HA timezone resolution, a non-UTC zone, DST conversion where applicable, timezone change and unavailable/invalid HA configuration, with preservation of stored UTC timestamps. Existing products must converge through product-scoped updates without deleting history or breaking released machine interfaces. New products and new timezone-dependent functionality must comply before release.
+### HAOS Apps — mandatory acquisition method
 
-DH Journal consumers must pass this resolved timezone to the shared library; see the [canonical DH Journal Standard](https://github.com/DigitalHouses/dh-app-libraries/blob/main/dh_journal/STANDARD.md).
+The App itself reads the native HA Core configuration through the Supervisor proxy:
+
+- Enable `homeassistant_api: true` in the App's `config.yaml` if it is not already enabled.
+- Use `GET http://supervisor/core/api/config` with `Authorization: Bearer <SUPERVISOR_TOKEN>`, using the token injected by Supervisor into the App's environment.
+- Read exactly the JSON field `time_zone` (for example, `"Asia/Almaty"`). Validate it with the language's IANA timezone database (Python `zoneinfo.ZoneInfo`, Go `time.LoadLocation`). Include timezone data in the image if necessary.
+- Reuse the product's existing authenticated Core API client. No personal long-lived access token, external address, additional service, HA configuration change or user setup is required.
+- Resolve at startup and on an existing configuration refresh, reconnect, manual refresh or normal runtime cycle. Do not make an HA request for every LOG row, Toast, UI poll or timestamp. A Supervisor-provided equivalent such as `bashio::supervisor.timezone` is acceptable for initial acquisition, but a one-time `TZ` environment assignment does not satisfy the refresh and fallback requirements on its own.
+
+Minimal reference for the existing App API client (Python):
+
+```python
+# Existing authenticated Supervisor Core API client:
+config = core_api.get("config")  # GET http://supervisor/core/api/config
+candidate = config.get("time_zone")
+# Validate and update the App's last-known-good timezone only on success.
+```
+
+The method name is illustrative; reuse the existing client's actual interface (e.g. DH Sync's `CoreAPI.timezone()`). The HTTP endpoint, authentication and response field above are normative. The App owns resolution, validation, cache, refresh and fallback. DH Sync 0.6.9 is a reference implementation: `rootfs/app/ha_core.py` and `rootfs/app/ha_timezone.py` in `digitalhouses_sync_app/`.
+
+### Do not create HA resources to obtain timezone
+
+**Forbidden for timezone acquisition:** new Home Assistant Packages, template sensors, helpers, automations, scripts, MQTT publishers/bridges in HA, MQTT Discovery entities, or a dependency on DH Sync or System Globals. Do not ask the owner to configure or install any of these. Do not put timezone into the retained product `/sync` announcement. An App does not need any HA entity to obtain timezone; the native configuration API already provides it.
+
+Do not hard-code a geographic timezone, infer it from IP/country, use browser or host timezone as an independent authority, or offer a separate user-editable timezone setting.
+
+### Agents and external server components
+
+Use the associated HA instance's native configuration API via an already authorized integration channel, or consume an already available authoritative HA-derived timezone through an existing product transport. The Supervisor-only URL/token above is for HAOS Apps, not for external hosts. Do not invent a new HA Package, sensor, automation or publisher to make timezone available. If no such authorized channel exists, document the integration gap and obtain agreement before adding infrastructure; use explicit UTC fallback meanwhile. Multi-site components resolve per site. A central administrative UI uses its designated HA instance; global machine aggregates explicitly defined in UTC remain UTC.
+
+### Cache, fallback and use
+
+- Keep one validated timezone per associated HA instance in the product runtime. Persist the last valid value in the product's existing persistent state or a small file (HAOS: `/data`). Refresh through the existing lifecycle/configuration path. No dedicated high-frequency polling; no additional database or service.
+- On an unavailable API or invalid response, retain the last valid value, including after restart. If there is no valid cached value, temporarily use UTC and visibly identify `UTC (fallback)`. Recover automatically at the next successful refresh. A timezone resolution failure must not block normal product operation.
+- Store event timestamps, database timestamps and machine protocol timestamps in UTC with explicit timezone information. Convert at the presentation boundary using the authoritative IANA timezone and historical DST rules. All human-readable timestamps, LOG, Toast Notifications, Ingress, exports (including filenames), reports and site-local scheduling/calendar boundaries must follow HA. Explicit UTC protocol/aggregate fields remain unchanged and clearly labeled.
+- **DH Journal is a consumer, not a resolver.** The App passes its already resolved IANA timezone to the library for LOG, Toast and export (for example, `dh_journal.http.get(journal, url, resolved_zone)`). The library must not query HA, create entities/Packages, obtain credentials, maintain an independent timezone or read the browser timezone as authority. Changing timezone must not rewrite stored UTC timestamps. The product identifies fallback in its presentation and refreshes rendered history as needed.
+
+### Acceptance
+
+Product tests must verify HA timezone resolution, a non-UTC zone, DST conversion where applicable, timezone change, unavailable/invalid HA configuration, persistent last-known-good cache and preservation of stored UTC timestamps. Verify that no new HA resources or timezone settings were introduced. Existing products converge through product-scoped updates without deleting history or breaking released machine interfaces. New products and new timezone-dependent functionality must comply before release.
+
+See also the [canonical DH Journal Standard](https://github.com/DigitalHouses/dh-app-libraries/blob/main/dh_journal/STANDARD.md) for the library consumer interface.
 
 ---
 
