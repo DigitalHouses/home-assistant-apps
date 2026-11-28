@@ -86,7 +86,7 @@ Actions App supersedes Aqara Switch App. Both IDs remain in the catalog and tele
 
 ## Local event journal (0.4.5)
 
-The dashboard's **LOG** opens DH Journal 1.0.3 (RU/EN, search, level filter,
+The dashboard's **LOG** opens DH Journal 1.1.0 (RU/EN, search, level filter,
 export and confirmed journal-only clear). It starts collecting on deployment;
 historical heartbeats are not replayed. A routine unchanged heartbeat produces
 no journal row. New registrations, upgrades/downgrades, country changes,
@@ -103,3 +103,20 @@ access is available through the public telemetry protocol. The LAN dashboard
 is the trusted administrative surface; do not expose it publicly.
 JOURNAL_PATH and JOURNAL_TIMEZONE may be set in the service environment
 (default Asia/Almaty). Journal failures do not stop telemetry ingestion.
+
+
+### Toast notifications (0.4.6)
+
+The dashboard mounts the shared DH Journal Toast component. New registrations
+and first observations of a country in retained PostgreSQL history are marked
+for notification. When both happen together, show one combined toast and retain
+both journal events. Ordinary heartbeats, version changes and rejected requests
+do not display toasts. Unknown country codes XX and ZZ do not create new-country
+notifications. The first toast is at the bottom right; later toasts appear above.
+Settings are browser-local (enabled by default, 60 minutes, adjustable 1–1440).
+Reload establishes a new cursor without replay. Dismissal affects only the UI.
+
+The exact external library tag, commit and SHA-256 file manifest are recorded in
+dh-journal.lock.json. The vendored package and dashboard assets are verified by
+scripts/vendor_dh_journal.py --check. To regenerate from an already checked-out
+pinned release, pass --stats-source PATH. No runtime download or extra store.

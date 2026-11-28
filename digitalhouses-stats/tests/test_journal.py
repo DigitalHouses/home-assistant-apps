@@ -41,6 +41,10 @@ def test_journal_observations_and_retention(tmp_path):
 def test_accepted_heartbeat_journal_and_private_routes(tmp_path, monkeypatch):
     monkeypatch.setattr(settings, "journal_path", str(tmp_path / "journal.sqlite3"))
     monkeypatch.setattr(settings, "journal_timezone", "UTC")
+    # Like test_api, run against the disposable CI PostgreSQL database.
+    with engine.begin() as connection:
+        connection.execute(text("DELETE FROM heartbeats"))
+        connection.execute(text("DELETE FROM installations"))
     product = "digitalhouses_internet_app"
     installation_id = str(uuid4())
     token = "af" * 32
@@ -52,6 +56,10 @@ def test_accepted_heartbeat_journal_and_private_routes(tmp_path, monkeypatch):
         assert key_path(settings).stat().st_mode & 0o777 == 0o600
         internal = {"X-DH-Journal-Key": key}
         assert client.get("/internal/journal/log").status_code == 404
+        assert client.get("/internal/journal/log/toasts").status_code == 404
+        baseline = client.get("/internal/journal/log/toasts?lang=en", headers=internal).json()
+        assert baseline["rows"] == []
+        assert baseline["cursor"] == 1
         assert client.post("/internal/journal/log/clear", json={"confirm": True}).status_code == 404
         assert client.post("/v1/heartbeat", json=payload, headers=headers).status_code == 204
         assert client.post("/v1/heartbeat", json=payload, headers=headers).status_code == 204
@@ -62,9 +70,16 @@ def test_accepted_heartbeat_journal_and_private_routes(tmp_path, monkeypatch):
         response = client.get("/internal/journal/log?lang=en", headers=internal)
         assert response.status_code == 200
         data = response.json()
-        assert data["app_version"] == "0.4.5"
+        assert data["app_version"] == "0.4.6"
         assert [r["code"] for r in data["rows"]] == [
-            "app_started", "installation_new", "version_upgraded", "telemetry_rejected"]
+            "app_started", "installation_new", "country_new_installation", "version_upgraded", "telemetry_rejected"]
+        toasts = client.get("/internal/journal/log/toasts?lang=en&after=1", headers=internal).json()
+        assert len(toasts["rows"]) == 1
+        assert "New country" in toasts["rows"][0]["message"]
+        assert "🇩🇪" in toasts["rows"][0]["message"] or "DE" in toasts["rows"][0]["message"]
+        assert "v0.1.9" in toasts["rows"][0]["message"]
+        assert client.get("/internal/journal/log/toasts?lang=en", headers=internal).json()["rows"] == []
+        assert client.get("/internal/journal/log/toasts?after=-1", headers=internal).status_code == 400
         assert "Germany" in data["rows"][1]["message"] or "DE" in data["rows"][1]["message"]
         assert "private-secret-invalid" not in response.text
         assert token not in response.text and installation_id not in response.text
@@ -72,6 +87,21 @@ def test_accepted_heartbeat_journal_and_private_routes(tmp_path, monkeypatch):
         assert export.status_code == 200
         assert "digitalhouses_stats_" in export.headers["content-disposition"]
         assert "Обновление" in export.text
+        # Known country: a new installation gets only its registration toast.
+        second_id = str(uuid4())
+        second = {**payload, "installation_id": second_id}
+        assert client.post("/v1/heartbeat", json=second, headers=headers).status_code == 204
+        next_toasts = client.get(f"/internal/journal/log/toasts?lang=en&after={toasts['cursor']}", headers=internal).json()
+        assert len(next_toasts["rows"]) == 1
+        assert "New registration" in next_toasts["rows"][0]["message"]
+        assert "New country" not in next_toasts["rows"][0]["message"]
+        # Existing installation reporting from a new country gets one country toast.
+        assert client.post("/v1/heartbeat", json=second, headers={**headers, "CF-IPCountry": "FR"}).status_code == 204
+        country_toasts = client.get(f"/internal/journal/log/toasts?lang=en&after={next_toasts['cursor']}", headers=internal).json()
+        assert len(country_toasts["rows"]) == 1
+        assert "New country" in country_toasts["rows"][0]["message"]
+        assert "FR" in country_toasts["rows"][0]["message"]
+        assert client.request("DELETE", "/v1/installation", json={"schema":1,"product":product,"installation_id":second_id}, headers=headers).status_code == 204
         assert client.post("/internal/journal/log/clear", json={}, headers=internal).status_code == 400
         assert client.post("/internal/journal/log/clear", json={"confirm": True}, headers=internal).status_code == 200
         assert [r["code"] for r in client.get("/internal/journal/log", headers=internal).json()["rows"]] == ["journal_cleared"]
@@ -92,7 +122,8 @@ def test_dashboard_bridge_uses_only_fixed_private_routes(monkeypatch):
     with TestClient(dashboard_app) as client:
         assert client.get("/v1/stats/log?lang=en&after=10").status_code == 200
         assert client.get("/v1/stats/log/export?lang=ru").status_code == 200
+        assert client.get("/v1/stats/log/toasts?lang=en&after=12").status_code == 200
         assert client.post("/v1/stats/log/clear", json={"confirm":False}).status_code == 400
         assert client.post("/v1/stats/log/clear", json={"confirm":True}, headers={"Sec-Fetch-Site":"cross-site"}).status_code == 403
         assert client.post("/v1/stats/log/clear", json={"confirm":True}).status_code == 200
-    assert calls == [("/log","lang=en&after=10",False),("/log/export","lang=ru",False),("/log/clear","",True)]
+    assert calls == [("/log","lang=en&after=10",False),("/log/export","lang=ru",False),("/log/toasts","lang=en&after=12",False),("/log/clear","",True)]

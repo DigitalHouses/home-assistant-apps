@@ -5,7 +5,7 @@ import logging
 from fastapi import Depends, FastAPI, Header, HTTPException, Request, Response, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.exception_handlers import request_validation_exception_handler
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
@@ -127,14 +127,24 @@ def heartbeat(
 
     journal = getattr(request.app.state, "journal", None)
     previous = None
-    if journal is not None and not new:
+    new_country = False
+    if journal is not None:
         # An optional diagnostic read must not poison the heartbeat transaction.
         try:
             with db.begin_nested():
-                previous = db.execute(select(Heartbeat).where(
-                    Heartbeat.product == payload.product,
-                    Heartbeat.installation_id == payload.installation_id,
-                ).order_by(Heartbeat.received_at.desc(), Heartbeat.id.desc()).limit(1)).scalar_one_or_none()
+                if not new:
+                    previous = db.execute(select(Heartbeat).where(
+                        Heartbeat.product == payload.product,
+                        Heartbeat.installation_id == payload.installation_id,
+                    ).order_by(Heartbeat.received_at.desc(), Heartbeat.id.desc()).limit(1)).scalar_one_or_none()
+                # Only a first report or country transition can introduce a country.
+                # Serialize concurrent first reports for the same country; rely on
+                # existing PostgreSQL history, not a second state store.
+                if country not in {"XX", "ZZ"} and (previous is None or previous.country != country):
+                    db.execute(text("SELECT pg_advisory_xact_lock(19630, :country_key)"),
+                               {"country_key": ord(country[0]) * 256 + ord(country[1])})
+                    new_country = db.execute(select(Heartbeat.id).where(
+                        Heartbeat.country == country).limit(1)).first() is None
         except SQLAlchemyError:
             journal.report_failure()
             journal = None
@@ -150,7 +160,7 @@ def heartbeat(
     )
     db.commit()
     observe(journal, product=payload.product, version=payload.version, country=country,
-            previous=previous, new=new)
+            previous=previous, new=new, new_country=new_country)
 
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
@@ -201,6 +211,11 @@ async def validation_error(request: Request, exc: RequestValidationError):
 @app.get("/internal/journal/log", include_in_schema=False)
 def internal_log(request: Request):
     return internal_get(request, settings, "/api/log")
+
+
+@app.get("/internal/journal/log/toasts", include_in_schema=False)
+def internal_toasts(request: Request):
+    return internal_get(request, settings, "/api/log/toasts")
 
 
 @app.get("/internal/journal/log/export", include_in_schema=False)

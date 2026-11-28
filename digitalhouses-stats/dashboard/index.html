@@ -4,7 +4,8 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>DigitalHouses Stats</title>
-  <link rel="stylesheet" href="/assets/styles.css?v=journal-20261128-v1">
+  <link rel="stylesheet" href="/assets/styles.css?v=journal-20261128-v2">
+  <link rel="stylesheet" href="./toast.css?v=1.1.0">
 </head>
 <body>
   <main class="page">
@@ -14,7 +15,8 @@
         <h1>Product telemetry</h1>
         <p>Local statistics dashboard</p>
       </div>
-      <div class="header-actions"><a class="log-button" href="/log.html">LOG</a><div class="status">
+      <div class="header-actions"><a class="log-button" href="/log.html">LOG</a>
+      <details class="notification-settings"><summary class="log-button" aria-label="Settings" title="Settings">⚙</summary><div id="toast-settings" class="notification-panel"></div></details><div class="status">
         <span id="status-dot" class="dot"></span>
         <span id="status-text">Loading</span>
       </div></div>
@@ -127,6 +129,8 @@
       <button id="refresh" type="button">Refresh</button>
     </footer>
   </main>
-  <script src="/assets/app.js?v=journal-20261128-v1"></script>
+  <script src="/assets/app.js?v=journal-20261128-v2"></script>
+  <script src="./toast.js?v=1.1.0"></script>
+  <script src="./assets/toast-init.js?v=0.4.6"></script>
 </body>
 </html>

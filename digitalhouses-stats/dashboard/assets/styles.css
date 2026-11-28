@@ -179,3 +179,12 @@ footer { padding-top:8px; }
 .log-button { color:#b4d8ff; background:#283747; border:1px solid #516277; border-radius:7px; padding:8px 14px; font-size:13px; font-weight:700; text-decoration:none; }
 .log-button:hover { background:#304154; }
 .log-button:focus-visible { outline:2px solid #b4d8ff; outline-offset:2px; }
+
+:root { --dh-toast-bg:#202b39; --dh-toast-text:#e9f0f7; --dh-toast-border:#516277; }
+.notification-settings { position:relative; }
+.notification-settings summary { list-style:none; cursor:pointer; }
+.notification-settings summary::-webkit-details-marker { display:none; }
+.notification-panel { position:absolute; z-index:20; right:0; top:calc(100% + 8px); width:min(310px,85vw); padding:14px; background:#202b39; border:1px solid #516277; border-radius:8px; }
+.notification-panel .dh-toast-settings { flex-direction:column; align-items:flex-start; }
+.notification-panel input[type=number] { background:#283747; border:1px solid #516277; color:#e9f0f7; border-radius:4px; padding:4px; }
+.dh-toast .dh-toast-close { padding:3px; border:0; background:transparent; }
