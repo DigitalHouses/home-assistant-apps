@@ -24,7 +24,7 @@ PRODUCT_ID = "digitalhouses_sync_app"
 BASE = "DigitalHouses/Global/" + PRODUCT_ID
 DISCOVERY = "homeassistant/device/" + PRODUCT_ID + "/config"
 STARTED_AT = datetime.now(timezone.utc).isoformat()
-VERSION = os.environ.get("APP_VERSION", "0.6.5-local")
+VERSION = os.environ.get("APP_VERSION", "0.6.6-local")
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 LOG = logging.getLogger("dh_sync")
 
@@ -123,8 +123,8 @@ def main() -> None:
     sources = ProductSources()  # In-memory only; MQTT is the registry.
     # Publish YAML files and register the DigitalHouses panel over HA API.
     # No direct .storage edits, HA restart, or operator interaction.
-    journal = EventJournal()
-    journal.record('app_started', VERSION)
+    journal = EventJournal(debug=os.environ.get("LOG_LEVEL", "info").lower() == "debug")
+    journal.backend.start(VERSION)
     auto = AutoSync(journal=journal)
     auto.publisher = DashboardPublisher(auto.root, auto.data, journal=journal)
     auto.reloader = lambda: CoreAPI().reload_configuration()
@@ -212,8 +212,15 @@ def main() -> None:
     telemetry_runner.start()
     try:
         client.loop_forever(retry_first_connection=True)
+    except SystemExit:
+        journal.backend.stop()
+        raise
+    except Exception:
+        journal.backend.error("app_failed")
+        raise
+    else:
+        journal.backend.stop()
     finally:
-        journal.record('app_stopped', VERSION)
         telemetry_runner.stop()
 
 

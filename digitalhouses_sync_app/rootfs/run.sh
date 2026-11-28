@@ -6,6 +6,9 @@ if [[ -z "${APP_VERSION:-}" ]]; then
   exit 1
 fi
 
+export TZ="$(bashio::supervisor.timezone)"
+export LOG_LEVEL="$(bashio::config 'log_level')"
+
 export TELEMETRY_ENABLED="$(bashio::config 'telemetry_enabled')"
 
 export MQTT_HOST="$(bashio::services mqtt host)"
