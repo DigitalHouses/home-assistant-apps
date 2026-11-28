@@ -86,7 +86,7 @@ Actions App supersedes Aqara Switch App. Both IDs remain in the catalog and tele
 
 ## Local event journal (0.4.5)
 
-The dashboard's **LOG** opens DH Journal 1.1.0 (RU/EN, search, level filter,
+The dashboard's **LOG** opens DH Journal 1.1.1 (RU/EN, search, level filter,
 export and confirmed journal-only clear). It starts collecting on deployment;
 historical heartbeats are not replayed. A routine unchanged heartbeat produces
 no journal row. New registrations, upgrades/downgrades, country changes,
@@ -120,3 +120,11 @@ The exact external library tag, commit and SHA-256 file manifest are recorded in
 dh-journal.lock.json. The vendored package and dashboard assets are verified by
 scripts/vendor_dh_journal.py --check. To regenerate from an already checked-out
 pinned release, pass --stats-source PATH. No runtime download or extra store.
+
+### Live dashboard refresh (0.4.7)
+
+A new notification event batch invokes the existing dashboard data refresh via
+DH Journal onEvents, even when toast presentation is disabled. Requests are
+serialized and concurrent refresh requests coalesce into one follow-up.
+Existing toast nodes, dismissal state, expiry timers, settings and expanded
+country rows are independent of dashboard rendering. No new poll or service.
