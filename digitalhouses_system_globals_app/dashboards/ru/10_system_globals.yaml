@@ -250,6 +250,7 @@ sections:
     grid_options:
       columns: 12
   - type: entities
+    show_header_toggle: false
     title: День / Ночь
     entities:
     - switch.dh_system_globals_app_night_mode
@@ -264,6 +265,7 @@ sections:
     - entity: switch.dh_system_globals_app_night_mode
       name: Ночной режим
   - type: entities
+    show_header_toggle: false
     title: Активные параметры
     entities:
     - sensor.dh_system_globals_app_active_brightness
@@ -276,6 +278,7 @@ sections:
     heading_style: title
     heading: Глобальные профили
   - type: entities
+    show_header_toggle: false
     title: День
     entities:
     - number.dh_system_globals_app_day_brightness
@@ -286,6 +289,7 @@ sections:
     - switch.dh_system_globals_app_day_voice_notifications_enabled
     - switch.dh_system_globals_app_day_noncritical_sound_notifications_enabled
   - type: entities
+    show_header_toggle: false
     title: Ночь
     entities:
     - number.dh_system_globals_app_night_brightness
@@ -296,6 +300,7 @@ sections:
     - switch.dh_system_globals_app_night_voice_notifications_enabled
     - switch.dh_system_globals_app_night_noncritical_sound_notifications_enabled
   - type: entities
+    show_header_toggle: false
     title: Готовность системы
     entities:
     - binary_sensor.dh_system_globals_app_mqtt_ready
