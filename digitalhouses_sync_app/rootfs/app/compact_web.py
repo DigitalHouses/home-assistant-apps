@@ -1,8 +1,7 @@
 """Compact admin Ingress, using only cached registry and completed sync report."""
-from datetime import datetime, timezone
+from datetime import datetime
 from html import escape
 from zoneinfo import ZoneInfo
-import os
 import re
 
 STYLE = """
@@ -28,16 +27,12 @@ def name(value):
     return value.removeprefix("digitalhouses_").removesuffix("_app").removesuffix("_agent").replace("_", " ").title()
 
 
-def time_text(value):
+def time_text(value, zone="UTC"):
     if not value:
         return "Ожидание первой проверки"
     try:
-        try:
-            zone = ZoneInfo(os.environ.get("TZ") or "UTC")
-        except (ValueError, KeyError):
-            zone = timezone.utc
-        return datetime.fromisoformat(value).astimezone(zone).strftime("%d.%m.%Y %H:%M:%S")
-    except (ValueError, TypeError):
+        return datetime.fromisoformat(value).astimezone(ZoneInfo(zone)).strftime("%d.%m.%Y %H:%M:%S")
+    except (ValueError, TypeError, KeyError):
         return "—"
 
 
@@ -59,7 +54,9 @@ def resource_line(r):
     return h(r.get("name", "—")) + " · " + h(r.get("kind", "Package"))
 
 
-def render(records, report, *, running=False, failure=""):
+def render(records, report, *, running=False, failure="", timezone_info=("UTC", True)):
+    zone, fallback = timezone_info
+    timezone_label = zone + (" (fallback)" if fallback else "")
     resources = report.get("resources") or []
     issues = list(report.get("issues") or [])
     if failure:
@@ -84,7 +81,7 @@ def render(records, report, *, running=False, failure=""):
     else:
         message, cls = "✓ Все ресурсы актуальны", "ok"
     trigger = {"manual": "Вручную", "automatic": "Авто"}.get(report.get("trigger"), "")
-    status = f'<div class="status-line"><strong class="{cls}">{message}</strong><small class="time">Последняя проверка: {h(time_text(report.get("last_run")))} {h(trigger)} · Авто / 60 мин</small></div>'
+    status = f'<div class="status-line"><strong class="{cls}">{message}</strong><small class="time">Последняя проверка: {h(time_text(report.get("last_run"), zone))} {h(trigger)} · {h(timezone_label)} · Авто / 60 мин</small></div>'
     if not running:
         if issues:
             status += '<ul class="error">' + "".join(f"<li>{h(i)}</li>" for i in issues) + "</ul>"
@@ -117,6 +114,7 @@ def render(records, report, *, running=False, failure=""):
     if not resource_rows:
         resource_rows = '<tr><td colspan="2" class="muted">Нет данных</td></tr>'
     technical = '<p>Источник реестра: MQTT retained /sync</p><p>Источник ресурсов: GitHub DigitalHouses</p><p>DH Journal 1.1.0 · SQLite · 3000 записей</p><p>Home Assistant автоматически не перезапускается. Новые интеграции в пакетах могут требовать обычного перезапуска HA.</p>'
+    technical += "<p>Timezone HA: " + h(timezone_label) + "</p>"
     repos = sorted({(str(x.get("repository","")),str(x.get("product_path",""))) for x in records.values()})
     if repos:
         technical += '<p>Источники продуктов:</p>' + "".join(f'<p>{h(repo)} / {h(path)}</p>' for repo,path in repos)

@@ -5,12 +5,11 @@ import html
 import json
 import hmac
 import secrets
-import os
 import logging
 import threading
 from pathlib import Path
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from urllib.parse import urlsplit, parse_qs, quote
+from urllib.parse import urlsplit, parse_qs, quote, urlencode, urlunsplit
 
 from discovery_contract import ProductSources
 from dh_journal.http import get as journal_get, ASSETS
@@ -44,9 +43,10 @@ form.sync-now{margin:14px 0}
 def _h(value: object) -> str:
     return html.escape(str(value), quote=True)
 
-def make_server(sources: ProductSources, inventory=None, *, version: str = 'development', port: int = 8099, inspect=None, audit=None, apply_manager=None, auto_status=None, auto_sync=None, journal=None):
+def make_server(sources: ProductSources, inventory=None, *, version: str = 'development', port: int = 8099, inspect=None, audit=None, apply_manager=None, auto_status=None, auto_sync=None, journal=None, timezone_source=None):
     sync_token = secrets.token_urlsafe(24) if auto_sync is not None or journal is not None else None
 
+    timezone_source = timezone_source or (lambda: ("UTC", True))
     manual_lock = threading.Lock()
     manual_failure = None
 
@@ -57,8 +57,10 @@ def make_server(sources: ProductSources, inventory=None, *, version: str = 'deve
         failed = manual_failure
         if failed is not None and failed[0] == report.get("last_run"):
             failure = failed[1]
-        return {"running": bool(running), "fragments": compact_web.render(
-            sources.snapshot(), report, running=running, failure=failure)}
+        timezone_info = timezone_source()
+        return {"running": bool(running), "timezone": timezone_info[0], "timezone_fallback": timezone_info[1],
+                "fragments": compact_web.render(
+            sources.snapshot(), report, running=running, failure=failure, timezone_info=timezone_info)}
 
     def manual_worker():
         nonlocal manual_failure
@@ -206,7 +208,32 @@ def make_server(sources: ProductSources, inventory=None, *, version: str = 'deve
                     self.send_error(403)
                     return
                 try:
-                    body, mime, filename = journal_get(journal.backend, self.path, os.environ.get("TZ") or "UTC")
+                    zone, fallback = timezone_source()
+                    label = zone + (" (fallback)" if fallback else "")
+                    url = self.path
+                    # Namespace the existing LOG cursor by presentation timezone.
+                    # Changing HA's timezone reloads old rendered rows without touching SQLite.
+                    suffix = "|" + label
+                    if path == "/api/log":
+                        parsed = urlsplit(url)
+                        params = parse_qs(parsed.query)
+                        generation = params.get("generation", [""])[0]
+                        params["generation"] = [generation[:-len(suffix)] if generation.endswith(suffix) else ""]
+                        url = urlunsplit(parsed._replace(query=urlencode(params, doseq=True)))
+                    body, mime, filename = journal_get(journal.backend, url, zone)
+                    if path == "/api/log":
+                        body["generation"] += suffix
+                        body["product_name"] += " · " + label
+                    if path == "/api/log/toasts":
+                        # Label each rendered notification with its authoritative zone.
+                        for row in body["rows"]:
+                            row["local_time"] += " " + label
+                    elif path == "/api/log" and fallback:
+                        for row in body["rows"]:
+                            row["local_time"] += " UTC (fallback)"
+                    if path == "/api/log/export" and fallback:
+                        # Explicit fallback label while keeping the standard log filename.
+                        body = b"Timezone: UTC (fallback)\n" + body
                     self._journal_output(200, body, mime, filename)
                 except StorageUnavailable:
                     self._journal_output(503, {"error": "journal_storage_unavailable"})

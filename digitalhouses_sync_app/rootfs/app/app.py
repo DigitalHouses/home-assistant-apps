@@ -18,13 +18,14 @@ from auto_sync import AutoSync
 from event_journal import EventJournal
 from dashboard_runtime import DashboardPublisher
 from ha_core import CoreAPI
+from ha_timezone import HATimezone, HAFormatter
 from telemetry import TelemetryClient, TelemetryRunner
 
 PRODUCT_ID = "digitalhouses_sync_app"
 BASE = "DigitalHouses/Global/" + PRODUCT_ID
 DISCOVERY = "homeassistant/device/" + PRODUCT_ID + "/config"
 STARTED_AT = datetime.now(timezone.utc).isoformat()
-VERSION = os.environ.get("APP_VERSION", "0.6.8-local")
+VERSION = os.environ.get("APP_VERSION", "0.6.9-local")
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 LOG = logging.getLogger("dh_sync")
 
@@ -123,15 +124,24 @@ def main() -> None:
     sources = ProductSources()  # In-memory only; MQTT is the registry.
     # Publish YAML files and register the DigitalHouses panel over HA API.
     # No direct .storage edits, HA restart, or operator interaction.
+    ha_timezone = HATimezone(lambda: CoreAPI().timezone())
+    for handler in logging.getLogger().handlers:
+        handler.setFormatter(HAFormatter(ha_timezone))
+    ha_timezone.refresh()
     journal = EventJournal(debug=os.environ.get("LOG_LEVEL", "info").lower() == "debug")
     journal.backend.start(VERSION)
     auto = AutoSync(journal=journal)
     auto.publisher = DashboardPublisher(auto.root, auto.data, journal=journal)
     auto.reloader = lambda: CoreAPI().reload_configuration()
+    def run_sync(*, refresh=False):
+        ha_timezone.refresh()
+        return auto.sync(sources.snapshot(), refresh=refresh)
+
     wake = threading.Event()
     ingress = make_server(
         sources, version=VERSION, port=8099, auto_status=auto.status,
-        auto_sync=lambda: auto.sync(sources.snapshot(), refresh=True), journal=journal,
+        auto_sync=lambda: run_sync(refresh=True), journal=journal,
+        timezone_source=ha_timezone.snapshot,
     )
     threading.Thread(target=ingress.serve_forever, daemon=True,
                      name="dh-sync-ingress").start()
@@ -146,7 +156,7 @@ def main() -> None:
             if first:
                 time.sleep(8)  # Batch the broker's retained /sync messages.
             first = False
-            auto.sync(sources.snapshot())
+            run_sync()
 
     threading.Thread(target=auto_loop, daemon=True,
                      name="dh-sync-auto").start()
