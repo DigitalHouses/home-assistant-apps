@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.1.11
+- Update pinned DH Lib Journal to 2.0.1: add a top-right close link in LOG returning to the App root. Existing back link, SQLite history, timezone and Toast behavior are unchanged.
+
 ## 0.1.10
 - Migrate to pinned DH Lib Journal 2.0.0. Preserve SQLite history and event IDs; migrate the notification flag in place. Add shared Toast notifications and refresh Ingress data without reloading the page or losing unsaved edits. Use native HA Core timezone for journal and notifications, with persistent last-known-good cache and explicit UTC fallback. Day/night logic and MQTT contracts unchanged.
 

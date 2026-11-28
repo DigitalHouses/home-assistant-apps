@@ -19,6 +19,17 @@ async function main(){
   browser=await chromium.launch({headless:true});
   const page=await browser.newPage({viewport:{width:1440,height:900}});
   const errors=[];page.on("pageerror",e=>errors.push(e.message));
+  const closePage=await browser.newPage({viewport:{width:390,height:844}});
+  await closePage.goto("http://127.0.0.1:"+port+"/log");
+  const close=closePage.locator("#dh-lib-journal-close");
+  await close.waitFor({state:"visible"});
+  assert.equal(await close.getAttribute("aria-label"),"Закрыть журнал");
+  await closePage.locator("#language").selectOption("en");
+  await closePage.waitForFunction(()=>document.querySelector("#dh-lib-journal-close").getAttribute("aria-label")==="Close journal");
+  await close.click();
+  await closePage.waitForURL("http://127.0.0.1:"+port+"/");
+  await closePage.close();
+  console.log("PASS: LOG close link RU/EN and return to app on narrow viewport");
   const start=Date.now();
   await page.goto("http://127.0.0.1:"+port+"/log");
   await page.waitForFunction(()=>document.querySelectorAll(".entry").length===3000);
