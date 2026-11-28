@@ -26,11 +26,13 @@ from .dh_journal.http import get as journal_get
 from .products import product_name
 
 LOG = logging.getLogger(__name__)
-APP_VERSION = "0.4.5"
+APP_VERSION = "0.4.6"
 RETURN_AFTER = timedelta(days=7)
 LOCALES = {
     "ru": {
         "installation_new": "{country_name} ({country}) · {product_name} v{version} · Новая регистрация",
+        "country_new": "Новая страна · {flag} {country_name} ({country})",
+        "country_new_installation": "Новая страна · {flag} {country_name} ({country}) · {product_name} v{version} · Новая регистрация",
         "version_changed": "{country_name} ({country}) · {product_name} · v{previous_version} → v{version} · Изменение версии",
         "version_upgraded": "{country_name} ({country}) · {product_name} · v{previous_version} → v{version} · Обновление",
         "version_downgraded": "{country_name} ({country}) · {product_name} · v{previous_version} → v{version} · Откат",
@@ -40,6 +42,8 @@ LOCALES = {
     },
     "en": {
         "installation_new": "{country_name} ({country}) · {product_name} v{version} · New registration",
+        "country_new": "New country · {flag} {country_name} ({country})",
+        "country_new_installation": "New country · {flag} {country_name} ({country}) · {product_name} v{version} · New registration",
         "version_changed": "{country_name} ({country}) · {product_name} · v{previous_version} → v{version} · Version changed",
         "version_upgraded": "{country_name} ({country}) · {product_name} · v{previous_version} → v{version} · Upgrade",
         "version_downgraded": "{country_name} ({country}) · {product_name} · v{previous_version} → v{version} · Downgrade",
@@ -48,7 +52,7 @@ LOCALES = {
         "telemetry_rejected": "{country_name} ({country}) · HTTP 422 · Telemetry rejected ({reason})",
     },
 }
-ICONS = {"installation_new": "🆕", "version_changed": "🔃", "country_changed": "🌍", "version_upgraded": "⬆️", "version_downgraded": "⬇️",
+ICONS = {"country_new": "🌍", "country_new_installation": "🌍", "installation_new": "🆕", "version_changed": "🔃", "country_changed": "🌍", "version_upgraded": "⬆️", "version_downgraded": "⬇️",
          "installation_returned": "🟢"}
 SAFE_FIELDS = {"schema", "telemetry_policy_version", "installation_id", "product", "version"}
 try:
@@ -61,6 +65,10 @@ except OSError:
 
 def country_name(code: str) -> str:
     return COUNTRY_NAMES.get(code, "Unknown" if code in {"XX", "ZZ"} else code)
+
+
+def country_flag(code: str) -> str:
+    return "".join(chr(0x1F1E6 + ord(c) - ord("A")) for c in code) if code in COUNTRY_NAMES else ""
 
 
 def key_path(settings) -> Path:
@@ -113,7 +121,7 @@ def version_key(version):
     return tuple(int(part) for part in main.split(".")), not bool(prerelease), identifiers
 
 
-def observe(journal, *, product, version, country, previous, new, now=None):
+def observe(journal, *, product, version, country, previous, new, new_country=False, now=None):
     """Called only after the PostgreSQL transaction commits; never log IDs."""
     if journal is None:
         return
@@ -121,8 +129,13 @@ def observe(journal, *, product, version, country, previous, new, now=None):
         facts = dict(product=product, product_name=product_name(product),
                      version=version, country=country, country_name=country_name(country))
         if new or previous is None:
-            journal.success("installation_new", **facts)
+            journal.success("installation_new", notify=not new_country, **facts)
+            if new_country:
+                journal.info("country_new_installation", notify=True, flag=country_flag(country), **facts)
             return
+        if new_country:
+            journal.info("country_new", notify=True, flag=country_flag(country),
+                         country=country, country_name=country_name(country))
         if previous.version != version:
             before, after = version_key(previous.version), version_key(version)
             code = "version_upgraded" if after > before else "version_downgraded" if after < before else "version_changed"

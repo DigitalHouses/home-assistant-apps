@@ -86,6 +86,11 @@ def stats_log(request: Request):
     return dashboard_proxy(settings, "/log", request.url.query)
 
 
+@app.get("/v1/stats/log/toasts")
+def stats_toasts(request: Request):
+    return dashboard_proxy(settings, "/log/toasts", request.url.query)
+
+
 @app.get("/v1/stats/log/export")
 def stats_log_export(request: Request):
     return dashboard_proxy(settings, "/log/export", request.url.query)
