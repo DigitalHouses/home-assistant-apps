@@ -92,7 +92,7 @@ class ConsentTests(unittest.TestCase):
         config = (root / "config.yaml").read_text(encoding="utf-8")
         self.assertIn("  telemetry_enabled: false", config)
         self.assertIn("  telemetry_enabled: bool", config)
-        self.assertIn("version: 0.1.26", config)
+        self.assertIn("version: 0.1.27", config)
         for locale in ("en", "ru"):
             text = (root / "translations" / f"{locale}.yaml").read_text(encoding="utf-8")
             self.assertIn(

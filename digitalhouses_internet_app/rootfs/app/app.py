@@ -72,7 +72,7 @@ from traffic import (
     entity_total_bytes,
     load_traffic_state,
     save_traffic_state,
-    traffic_payload,
+    TrafficPublication,
     update_traffic,
 )
 
@@ -164,6 +164,8 @@ class InternetApp:
             self.config.traffic.traffic_upload_total,
         )
         self.traffic_available = False
+        self.traffic_publication = TrafficPublication()
+        self._last_traffic_wire: tuple[str, str] | None = None
         self.router_telemetry: dict[str, Any] = {
             "wan_status": None,
             "download_rate_mbps": None,
@@ -273,7 +275,7 @@ class InternetApp:
             qos=1,
             retain=True,
         )
-        self._publish_all()
+        self._publish_all(force_traffic=True)
         self._publish_update_state()
         self.app_card.publish()
         self.log.info("MQTT connected")
@@ -377,7 +379,7 @@ class InternetApp:
             self.app_card.finish("refresh", error="MQTT is not connected")
             return
         try:
-            self._publish_all()
+            self._publish_all(force_traffic=True)
             self._publish_update_state()
         except Exception as exc:
             self.log.exception("UI refresh failed")
@@ -517,26 +519,31 @@ class InternetApp:
         }
 
     def _traffic_payload(self) -> dict[str, Any]:
-        payload = traffic_payload(self.traffic)
-        payload["router"] = dict(self.router_telemetry)
-        return payload
+        return self.traffic_publication.payload(
+            self.traffic, self.router_telemetry,
+            available=self.traffic_available,
+        )
 
-    def _publish_traffic(self) -> None:
+    def _publish_traffic(self, *, force: bool = False) -> None:
         if not self.mqtt.is_connected():
             return
-        configured = self.config.traffic.configured
-        self.mqtt.publish(
-            TOPICS["traffic_availability"],
-            "online" if configured and self.traffic_available else "offline",
-            qos=1,
-            retain=True,
-        )
-        self.mqtt.publish(
-            TOPICS["traffic"],
-            json.dumps(self._traffic_payload()),
-            qos=1,
-            retain=True,
-        )
+        with self.lock:
+            configured = self.config.traffic.configured
+            availability = (
+                "online" if configured and self.traffic_available else "offline"
+            )
+            payload = json.dumps(self._traffic_payload())
+            wire = (availability, payload)
+            if not force and wire == self._last_traffic_wire:
+                return
+            availability_result = self.mqtt.publish(
+                TOPICS["traffic_availability"], availability, qos=1, retain=True,
+            )
+            payload_result = self.mqtt.publish(
+                TOPICS["traffic"], payload, qos=1, retain=True,
+            )
+            if availability_result.rc == 0 and payload_result.rc == 0:
+                self._last_traffic_wire = wire
 
     def _optional_router_state(self, entity_id: str) -> str | None:
         if not entity_id:
@@ -570,7 +577,7 @@ class InternetApp:
 
     def _traffic_sample_once(self) -> None:
         cfg = self.config.traffic
-        self.router_telemetry = {
+        router_telemetry = {
             "wan_status": self._optional_router_state(cfg.router_wan_status),
             "download_rate_mbps": self._optional_router_rate(
                 cfg.router_download_rate
@@ -579,6 +586,9 @@ class InternetApp:
                 cfg.router_upload_rate
             ),
         }
+
+        with self.lock:
+            self.router_telemetry = router_telemetry
 
         if cfg.enabled:
             try:
@@ -595,15 +605,18 @@ class InternetApp:
                     )
                 else:
                     self.log.debug("Traffic sources unavailable: %s", exc)
-                self.traffic_available = False
+                with self.lock:
+                    self.traffic_available = False
             else:
-                update_traffic(self.traffic, download, upload)
-                save_traffic_state(TRAFFIC_FILE, self.traffic)
-                if not self.traffic_available:
-                    self.log.info("Traffic sources are available")
-                self.traffic_available = True
+                with self.lock:
+                    update_traffic(self.traffic, download, upload)
+                    save_traffic_state(TRAFFIC_FILE, self.traffic)
+                    if not self.traffic_available:
+                        self.log.info("Traffic sources are available")
+                    self.traffic_available = True
         else:
-            self.traffic_available = False
+            with self.lock:
+                self.traffic_available = False
 
         self._publish_traffic()
 
@@ -627,14 +640,14 @@ class InternetApp:
             retain=True,
         )
 
-    def _publish_all(self) -> None:
+    def _publish_all(self, *, force_traffic: bool = False) -> None:
         self._publish_state()
         self._publish_outages()
         self._publish_thresholds()
         self._publish_servers()
         self._publish_recent_results()
         self._publish_performance()
-        self._publish_traffic()
+        self._publish_traffic(force=force_traffic)
         self._publish_problems()
 
     def _event(self, event_type: str, **data: Any) -> None:
