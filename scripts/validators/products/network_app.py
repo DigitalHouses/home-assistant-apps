@@ -11,8 +11,9 @@ def validate_network(root: Path, app: Path, context: dict) -> None:
     config = context["config"]
     if config.get("name") != "DigitalHouses Network App":
         fail("Network App canonical display name changed")
-    if config.get("stage") != "experimental":
-        fail("Network App must be experimental until real scanner acceptance")
+    expected_stage = "experimental" if context["version"] == "0.1.32" else "stable"
+    if config.get("stage") != expected_stage:
+        fail(f"Network App {context['version']} requires stage {expected_stage}")
     if config.get("ingress") is not True or config.get("ingress_port") != 0:
         fail("Network App requires dynamically assigned Supervisor Ingress port")
     if config.get("panel_admin") is not True:
@@ -28,7 +29,7 @@ def validate_network(root: Path, app: Path, context: dict) -> None:
             or config.get("map")
             or config.get("ports") or config.get("ports_description")):
         fail("Foundation preview cannot request host privileges or expose ports")
-    if context["version"] not in {"0.1.32", "0.1.33-rc.1"}:
+    if context["version"] not in {"0.1.32", "0.1.33"}:
         fail("Network App pilot security policy requires review for every new version")
     if config.get("homeassistant_api") is not True:
         fail("Network App requires HA Core API via Supervisor proxy")
@@ -50,7 +51,7 @@ def validate_network(root: Path, app: Path, context: dict) -> None:
         fail("Network App telemetry consent must default to false")
     if config.get("schema", {}).get("telemetry_enabled") != "bool":
         fail("Network App must expose one boolean telemetry consent option")
-    if context["version"] == "0.1.33-rc.1":
+    if context["version"] == "0.1.33":
         for language in ("en", "ru"):
             path = app / "translations" / f"{language}.yaml"
             fields = load_yaml(path, root).get("configuration")

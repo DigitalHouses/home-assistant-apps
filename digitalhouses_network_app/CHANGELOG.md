@@ -1,12 +1,12 @@
 # Changelog
 
-## 0.1.33-rc.1
+## 0.1.33
 
 - Internationalization candidate: add RU/EN language selection in Ingress, browser-local language preference, localized UI labels, settings, errors, event descriptions and help. Retain machine identifiers and user-provided data.
 - Complete English and Russian Supervisor configuration translations.
 - Add localization regression coverage and public-facing documentation.
 - Register the candidate for the shared immutable GHCR delivery pipeline on amd64 and aarch64.
-- No scanner, data schema, Presence engine, MQTT contract or telemetry participation changes. Experimental pending real HAOS acceptance; not a stable release.
+- No scanner, data schema, Presence engine, MQTT contract or telemetry participation changes. Stable release approved by the maintainer without a separate release candidate; final live HAOS acceptance remains pending.
 
 ## 0.1.32
 
