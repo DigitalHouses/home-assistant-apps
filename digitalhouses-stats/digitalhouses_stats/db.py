@@ -15,7 +15,7 @@ class Base(DeclarativeBase):
 engine = create_engine(
     get_settings().database_url,
     pool_pre_ping=True,
-    connect_args={"client_encoding": "utf8"},
+    connect_args={"client_encoding": "utf8", "options": "-c timezone=UTC"},
 )
 
 SessionLocal = sessionmaker(

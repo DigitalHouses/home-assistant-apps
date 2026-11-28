@@ -128,15 +128,12 @@ serialized and concurrent refresh requests coalesce into one follow-up.
 Existing toast nodes, dismissal state, expiry timers, settings and expanded
 country rows are independent of dashboard rendering. No new poll or service.
 
-### CORE HA timezone
+### LXC timezone (0.4.9)
 
-The designated CORE Home Assistant is the only timezone authority. Install
-integrations/ha_timezone_package.yaml on CORE HA and run its automation once.
-HA publishes its own IANA timezone on the existing authenticated CORE MQTT
-broker (retained, QoS 1) at startup, configuration changes and MQTT birth.
-The existing minute country-notifier cycle reads this retained state and
-atomically caches the last valid HA value alongside the journal. No new
-service or timer is required. LOG, exports, toast and dashboard display use
-this value; unavailable/invalid messages preserve the cache. Until the first
-valid value, UI explicitly displays temporary UTC. Historical UTC data and
-UTC aggregate boundaries remain unchanged. No independent timezone setting.
+DH Stats is an independent central statistics server. As an explicit exception
+to the HA timezone authority rule, presentation uses the LXC system IANA
+timezone from /etc/localtime. Ansible-CORE sets it to Asia/Almaty at deployment
+and update. No HA API, HA package, MQTT timezone topic, token, cache or separate
+timezone setting is required. LOG, export, toast and dashboard use this zone;
+invalid system timezone falls back to UTC. Database sessions, historical
+timestamps and UTC aggregate boundaries remain UTC.

@@ -26,7 +26,9 @@ def test_healthz() -> None:
     assert response.json() == {"status": "ok"}
 
 
-def test_empty_dashboard_summary() -> None:
+def test_empty_dashboard_summary(tmp_path, monkeypatch) -> None:
+    from digitalhouses_stats import local_timezone
+    monkeypatch.setattr(local_timezone, 'LOCALTIME', tmp_path / 'missing')
     reset_database()
 
     response = dashboard_client.get("/v1/stats/summary")

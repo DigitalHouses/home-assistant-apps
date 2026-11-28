@@ -382,6 +382,8 @@ Do not hard-code a geographic timezone, infer it from IP/country, use browser or
 
 Use the associated HA instance's native configuration API via an already authorized integration channel, or consume an already available authoritative HA-derived timezone through an existing product transport. The Supervisor-only URL/token above is for HAOS Apps, not for external hosts. Do not invent a new HA Package, sensor, automation or publisher to make timezone available. If no such authorized channel exists, document the integration gap and obtain agreement before adding infrastructure; use explicit UTC fallback meanwhile. Multi-site components resolve per site. A central administrative UI uses its designated HA instance; global machine aggregates explicitly defined in UTC remain UTC.
 
+**Explicit exception — DH Stats:** This independent central statistics server uses the IANA timezone of its LXC, configured by its deployment (CORE: Asia/Almaty). It does not acquire timezone from HA, create HA resources or maintain a separate timezone setting/cache. UTC storage and machine aggregate rules remain mandatory.
+
 ### Cache, fallback and use
 
 - Keep one validated timezone per associated HA instance in the product runtime. Persist the last valid value in the product's existing persistent state or a small file (HAOS: `/data`). Refresh through the existing lifecycle/configuration path. No dedicated high-frequency polling; no additional database or service.
