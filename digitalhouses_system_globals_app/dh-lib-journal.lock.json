@@ -1,17 +1,17 @@
 {
   "repository": "https://github.com/DigitalHouses/dh-app-libraries",
-  "tag": "dh-lib-journal-v2.0.1",
-  "commit": "4f1430507dc323374c6801fa3552a3e1a7e4aaa3",
-  "version": "2.0.1",
+  "tag": "dh-lib-journal-v2.0.2",
+  "commit": "9f92235f635c3c3eefebe4c12b079b6ebdd95a40",
+  "version": "2.0.2",
   "files": {
-    "__init__.py": "1a40fc14edf7895c6d5bcaff4373549fb9f4f1432014013e66f1e592e801150f",
+    "__init__.py": "c202aa1872c418e873497699db51d42dff606ff58875b75bccebf4f05d3e4bd2",
     "http.py": "c86433c989bc3d65a9ff5ba61055ee5622db6eb34fd7755e134c3698f28fd668",
     "locales/en.json": "c407fa520439441868332cd1a34f1e1c8cf05a67d0ab99a52edcdd4a95b8d25e",
     "locales/ru.json": "42fae6c88028be5a01ef4c596e0a524c5d12d7bccf657d614220e51c072f876c",
     "web/dh-lib-journal-toast.css": "00bc60f1de3bdccf17ce484f169b48030f9f3020e770300776a9323df758f4e6",
-    "web/dh-lib-journal-toast.js": "9619896207641d7f79e04ae05a55546be8496aa77333137329b4ab11a470c5a1",
+    "web/dh-lib-journal-toast.js": "6dbe6dfd58987d00451addee03bdd45a28601a499fe4562725520ee6f0578bca",
     "web/dh-lib-journal.css": "f093efe36ee2a8c6f166683130b5c92809a4753c3460f5d371b400887c60e1bd",
-    "web/dh-lib-journal.js": "28c8bc33debf2c9157d27420a72f9109a260117a6f30c6fafba56b4ba7b9b342",
+    "web/dh-lib-journal.js": "aab80478c079ecbf7fca29c99ddfd410d81ea6e0641bccdaacf0b947699bbb94",
     "web/index.html": "465ec884e1486bbc2fe0e34c1ef7cd00113377576789187a9adddafeb43a01df"
   }
 }

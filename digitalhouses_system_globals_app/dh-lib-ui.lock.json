@@ -1,10 +1,10 @@
 {
   "repository": "https://github.com/DigitalHouses/dh-app-libraries",
-  "tag": "dh-lib-ui-v0.1.0",
-  "commit": "30c0562d66692fb5d92c4e040023df0794087703",
-  "version": "0.1.0",
+  "tag": "dh-lib-ui-v0.1.2",
+  "commit": "56fc9c0bda4b140d2b67159b327b75beefd4fd58",
+  "version": "0.1.2",
   "files": {
-    "dh-lib-ui.css": "f101affd58f42a2b5a27f12c8f568a2795569d76695fc6e88fd4c73e6d50f960",
-    "dh-lib-ui.js": "fa369e0baf1815c26c3b98f650f14aadd5ae4f8ca27759b8f9ef70357e5be5ed"
+    "dh-lib-ui.css": "63e2ce64ba0aaa7b1c07a5959613800882a683219a3c9791ef7bad2bda08d86e",
+    "dh-lib-ui.js": "fa29cc8c82fe1bd2a2aff6086ca31ebd3244c2bddfdc49c8ae1744e2c07ab945"
   }
 }

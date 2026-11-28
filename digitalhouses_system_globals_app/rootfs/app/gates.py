@@ -189,6 +189,7 @@ class HAResult:
     nonce_seen: bool
     reachable: bool
     time_zone: str | None = None
+    language: str | None = None
 
 
 def ha_get(base, token, path):
@@ -206,12 +207,14 @@ def ha_probe(base, token, nonce, entity):
         cfg = ha_get(base, token, "/config")
         state = cfg.get("state") if isinstance(cfg, dict) else None
         zone = cfg.get("time_zone") if isinstance(cfg, dict) else None
+        language = cfg.get("language") if isinstance(cfg, dict) else None
+        language = language if isinstance(language, str) else None
         if state != "RUNNING":
-            return HAResult(state, False, True, zone)
+            return HAResult(state, False, True, zone, language)
         try:
             obj = ha_get(base, token, "/states/" + entity)
         except (OSError, ValueError, TypeError):
-            return HAResult(state, False, True, zone)
-        return HAResult(state, isinstance(obj, dict) and obj.get("state") == nonce, True, zone)
+            return HAResult(state, False, True, zone, language)
+        return HAResult(state, isinstance(obj, dict) and obj.get("state") == nonce, True, zone, language)
     except (OSError, ValueError, TypeError, urllib.error.URLError):
         return HAResult(None, False, False)

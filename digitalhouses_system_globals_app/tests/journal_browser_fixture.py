@@ -17,7 +17,7 @@ def main():
             journal.record("warning" if i%10==0 else "info","gate_not_ready",
                            gate=f"TEST-{i:04d}",reason="awaiting_probe",
                            **{f"detail_{n}":"💡"*500 for n in range(5)})
-        facts={"mqtt_connected":True,"gates":{"ha_ready":True,"mqtt_ready":True},"diagnostics":{},"ha_timezone":"Asia/Almaty","telemetry_status":"ok","journal_debug":False}
+        facts={"ha_language":"ru","mqtt_connected":True,"gates":{"ha_ready":True,"mqtt_ready":True},"diagnostics":{},"ha_timezone":"Asia/Almaty","telemetry_status":"ok","journal_debug":False}
         state={"night_mode":"off","config":{"night_start":"22:00"},"profiles":{"day":{},"night":{}}}
         class Service:
             ha_timezone=SimpleNamespace(snapshot=lambda: "Asia/Almaty")

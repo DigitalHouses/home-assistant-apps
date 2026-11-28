@@ -10,7 +10,7 @@ import sqlite3
 import time
 import uuid
 
-VERSION = "2.0.1"
+VERSION = "2.0.2"
 LIMIT = 3000
 MAX_RECORD_BYTES = 8192
 MAX_PARAMS_BYTES = MAX_RECORD_BYTES - 256

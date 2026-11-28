@@ -77,6 +77,7 @@ class Service:
     def __init__(self, engine, version, opts, *, clock=time.monotonic, ha_fn=ha_probe, release_fn=latest_release, journal=None, ha_timezone=None):
         self.journal=journal
         self.ha_timezone=ha_timezone
+        self.ha_language=opts.get("ha_language")
         self.telemetry_client=None
         self.journal_observer=GlobalsJournal(journal, clock=clock) if journal else None
         self.mqtt_failure_logged=False
@@ -131,6 +132,7 @@ class Service:
                         "diagnostics":self.gates.diagnostics(self.clock()),"zigbee_bridges":self.z.diagnostics(self.clock()),"lifecycle":self.life.values(utcnow()),
                         "card":deepcopy(self.card),"version":self.version,"latest_version":self.latest,
                         "mqtt_connected":self.session is not None,
+                        "ha_language":self.ha_language,
                         "ha_timezone":self.ha_timezone.snapshot() if self.ha_timezone is not None else None,
                         "telemetry_status":self.telemetry_client.delivery_status if self.telemetry_client else ("unknown" if self.opts.get("telemetry_enabled") else "disabled"),
                         "journal_debug":bool(self.opts.get("journal_debug",False))}
@@ -310,6 +312,8 @@ class Service:
             if generation==self.ha_generation and t<=self.ha_deadline:
                 if self.ha_timezone is not None:
                     self.ha_timezone.update(result.time_zone)
+                if result.language:
+                    self.ha_language=result.language
                 ev=self.life.observe(result,utcnow())
                 if result.nonce_seen:
                     self.gates.prove("ha_ready",t)
@@ -486,6 +490,8 @@ def main():
             cfg=ha_get(opts["ha_url"],opts["ha_token"],"/config")
             if isinstance(cfg,dict):
                 ha_timezone.update(cfg.get("time_zone"))
+                if isinstance(cfg.get("language"),str):
+                    opts["ha_language"]=cfg["language"]
         except (OSError,ValueError,TypeError):
             pass
     svc=Service(engine,os.environ["APP_VERSION"],opts,journal=journal,ha_timezone=ha_timezone)

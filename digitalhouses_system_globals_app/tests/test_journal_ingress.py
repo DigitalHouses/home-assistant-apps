@@ -89,7 +89,7 @@ class TestJournalIntegration(unittest.TestCase):
         import hashlib
         app=Path(__file__).resolve().parents[1]
         lock=json.loads((app/"dh-lib-ui.lock.json").read_text())
-        self.assertEqual(lock["version"],"0.1.0")
+        self.assertEqual(lock["version"],"0.1.2")
         for name,digest in lock["files"].items():
             self.assertEqual(hashlib.sha256((app/"rootfs/app/dh_lib_ui"/name).read_bytes()).hexdigest(),digest)
         server=serve(SimpleNamespace(journal=None),host="127.0.0.1",port=0,allowed={"127.0.0.1"})

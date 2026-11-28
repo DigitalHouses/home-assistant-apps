@@ -69,9 +69,16 @@ async function main(){
   await home.waitForFunction(()=>document.querySelector("#mode").textContent==="День");
   await home.locator('input[name="night_start"]').fill("21:30");
   await home.evaluate(()=>{window.originalShell=document.querySelector("#chrome header");window.originalForm=document.querySelector("#config");window.originalToast=document.querySelector("#toast-settings")});
-  assert.match(await home.locator(".dh-lib-ui-status-list").innerText(),/HA\s*OK/);
-  assert.match(await home.locator(".dh-lib-ui-status-list").innerText(),/MQTT\s*OK/);
-  assert.match(await home.locator(".dh-lib-ui-status-list").innerText(),/DH Sync\s*Неизвестно/);
+  await home.getByRole("button",{name:/Статус/}).click();
+  assert.match(await home.locator("#status-page").innerText(),/Home Assistant\s*OK/);
+  assert.match(await home.locator("#status-page").innerText(),/MQTT\s*OK/);
+  assert.match(await home.locator("#status-page").innerText(),/DH Sync\s*Неизвестно/);
+  await home.getByLabel("Язык",{exact:true}).selectOption("en");
+  assert.match(await home.locator("#status-page").innerText(),/No receipt acknowledgement/);
+  await home.getByRole("button",{name:"Home",exact:true}).click();
+  assert.match(await home.locator("#overview").innerText(),/Night starts/);
+  assert.equal(await home.locator('input[name="night_start"]').inputValue(),"21:30");
+  await home.getByLabel("Language",{exact:true}).selectOption("ru");
   await home.getByRole("button",{name:"Настройки",exact:true}).click();
   await home.getByLabel("Тема",{exact:true}).selectOption("dark");
   assert.equal(await home.locator("html").getAttribute("data-dh-lib-ui-theme"),"dark");
@@ -94,8 +101,15 @@ async function main(){
   await home.waitForTimeout(3500);
   assert.equal(await home.locator('input[name="night_start"]').inputValue(),"21:30");
   assert.match(await home.locator(".dh-toast-stack").innerText(),/Ночной режим включён/);
+  const toastNode=await home.locator(".dh-toast-stack").evaluate(e=>{window.originalNotification=e.firstElementChild;return !!window.originalNotification});
+  assert.equal(toastNode,true);
+  await home.getByLabel("Язык",{exact:true}).selectOption("en");
+  assert.equal(await home.locator(".dh-toast-stack").evaluate(e=>e.firstElementChild===window.originalNotification),true);
+  assert.match(await home.locator(".dh-toast-stack").innerText(),/Ночной режим включён/);
+  await home.getByLabel("Language",{exact:true}).selectOption("ru");
+
   await command("offline");
-  await home.waitForFunction(()=>[...document.querySelectorAll(".dh-lib-ui-service")].some(n=>n.textContent.includes("MQTT")&&n.dataset.dhLibUiState==="error"));
+  await home.waitForFunction(()=>[...document.querySelectorAll(".dh-lib-ui-status-card")].some(n=>n.textContent.includes("MQTT")&&n.dataset.dhLibUiState==="error"));
   assert.equal(await home.evaluate(()=>window.originalShell===document.querySelector("#chrome header")&&window.originalForm===document.querySelector("#config")&&window.originalToast===document.querySelector("#toast-settings")),true);
   assert.equal(await home.locator('input[name="night_start"]').inputValue(),"21:30");
   await home.getByRole("button",{name:"Настройки",exact:true}).click();
