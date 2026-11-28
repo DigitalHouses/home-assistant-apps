@@ -5,3 +5,6 @@ configuration:
   require_z2m:
     name: Require Zigbee2MQTT
     description: Require fresh health confirmation from every automatically discovered Zigbee2MQTT bridge.
+  journal_debug:
+    name: Debug journal
+    description: Include additional safe diagnostic events in the local LOG.

@@ -67,3 +67,7 @@ One immediate best-effort heartbeat is attempted at each activated App startup.
 The same running process retries after one hour on failure, or sends its next
 periodic heartbeat 24h ± 30 min after success. Restarts preserve identity and
 credentials, but do not suppress the single startup attempt.
+
+## LOG (0.1.6)
+
+The LOG button opens the full-screen DH Journal. It retains the latest 3000 local SQLite events, survives App restarts, supports RU/EN, search, level filters and full UTF-8 .log export. DEBUG is optional in App configuration. No MQTT entities or Recorder changes are introduced.

@@ -2,6 +2,8 @@
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 import json
+import os
+from dh_journal.http import get as journal_get
 import threading
 from core import ContractError, GLOBAL, PRODUCT
 from discovery import CTRL, OPS
@@ -18,7 +20,7 @@ def serve(service,*,host,port,allowed):
                 return False
             return True
 
-        def output(self,status,body,content_type="application/json"):
+        def output(self,status,body,content_type="application/json",filename=None):
             if content_type=="application/json":
                 body=json.dumps(body,ensure_ascii=False,allow_nan=False).encode()
             self.send_response(status)
@@ -26,6 +28,8 @@ def serve(service,*,host,port,allowed):
             self.send_header("Cache-Control","no-store")
             self.send_header("X-Content-Type-Options","nosniff")
             self.send_header("Content-Security-Policy","default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; object-src 'none'; base-uri 'none'")
+            if filename:
+                self.send_header("Content-Disposition",'attachment; filename="'+filename+'"')
             self.send_header("Content-Length",str(len(body)))
             self.end_headers()
             self.wfile.write(body)
@@ -37,11 +41,34 @@ def serve(service,*,host,port,allowed):
                 self.output(200,HTML.read_bytes(),"text/html")
             elif self.path=="/api/state":
                 self.output(200,service.view())
+            elif getattr(service,"journal",None) is not None:
+                try:
+                    result=journal_get(service.journal,self.path,os.environ.get("TZ") or service.view()["state"]["config"]["timezone"])
+                    if result is None:
+                        self.send_error(404)
+                    else:
+                        body,mime,filename=result
+                        self.output(200,body,mime,filename)
+                except (ValueError,OverflowError):
+                    self.output(400,{"error":"Invalid journal request"})
             else:
                 self.send_error(404)
 
         def do_POST(self):
             if not self.authorized():
+                return
+            if self.path=="/api/log/clear" and getattr(service,"journal",None) is not None:
+                try:
+                    if self.headers.get_content_type()!="application/json" or not 0<int(self.headers.get("Content-Length","0"))<=128:
+                        raise ValueError()
+                    self.connection.settimeout(5)
+                    data=json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+                    if not isinstance(data,dict) or set(data)!={"confirm"} or data["confirm"] is not True:
+                        raise ValueError()
+                    service.journal.clear()
+                    self.output(200,{"ok":True})
+                except (ValueError,OSError):
+                    self.output(400,{"error":"Invalid clear request"})
                 return
             if self.path!="/api/command":
                 self.send_error(404)

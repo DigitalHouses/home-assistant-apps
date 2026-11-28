@@ -74,6 +74,7 @@ Telemetry requirements and consent behavior depend on the product and its curren
 
 - [Documentation index](docs/README.md)
 - [Application Standard](docs/standards/DIGITALHOUSES_APP_STANDARD.md)
+- [DH Journal Standard](docs/standards/DH_JOURNAL_STANDARD.md)
 - [Product Naming Standard](docs/standards/PRODUCT_NAMING_STANDARD.md)
 - [Contract Data Policy](docs/standards/CONTRACT_DATA_POLICY.md)
 - [DH Sync Developer Standard](docs/standards/DH_SYNC_DEVELOPER_STANDARD.md) — retained MQTT /sync, canonical Views and packages

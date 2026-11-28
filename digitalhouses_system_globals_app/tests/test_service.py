@@ -18,6 +18,8 @@ from discovery import (discovery,translate,projections,FIELD,LEASE,PROBE,LOOP,AV
 from lifecycle import Lifecycle
 from service import Service
 from ingress import serve
+from dh_journal import Journal
+from journal_events import LOCALES
 
 NOW=datetime(2026,11,26,12,tzinfo=timezone.utc)
 
@@ -143,7 +145,10 @@ class LiveService(unittest.TestCase):
             h=ThreadingHTTPServer(("127.0.0.1",0),H)
             threading.Thread(target=h.serve_forever,daemon=True).start()
             self.addCleanup(h.server_close);self.addCleanup(h.shutdown)
-            svc=Service(Engine(Store(root/"state.json")),"0.1.0",{"require_z2m":True,"ha_url":f"http://127.0.0.1:{h.server_port}","ha_token":"test"},release_fn=lambda:"0.2.0")
+            journal=Journal(root/"journal.sqlite3",product="digitalhouses_system_globals_app",locales=LOCALES)
+            journal.start("0.1.0")
+            self.addCleanup(journal.close)
+            svc=Service(Engine(Store(root/"state.json")),"0.1.0",{"require_z2m":True,"ha_url":f"http://127.0.0.1:{h.server_port}","ha_token":"test"},release_fn=lambda:"0.2.0",journal=journal)
             stop=threading.Event()
             errors=[]
             def run():
@@ -197,6 +202,16 @@ class LiveService(unittest.TestCase):
             self.assertEqual(svc.view()["state"]["night_mode"],"off")
             self.assertFalse(any(svc.view()["gates"].values()))
             stop_service()
+            rows=journal.snapshot()["rows"]
+            codes=[r["code"] for r in rows]
+            self.assertEqual(codes[0],"app_started")
+            self.assertEqual(codes.count("mqtt_connected"),1)
+            self.assertIn("mqtt_disconnected",codes)
+            self.assertIn("night_mode_on",codes)
+            self.assertIn("night_mode_off",codes)
+            self.assertTrue(any(r["code"]=="gate_ready" and r["params"]["gate"]=="System Ready" for r in rows))
+            self.assertTrue(any(r["code"]=="gate_not_ready" and r["params"]["gate"]=="System Ready" for r in rows))
+            self.assertIn("operation_success",codes)
             actor.disconnect();actor.loop_stop()
 
     @staticmethod

@@ -22,6 +22,8 @@ from discovery import (ID, PREFIX, AVAIL, LEASE, PROBE, LOOP, DISCOVERY, HA_STAT
 from gates import Gates, Z2MRegistry, ha_probe
 from lifecycle import Lifecycle
 from ingress import serve
+from journal_events import GlobalsJournal, LOCALES
+from dh_journal import Journal
 
 LOG = logging.getLogger(ID)
 PERIOD = 5
@@ -71,7 +73,10 @@ def empty_operation(state="idle"):
 
 
 class Service:
-    def __init__(self, engine, version, opts, *, clock=time.monotonic, ha_fn=ha_probe, release_fn=latest_release):
+    def __init__(self, engine, version, opts, *, clock=time.monotonic, ha_fn=ha_probe, release_fn=latest_release, journal=None):
+        self.journal=journal
+        self.journal_observer=GlobalsJournal(journal) if journal else None
+        self.mqtt_failure_logged=False
         self.engine=engine
         self.version=version
         version_tuple(version)
@@ -117,12 +122,15 @@ class Service:
     def entity(self,key,value,retain=True):
         return Publication(state_topic(key),scalar(value),retain)
 
-    def update_view(self):
+    def update_view(self, *, observe_journal=True):
         with self.view_lock:
             self._view={"state":self.engine.state,"gates":self.gates.states(self.clock()),
                         "diagnostics":self.gates.diagnostics(self.clock()),"zigbee_bridges":self.z.diagnostics(self.clock()),"lifecycle":self.life.values(utcnow()),
                         "card":deepcopy(self.card),"version":self.version,"latest_version":self.latest,
                         "mqtt_connected":self.session is not None}
+            view=self._view if self.journal_observer else None
+        if self.journal_observer and observe_journal:
+            self.journal_observer.observe(view)
 
     def view(self):
         with self.view_lock:
@@ -153,6 +161,8 @@ class Service:
                 self.update_view()
                 future.set_result(self.view())
             except ContractError as e:
+                if self.journal:
+                    self.journal.warning("command_rejected")
                 future.set_exception(e)
             except (TransportError,OSError) as e:
                 future.set_exception(ContractError("Transport/storage failure; check current state"))
@@ -169,6 +179,8 @@ class Service:
             topic,payload=translate(topic,payload)
         pubs=(self.engine.import_settings(payload,utcnow()) if topic=="internal/import"
               else self.engine.command(topic,payload,utcnow()))
+        if self.journal and pubs:
+            self.journal.debug("command_applied")
         # State first, projections next, event last.
         self.send([p for p in pubs if p.retain])
         if pubs:
@@ -192,6 +204,7 @@ class Service:
             s.close()
             raise
         self.session=s
+        self.mqtt_failure_logged=False
         # Fence old retained state before advertising availability.
         self.send([Publication(AVAIL,"offline")])
         self.publish_gates(force=True,events=False)
@@ -248,7 +261,7 @@ class Service:
             self.session=None
         self.gates.reset()
         self.z=Z2MRegistry(TTL,PROBE_TIMEOUT)
-        self.update_view()
+        self.update_view(observe_journal=not graceful)
 
     def message(self,topic,raw,retained):
         try:
@@ -276,6 +289,8 @@ class Service:
             self.command(topic,value)
         except (ContractError,ValueError,UnicodeError):
             LOG.warning("Rejected invalid payload on %s",topic)
+            if self.journal:
+                self.journal.warning("command_rejected")
 
     def probe(self):
         t=self.clock()
@@ -291,6 +306,10 @@ class Service:
                     self.gates.invalidate("ha_ready","ha_probe_not_confirmed")
                 self.publish_lifecycle()
                 self.send(ev)
+                if self.journal:
+                    for event in ev:
+                        code=event.payload["event_type"]
+                        self.journal.record("warning" if code=="ha_connection_lost" else "info",code)
         if self.loop_nonce and t>self.loop_deadline:
             self.loop_nonce=None
             self.gates.invalidate("mqtt_ready","roundtrip_timeout")
@@ -415,6 +434,9 @@ class Service:
                         self.connect(host,port,user,password)
                 except (TransportError,OSError) as e:
                     LOG.warning("MQTT or I/O unavailable: %s",type(e).__name__)
+                    if self.journal and not self.mqtt_failure_logged and self.session is None:
+                        self.journal.warning("mqtt_unavailable")
+                    self.mqtt_failure_logged=True
                     self.disconnect()
                     if self.operation:
                         # No successful operation may survive a failed required publication.
@@ -441,7 +463,9 @@ def main():
     engine=Engine(Store("/data/state.json"))
     if engine.state["config"]["timezone"] is None and os.environ.get("TZ"):
         engine.command(PRODUCT+"/config/set",{"timezone":os.environ["TZ"]},utcnow())
-    svc=Service(engine,os.environ["APP_VERSION"],opts)
+    journal=Journal("/data/journal.sqlite3",product=ID,locales=LOCALES,debug=opts.get("journal_debug",False))
+    journal.start(os.environ["APP_VERSION"])
+    svc=Service(engine,os.environ["APP_VERSION"],opts,journal=journal)
     stop=threading.Event()
     signal.signal(signal.SIGTERM,lambda *_:stop.set())
     signal.signal(signal.SIGINT,lambda *_:stop.set())
@@ -453,10 +477,16 @@ def main():
         telemetry.start()
     try:
         svc.run(os.environ["MQTT_HOST"],int(os.environ["MQTT_PORT"]),os.environ.get("MQTT_USERNAME"),os.environ.get("MQTT_PASSWORD"),stop.is_set)
+    except BaseException:
+        journal.error("app_failed")
+        raise
+    else:
+        journal.stop()
     finally:
         server.shutdown()
         if telemetry:
             telemetry.stop()
+        journal.close()
 
 
 if __name__=="__main__":
