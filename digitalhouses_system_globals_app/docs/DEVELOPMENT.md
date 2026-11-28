@@ -31,6 +31,14 @@ On reconnect a fresh client is used; missed transient events are not replayed.
 
 - Day/night profiles store independent CCT and RGB values. HA exposes two text
   controls (kelvin and #RRGGBB), Ingress exposes temperature and RGB picker.
+  The owner/admin Views pair each profile setting in two columns using Mushroom.
+  The common Package exposes two native template lights as RGB configuration
+  controls; the existing text entities remain authoritative. Generic on/off
+  commands are intentionally no-ops; clear is an explicit text command. The
+  unset color uses a white preview and is identified by the separate Clear RGB
+  status. Do not assign these configuration lights to physical lighting groups
+  or Electrica targets. If the Package is not loaded, the UI reports the helper
+  as unavailable; verify DH Sync package installation and reload template YAML.
   Consumers choose the supported mode per device, not per global profile.
   Storage schemas 1 and 2 migrate to schema 3 automatically, dropping only
   obsolete selectors and display/indicator brightness fields. Restore a

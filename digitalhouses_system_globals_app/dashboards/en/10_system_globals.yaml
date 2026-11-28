@@ -249,114 +249,355 @@ sections:
             text: Restart System Globals? Global scheduling and readiness checks will be temporarily interrupted.
     grid_options:
       columns: 12
-  - type: entities
-    show_header_toggle: false
-    title: Day / Night
-    entities:
-    - entity: switch.dh_system_globals_app_night_mode
+  - type: grid
+    columns: 2
+    square: false
+    cards:
+    - type: custom:mushroom-entity-card
+      entity: switch.dh_system_globals_app_night_mode
       name: Night mode
-    - entity: switch.dh_system_globals_app_auto_switch
-      name: Automatic switching
-    - entity: text.dh_system_globals_app_night_start
+      icon: mdi:weather-night
+      layout: horizontal
+      fill_container: true
+      tap_action:
+        action: toggle
+    - type: custom:mushroom-entity-card
+      entity: switch.dh_system_globals_app_auto_switch
+      name: Auto switching
+      icon: mdi:calendar-clock
+      layout: horizontal
+      fill_container: true
+      tap_action:
+        action: toggle
+    - type: custom:mushroom-entity-card
+      entity: text.dh_system_globals_app_night_start
       name: Night start
-    - entity: text.dh_system_globals_app_night_end
+      icon: mdi:weather-sunset-down
+      layout: horizontal
+      fill_container: true
+      tap_action:
+        action: more-info
+    - type: custom:mushroom-entity-card
+      entity: text.dh_system_globals_app_night_end
       name: Night end
-    - entity: sensor.dh_system_globals_app_timezone
+      icon: mdi:weather-sunset-up
+      layout: horizontal
+      fill_container: true
+      tap_action:
+        action: more-info
+    - type: custom:mushroom-entity-card
+      entity: sensor.dh_system_globals_app_timezone
       name: Time zone
+      icon: mdi:earth
+      layout: horizontal
+      fill_container: true
+      tap_action:
+        action: more-info
   - type: history-graph
     title: Night mode history
     hours_to_show: 24
     entities:
     - entity: switch.dh_system_globals_app_night_mode
       name: Night mode
-  - type: entities
-    show_header_toggle: false
+  - type: custom:mushroom-title-card
     title: Active settings
-    entities:
-    - entity: sensor.dh_system_globals_app_active_brightness
+  - type: grid
+    columns: 2
+    square: false
+    cards:
+    - type: custom:mushroom-entity-card
+      entity: sensor.dh_system_globals_app_active_brightness
       name: Brightness
-    - entity: sensor.dh_system_globals_app_active_color_temp_kelvin
-      name: Color temperature
-    - entity: sensor.dh_system_globals_app_active_rgb_color
-      name: RGB color
-    - entity: sensor.dh_system_globals_app_active_volume
+      icon: mdi:brightness-6
+      layout: horizontal
+      fill_container: true
+      tap_action:
+        action: more-info
+    - type: custom:mushroom-entity-card
+      entity: sensor.dh_system_globals_app_active_color_temp_kelvin
+      name: Temperature, K
+      icon: mdi:thermometer
+      layout: horizontal
+      fill_container: true
+      tap_action:
+        action: more-info
+    - type: custom:mushroom-template-card
+      entity: sensor.dh_system_globals_app_active_rgb_color
+      primary: RGB color
+      icon: mdi:palette
+      secondary: >-
+        {% set rgb = states(entity) | from_json(default=none) %}
+        {{ 'Set' if rgb is sequence and rgb is not string and rgb | count == 3 else 'Not set / unavailable' }}
+      tap_action:
+        action: none
+    - type: custom:mushroom-entity-card
+      entity: sensor.dh_system_globals_app_active_volume
       name: Volume
+      icon: mdi:volume-high
+      layout: horizontal
+      fill_container: true
+      tap_action:
+        action: more-info
 - type: grid
+  column_span: 2
   cards:
-  - type: heading
-    heading_style: title
-    heading: Global profiles
-  - type: entities
-    show_header_toggle: false
-    title: Day
-    entities:
-    - entity: number.dh_system_globals_app_day_brightness
+  - type: custom:mushroom-title-card
+    title: Global profiles
+    grid_options:
+      columns: full
+  - type: grid
+    grid_options:
+      columns: full
+    columns: 2
+    square: false
+    cards:
+    - type: custom:mushroom-title-card
+      title: Day
+      alignment: center
+    - type: custom:mushroom-title-card
+      title: Night
+      alignment: center
+    - type: custom:mushroom-number-card
+      entity: number.dh_system_globals_app_day_brightness
       name: Brightness
-    - entity: number.dh_system_globals_app_day_volume
-      name: Volume
-    - entity: number.dh_system_globals_app_day_transition_seconds
-      name: Transition
-    - entity: text.dh_system_globals_app_day_color_temp_kelvin
-      name: Color temperature, K
-    - type: button
-      entity: script.dh_system_globals_app_day_rgb_set
-      name: RGB color
-      icon: mdi:palette
-      action_name: Choose
+      icon: mdi:brightness-6
+      layout: horizontal
+      fill_container: true
+      display_mode: slider
       tap_action:
         action: more-info
-    - type: button
-      entity: script.dh_system_globals_app_day_rgb_clear
-      name: Clear RGB
-      icon: mdi:palette-outline
-      action_name: Clear
-      tap_action:
-        action: perform-action
-        perform_action: script.dh_system_globals_app_day_rgb_clear
-    - entity: switch.dh_system_globals_app_day_voice_notifications_enabled
-      name: Voice notifications
-    - entity: switch.dh_system_globals_app_day_noncritical_sound_notifications_enabled
-      name: Noncritical sounds
-  - type: entities
-    show_header_toggle: false
-    title: Night
-    entities:
-    - entity: number.dh_system_globals_app_night_brightness
+    - type: custom:mushroom-number-card
+      entity: number.dh_system_globals_app_night_brightness
       name: Brightness
-    - entity: number.dh_system_globals_app_night_volume
-      name: Volume
-    - entity: number.dh_system_globals_app_night_transition_seconds
-      name: Transition
-    - entity: text.dh_system_globals_app_night_color_temp_kelvin
-      name: Color temperature, K
-    - type: button
-      entity: script.dh_system_globals_app_night_rgb_set
-      name: RGB color
-      icon: mdi:palette
-      action_name: Choose
+      icon: mdi:brightness-6
+      layout: horizontal
+      fill_container: true
+      display_mode: slider
       tap_action:
         action: more-info
-    - type: button
-      entity: script.dh_system_globals_app_night_rgb_clear
-      name: Clear RGB
+    - type: custom:mushroom-entity-card
+      entity: text.dh_system_globals_app_day_color_temp_kelvin
+      name: Temperature, K
+      icon: mdi:thermometer
+      layout: horizontal
+      fill_container: true
+      tap_action:
+        action: more-info
+    - type: custom:mushroom-entity-card
+      entity: text.dh_system_globals_app_night_color_temp_kelvin
+      name: Temperature, K
+      icon: mdi:thermometer
+      layout: horizontal
+      fill_container: true
+      tap_action:
+        action: more-info
+    - type: vertical-stack
+      cards:
+      - type: conditional
+        conditions:
+        - condition: state
+          entity: light.dh_system_globals_app_day_rgb_picker
+          state: 'on'
+        card:
+          type: custom:mushroom-light-card
+          entity: light.dh_system_globals_app_day_rgb_picker
+          name: RGB color
+          icon: mdi:palette
+          layout: horizontal
+          fill_container: true
+          secondary_info: none
+          use_light_color: true
+          show_color_control: true
+          show_brightness_control: false
+          show_color_temp_control: false
+          collapsible_controls: false
+          tap_action:
+            action: more-info
+      - type: conditional
+        conditions:
+        - condition: state
+          entity: light.dh_system_globals_app_day_rgb_picker
+          state_not: 'on'
+        card:
+          type: custom:mushroom-template-card
+          primary: RGB color
+          secondary: Helper unavailable
+          icon: mdi:palette
+          tap_action:
+            action: none
+    - type: vertical-stack
+      cards:
+      - type: conditional
+        conditions:
+        - condition: state
+          entity: light.dh_system_globals_app_night_rgb_picker
+          state: 'on'
+        card:
+          type: custom:mushroom-light-card
+          entity: light.dh_system_globals_app_night_rgb_picker
+          name: RGB color
+          icon: mdi:palette
+          layout: horizontal
+          fill_container: true
+          secondary_info: none
+          use_light_color: true
+          show_color_control: true
+          show_brightness_control: false
+          show_color_temp_control: false
+          collapsible_controls: false
+          tap_action:
+            action: more-info
+      - type: conditional
+        conditions:
+        - condition: state
+          entity: light.dh_system_globals_app_night_rgb_picker
+          state_not: 'on'
+        card:
+          type: custom:mushroom-template-card
+          primary: RGB color
+          secondary: Helper unavailable
+          icon: mdi:palette
+          tap_action:
+            action: none
+    - type: custom:mushroom-template-card
+      entity: text.dh_system_globals_app_day_rgb_color
+      primary: Clear RGB
       icon: mdi:palette-outline
-      action_name: Clear
+      secondary: >-
+        {% set s = states('text.dh_system_globals_app_day_rgb_color') %}
+        {{ 'Not set' if s == '' else 'Set' if s | regex_match('^#[0-9a-fA-F]{6}$') else 'Unavailable' }}
       tap_action:
         action: perform-action
-        perform_action: script.dh_system_globals_app_night_rgb_clear
-    - entity: switch.dh_system_globals_app_night_voice_notifications_enabled
-      name: Voice notifications
-    - entity: switch.dh_system_globals_app_night_noncritical_sound_notifications_enabled
+        perform_action: text.set_value
+        target:
+          entity_id: text.dh_system_globals_app_day_rgb_color
+        data:
+          value: ""
+        confirmation:
+          text: Clear RGB for this profile?
+    - type: custom:mushroom-template-card
+      entity: text.dh_system_globals_app_night_rgb_color
+      primary: Clear RGB
+      icon: mdi:palette-outline
+      secondary: >-
+        {% set s = states('text.dh_system_globals_app_night_rgb_color') %}
+        {{ 'Not set' if s == '' else 'Set' if s | regex_match('^#[0-9a-fA-F]{6}$') else 'Unavailable' }}
+      tap_action:
+        action: perform-action
+        perform_action: text.set_value
+        target:
+          entity_id: text.dh_system_globals_app_night_rgb_color
+        data:
+          value: ""
+        confirmation:
+          text: Clear RGB for this profile?
+    - type: custom:mushroom-number-card
+      entity: number.dh_system_globals_app_day_volume
+      name: Volume
+      icon: mdi:volume-high
+      layout: horizontal
+      fill_container: true
+      display_mode: slider
+      tap_action:
+        action: more-info
+    - type: custom:mushroom-number-card
+      entity: number.dh_system_globals_app_night_volume
+      name: Volume
+      icon: mdi:volume-high
+      layout: horizontal
+      fill_container: true
+      display_mode: slider
+      tap_action:
+        action: more-info
+    - type: custom:mushroom-number-card
+      entity: number.dh_system_globals_app_day_transition_seconds
+      name: Transition
+      icon: mdi:timer-outline
+      layout: horizontal
+      fill_container: true
+      display_mode: buttons
+      tap_action:
+        action: more-info
+    - type: custom:mushroom-number-card
+      entity: number.dh_system_globals_app_night_transition_seconds
+      name: Transition
+      icon: mdi:timer-outline
+      layout: horizontal
+      fill_container: true
+      display_mode: buttons
+      tap_action:
+        action: more-info
+    - type: custom:mushroom-entity-card
+      entity: switch.dh_system_globals_app_day_voice_notifications_enabled
+      name: Voice alerts
+      icon: mdi:account-voice
+      layout: horizontal
+      fill_container: true
+      tap_action:
+        action: toggle
+    - type: custom:mushroom-entity-card
+      entity: switch.dh_system_globals_app_night_voice_notifications_enabled
+      name: Voice alerts
+      icon: mdi:account-voice
+      layout: horizontal
+      fill_container: true
+      tap_action:
+        action: toggle
+    - type: custom:mushroom-entity-card
+      entity: switch.dh_system_globals_app_day_noncritical_sound_notifications_enabled
       name: Noncritical sounds
-  - type: entities
-    show_header_toggle: false
+      icon: mdi:volume-medium
+      layout: horizontal
+      fill_container: true
+      tap_action:
+        action: toggle
+    - type: custom:mushroom-entity-card
+      entity: switch.dh_system_globals_app_night_noncritical_sound_notifications_enabled
+      name: Noncritical sounds
+      icon: mdi:volume-medium
+      layout: horizontal
+      fill_container: true
+      tap_action:
+        action: toggle
+  - type: custom:mushroom-title-card
     title: System readiness
-    entities:
-    - entity: binary_sensor.dh_system_globals_app_mqtt_ready
-      name: MQTT ready
-    - entity: binary_sensor.dh_system_globals_app_ha_ready
-      name: Home Assistant ready
-    - entity: binary_sensor.dh_system_globals_app_zigbee_ready
-      name: Zigbee ready
-    - entity: binary_sensor.dh_system_globals_app_system_ready
-      name: System ready
+    grid_options:
+      columns: full
+  - type: grid
+    grid_options:
+      columns: full
+    columns: 2
+    square: false
+    cards:
+    - type: custom:mushroom-entity-card
+      entity: binary_sensor.dh_system_globals_app_mqtt_ready
+      name: MQTT
+      icon: mdi:check-network-outline
+      layout: horizontal
+      fill_container: true
+      tap_action:
+        action: more-info
+    - type: custom:mushroom-entity-card
+      entity: binary_sensor.dh_system_globals_app_ha_ready
+      name: Home Assistant
+      icon: mdi:home-assistant
+      layout: horizontal
+      fill_container: true
+      tap_action:
+        action: more-info
+    - type: custom:mushroom-entity-card
+      entity: binary_sensor.dh_system_globals_app_zigbee_ready
+      name: Zigbee
+      icon: mdi:zigbee
+      layout: horizontal
+      fill_container: true
+      tap_action:
+        action: more-info
+    - type: custom:mushroom-entity-card
+      entity: binary_sensor.dh_system_globals_app_system_ready
+      name: System
+      icon: mdi:shield-check-outline
+      layout: horizontal
+      fill_container: true
+      tap_action:
+        action: more-info
