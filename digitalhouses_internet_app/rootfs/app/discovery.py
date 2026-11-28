@@ -353,6 +353,7 @@ def build_discovery_payload(
                 "'server_id': value_json.speedtest.server_id, "
                 "'result_url': value_json.speedtest.result_url, "
                 "'tested_at': value_json.speedtest.tested_at, "
+                "'rate_limit_until': value_json.speedtest.rate_limit_until, "
                 "'error': value_json.speedtest.error} | tojson }}"
             ),
             "availability": availability,

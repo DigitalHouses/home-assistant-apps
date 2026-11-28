@@ -11,6 +11,14 @@ from typing import Any
 from state import ContractDataError, atomic_write_json, iso, load_json_object, now_local
 
 
+RATE_LIMIT_PAUSE_SECONDS = 24 * 60 * 60
+
+
+def is_rate_limit_error(message: str) -> bool:
+    message = message.casefold()
+    return "limit reached" in message or "too many requests" in message
+
+
 def default_speedtest_state() -> dict[str, Any]:
     return {
         "status": "idle",
@@ -28,6 +36,7 @@ def default_speedtest_state() -> dict[str, Any]:
         "tested_at": None,
         "error": None,
         "automatic_failure_streak": 0,
+        "rate_limit_until": None,
     }
 
 
@@ -104,6 +113,9 @@ def load_last_result(path: Path) -> dict[str, Any]:
         )
     state["automatic_failure_streak"] = automatic_failure_streak
 
+    state["rate_limit_until"] = _optional_number(
+        raw.get("rate_limit_until"), field="speedtest.rate_limit_until"
+    )
     last_result = raw.get("last_result")
     if last_result is not None and last_result not in {
         "success",
@@ -202,6 +214,7 @@ def parse_result(payload: Any) -> dict[str, Any]:
         "tested_at": iso(now_local()),
         "error": None,
         "automatic_failure_streak": 0,
+        "rate_limit_until": None,
     }
 
 

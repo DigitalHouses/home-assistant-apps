@@ -91,7 +91,12 @@ sections:
           - type: template
             entity: sensor.dh_internet_app_speedtest_status
             icon: mdi:speedometer
-            content: '{{ states(''sensor.dh_internet_app_speedtest_status'') }}'
+            content: >-
+              {% set e = 'sensor.dh_internet_app_speedtest_status' %}
+              {% if is_state(e, 'running') %} Running
+              {% elif state_attr(e, 'last_result') == 'error' %}
+                Speedtest временно недоступен
+              {% else %} {{ states(e) }} {% endif %}
             icon_color: >-
               {% if
               is_state('sensor.dh_internet_app_speedtest_status','success') %}
