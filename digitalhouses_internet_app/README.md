@@ -1,135 +1,99 @@
 # DigitalHouses Internet App
 
-Home Assistant App for Internet availability monitoring, Ookla Speedtest, current-month outage history and automatic ONT/router recovery.
+[![CI](https://github.com/DigitalHouses/home-assistant-apps/actions/workflows/validate.yml/badge.svg)](https://github.com/DigitalHouses/home-assistant-apps/actions/workflows/validate.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](../LICENSE)
+![Type: Home Assistant App](https://img.shields.io/badge/type-Home%20Assistant%20App-41BDF5.svg)
 
-This is a new product. It does not migrate or reuse the stable MQTT identities or Recorder history of `digitalhouses_speedtest`.
+**Monitor, diagnose and automatically recover your internet connection in Home Assistant.**
 
-## Canonical identities
+Track connectivity, speed, traffic and outages. Optionally let Home Assistant recover your ONT or router when connectivity is lost.
 
-- repository directory: `digitalhouses_internet_app`
-- HA App slug: `digitalhouses_internet_app`
-- public product name: **DigitalHouses Internet App**
-- release identifier: `digitalhouses_internet_app`
-- production image: `ghcr.io/digitalhouses/digitalhouses_internet_app:<version>`
-- MQTT base: `DigitalHouses/Global/dh_internet_app`
-- Home Assistant entity / unique-id prefix: `dh_internet_app_`
+## Why I built this app
 
-## DH Sync
+I wanted reliable internet monitoring in my own Home Assistant installation in Kazakhstan. Automatic Speedtest server selection occasionally chose a server in another country, including Poland. This produced misleading low-speed alerts, even when a manual test against a local server showed normal performance.
 
-Начиная с версии **0.1.25**, Internet App публикует retained MQTT-объявление
-`DigitalHouses/Global/digitalhouses_internet_app/sync` (QoS 1) на каждом
-успешном подключении и переподключении к существующему MQTT-клиенту.
+I wanted to choose several local providers in priority order, fall back when needed, and avoid declaring the internet down just because one ping target stopped responding.
 
-С версии **0.1.26** объявление соответствует **DH Sync 0.6.0**: содержит только
-`schema=1`, `product_id=digitalhouses_internet_app`, `type=app`, текущую
-`version`, `repository=https://github.com/DigitalHouses/home-assistant-apps`
-и `product_path=digitalhouses_internet_app`. Поля `dashboard` в нём нет.
+## From Speedtest to Internet App
 
-Каноническая View **Internet** (`path: internet`) хранится в
-`dashboards/ru/13_internet.yaml`; Recorder и русские уведомления — в
-`packages/common/` и `packages/locales/ru/`. DH Sync получает эти файлы
-из GitHub; `examples/` остаётся справочным каталогом. Размещение View,
-название и доступность панелей настраиваются **только** в YAML DH Sync,
-по паре `product_id + path`, без изменения кода Internet App.
+The [original DigitalHouses Speedtest project](https://community.home-assistant.io/t/digitalhouses-speedtest-preferred-ookla-servers-dual-connectivity-checks-and-performance-thresholds/1019636) began with those problems. Internet App extends that idea beyond speed tests: it tracks outages and traffic and can attempt to restore connectivity automatically.
 
-MQTT namespace `DigitalHouses/Global/dh_internet_app/` и существующие
-`entity_id` не меняются. Старые retained `/sync` с полем `dashboard`
-совместимы с DH Sync 0.6.0, миграция не требуется.
-Подробности: [DH_SYNC_COMPATIBILITY.md](docs/DH_SYNC_COMPATIBILITY.md).
+## What can it do?
 
-## Recovery
+| Area | What the app provides |
+| --- | --- |
+| Availability | Independent ICMP checks of Google and Cloudflare plus local router reachability. |
+| Quality | Download, upload, ping, jitter, packet loss when provided, editable download/upload/ping thresholds, preferred Ookla servers and fallback. |
+| Traffic | Optional router counters, current transfer rates and WAN status; monthly traffic history. |
+| Reliability | Current-month outage history, duration and availability; the last 20 successful speed tests. |
+| Recovery | Optional automatic ONT or router reboot using existing Home Assistant buttons or switches. |
 
-Recovery is intentionally limited to two user-facing modes:
+A failed Speedtest is not an internet outage. Failed tests preserve the last successful measurement and its timestamp and do not send technical error notifications. Measurements represent the last successful test, not necessarily current speed.
 
-- `smart` — if the router answers locally but Internet is unavailable, reboot the ONT; if the router itself does not answer, reboot the router.
-- `both` — reboot ONT and then router on every recovery cycle.
+## Dashboard
 
-Recovery actions are intentionally limited to:
+- [English dashboard (YAML)](dashboards/en/13_internet.yaml)
+- [Russian dashboard (YAML)](dashboards/ru/13_internet.yaml)
 
-- `button` — press an existing Home Assistant reboot button;
-- `switch` — power-cycle a Home Assistant switch/relay.
+The view combines live reachability, recent measurements, monthly availability, traffic and recovery controls. MQTT Discovery creates monitoring entities automatically. You can use them in your own dashboards and automations.
 
-Arbitrary scripts and shell commands are not part of the recovery contract.
+Install Mushroom and Button Card (5.0 or newer) through HACS to use the supplied dashboard. Import one language as a view under `views:` in your dashboard YAML. The view has the same path and entities in both languages.
 
-All recovery timing belongs to App configuration: maximum cycles, retry interval, boot wait, cooldown and switch power-off duration. `router_ip` is a top-level network fact used by both monitoring and smart recovery.
+Real English dashboard screenshots will be added after live Home Assistant acceptance.
 
-`Stop recovery` stops further attempts for the current outage. Stop state, completed recovery cycles and an active cooldown survive an App restart, so restarting the App does not bypass recovery limits. If a switch has already been turned off, the App always attempts to turn it back on before the stop propagates. The HAOS App shutdown timeout is extended to 45 seconds so normal Stop/Restart operations can complete that restore path.
+## How automatic recovery works
 
-## Current product state
+Recovery is disabled by default. Once you configure suitable local Home Assistant entities and enable recovery:
 
-Version `0.1.25` adds DH Sync Discovery and canonical YAML resources. Version `0.1.24` fixes editing multiple preferred Ookla server IDs in the Home Assistant configuration form. Version `0.1.23` introduced App-owned compact-card controls and stable release checks while keeping update installation and restart under Home Assistant Supervisor. The canonical Supervisor identity is permanent, the temporary migration runtime has been removed, and the App remains stable in Home Assistant. The product provides:
+- **Smart:** if the internet is unavailable but the router responds locally, the app targets the ONT. If the router is unreachable, it targets the router.
+- **Both:** the app attempts to restart the ONT and then the router in each cycle.
 
-- Internet and router reachability;
-- legacy `binary_sensor.internet_status` compatibility alias mirroring `binary_sensor.dh_internet_app_internet`;
-- current-month outage state persisted under `/data`;
-- `smart | both` recovery state machine;
-- `button | switch` recovery actions via the Home Assistant Core API;
-- recovery countdown and Stop button;
-- structured MQTT Event entity;
-- Version and Started-at diagnostics;
-- Ookla Download, Upload, Ping, Jitter and Packet loss measurements;
-- manual and periodic Speedtest with `idle | running` execution status and last-result metadata;
-- preferred Ookla server IDs with optional automatic fallback and on-demand server catalog;
-- Recent Results as one diagnostic entity with the last 20 successful tests and the thresholds that were active for each test.
+A reboot button or a switch controlling the equipment's power can be used. Boot wait, retry delay, maximum cycles and cooldown limit how often equipment is restarted. A Stop Recovery button suppresses further attempts for the current outage. The app persists cycle limits and cooldown across restarts.
 
-Quality thresholds and App-owned performance problem evaluation are implemented. Router integration uses at most five optional HA bindings: cumulative Download/Upload totals, WAN state and current Download/Upload rates. Together with two recovery entities the App stays within seven external HA bindings. Monthly traffic retains the current month plus 11 previous months. The reusable package, notification presentation and reference dashboard are included in this development milestone.
+Use locally controlled recovery devices that remain reachable when the internet or router fails. Do not use a relay that loses its own control connection when it switches off the equipment. Test the power restoration path before enabling recovery; a hard power loss or unreachable switch can prevent the app from restoring power. Recovery cannot fix every ISP outage.
 
-See [DOCS.md](DOCS.md) for configuration semantics and [HAOS_TEST_PLAN.md](HAOS_TEST_PLAN.md) for the first real installation test sequence.
+## Requirements and quick start
 
-## Immutable production delivery
+1. Use Home Assistant OS with Apps support on AMD64 or ARM64. Configure MQTT in Home Assistant and a Supervisor MQTT broker service (for example, Mosquitto).
+2. Open **Settings → Apps → App store → Repositories** and add:
 
-Production releases are delivered through the DigitalHouses App repository using the canonical image repository `ghcr.io/digitalhouses/digitalhouses_internet_app`. The App package version, canonical release tag, exact release commit, GHCR version tag and recorded image digest must all describe the same release. Floating tags such as `latest` are not part of the production contract.
+   ```text
+   https://github.com/DigitalHouses/home-assistant-apps
+   ```
 
-Home Assistant backups are expected to contain installation-specific configuration and persistent `/data` state, including telemetry identity and App-owned runtime state, without duplicating a locally built application image. Restore acceptance targets the current supported production release; restoring an older release over a newer one is not a general immutable-delivery requirement.
+3. Install **DigitalHouses Internet App**. Set the router IP to its local LAN address; no router integration or ONT is required for basic monitoring.
+4. Review the [statistics policy](../docs/standards/PRODUCT_TELEMETRY_POLICY.md) and explicitly enable statistics collection consent. The app does not start monitoring without it.
+5. Review the [Ookla terms](https://www.speedtest.net/about/terms) and [privacy policy](https://www.speedtest.net/about/privacy) before using Speedtest. Set the periodic interval, or disable periodic tests. Leave the preferred server list empty for automatic selection.
+6. Start the app and check its MQTT device. Run a manual Speedtest only if permitted by Ookla's terms. Enable Start on boot and Watchdog after verifying operation.
 
-## Completed App slug migration
+The app works without DigitalHouses Sync or any other DigitalHouses app. Sync is optional; its current implementation selects Russian resources. Import the English dashboard and notification package manually instead of installing both languages.
 
-The Home Assistant App slug migration from legacy `digitalhouses_internet` to canonical `digitalhouses_internet_app` is complete.
+For notifications, use the [English](packages/locales/en/dh_internet_app_notification_local_package.yaml) or [Russian](packages/locales/ru/dh_internet_app_notification_local_package.yaml) Home Assistant package. For history graphs, merge the [Recorder selection](packages/common/dh_internet_app_global_package.yaml) with your existing Recorder configuration as appropriate. Enable Home Assistant packages if you do not already use them.
 
-Releases `0.1.12` through `0.1.15` contained the temporary bridge/import machinery used for the controlled reinstall. Version `0.1.16` removes that machinery from the normal runtime: there is no writable `/share` migration mapping, no migration environment mode, and no migration module in the image.
+## Optional router integration
 
-MQTT/device/entity identities remain unchanged under `dh_internet_app`.
+Map existing Home Assistant sensors for cumulative download and upload together if you want traffic accounting. WAN state and live transfer rates can be added independently. The app does not discover or configure router-specific SNMP or API integrations for you.
 
-The completed procedure and release history are retained in [the slug migration record](../docs/digitalhouses_internet_app/slug-migration.md).
+## Ookla CLI: limits and terms
 
-## Runtime contract behavior
+The official Ookla CLI is a separate proprietary component, not covered by this project's MIT license. Its standard license restricts use to personal, non-commercial use on a single personal computer. Commercial or embedded use requires appropriate authorization; see [Ookla licensing](https://www.ookla.com/speedtest-embedded). Review the license before using it in your environment.
 
-Connectivity is considered **unknown** until a real ICMP probe completes. During startup, or when the probe mechanism itself cannot execute, the four connectivity entities are unavailable rather than being reported as down. Probe execution failures do not advance outage confirmation and cannot start automatic recovery.
+Tests use bandwidth and count toward provider restrictions. Use a conservative schedule; there is no guaranteed daily quota. When Ookla reports a rate limit, version 0.1.28 stops fallback and pauses manual tests, automatic tests and server discovery for 24 hours, including across restarts. This is a local protective pause, not a promise of when Ookla will lift its limit. Do not try to bypass it.
 
-Persisted App-owned state under `/data` is contract data. A genuinely missing state file is treated as first-run state and receives documented defaults where applicable. An existing malformed state file is not silently replaced: startup fails with an explicit contract-data error so recovery limits, outage history, traffic totals or telemetry installation identity cannot be reset unnoticed.
+## Privacy
 
-Machine events are producer-validated against their schema-v2 event-specific contract before transport. For connection loss/restoration, retained authoritative state is synchronized before the transient event is emitted. Existing MQTT/device/entity identities remain unchanged.
+The current DigitalHouses policy requires explicit consent to minimal statistics before monitoring starts. Statistics contain the product, version and random installation identifier, with protocol/policy versions; country is derived server-side. No speed results, router data, IP fields, outage history, entity IDs or configuration are included in the telemetry payload. Monitoring continues if the statistics server is temporarily unavailable after consent. See the [telemetry policy](../docs/standards/PRODUCT_TELEMETRY_POLICY.md). Ookla has its own privacy terms.
 
-## Product telemetry
+## Moving from the original Speedtest App
 
-Statistics collection requires explicit consent in the standard App configuration (`telemetry_enabled`), disabled by default:
+Internet App is a separate product with different MQTT identities. There is no automatic migration of old entity IDs or Recorder history. Back up Home Assistant, record your old server IDs and thresholds, install and configure Internet App, update automations and dashboards to reference its entities, and disable the old app's scheduled tests to avoid duplicate Ookla calls. Preserve old history as needed.
 
-```yaml
-telemetry_enabled: false
-```
+## Documentation and feedback
 
-The configuration label and description are `Statistics collection consent` and `Consent to collect statistics (product name, version, installation ID).` When the option is `false` or absent, startup logs `Statistics collection consent not granted. Stopping application.` and stops **before MQTT, state initialization, or telemetry requests**. Existing installations retain their configured consent setting across updates. Set the option to `true` and restart the App to activate normal monitoring and required statistics. Removing consent stops the App at its next start; no new authorization mechanism is introduced.
+- [Technical documentation](DOCS.md)
+- [Implementation and migration details](docs/IMPLEMENTATION.md)
+- [DH Sync compatibility](docs/DH_SYNC_COMPATIBILITY.md)
+- [Changelog](CHANGELOG.md)
+- [Report a bug or suggest a feature](https://github.com/DigitalHouses/home-assistant-apps/issues)
 
-When telemetry changes from disabled to enabled, the App sends one best-effort heartbeat immediately on the next App start. A fresh installation and a released App version change are also eligible for an immediate heartbeat. After a successful heartbeat, normal reporting is approximately every 24 hours with deterministic ±30 minute jitter. Ordinary restarts do not bypass the saved schedule, and a failed attempt keeps the one-hour retry backoff across restarts. The endpoint is `https://telemetry.digitalhouses.vip`. The payload contains only protocol version, telemetry policy version, random installation UUID, canonical product identifier `digitalhouses_internet_app`, and App version. Country is derived server-side. Hostname, Home Assistant UUID, LAN/WAN addresses, router data, Speedtest results, outages, entity IDs and configuration are not sent.
-
-Protocol v1 continues unchanged; the supported release uses telemetry policy version **2**. Telemetry identity and scheduling state are stored in `/data/telemetry.json` only after accepted activation; existing valid state is preserved across App restart/update and normal HA backup/restore. Telemetry server outages do not prevent monitoring or recovery after consent. `button.dh_internet_app_delete_telemetry` requests authenticated deletion of this installation's retained server-side telemetry data and does not withdraw consent.
-
-See [DigitalHouses Product Telemetry Policy](../docs/standards/PRODUCT_TELEMETRY_POLICY.md).
-
-## Home Assistant presentation
-
-The Home Assistant layer is deliberately split by responsibility:
-
-- `examples/packages/dh_internet_app_global_package.yaml` — Recorder whitelist only;
-- `examples/packages/dh_internet_app_notification_local_package.yaml` — English direct-delivery example;
-- `examples/packages/locales/ru/dh_internet_app_notification_local_package.yaml` — Russian public direct-delivery example;
-- `examples/lovelace/dh_internet_app_dashboard.yaml` — reference Sections dashboard;
-- `examples/lovelace/internet_app_card_ru.yaml` — compact Russian HAOS control card using the standard Supervisor update entity and App restart action.
-
-Install one local notification package. It consumes `event.dh_internet_app_event` directly, gives every user-visible machine event its own `trigger.id`, routes through `choose`, and calls the final delivery action directly. There is no Notification Envelope, secondary `dh_internet_app_notification` event, adapter layer or repeated machine-schema validation in Home Assistant. The producer owns the machine-event contract.
-
-The reference dashboard uses Mushroom, `custom:button-card >= 5.0` and native Sections/tile/logbook/markdown cards. Optional Router and traffic values are presented directly; when an optional mapped source is absent or unavailable, the corresponding card renders `Unavailable`/unknown state instead of inventing data. The dashboard embeds the maintained compact Internet App control card and uses the Supervisor installation slug for restart.
-
-The compact Russian control card requires Mushroom and `custom:button-card >= 5.0`. `Обновить` calls the App-owned `button.dh_internet_app_refresh`, which republishes the current authoritative MQTT snapshot without running Ookla or creating a second calculation path. `Версия` calls `button.dh_internet_app_check_updates`; the App checks published stable GitHub Releases and updates `sensor.dh_internet_app_latest_version`, `binary_sensor.dh_internet_app_update_available` and the foreground card operation state. A lightweight background check uses the same path every 24 hours. Actual installation stays on Home Assistant Supervisor's canonical `update.digitalhouses_internet_app_update` entity, and `Перезапуск` uses `hassio.app_restart` with the Supervisor installation slug `8133339d_digitalhouses_internet_app`. The `8133339d` repository prefix is deterministic for the canonical repository URL `https://github.com/DigitalHouses/home-assistant-apps`; `config.yaml -> slug` remains `digitalhouses_internet_app`. The App keeps its existing `hassio_role: default`; release checking does not broaden Supervisor privileges.
-
-Recorder-facing diagnostics are intentionally low-noise: `sensor.dh_internet_app_problems` changes only when the actual problem list changes, and `sensor.dh_internet_app_availability_month` exposes a two-decimal state plus the stable calendar month while exact outage timing remains App-owned.
+This is an independent community project, not affiliated with Home Assistant or Ookla. Feedback on different ISPs, hardware and recovery setups is welcome.

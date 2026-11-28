@@ -97,7 +97,7 @@ sections:
               {% else %} {{ states(e) }} {% endif %}
             icon_color: >-
               {% if
-              is_state('sensor.dh_internet_app_speedtest_status','success') %}
+              state_attr('sensor.dh_internet_app_speedtest_status','last_result') == 'success' and not is_state('sensor.dh_internet_app_speedtest_status','running') %}
                 green
               {% elif
               is_state('sensor.dh_internet_app_speedtest_status','running') %}
@@ -374,7 +374,7 @@ sections:
         cards:
           - type: tile
             entity: sensor.dh_internet_app_download
-            name: Download This Month
+            name: Download speed
             icon: mdi:cpu-64-bit
             vertical: false
             features:
@@ -384,7 +384,7 @@ sections:
             features_position: bottom
           - type: tile
             entity: sensor.dh_internet_app_upload
-            name: Upload This Month
+            name: Upload speed
             icon: mdi:movie-cog
             features_position: bottom
             features:

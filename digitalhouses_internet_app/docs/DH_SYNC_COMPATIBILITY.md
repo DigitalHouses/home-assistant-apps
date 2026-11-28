@@ -1,6 +1,6 @@
 # Internet App — контракт с DH Sync 0.6.0
 
-**Версия App:** 0.1.26. **Действующий стандарт:** [DH Sync Developer Standard](../../docs/standards/DH_SYNC_DEVELOPER_STANDARD.md).
+**Версия контракта App:** с 0.1.26. **Действующий стандарт:** [DH Sync Developer Standard](../../docs/standards/DH_SYNC_DEVELOPER_STANDARD.md).
 
 ## Публикация MQTT
 
@@ -29,6 +29,8 @@
 | --- | --- | --- |
 | View | `dashboards/ru/13_internet.yaml` | `path: internet` |
 | Recorder package | `packages/common/dh_internet_app_global_package.yaml` | `dh_internet_app_global_package` |
+| View EN (ручной импорт) | `dashboards/en/13_internet.yaml` | `path: internet` |
+| Уведомления EN (ручной импорт) | `packages/locales/en/dh_internet_app_notification_local_package.yaml` | `dh_internet_app_notification_local_package` |
 | Уведомления RU | `packages/locales/ru/dh_internet_app_notification_local_package.yaml` | `dh_internet_app_notification_local_package` |
 
 DH Sync читает эти YAML из основной ветки GitHub. Internet App публикует только **самостоятельную View** с постоянным `path: internet`. Название Dashboard, состав и порядок вкладок, иконки размещения и права доступа определяются исключительно файлами `digitalhouses_sync_app/dashboards/*.yaml`; одна View может быть включена в несколько панелей.
@@ -44,3 +46,5 @@ DH Sync читает эти YAML из основной ветки GitHub. Intern
 - DH Sync не обновляет контейнер Internet App, а Internet App не записывает YAML на стороне Home Assistant.
 
 **Примечание:** App требует `telemetry_enabled=true` для запуска runtime. Если App не запущен, ранее опубликованный retained `/sync` может сохраняться на MQTT-брокере; DH Sync использует его как объявление ресурса, а не как показатель состояния App.
+
+Текущая реализация DH Sync выбирает RU. Английские ресурсы можно установить вручную вместо русских, не одновременно.
