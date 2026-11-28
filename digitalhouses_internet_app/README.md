@@ -32,14 +32,16 @@ A failed Speedtest is not an internet outage. Failed tests preserve the last suc
 
 ## Dashboard
 
+![DigitalHouses Internet App dashboard](images/internet_dashboard.png)
+
+*Home Assistant dashboard running Internet App 0.1.28 (public IP address hidden).*
+
 - [English dashboard (YAML)](dashboards/en/13_internet.yaml)
 - [Russian dashboard (YAML)](dashboards/ru/13_internet.yaml)
 
 The view combines live reachability, recent measurements, monthly availability, traffic and recovery controls. MQTT Discovery creates monitoring entities automatically. You can use them in your own dashboards and automations.
 
 Install Mushroom and Button Card (5.0 or newer) through HACS to use the supplied dashboard. Import one language as a view under `views:` in your dashboard YAML. The view has the same path and entities in both languages.
-
-Real English dashboard screenshots will be added after live Home Assistant acceptance.
 
 ## How automatic recovery works
 
