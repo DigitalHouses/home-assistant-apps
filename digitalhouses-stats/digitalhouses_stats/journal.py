@@ -26,7 +26,7 @@ from .dh_journal.http import get as journal_get
 from .products import product_name
 
 LOG = logging.getLogger(__name__)
-APP_VERSION = "0.4.6"
+APP_VERSION = "0.4.7"
 RETURN_AFTER = timedelta(days=7)
 LOCALES = {
     "ru": {

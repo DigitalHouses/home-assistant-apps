@@ -11,6 +11,7 @@
     const product=options.product;
     if(typeof product!=="string"||!product)throw new Error("DH Journal Toast: product is required");
     const endpoint=options.endpoint||"./api/log/toasts";
+    const onEvents=typeof options.onEvents==="function"?options.onEvents:null;
     const language=()=>((typeof options.language==="function"?options.language():options.language)||doc.documentElement.lang)==="ru"?"ru":"en";
     const t=()=>labels[language()];
     const key="dh-journal-toasts:"+product;
@@ -19,7 +20,7 @@
       const stored=JSON.parse(global.localStorage.getItem(key)||"null");
       if(stored){if(typeof stored.enabled==="boolean")settings.enabled=stored.enabled;if(validMinutes(stored.minutes))settings.minutes=stored.minutes}
     }catch{}
-    let cursor=null, busy=false, disposed=false, epoch=0;
+    let cursor=null, busy=false, disposed=false, epoch=0, displayBaseline=false;
     const active=new Map();
     const stack=doc.createElement("section");
     stack.className="dh-toast-stack";
@@ -55,7 +56,7 @@
       schedule(row.id);
     }
     async function poll(){
-      if(disposed||busy||!settings.enabled||doc.hidden)return;
+      if(disposed||busy||(!settings.enabled&&!onEvents)||doc.hidden)return;
       busy=true;const current=epoch;
       try{
         const params=new URLSearchParams({lang:language()});
@@ -64,14 +65,19 @@
         const r=await global.fetch(url,{cache:"no-store",credentials:"same-origin"});
         if(!r.ok)throw new Error("HTTP");
         const data=await r.json();
-        if(disposed||current!==epoch||!settings.enabled)return;
+        if(disposed||current!==epoch||(!settings.enabled&&!onEvents))return;
         if(!Number.isSafeInteger(data.cursor)||data.cursor<0||!Array.isArray(data.rows))return;
         const previous=cursor;
         if(previous!==null&&data.cursor<previous){for(const id of active.keys())dismiss(id)}
         cursor=data.cursor;
         if(previous!==null&&data.cursor>=previous){
-          for(const row of data.rows){if(Number.isSafeInteger(row.id)&&row.id>previous&&row.id<=cursor)show(row)}
+          const fresh=data.rows.filter(row=>Number.isSafeInteger(row.id)&&row.id>previous&&row.id<=cursor);
+          if(settings.enabled&&!displayBaseline)for(const row of fresh)show(row);
+          // A consumer may react to the event batch even when presentation is disabled.
+          // Callback errors must not interrupt polling or change notification timers.
+          if(onEvents&&fresh.length)try{Promise.resolve(onEvents(fresh)).catch(()=>{})}catch{}
         }
+        displayBaseline=false;
       }catch{}finally{busy=false;if(!disposed&&current!==epoch)poll()}
     }
     let controls=null,enabledInput=null,minutesInput=null;
@@ -84,8 +90,16 @@
       try{global.localStorage.setItem(key,JSON.stringify(settings))}catch{}
       syncControls();
       if(wasEnabled!==settings.enabled){
-        epoch++;cursor=null;for(const id of active.keys())dismiss(id);
-        if(settings.enabled)poll();
+        epoch++;for(const id of active.keys())dismiss(id);
+        if(onEvents){
+          // Keep the event cursor for the consumer. Re-enabling presentation
+          // establishes a fresh display baseline without replaying missed toasts.
+          displayBaseline=settings.enabled;
+          poll();
+        }else{
+          cursor=null;
+          if(settings.enabled)poll();
+        }
       }else{for(const id of active.keys())schedule(id)}
       return {...settings};
     }

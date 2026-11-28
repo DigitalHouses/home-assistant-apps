@@ -228,7 +228,27 @@ function renderChart(points) {
   }
 }
 
+// Manual and event-driven refresh share one queue. A batch received during
+// a request schedules one follow-up, never overlapping requests.
+let refreshRunning = false;
+let refreshQueued = false;
 async function load() {
+  if (refreshRunning) {
+    refreshQueued = true;
+    return;
+  }
+  refreshRunning = true;
+  try {
+    do {
+      refreshQueued = false;
+      await loadData();
+    } while (refreshQueued);
+  } finally {
+    refreshRunning = false;
+  }
+}
+
+async function loadData() {
   setStatus(true, "Loading");
   $("refresh").disabled = true;
 
@@ -240,6 +260,8 @@ async function load() {
       getJson("/api/installation-history?days=7")
     ]);
 
+    // Capture immediately before updating, not before the asynchronous requests.
+    const scrollX = window.scrollX, scrollY = window.scrollY;
     $("known").textContent = summary.observed_installations;
     $("active24").textContent = summary.active_24h;
     $("active7").textContent = summary.active_7d;
@@ -266,6 +288,9 @@ async function load() {
     renderCountryChart(countries);
 
     renderChart(history);
+    if (window.scrollX !== scrollX || window.scrollY !== scrollY) {
+      window.scrollTo({left: scrollX, top: scrollY, behavior: "instant"});
+    }
     $("updated").textContent = "Updated " + new Date().toLocaleString();
     setStatus(true, "Online");
   } catch (error) {

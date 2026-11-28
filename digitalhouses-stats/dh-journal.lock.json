@@ -1,10 +1,10 @@
 {
   "repository": "https://github.com/DigitalHouses/dh-app-libraries",
-  "tag": "dh-journal-v1.1.0",
-  "commit": "2c6cb0e4f9e8a92c9fc89c9c8c83a0e7dbe559b3",
-  "version": "1.1.0",
+  "tag": "dh-journal-v1.1.1",
+  "commit": "94ebce04d9d470f62565e54c7078738ea02c4b3a",
+  "version": "1.1.1",
   "files": {
-    "__init__.py": "bd5d9bff1f7f4de4da9f60ae259c193371b429ce401af2928a28c2712ef53f6a",
+    "__init__.py": "e6b63e2c3ba8bde301e2933171a3ef0f511267bc44bd53d6541047852a030e87",
     "http.py": "a5702749720cbeab053438743eb6cbb7cfaf25ca885a4c95dbcb6acb50bb03d7",
     "locales/en.json": "c407fa520439441868332cd1a34f1e1c8cf05a67d0ab99a52edcdd4a95b8d25e",
     "locales/ru.json": "42fae6c88028be5a01ef4c596e0a524c5d12d7bccf657d614220e51c072f876c",
@@ -12,6 +12,6 @@
     "web/journal.css": "9b3ddd7ecad3264d01628ef5e51434b868a6e31b31985bd0e60dd70a7a469395",
     "web/journal.js": "0dba23e5a64959534a722b1f6463429ee0a17968b6698458116a7e1a61596183",
     "web/toast.css": "2250db472b1c53c70746904cd662e62fa79e19c11aa17189251d4c4eca7954c8",
-    "web/toast.js": "823f5da0edb021143b5f2ae0f331f9230e5562f5e225f0c22b117f9723f1fac8"
+    "web/toast.js": "5713a7258ff9018737894201afdba15fef63e3af7ea3312b9930ea27240f995e"
   }
 }
