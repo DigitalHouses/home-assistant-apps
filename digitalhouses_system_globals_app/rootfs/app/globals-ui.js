@@ -8,6 +8,7 @@ let initial=null;
 try{const response=await fetch("./api/state",{cache:"no-store"});if(response.ok)initial=await response.json()}catch{}
 const locale=DHLibUI.createLocale({product:"digitalhouses_system_globals_app",haLanguage:initial?.ha_language,languages:["en","ru"]});
 const words={"День / Ночь": "Day / Night", "День": "Day", "Ночь": "Night", "Не задано": "Not set", "Автоматическое переключение": "Automatic switching", "Вкл.": "On", "Выкл.": "Off", "Начало ночи": "Night starts", "Конец ночи": "Night ends", "Часовой пояс расписания": "Schedule timezone", "Сохранить расписание": "Save schedule", "Профили": "Profiles", "Готовность системы": "System readiness", "Жизненный цикл HA": "HA lifecycle", "Дневной профиль": "Day profile", "Ночной профиль": "Night profile", "Яркость света, %": "Brightness, %", "Громкость, %": "Volume, %", "Плавный переход, с": "Transition, s", "Голосовые уведомления": "Voice notifications", "Некритические звуки": "Noncritical sounds", "Температура, K": "Temperature, K", "RGB — выбрать цвет": "RGB — choose color", "Сбросить RGB": "Clear RGB", "Очистить RGB профиля": "Clear profile RGB", "Выбрать цвет RGB": "Choose RGB color", "RGB не задан": "RGB not set", "Сохранить": "Save", "Связь с App потеряна": "App connection lost", "Неизвестно": "Unknown", "Команда принята": "Command accepted", "Файл слишком большой": "File too large", "Некорректный файл": "Invalid file", "Тема": "Theme", "Системная": "System", "Светлая": "Light", "Тёмная": "Dark", "UTC (временно)": "UTC (temporary)", "OK · отправлено": "OK · delivered", "Ошибка последней отправки": "Last delivery failed", "Отключено": "Disabled", "Есть несохранённые изменения. Открыть журнал без сохранения?": "Unsaved changes. Open LOG without saving?", "Журнал недоступен": "Journal unavailable", "Причина": "Reason", "Подключение": "Connection", "Последняя отправка": "Last delivery", "Подтверждение": "Acknowledgement", "Нет подтверждения приёма": "No receipt acknowledgement", "Подключено": "Connected", "Нет соединения": "Disconnected", " (необязательный)": " (optional)", "Ожидание проверки": "Awaiting probe", "Проверка пройдена": "Ready", "Проверка устарела": "Probe expired", "HA не подтвердил MQTT": "HA did not confirm MQTT", "Тайм-аут проверки HA": "HA probe timed out", "Тайм-аут MQTT": "MQTT round-trip timed out"};
+Object.assign(words,{"Текущий режим":"Current mode","Подтверждение переключения":"Confirm mode change","Отмена":"Cancel","Подтвердить":"Confirm","Переключить систему в дневной режим?":"Switch the system to Day mode?","Переключить систему в ночной режим?":"Switch the system to Night mode?"});
 const tr=ru=>locale.language==="ru"?ru:(words[ru]??ru);
 
 function markDirty(id){dirty.add(id);edits.set(id,(edits.get(id)||0)+1)}
@@ -33,19 +34,41 @@ const patch={};for(const k of [...Object.keys(numeric),...Object.keys(flags),"co
 }
 makeProfile("day");makeProfile("night");
 function populate(f,values){if(dirty.has(f.id))return;baseline[f.id]=structuredClone(values);for(const[k,v]of Object.entries(values)){const e=f.elements[k];if(!e)continue;e.value=k==="rgb_color"&&v?"#"+v.map(n=>n.toString(16).padStart(2,"0")).join(""):v===null?"":String(v)}if(f.elements.picker){f.elements.picker.value=f.elements.rgb_color.value||"#000000";f.colorStatus()}}
-function render(v){latest=v;renderChrome(v);$("mode").textContent=tr(({on:"Ночь",off:"День"})[v.state.night_mode]||"Не задано");$("card").textContent=v.card.state+(v.card.operation?" · "+v.card.operation:"")+(v.card.error?" · "+v.card.error:"");populate($("config"),v.state.config);for(const m of ["day","night"])populate($(m+"Form"),v.state.profiles[m]);$("gates").replaceChildren();for(const[k,ready]of Object.entries(v.gates)){const p=document.createElement("p");p.className=ready?"good":"bad";const d=v.diagnostics[k];p.textContent=k+": "+(ready?"ON":"OFF")+(d?" · "+d.reason+(d.required?"":tr(" (необязательный)")):"");$("gates").append(p)}for(const[base,b]of Object.entries(v.zigbee_bridges||{})){const p=document.createElement("p");p.className=b.ready?"good":"bad";p.textContent="Z2M · "+base+": "+(b.ready?"ON":"OFF");$("gates").append(p)}$("lifecycle").textContent=JSON.stringify(v.lifecycle,null,2)}
+function render(v){latest=v;renderChrome(v);renderMode(v.state.night_mode);$("card").textContent=v.card.state==="idle"?"":v.card.state+(v.card.operation?" · "+v.card.operation:"")+(v.card.error?" · "+v.card.error:"");populate($("config"),v.state.config);for(const m of ["day","night"])populate($(m+"Form"),v.state.profiles[m]);$("gates").replaceChildren();for(const[k,ready]of Object.entries(v.gates)){const p=document.createElement("p");p.className=ready?"good":"bad";const d=v.diagnostics[k];p.textContent=k+": "+(ready?"ON":"OFF")+(d?" · "+d.reason+(d.required?"":tr(" (необязательный)")):"");$("gates").append(p)}for(const[base,b]of Object.entries(v.zigbee_bridges||{})){const p=document.createElement("p");p.className=b.ready?"good":"bad";p.textContent="Z2M · "+base+": "+(b.ready?"ON":"OFF");$("gates").append(p)}$("lifecycle").textContent=JSON.stringify(v.lifecycle,null,2)}
 async function poll(){if(document.hidden)return;const request=++stateRequest;try{const r=await fetch("./api/state",{cache:"no-store"});if(!r.ok)throw Error("HTTP "+r.status);const v=await r.json();if(request===stateRequest&&!pending)render(v)}catch(e){if(request===stateRequest&&!pending){$("card").textContent=tr("Связь с App потеряна");shell.setStatuses(unknownStatuses);settings.setValue("telemetry",tr("Неизвестно"))}}}
 async function send(topic,payload,form){if(pending)return;pending=true;const editVersion=edits.get(form);setBusy(true);try{const r=await fetch("./api/command",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({topic,payload})});const v=await r.json();if(!r.ok)throw Error(v.error||"HTTP "+r.status);if(form){if(edits.get(form)===editVersion)dirty.delete(form);else baseline[form]=structuredClone(form==="config"?v.state.config:v.state.profiles[form==="dayForm"?"day":"night"]);}++stateRequest;render(v);$("result").textContent=tr("Команда принята")}catch(e){$("result").textContent=e.message}finally{pending=false;setBusy(false)}}
 $("config").addEventListener("input",()=>markDirty("config"));$("config").addEventListener("change",()=>markDirty("config"));
 $("config").addEventListener("submit",e=>{e.preventDefault();const v={};for(const k of ["night_start","night_end","timezone"])v[k]=e.target.elements[k].value||null;const a=e.target.elements.auto_switch.value;v.auto_switch=a===""?null:a==="true";const p={};for(const k in v)if(v[k]!==baseline.config?.[k])p[k]=v[k];send(PRODUCT+"/config/set",p,"config")});
-$("day").onclick=()=>send(GLOBAL+"/set","off");$("night").onclick=()=>send(GLOBAL+"/set","on");
+function renderMode(value){
+  $("mode").textContent=tr(({on:"Ночь",off:"День"})[value]||"Не задано");
+  $("day").setAttribute("aria-pressed",String(value==="off"));
+  $("night").setAttribute("aria-pressed",String(value==="on"));
+}
+const modeDialog=$("mode-confirm");
+let requestedMode=null;
+function renderConfirmation(){
+  $("mode-confirm-message").textContent=tr(requestedMode==="on"?"Переключить систему в ночной режим?":"Переключить систему в дневной режим?");
+}
+function requestMode(value){
+  if(pending||modeDialog.open)return;
+  requestedMode=value;
+  renderConfirmation();
+  modeDialog.returnValue="cancel";
+  modeDialog.showModal();
+}
+modeDialog.addEventListener("close",()=>{
+  const value=requestedMode;
+  requestedMode=null;
+  if(modeDialog.returnValue==="confirm"&&value!==null)send(GLOBAL+"/set",value);
+});
+$("day").onclick=()=>requestMode("off");$("night").onclick=()=>requestMode("on");
 function exportConfig(){if(!latest)return;const blob=new Blob([JSON.stringify(latest.state,null,2)],{type:"application/json"});const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="dh-system-globals.json";a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000)};
 
 $("file").onchange=async()=>{try{const f=$("file").files[0];if(!f)return;if(f.size>65536)throw Error(tr("Файл слишком большой"));const v=JSON.parse(await f.text());if(!v.profiles||!v.config)throw Error(tr("Некорректный файл"));await send("internal/import",{night_mode:v.night_mode,config:v.config,profiles:v.profiles})}catch(e){$("result").textContent=e.message}finally{$("file").value=""}};
 
 // The shell and common settings mount once. Navigation hides, never rebuilds, the forms.
 const unknownStatuses={ha:"unknown",mqtt:"unknown",sync:"unknown",telemetry:"unknown"};
-const shell=DHLibUI.mount({target:$("chrome"),title:"DigitalHouses System Globals",locale,statusTarget:$("status-page"),
+const shell=DHLibUI.mount({target:$("chrome"),title:"DigitalHouses System Globals",locale,statusTarget:$("service-status"),
   items:[{id:"home"},{id:"settings"},{id:"log",href:"./log"}],
   active:"home",statuses:unknownStatuses,onRefresh:()=>send(PRODUCT+"/control/refresh","PRESS"),
   onNavigate:id=>{$("overview").hidden=id!=="home";$("settings-page").hidden=id!=="settings";$("status-page").hidden=id!=="status";shell.setActive(id)}
@@ -89,6 +112,8 @@ function renderChrome(v){
 function setBusy(value){
   const operation=latest?.card?.state==="running";
   const disconnected=latest?.mqtt_connected===false;
+  $("day").disabled=Boolean(value||disconnected||!latest);
+  $("night").disabled=Boolean(value||disconnected||!latest);
   shell.setRefreshDisabled(value||operation||disconnected);
   settings.setDisabled("check",value||operation||disconnected);
   settings.setDisabled("import",value);
@@ -99,7 +124,7 @@ document.querySelector(".dh-lib-ui-nav-log").addEventListener("click",e=>{
   if(dirty.size&&!confirm(tr("Есть несохранённые изменения. Открыть журнал без сохранения?")))e.preventDefault();
 });
 const textNodes=[];
-for(const target of [$("overview"),theme]){
+for(const target of [$("overview"),$("system-diagnostics"),modeDialog,theme]){
   const walk=document.createTreeWalker(target,NodeFilter.SHOW_TEXT);
   while(walk.nextNode()){const node=walk.currentNode;if(Object.hasOwn(words,node.nodeValue))textNodes.push([node,node.nodeValue])}
 }
@@ -107,9 +132,10 @@ let toast;
 function relabel(){
   for(const [node,ru] of textNodes)node.nodeValue=tr(ru);
   theme.setAttribute("aria-label",tr("Тема"));
+  if(modeDialog.open)renderConfirmation();
   for(const mode of ["day","night"])$(mode+"Form").colorStatus();
   if(!toast)toastTarget.textContent=tr("Журнал недоступен");
-  if(latest){renderChrome(latest);$("mode").textContent=tr(({on:"Ночь",off:"День"})[latest.state.night_mode]||"Не задано")}
+  if(latest){renderChrome(latest);renderMode(latest.state.night_mode)}
   const reverse=Object.fromEntries(Object.entries(words).map(([ru,en])=>[en,ru]));
   for(const id of ["result","card"]){const node=$(id);const ru=reverse[node.textContent]||node.textContent;if(Object.hasOwn(words,ru))node.textContent=tr(ru)}
 }
