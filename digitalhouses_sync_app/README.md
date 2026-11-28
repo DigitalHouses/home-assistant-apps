@@ -41,4 +41,4 @@ review of mandatory public rollout remains a separate responsibility.
 
 ### Operational journal
 
-The admin Ingress LOG uses shared DH Journal 1.0.3 (local SQLite at /data/dh_sync.db, latest 3000 records). Search, severity filter, RU/EN, full text export and confirmed clear. Legacy history is migrated on startup; unsafe legacy details are omitted. Debug is enabled by the App log_level setting. The journal is diagnostic only, never a registry or sync prerequisite.
+The admin Ingress LOG uses shared DH Journal 1.1.0 (local SQLite at /data/dh_sync.db, latest 3000 records). Search, severity filter, RU/EN, full text export and confirmed clear. Legacy history is migrated on startup; unsafe legacy details are omitted. Debug is enabled by the App log_level setting. Toast notifications use the shared library; one meaningful sync result, no unchanged scheduled checks. Browser-local settings (enabled and 60 minutes by default) are in Technical information; language follows LOG. The journal is diagnostic only, never a registry or sync prerequisite.

@@ -98,6 +98,41 @@ class AutomaticSyncTests(unittest.TestCase):
         self.assertEqual(third["trigger"], "manual")
         self.assertTrue(third["last_run"])
 
+    def test_one_toast_for_changes_and_attention_only(self):
+        from dashboard_runtime import DashboardPublisher
+        from test_dashboard_runtime import FakeWS
+        from event_journal import EventJournal
+        journal = EventJournal(self.data.parent / "toast.db")
+        self.addCleanup(journal.backend.close)
+        self.app.journal = journal
+        ws = FakeWS()
+        self.app.publisher = DashboardPublisher(self.root, self.data, transport=ws, journal=journal)
+        first = self.app.sync(CLAIMS)
+        rows = journal.backend.toast_snapshot(0)["rows"]
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["code"], "sync_result")
+        self.assertEqual({k:rows[0]["params"][k] for k in ("views","packages","dashboards")}, {"views":1,"packages":1,"dashboards":1})
+        self.assertEqual(first["updated"], 3)
+        cursor = journal.backend.toast_snapshot()["cursor"]
+        self.app.sync(CLAIMS)
+        self.app.sync(CLAIMS, refresh=True)
+        self.assertEqual(journal.backend.toast_snapshot(cursor)["rows"], [])
+        ws.fail_save = True
+        self.backend.raw["example/dashboards/ru/10_first.yaml"] = VIEW.replace(b"First", b"Changed")
+        self.app.sync(CLAIMS)
+        rows = journal.backend.toast_snapshot(cursor)["rows"]
+        self.assertEqual([r["code"] for r in rows], ["sync_partial"])
+        self.assertEqual(rows[0]["level"], "warning")
+        cursor = journal.backend.toast_snapshot()["cursor"]
+        self.app.sync(CLAIMS)
+        self.assertEqual(journal.backend.toast_snapshot(cursor)["rows"], [])
+        self.app._check_root = lambda: (_ for _ in ()).throw(ValueError("test failure"))
+        self.app.sync(CLAIMS)
+        rows = journal.backend.toast_snapshot(cursor)["rows"]
+        self.assertEqual([r["code"] for r in rows], ["sync_failed"])
+        self.assertEqual(rows[0]["level"], "error")
+        self.assertTrue(any(r["code"] == "package_updated" for r in journal.backend.snapshot()["rows"]))
+
     def test_manual_refresh_runs_same_autosync_and_invalidates_git(self):
         automatic = self.app.sync(CLAIMS)
         self.assertEqual(automatic["updated"], 1)
