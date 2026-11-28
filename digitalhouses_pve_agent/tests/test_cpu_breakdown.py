@@ -86,9 +86,17 @@ def test_recorder_and_both_charts_cover_every_new_sensor():
     for name in CPU_BREAKDOWN_FIELDS:
         entity = f"sensor.dh_pve_agent_cpu_{name}"
         assert f"        - {entity}\n" in package
-        assert view.count(f"entity_id: {entity}\n") == 2
+        assert view.count(f"- entity: {entity}\n") == 2
     assert "chart_type: line-stack" in view
     assert "chart_type: line\n" in view
+    for title in ("Структура CPU · 24 часа", "Детализация CPU · 24 часа"):
+        start = view.index("      - type: statistics-graph\n        title: " + title)
+        card = view[start:].split("\n      - type:", 1)[0]
+        assert "        entities:\n" in card
+        assert "        visibility:\n          - condition: numeric_state\n" in card
+        assert "            entity: sensor.dh_pve_agent_cpu_idle\n            above: -1\n" in card
+        assert "custom:auto-entities" not in card
+
 
 
 
