@@ -21,6 +21,12 @@ dh_pve_agent_package:
     include:
       entities:
         - sensor.dh_pve_agent_cpu_usage
+        - sensor.dh_pve_agent_cpu_user
+        - sensor.dh_pve_agent_cpu_system
+        - sensor.dh_pve_agent_cpu_guest
+        - sensor.dh_pve_agent_cpu_iowait
+        - sensor.dh_pve_agent_cpu_irq
+        - sensor.dh_pve_agent_cpu_idle
         - sensor.dh_pve_agent_cpu_temperature
         - sensor.dh_pve_agent_cpu_frequency
         - sensor.dh_pve_agent_memory_usage

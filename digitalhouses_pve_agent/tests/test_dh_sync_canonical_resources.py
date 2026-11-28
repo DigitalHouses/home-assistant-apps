@@ -70,6 +70,16 @@ class DhSyncCanonicalPveResourcesTests(unittest.TestCase):
                     self.assertIn("number.dh_pve_agent_backup_history_limit", backup_fragment)
                     self.assertIn("<details", backup_fragment)
                     body = body[:start] + body[end:]
+                    # Remove only the two explicitly approved additive CPU charts.
+                    title = body.index("          title: Структура CPU · 24 часа\n")
+                    start = body.rindex("      - type: custom:auto-entities\n", 0, title)
+                    end = body.index("      - type: heading\n        heading: Частота CPU · 24 часа\n", title)
+                    fragment = body[start:end]
+                    self.assertEqual(fragment.count("type: statistics-graph"), 2)
+                    self.assertEqual(fragment.count("show_empty: false"), 2)
+                    for name in ("user", "system", "guest", "iowait", "irq", "idle"):
+                        self.assertEqual(fragment.count(f"entity_id: sensor.dh_pve_agent_cpu_{name}\n"), 2)
+                    body = body[:start] + body[end:]
                     # Preserve the exact v3 CORE baseline except for the
                     # intentional, narrowly scoped Diagnostics UI update.
                     self.assertEqual(body.count("        heading: Диагностика\n"), 1)

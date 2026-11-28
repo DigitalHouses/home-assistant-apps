@@ -13,6 +13,7 @@ from .app import CollectorSample
 from .collectors.cooling import collect_fans
 from .collectors.cpu import (
     CpuTimes,
+    cpu_breakdown_percent,
     cpu_usage_percent,
     parse_lscpu,
     read_cpu_frequency,
@@ -169,6 +170,7 @@ class ProductionCollectors:
     def cpu(self) -> CollectorSample:
         current_times = read_cpu_times(self.proc_root / "stat")
         usage = cpu_usage_percent(self._cpu_previous, current_times) if self._cpu_previous is not None else None
+        breakdown = cpu_breakdown_percent(self._cpu_previous, current_times) if self._cpu_previous is not None else None
         self._cpu_previous = current_times
         temperature = read_cpu_temperature(self.sys_root)
         frequency = read_cpu_frequency(self.sys_root)
@@ -177,6 +179,7 @@ class ProductionCollectors:
         self._throttle_previous = throttles
         data = {
             "usage_percent": usage,
+            "breakdown": breakdown,
             "temperature_c": temperature,
             "frequency": asdict(frequency),
             "throttling_active": throttling,

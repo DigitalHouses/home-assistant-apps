@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.107
+
+- Add six mutually exclusive host CPU time shares from the existing /proc/stat read: User (including nice, excluding guest), System, Guest (including guest_nice), IOWait, IRQ + SoftIRQ and Idle. Preserve existing host and agent CPU usage semantics and polling cadence. Invalid counter deltas do not fabricate values; steal is included in the denominator and appears as an unfilled share on nested hosts.
+- Publish all six together in the existing adaptive CPU group, record them through the canonical DH Sync package, and add native stacked and line statistics graphs (24 hours) to the PVE dashboard, hidden on older agents without these sensors. No new polling, dependencies, alert thresholds or settings.
+
 ## 0.5.106
 
 - Fix the UPS setup inspection self-rescheduling loop: successful and failed inspections respect the 120-second interval, while explicit setup operations and driver selections still trigger refresh. Failed inspection cannot authorize stale setup actions. Native NUT and emergency shutdown checks are unchanged.
