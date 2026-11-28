@@ -16,7 +16,7 @@ import re
 import threading
 import time
 
-from . import cover_rules, climate_rules, media_rules, profiles, sensor_rules
+from . import cover_rules, climate_rules, media_rules, profiles, sensor_rules, lights
 from .catalog import (CatalogError, candidate_from_mqtt, decode_bridge_devices,
                       resolve_hardware, has_event_actions, has_device_power)
 from .actions import ActionError
@@ -178,6 +178,16 @@ class Application:
         self._target_registries = None
         self._temperature_unit = None
         self._home_profile = None
+        self._lights_path = last_scan_path.with_name("lights.json")
+        self.light_settings_error = None
+        try:
+            self.light_settings = lights.read(self._lights_path)
+        except (OSError, ValueError, TypeError) as exc:
+            LOG.error("Lights settings unavailable; adaptation disabled: %s", exc)
+            self.light_settings = {}
+            self.light_settings_error = str(exc)
+        self.solar_clock = lights.SolarClock()
+        self._next_adaptive = 0.
         self._global_mode = None
         self._global_profiles = None
         self._last_refresh = None
@@ -556,6 +566,7 @@ class Application:
                 with self._mutex:
                     self.readiness.values={}
                     self.schedule_engine.disconnect()
+                    self.solar_clock.invalidate()
             if bytes(message.payload) == b"online":
                 self._publish_all()
             return
@@ -929,47 +940,114 @@ class Application:
             self.event_log.finish(rid,"Очередь заполнена")
             LOG.warning("Day/Night transition skipped: queue full")
 
-    def _adapt_home_profile(self,snapshot,transition_rid=None):
-        """Same serialized worker, same verified transports. No synthetic key."""
-        def adaptation():
-            policies,conflicts=profiles.adaptation_plan(self.config,self.sensor_engine.dynamic_owner,mode=snapshot["mode"])
-            # Mode-specific parameters apply only to a light owned by the
-            # active presence rule; never claim manually lit lights.
-            for eid,data in self.sensor_engine.mode_parameters(snapshot["mode"]).items():
-                if eid not in conflicts and eid not in policies:policies[eid]=data
-            return policies,conflicts
-        def eligible(eid):
-            return (self._home_profile is snapshot and self.globals.get("auto_day_night")
-                    and not self.globals["maintenance_mode"]
-                    and adaptation()[0].get(eid)==policies.get(eid)
-                    and eid in policies
-                    and not self.event_log.active_target(eid,exclude=rid))
+    def _tick_adaptive(self):
+        """One bounded periodic job on the existing serialized worker."""
+        now=time.monotonic()
+        if now < self._next_adaptive or self.globals["maintenance_mode"]:
+            return
+        if (not self.sensor_engine.ready or not self._home_profile
+                or not any(r["adaptive"] for r in self.light_settings.values())):
+            return
+        if not {"day","night"} <= self._home_profile.keys():
+            return
+        if self.solar_clock.factor() is None and not (
+                self._home_profile.get("mode")=="night" and self.globals.get("auto_day_night")
+                and any(r["adaptive"] and r["day_night"] for r in self.light_settings.values())):
+            return
+        try:
+            self._jobs.put_nowait((None,None,"Lights","ADAPTIVE_CCT",[],None,self._home_profile))
+            self._next_adaptive=now+lights.INTERVAL
+        except queue.Full:
+            pass
+
+    def _adapt_home_profile(self,snapshot,transition_rid=None,*,adaptive_only=False):
+        """Shared verified dispatcher; light profiles come from Lights, not keys."""
         with self._mutex:
-            if self._home_profile is not snapshot or not self.globals.get("auto_day_night") or self.globals["maintenance_mode"]:
+            factor=self.solar_clock.factor()
+            selected=deepcopy(self.light_settings)
+        def adaptation():
+            settings=self.light_settings
+            conflicts=lights.overlaps(settings,self.config.get("light_routes",{}))
+            policies={}
+            if not adaptive_only:
+                # Existing media adaptation is outside the Lights domain.
+                policies,media_conflicts=profiles.adaptation_plan(self.config,
+                    self.sensor_engine.dynamic_owner,mode=snapshot["mode"],domains={"media_player"})
+                conflicts.update(media_conflicts)
+                # Presence-owned mode-specific actions are independent of global
+                # adaptation. Explicit Lights Day/Night takes precedence.
+                for eid,data in self.sensor_engine.mode_parameters(snapshot["mode"]).items():
+                    if not settings.get(eid,{}).get("day_night") and eid not in conflicts:
+                        policies[eid]=data
+            for eid,row in settings.items():
+                if not row["adaptive" if adaptive_only else "day_night"] or eid in conflicts:
+                    continue
+                target=self.target_catalog.get(eid,{})
+                try:lights.validate_target(eid,row,target)
+                except CatalogError:
+                    continue
+                if adaptive_only:
+                    k=0. if row["day_night"] and self.globals.get("auto_day_night") and snapshot.get("mode")=="night" else factor
+                    data=lights.adaptive_parameters(target,snapshot,k)
+                    if data:policies[eid]=data
+                else:
+                    policies[eid]={"profile":"current",**({"color_source":row["color_source"]} if row["color_source"] else {})}
+            return policies,sorted(conflicts if not adaptive_only else conflicts & settings.keys())
+        def eligible(eid):
+            return (self._home_profile is snapshot and (adaptive_only or self.globals.get("auto_day_night"))
+                    and not self.globals["maintenance_mode"]
+                    and (not adaptive_only or self.sensor_engine.ready)
+                    and (not adaptive_only or self.solar_clock.factor() is not None
+                         or (self.globals.get("auto_day_night") and snapshot.get("mode")=="night"
+                             and selected.get(eid,{}).get("day_night")))
+                    and self.light_settings.get(eid)==selected.get(eid)
+                    and adaptation()[0].get(eid)==policies.get(eid)
+                    and eid in policies and not self.event_log.active_target(eid,exclude=rid))
+        def resolve(eid,target):
+            data=profiles.resolve(policies[eid],target,snapshot,eid.split(".")[0])
+            row=self.light_settings.get(eid,{})
+            if row.get("adaptive") and (adaptive_only or (row.get("day_night") and snapshot["mode"]=="day")):
+                lights.validate_target(eid,row,target)
+                k=0. if row.get("day_night") and self.globals.get("auto_day_night") and snapshot.get("mode")=="night" else factor
+                cct=lights.adaptive_parameters(target,snapshot,k)
+                if adaptive_only:
+                    if not cct:raise ActionError("Solar CCT unavailable")
+                    return cct
+                if cct and data.get("brightness_pct")!=0:data={**data,**cct}
+            return data
+        with self._mutex:
+            if (self._home_profile is not snapshot or (not adaptive_only and not self.globals.get("auto_day_night"))
+                    or self.globals["maintenance_mode"] or (adaptive_only and not self.sensor_engine.ready)):
                 if transition_rid is not None:
                     self.event_log.finish(transition_rid,"Режим, профиль или настройки изменились до выполнения")
                 return
-            mode_off_count=self.sensor_engine.mode_transition(snapshot)
+            mode_off_count=0 if adaptive_only else self.sensor_engine.mode_transition(snapshot)
             policies,conflicts=adaptation()
             candidates=list(policies)
-            LOG.info("Day/Night profile %s: %d eligible assignments, %d conflicts",
-                     snapshot["mode"],len(candidates),len(conflicts))
+            LOG.info("%s: %d eligible assignments, %d conflicts",
+                     "Adaptive CCT" if adaptive_only else "Day/Night profile "+snapshot["mode"],len(candidates),len(conflicts))
             if transition_rid is not None:
                 self.event_log.finish(transition_rid,f"Целей: {len(candidates)} · конфликтов: {len(conflicts)}"
                                       + (f" · OFF по режиму: {mode_off_count}" if mode_off_count else "")
                                       if candidates or conflicts or mode_off_count else "Нет назначений День/Ночь")
-            # Groups first; successful group command covers its member routes.
             candidates.sort(key=lambda eid:(self.config.get("light_routes",{}).get(eid,{}).get("kind")!="group",eid))
         handled=set()
         for eid in candidates+conflicts:
-            rid=self.event_log.press("global","Режим дома","Профиль: "+({"day":"День","night":"Ночь"}[snapshot["mode"]]),[eid])
+            # Periodic jobs skip OFF targets quietly; do not flood the journal.
+            if adaptive_only:
+                with self._mutex:
+                    state=(self.observed_target_state(eid,verify_route=True)
+                           if eid in self.config.get("light_routes",{}) else self.sensor_engine.state(eid))
+                    if state!="on":continue
+            rid=self.event_log.press("global","Lights" if adaptive_only else "Режим дома",
+                "Adaptive CCT" if adaptive_only else "Профиль: "+({"day":"День","night":"Ночь"}[snapshot["mode"]]),[eid])
             try:
-                if eid in conflicts:raise ActionError("Conflicting profile or color-source assignments")
+                if eid in conflicts:raise ActionError("Overlapping Lights targets or conflicting media assignments")
                 with self._mutex:
                     if not eligible(eid):raise ActionError("Profile, assignment or pending command changed")
                     route=deepcopy(self.config.get("light_routes",{}).get(eid))
                     target=self.target_catalog.get(eid,{})
-                    data=profiles.resolve(policies[eid],target,snapshot,eid.split(".")[0])
+                    data=resolve(eid,target)
                     if eid.startswith("light.") and route:
                         base,name=route["base_topic"],route["friendly_name"]
                         ident=(base,name)
@@ -990,6 +1068,12 @@ class Application:
                         zero=data.get("brightness_pct")==0
                         payload=({"state":"OFF",**{k:v for k,v in plan["payload"].items() if k=="transition"}} if zero
                                  else {k:v for k,v in plan["payload"].items() if k!="state"})
+                        expected=profile_feedback.z2m_expected(payload)
+                        if eid in self.light_settings and not zero and expected:
+                            reports=[net.get("states",{}).get(member,{}) for _,member in members]
+                            if reports and all(profile_feedback.match_z2m(expected,report) is not None for report in reports):
+                                self.event_log.skip(rid,eid,"Parameters already match")
+                                continue
                         self.sensor_engine.expect_profile(eid,data)
                         if not payload or not self._publish(plan["topic"],payload,retain=False):
                             self.sensor_engine.profile_changes.pop(eid,None)
@@ -1015,16 +1099,21 @@ class Application:
                         regs=self._target_registries
                     if regs is None:raise ActionError("HA catalog unavailable")
                     live=target_catalog(regs,[state],self.config).get(eid,{})
-                    data=profiles.resolve(policies[eid],live,snapshot,"light")
+                    data=resolve(eid,live)
                     if "profile" not in policies[eid]:
                         from .ingress import validate_assignment
                         validate_assignment({"entity_id":eid,"operation":"on","data":data},{eid:live})
                     with self._mutex:
                         shadow=self._ha_shadows.get(eid)
                         if (not eligible(eid) or eid in self.config.get("light_routes",{})
-                                or (eid in self.sensor_engine.mode_parameters(snapshot["mode"]) and not self.sensor_engine.live_owned(eid,state))
+                                or (adaptive_only and self.sensor_engine.state(eid)!="on")
+                                or (not adaptive_only and not self.light_settings.get(eid,{}).get("day_night") and eid in self.sensor_engine.mode_parameters(snapshot["mode"]) and not self.sensor_engine.live_owned(eid,state))
                                 or (shadow and time.monotonic()-shadow["at"]<=HA_SHADOW_SECONDS)):
                             raise ActionError("Light route or profile changed")
+                        expected=profile_feedback.ha_expected(data)
+                        if eid in self.light_settings and data.get("brightness_pct")!=0 and expected and profile_feedback.match_ha(expected,state) is not None:
+                            self.event_log.skip(rid,eid,"Parameters already match")
+                            continue
                         self.sensor_engine.expect_profile(eid,data)
                     zero=data.get("brightness_pct")==0
                     at=_iso_now()
@@ -1134,6 +1223,7 @@ class Application:
                         self.sensor_engine.tick()
                         self.relay_timers.tick()
                         self.schedule_engine.tick()
+                        self._tick_adaptive()
                 except Exception:
                     LOG.exception("Sensor timer tick failed")
                     with self._mutex:self.sensor_engine.disconnect()
@@ -1154,8 +1244,8 @@ class Application:
                         LOG.exception("Failed to save Day/Night setting")
                         self._publish_auto_day_night()
                     continue
-                if base is None and action=="AUTO_PROFILE":
-                    self._adapt_home_profile(job[6],rid)
+                if base is None and action in ("AUTO_PROFILE","ADAPTIVE_CCT"):
+                    self._adapt_home_profile(job[6],rid,adaptive_only=action=="ADAPTIVE_CCT")
                     continue
                 all_commands = commands
                 with self._mutex:
@@ -1537,6 +1627,7 @@ class Application:
                         self.sensor_engine.tick()
                         self.relay_timers.tick()
                         self.schedule_engine.tick()
+                        self._tick_adaptive()
                 except Exception:
                     LOG.exception("Sensor timer tick failed")
                     with self._mutex:self.sensor_engine.disconnect()
@@ -1687,7 +1778,9 @@ class Application:
                     if confirmed:
                         self._ha_shadows.pop(eid,None)
             self.sensor_engine.changed(eid,state)
-            if eid=="sun.sun":self.schedule_engine.observe_sun(state)
+            if eid=="sun.sun":
+                self.schedule_engine.observe_sun(state)
+                self.solar_clock.observe(state)
 
     def _watch_sensor_states(self):
         def baseline(states):
@@ -1697,6 +1790,8 @@ class Application:
             with self._mutex:
                 self.sensor_engine.baseline(states)
                 self.schedule_engine.baseline(zone,self.sensor_engine.states.get("sun.sun"))
+                self.solar_clock.reset(zone)
+                self.solar_clock.observe(self.sensor_engine.states.get("sun.sun"))
         def changed(eid,state):
             self._ha_state_changed(eid,state)
         while not self._stop.is_set():
@@ -1708,6 +1803,7 @@ class Application:
                 with self._mutex:
                     self.sensor_engine.disconnect()
                     self.schedule_engine.disconnect()
+                    self.solar_clock.invalidate()
             self._stop.wait(5)
 
     def _observe_targets(self):
@@ -1719,6 +1815,7 @@ class Application:
                     for entry in (*self.target_catalog.values(),*self.sensor_catalog.values()):
                         entry["state"] = "unknown"
                     self.schedule_engine.disconnect()
+                    self.solar_clock.invalidate()
                 self._publish_details()
             self._stop.wait(15)
 

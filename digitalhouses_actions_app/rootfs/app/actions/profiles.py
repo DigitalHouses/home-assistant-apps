@@ -123,7 +123,7 @@ def resolve_commands(commands,catalog,snapshot):
     return output,skipped,unresolved_toggles
 
 
-def adaptation_plan(config, dynamic_owner=None, mode=None):
+def adaptation_plan(config, dynamic_owner=None, mode=None, domains=None):
     """Enabled dynamic assignments only; ambiguous mixed policies fail closed.
 
     Plain ON/OFF is not a parameter owner. Do not infer the active profile from ON.
@@ -133,6 +133,7 @@ def adaptation_plan(config, dynamic_owner=None, mode=None):
     """
     kinds={}
     def add(eid,data):
+        if domains is not None and eid.split(".")[0] not in domains:return
         # Plain ON/OFF (including a transition duration) does not select
         # brightness or color, so it is not a competing profile owner.
         if eid.startswith("light.") and not set(data)-{"transition"}:

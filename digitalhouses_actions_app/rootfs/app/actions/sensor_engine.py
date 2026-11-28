@@ -331,7 +331,10 @@ class SensorEngine:
                    for a in record["row"]["assignments"])
 
     def expect_profile(self,eid,data):
-        if self.dynamic_owner(eid) or self.mode_owner(eid):
+        # A verified automatic parameter adjustment must not cancel an
+        # existing Auto-OFF timer, even if it came from explicit Lights.
+        record=self.owners.get(eid)
+        if record and self.state(eid)=="on" and self.target_signature(eid)==record["signature"]:
             self.profile_changes[eid]={"data":deepcopy(data),"until":time.time()+CONFIRM_SECONDS+data.get("transition",0)}
 
     def profile_matches(self,eid,observed,now):
