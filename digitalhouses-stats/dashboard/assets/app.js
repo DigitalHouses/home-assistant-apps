@@ -40,6 +40,12 @@ function countryName(code) {
   }
 }
 
+// Numeric version ordering, newest first (e.g. 0.5.107 before 0.5.96).
+const versionOrder = new Intl.Collator("en", {numeric:true, sensitivity:"base"});
+function compareVersions(a,b) {
+  return versionOrder.compare(String(b.version), String(a.version));
+}
+
 const expandedCountries = new Set();
 const countryPalette = ["#699bd4", "#50bba7", "#e0ae72", "#a58bd4", "#d67f91", "#80c6e1", "#9ebc76", "#a0a8bd", "#7889a0"];
 
@@ -251,7 +257,7 @@ async function load() {
       grouped.get(key).push(r);
     }
     tableRows("versions", Array.from(grouped.values()).flatMap(group =>
-      group.map((r,i) => ({...r, first:i===0}))), r =>
+      group.sort(compareVersions).map((r,i) => ({...r, first:i===0}))), r =>
       '<tr><td class="product">' + (r.first ? escapeHtml(r.name || r.product) : "") +
       '</td><td>' + escapeHtml(r.version) + '</td><td>' + escapeHtml(r.observed_installations) +
       '</td><td>' + escapeHtml(r.active_7d) + '</td></tr>', 4);
