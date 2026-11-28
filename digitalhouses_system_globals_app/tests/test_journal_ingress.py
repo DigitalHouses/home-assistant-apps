@@ -1,4 +1,7 @@
 import json
+import sqlite3
+from contextlib import closing
+from types import SimpleNamespace
 import tempfile
 import unittest
 from copy import deepcopy
@@ -6,7 +9,7 @@ from pathlib import Path
 from urllib.request import urlopen, Request
 from urllib.error import HTTPError
 
-from dh_journal import Journal
+from dh_lib_journal import Journal
 from journal_events import GlobalsJournal, LOCALES, PRODUCT_NAME, VALUE_LOCALES, ICONS
 from ingress import serve
 
@@ -52,6 +55,7 @@ class TestJournalIntegration(unittest.TestCase):
 
     def test_ingress_assets_export_clear(self):
         class Service:
+            ha_timezone=SimpleNamespace(snapshot=lambda: "Asia/Almaty")
             journal=self.j
             def view(self):
                 return {"state":{"config":{"timezone":"Asia/Almaty"}}}
@@ -60,7 +64,7 @@ class TestJournalIntegration(unittest.TestCase):
         self.addCleanup(server.shutdown)
         base="http://127.0.0.1:"+str(server.server_address[1])
         with urlopen(base+"/log") as res:
-            self.assertIn(b"journal.js",res.read())
+            self.assertIn(b"dh-lib-journal.js",res.read())
             self.assertIn("text/html",res.headers["Content-Type"])
         with urlopen(base+"/journal.js") as res:
             self.assertIn(b"api/log",res.read())
@@ -105,7 +109,7 @@ class TestJournalIntegration(unittest.TestCase):
         self.assertEqual([r["level"] for r in self.j.snapshot()["rows"][-2:]],["success","success"])
 
     def test_historical_translation_and_icons(self):
-        from dh_journal.http import get
+        from dh_lib_journal.http import get
         # Historic 1.0.0 rows lack product_name: render without rewriting SQLite.
         self.j.record("lifecycle","app_started",version="0.1.6",journal="1.0.0")
         self.j.warning("gate_not_ready",gate="HA Ready",reason="ha_probe_not_confirmed")
@@ -133,6 +137,7 @@ class TestJournalIntegration(unittest.TestCase):
         self.j.db.close()
         self.j.info("night_mode_off")
         class Service:
+            ha_timezone=SimpleNamespace(snapshot=lambda: "Asia/Almaty")
             journal=self.j
             def view(self):
                 return {"state":{"config":{"timezone":"Asia/Almaty"}}}
@@ -152,6 +157,7 @@ class TestJournalIntegration(unittest.TestCase):
 
     def test_unauthorized_ingress(self):
         class Service:
+            ha_timezone=SimpleNamespace(snapshot=lambda: "Asia/Almaty")
             journal=self.j
         server=serve(Service(),host="127.0.0.1",port=0,allowed={"172.30.32.2"})
         self.addCleanup(server.server_close)
@@ -159,3 +165,55 @@ class TestJournalIntegration(unittest.TestCase):
         with self.assertRaises(HTTPError) as raised:
             urlopen("http://127.0.0.1:"+str(server.server_address[1])+"/api/log")
         self.assertEqual(raised.exception.code,403)
+
+    def test_migration_from_103_and_toast_cursor(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path=Path(tmp)/"journal.sqlite3"
+            with closing(sqlite3.connect(path)) as db, db:
+                db.execute("CREATE TABLE events (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT NOT NULL, level TEXT NOT NULL, code TEXT NOT NULL, params TEXT NOT NULL)")
+                db.execute("INSERT INTO events(id,ts,level,code,params) VALUES(42,'2026-11-28T12:15:32.123+00:00','info','night_mode_off','{}')")
+            j=Journal(path,product="digitalhouses_system_globals_app",locales=LOCALES)
+            try:
+                row=j.snapshot()["rows"][0]
+                self.assertEqual((row["id"],row["ts"],row["code"]),(42,"2026-11-28T12:15:32.123+00:00","night_mode_off"))
+                self.assertEqual(j.toast_snapshot(0)["rows"],[])
+                j.info("night_mode_on",notify=True)
+                self.assertEqual([r["id"] for r in j.toast_snapshot(42)["rows"]],[43])
+                self.assertEqual(j.snapshot()["rows"][0],row)
+            finally:
+                j.close()
+
+    def test_authoritative_timezone_and_toasts_http(self):
+        from ha_timezone import HATimezone
+        with tempfile.TemporaryDirectory() as tmp:
+            tz=HATimezone(Path(tmp)/"ha_timezone")
+            class Service:
+                journal=self.j
+                ha_timezone=tz
+            server=serve(Service(),host="127.0.0.1",port=0,allowed={"127.0.0.1"})
+            self.addCleanup(server.server_close)
+            self.addCleanup(server.shutdown)
+            base="http://127.0.0.1:"+str(server.server_address[1])
+            def read(path):
+                with urlopen(base+path) as res:
+                    return json.load(res)
+            fallback=read("/api/log")
+            self.assertTrue(fallback["timezone_fallback"])
+            self.assertEqual(fallback["timezone"],"UTC")
+            tz.update("Asia/Almaty")
+            data=read("/api/log")
+            self.assertEqual(data["timezone"],"Asia/Almaty")
+            self.assertFalse(data["timezone_fallback"])
+            self.assertEqual(data["rows"][0]["ts"],fallback["rows"][0]["ts"])
+            baseline=read("/api/log/toasts")
+            self.assertEqual(baseline["rows"],[])
+            self.j.info("night_mode_on",notify=True)
+            cursor=baseline["cursor"]
+            toasts=read("/api/log/toasts?lang=en&after="+str(cursor))
+            self.assertEqual(toasts["rows"][0]["message"],"Night mode enabled")
+            tz.update("Europe/Berlin")
+            self.assertEqual(read("/api/log")["timezone"],"Europe/Berlin")
+            tz.update("invalid/zone")
+            self.assertEqual(HATimezone(Path(tmp)/"ha_timezone").snapshot(),"Europe/Berlin")
+            with urlopen(base+"/dh-lib-journal-toast.js") as res:
+                self.assertIn(b"DHLibJournalToast",res.read())

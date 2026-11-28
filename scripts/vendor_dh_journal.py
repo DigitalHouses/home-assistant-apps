@@ -3,12 +3,11 @@ import argparse
 import hashlib
 import json
 import subprocess
-import re
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-SOURCE = ROOT / "shared/dh_journal/dh_journal"
-TARGETS = [ROOT / "digitalhouses_system_globals_app/rootfs/app/dh_journal"]
+GLOBALS_PACKAGE = ROOT / "digitalhouses_system_globals_app/rootfs/app/dh_lib_journal"
+GLOBALS_LOCK = ROOT / "digitalhouses_system_globals_app/dh-lib-journal.lock.json"
 SYNC_PACKAGE = ROOT / "digitalhouses_sync_app/rootfs/app/dh_journal"
 SYNC_LOCK = ROOT / "digitalhouses_sync_app/dh-journal.lock.json"
 STATS_WEB = ROOT / "digitalhouses-stats/dashboard"
@@ -26,33 +25,18 @@ def main():
     parser.add_argument("--check", action="store_true")
     parser.add_argument("--stats-source", type=Path, help="Local checkout of the pinned external library release")
     parser.add_argument("--sync-source", type=Path, help="Local checkout of the pinned external Sync library release")
+    parser.add_argument("--globals-source", type=Path, help="Local checkout of pinned DH Lib Journal release")
     args = parser.parse_args()
-    if args.check:
-        version = re.search(r'^VERSION = "([^"]+)"$', (SOURCE / "__init__.py").read_text(), re.M).group(1)
-        title = (ROOT / "docs/standards/DH_JOURNAL_STANDARD.md").read_text().splitlines()[0]
-        if title != "# DH Journal Standard " + version:
-            raise SystemExit("DH Journal standard version differs from library")
-    for target in TARGETS:
-        if args.check:
-            if files(target) != files(SOURCE):
-                raise SystemExit(f"DH Journal snapshot differs: {target.relative_to(ROOT)}")
-        else:
-            target.mkdir(parents=True, exist_ok=True)
-            for path in set(files(target)) - set(files(SOURCE)):
-                (target / path).unlink()
-            for path, content in files(SOURCE).items():
-                dest = target / path
-                dest.parent.mkdir(parents=True, exist_ok=True)
-                dest.write_bytes(content)
-    for package, lock_path, source_checkout in ((STATS_PACKAGE, STATS_LOCK, args.stats_source),
-                                                (SYNC_PACKAGE, SYNC_LOCK, args.sync_source)):
+    for package, lock_path, source_checkout, source_path in ((STATS_PACKAGE, STATS_LOCK, args.stats_source, "dh_journal/dh_journal"),
+                                                (SYNC_PACKAGE, SYNC_LOCK, args.sync_source, "dh_journal/dh_journal"),
+                                                (GLOBALS_PACKAGE, GLOBALS_LOCK, args.globals_source, "dh_lib_journal/dh_lib_journal")):
         lock = json.loads(lock_path.read_text())
         if source_checkout:
             checkout = source_checkout.resolve()
             commit = subprocess.check_output(["git", "-C", str(checkout), "rev-parse", "HEAD"], text=True).strip()
             if commit != lock["commit"]:
                 raise SystemExit(f"Journal source commit differs from lock: {lock_path}")
-            external = files(checkout / "dh_journal/dh_journal")
+            external = files(checkout / source_path)
             if {str(p): hashlib.sha256(data).hexdigest() for p, data in external.items()} != lock["files"]:
                 raise SystemExit(f"Journal source differs from lock: {lock_path}")
             if not args.check:
@@ -62,6 +46,8 @@ def main():
                     dest = package / path
                     dest.parent.mkdir(parents=True, exist_ok=True)
                     dest.write_bytes(content)
+        if package == GLOBALS_PACKAGE and (package.parent / "dh_journal").exists():
+            raise SystemExit("Legacy System Globals journal package must be removed")
         actual = files(package)
         if {str(p): hashlib.sha256(data).hexdigest() for p, data in actual.items()} != lock["files"]:
             raise SystemExit(f"Journal snapshot differs from pinned release: {lock_path}")

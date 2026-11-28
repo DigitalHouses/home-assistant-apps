@@ -52,6 +52,22 @@ async function main(){
   assert.match(await page.locator(".entry").first().innerText(),/TEST-0001/);
   await page.locator("#language").selectOption("ru");
   await page.waitForFunction(()=>document.querySelectorAll(".entry").length===3000&&document.querySelector(".entry").textContent.includes("ожидание проверки"));
+  const home=await browser.newPage();
+  const homeErrors=[];home.on("pageerror",e=>homeErrors.push(e.message));
+  await home.goto("http://127.0.0.1:"+port+"/");
+  await home.waitForFunction(()=>document.querySelector("#mode").textContent==="День");
+  await home.locator('input[name="night_start"]').fill("21:30");
+  // Wait until the initial notification baseline has been established.
+  await home.waitForTimeout(500);
+  await command("mode");
+  await home.waitForFunction(()=>document.querySelector(".dh-toast-stack").textContent.includes("Ночной режим включён"));
+  await home.waitForFunction(()=>document.querySelector("#mode").textContent==="Ночь");
+  await home.waitForTimeout(3500);
+  assert.equal(await home.locator('input[name="night_start"]').inputValue(),"21:30");
+  assert.match(await home.locator(".dh-toast-stack").innerText(),/Ночной режим включён/);
+  assert.deepEqual(homeErrors,[]);
+  await home.close();
+  console.log("PASS: toast survives live refresh; dirty form retained");
   await command("fail");
   await page.waitForFunction(()=>document.querySelector("#clear").disabled&&document.querySelector("#export").disabled&&document.querySelectorAll(".entry").length===0);
   assert.equal(await page.locator(".entry").count(),0);
