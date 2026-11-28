@@ -19,11 +19,12 @@ from core import Engine, Store, Publication, GLOBAL, PRODUCT, ContractError
 from runtime import Session, TransportError, COMMANDS
 from discovery import (ID, PREFIX, AVAIL, LEASE, PROBE, LOOP, DISCOVERY, HA_STATUS, GATE_EVENT,
                        CTRL, FIELD, OPS, GATES, state_topic, discovery, retired_discovery, RETIRED_ENTITIES, sync, projections, translate, scalar)
-from gates import Gates, Z2MRegistry, ha_probe
+from gates import Gates, Z2MRegistry, ha_probe, ha_get
+from ha_timezone import HATimezone
 from lifecycle import Lifecycle
 from ingress import serve
 from journal_events import GlobalsJournal, LOCALES, PRODUCT_NAME, VALUE_LOCALES, ICONS
-from dh_journal import Journal
+from dh_lib_journal import Journal
 
 LOG = logging.getLogger(ID)
 PERIOD = 5
@@ -73,8 +74,9 @@ def empty_operation(state="idle"):
 
 
 class Service:
-    def __init__(self, engine, version, opts, *, clock=time.monotonic, ha_fn=ha_probe, release_fn=latest_release, journal=None):
+    def __init__(self, engine, version, opts, *, clock=time.monotonic, ha_fn=ha_probe, release_fn=latest_release, journal=None, ha_timezone=None):
         self.journal=journal
+        self.ha_timezone=ha_timezone
         self.journal_observer=GlobalsJournal(journal, clock=clock) if journal else None
         self.mqtt_failure_logged=False
         self.engine=engine
@@ -165,7 +167,7 @@ class Service:
                 future.set_result(self.view())
             except ContractError as e:
                 if self.journal:
-                    self.journal.warning("command_rejected")
+                    self.journal.warning("command_rejected",notify=True)
                 future.set_exception(e)
             except (TransportError,OSError) as e:
                 future.set_exception(ContractError("Transport/storage failure; check current state"))
@@ -293,7 +295,7 @@ class Service:
         except (ContractError,ValueError,UnicodeError):
             LOG.warning("Rejected invalid payload on %s",topic)
             if self.journal:
-                self.journal.warning("command_rejected")
+                self.journal.warning("command_rejected",notify=True)
 
     def probe(self):
         t=self.clock()
@@ -302,6 +304,8 @@ class Service:
             self.ha_future=None
             result=future.result()
             if generation==self.ha_generation and t<=self.ha_deadline:
+                if self.ha_timezone is not None:
+                    self.ha_timezone.update(result.time_zone)
                 ev=self.life.observe(result,utcnow())
                 if result.nonce_seen:
                     self.gates.prove("ha_ready",t)
@@ -312,7 +316,7 @@ class Service:
                 if self.journal:
                     for event in ev:
                         code=event.payload["event_type"]
-                        self.journal.record("warning" if code=="ha_connection_lost" else "info",code)
+                        self.journal.record("warning" if code=="ha_connection_lost" else "info",code,notify=True)
         if self.loop_nonce and t>self.loop_deadline:
             self.loop_nonce=None
             self.gates.invalidate("mqtt_ready","roundtrip_timeout")
@@ -438,7 +442,7 @@ class Service:
                 except (TransportError,OSError) as e:
                     LOG.warning("MQTT or I/O unavailable: %s",type(e).__name__)
                     if self.journal and not self.mqtt_failure_logged and self.session is None:
-                        self.journal.warning("mqtt_unavailable")
+                        self.journal.warning("mqtt_unavailable",notify=True)
                     self.mqtt_failure_logged=True
                     self.disconnect()
                     if self.operation:
@@ -472,7 +476,15 @@ def main():
         journal.start(os.environ["APP_VERSION"])
     except Exception:
         LOG.warning("DH Journal initialization failed; application continues")
-    svc=Service(engine,os.environ["APP_VERSION"],opts,journal=journal)
+    ha_timezone=HATimezone()
+    if opts["ha_token"]:
+        try:
+            cfg=ha_get(opts["ha_url"],opts["ha_token"],"/config")
+            if isinstance(cfg,dict):
+                ha_timezone.update(cfg.get("time_zone"))
+        except (OSError,ValueError,TypeError):
+            pass
+    svc=Service(engine,os.environ["APP_VERSION"],opts,journal=journal,ha_timezone=ha_timezone)
     stop=threading.Event()
     signal.signal(signal.SIGTERM,lambda *_:stop.set())
     signal.signal(signal.SIGINT,lambda *_:stop.set())

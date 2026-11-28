@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.1.10
+- Migrate to pinned DH Lib Journal 2.0.0. Preserve SQLite history and event IDs; migrate the notification flag in place. Add shared Toast notifications and refresh Ingress data without reloading the page or losing unsaved edits. Use native HA Core timezone for journal and notifications, with persistent last-known-good cache and explicit UTC fallback. Day/night logic and MQTT contracts unchanged.
+
 ## 0.1.9
 - DH Journal 1.0.3: SQLite is the only event store. Remove RAM fallback. On database failure stop journal writes until App restart, show storage unavailable, and disable export/clear; do not delete existing history.
 

@@ -18,7 +18,7 @@ from discovery import (discovery,translate,projections,FIELD,LEASE,PROBE,LOOP,AV
 from lifecycle import Lifecycle
 from service import Service
 from ingress import serve
-from dh_journal import Journal
+from dh_lib_journal import Journal
 from journal_events import LOCALES
 
 NOW=datetime(2026,11,26,12,tzinfo=timezone.utc)
@@ -92,7 +92,7 @@ class ContractTests(unittest.TestCase):
             def do_GET(self):
                 if self.headers.get("Authorization")!="Bearer test":
                     self.send_error(401);return
-                data={"state":"RUNNING"} if self.path=="/config" else {"state":current["value"]}
+                data={"state":"RUNNING","time_zone":"Asia/Almaty"} if self.path=="/config" else {"state":current["value"]}
                 b=json.dumps(data).encode();self.send_response(200);self.end_headers();self.wfile.write(b)
             def log_message(self,*a):pass
         h=ThreadingHTTPServer(("127.0.0.1",0),H)
@@ -102,6 +102,7 @@ class ContractTests(unittest.TestCase):
         self.assertFalse(ha_probe(url,"test","fresh","sensor.probe").nonce_seen)
         current["value"]="fresh"
         self.assertTrue(ha_probe(url,"test","fresh","sensor.probe").nonce_seen)
+        self.assertEqual(ha_probe(url,"test","fresh","sensor.probe").time_zone,"Asia/Almaty")
 
 
 @unittest.skipUnless(os.environ.get("DH_TEST_MOSQUITTO"),"isolated broker binary not configured")

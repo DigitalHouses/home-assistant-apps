@@ -1,6 +1,0 @@
-{
-  "app_started": "APPLICATION START · {product_name} v{version}",
-  "app_stopped": "APPLICATION STOP",
-  "journal_cleared": "Journal cleared by administrator",
-  "app_failed": "Application terminated with an error"
-}

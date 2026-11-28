@@ -1,4 +1,4 @@
-"""DH Journal 1.0.3: bounded local, append-only diagnostic events."""
+"""DH Journal 1.1.2: bounded local, append-only diagnostic events."""
 from datetime import datetime, timezone
 from pathlib import Path
 from threading import RLock
@@ -10,7 +10,7 @@ import sqlite3
 import time
 import uuid
 
-VERSION = "1.0.3"
+VERSION = "2.0.0"
 LIMIT = 3000
 MAX_RECORD_BYTES = 8192
 MAX_PARAMS_BYTES = MAX_RECORD_BYTES - 256
@@ -117,7 +117,9 @@ class Journal:
             self.db.execute("PRAGMA journal_mode=WAL")
             self.db.execute("PRAGMA synchronous=NORMAL")
             with self.db:
-                self.db.execute("CREATE TABLE IF NOT EXISTS events (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT NOT NULL, level TEXT NOT NULL, code TEXT NOT NULL, params TEXT NOT NULL)")
+                self.db.execute("CREATE TABLE IF NOT EXISTS events (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT NOT NULL, level TEXT NOT NULL, code TEXT NOT NULL, params TEXT NOT NULL, notify INTEGER NOT NULL DEFAULT 0)")
+                if "notify" not in {row[1] for row in self.db.execute("PRAGMA table_info(events)")}:
+                    self.db.execute("ALTER TABLE events ADD COLUMN notify INTEGER NOT NULL DEFAULT 0")
                 self._prune()
         except (sqlite3.Error, OSError):
             self._disable_storage()
@@ -148,17 +150,19 @@ class Journal:
         except Exception:
             pass
 
-    def record(self, level=None, code=None, /, **params):
+    def record(self, level=None, code=None, /, *, notify=False, **params):
         """Best effort: malformed events never interrupt product operations."""
         try:
-            return self._record(level, code, params)
+            return self._record(level, code, params, notify)
         except Exception:
             self.report_failure()
             return False
 
-    def _record(self, level, code, params):
+    def _record(self, level, code, params, notify=False):
         if type(level) is not str or level not in LEVELS or type(code) is not str or not CODE.fullmatch(code):
             raise ValueError("Invalid journal event")
+        if type(notify) is not bool:
+            raise ValueError("Invalid notification flag")
         if level == "debug" and not self.debug_enabled:
             return False
         with self.lock:
@@ -168,7 +172,7 @@ class Journal:
             ts = self.clock().astimezone(timezone.utc).isoformat(timespec="milliseconds")
             try:
                 with self.db:
-                    self.db.execute("INSERT INTO events(ts,level,code,params) VALUES(?,?,?,?)", (ts, level, code, raw))
+                    self.db.execute("INSERT INTO events(ts,level,code,params,notify) VALUES(?,?,?,?,?)", (ts, level, code, raw, int(notify)))
                     self._prune()
                 return True
             except (sqlite3.Error, OSError):
@@ -225,6 +229,22 @@ class Journal:
             return dict(generation=self.generation, oldest=oldest, newest=newest, count=count,
                         limit=LIMIT, storage=self.storage, rows=rows, version=VERSION, rejected=self.rejected, can_clear=self.db is not None)
 
+    def toast_snapshot(self, after=None):
+        """An initial request establishes a cursor, never replays history."""
+        with self.lock:
+            if self.db is None:
+                raise StorageUnavailable("SQLite unavailable")
+            try:
+                newest = self.db.execute("SELECT COALESCE(MAX(id),0) FROM events").fetchone()[0]
+                rows = []
+                if after is not None and after <= newest:
+                    rows = [self._decode(row) for row in self.db.execute(
+                        "SELECT id,ts,level,code,params FROM events WHERE id>? AND notify=1 ORDER BY id", (after,))]
+                return {"cursor": newest, "rows": rows}
+            except (sqlite3.Error, OSError, ValueError):
+                self._disable_storage()
+                raise StorageUnavailable("SQLite unavailable")
+
     def message(self, row, lang):
         template = self.messages.get(lang, self.messages["en"]).get(row["code"])
         if template:
@@ -275,9 +295,9 @@ class Journal:
 
 
 def _level(name):
-    def emit(self, code=None, /, **params):
+    def emit(self, code=None, /, *, notify=False, **params):
         try:
-            return self._record(name, code, params)
+            return self._record(name, code, params, notify)
         except Exception:
             self.report_failure()
             return False

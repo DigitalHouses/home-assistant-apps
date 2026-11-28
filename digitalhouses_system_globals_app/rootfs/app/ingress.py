@@ -2,9 +2,8 @@
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 import json
-import os
-from dh_journal.http import get as journal_get
-from dh_journal import StorageUnavailable
+from dh_lib_journal.http import get as journal_get
+from dh_lib_journal import StorageUnavailable
 import threading
 from core import ContractError, GLOBAL, PRODUCT
 from discovery import CTRL, OPS
@@ -44,7 +43,7 @@ def serve(service,*,host,port,allowed):
                 self.output(200,service.view())
             elif getattr(service,"journal",None) is not None:
                 try:
-                    result=journal_get(service.journal,self.path,os.environ.get("TZ") or service.view()["state"]["config"]["timezone"])
+                    result=journal_get(service.journal,self.path,service.ha_timezone.snapshot() if getattr(service,"ha_timezone",None) is not None else None)
                     if result is None:
                         self.send_error(404)
                     else:

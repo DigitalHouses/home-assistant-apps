@@ -113,9 +113,9 @@ class GlobalsJournal:
         self.previous = view
         if old is None or old["mqtt_connected"] != view["mqtt_connected"]:
             if view["mqtt_connected"]:
-                j.success("mqtt_connected")
+                j.success("mqtt_connected",notify=old is not None)
             elif old is not None:
-                j.warning("mqtt_disconnected")
+                j.warning("mqtt_disconnected",notify=True)
         initializing = self.clock() < self.startup_deadline
         for key, ready in view["gates"].items():
             d = view["diagnostics"].get(key, {})
@@ -125,7 +125,7 @@ class GlobalsJournal:
             if old is None or self.gate_levels.get(key) != level or old["gates"].get(key) != ready or (not ready and (old["diagnostics"].get(key,{}) or {}).get("reason")!=d.get("reason")):
                 j.record(level,
                          "gate_ready" if ready else "gate_not_ready", gate=GATE_NAMES.get(key,key),
-                         reason=d.get("reason","required_components"))
+                         reason=d.get("reason","required_components"),notify=level!="pending" and old is not None)
             self.gate_levels[key] = level
         for base, bridge in view["zigbee_bridges"].items():
             ready=bridge.get("ready",False)
@@ -135,21 +135,21 @@ class GlobalsJournal:
             if ready:
                 self.ready_seen.add(key)
             if previous is None or previous.get("ready") != ready or self.bridge_levels.get(base) != level:
-                j.record(level,"bridge_ready" if ready else "bridge_not_ready",bridge=base)
+                j.record(level,"bridge_ready" if ready else "bridge_not_ready",bridge=base,notify=level!="pending" and old is not None)
             self.bridge_levels[base] = level
         state=view["state"]
         before=(old or {}).get("state",{})
         if old is None or before.get("night_mode") != state["night_mode"]:
-            j.info("night_mode_"+(state["night_mode"] or "unset"))
+            j.info("night_mode_"+(state["night_mode"] or "unset"),notify=old is not None)
         for key in ("config","profiles"):
             if old is not None and before.get(key)!=state[key]:
-                j.info(key+"_changed",previous=before.get(key),current=state[key])
+                j.info(key+"_changed",previous=before.get(key),current=state[key],notify=True)
         life=view["lifecycle"].get("ha_core_state")
         if life is not None and life!=(old or {}).get("lifecycle",{}).get("ha_core_state"):
-            j.info("ha_core_state",state=life)
+            j.info("ha_core_state",state=life,notify=old is not None)
         card=view["card"]
         previous=(old or {}).get("card",{})
         if (card.get("state"),card.get("started_at"))!=(previous.get("state"),previous.get("started_at")):
             kind={"running":("pending","operation_started"),"success":("success","operation_success"),"error":("error","operation_failed")}.get(card.get("state"))
             if kind:
-                j.record(*kind,operation=card.get("operation"),duration=card.get("duration_seconds"),reason=card.get("error"))
+                j.record(*kind,operation=card.get("operation"),duration=card.get("duration_seconds"),reason=card.get("error"),notify=True)

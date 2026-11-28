@@ -188,26 +188,30 @@ class HAResult:
     state: str | None
     nonce_seen: bool
     reachable: bool
+    time_zone: str | None = None
+
+
+def ha_get(base, token, path):
+    request = urllib.request.Request(base.rstrip("/") + path,
+                                     headers={"Authorization": "Bearer " + token})
+    with urllib.request.urlopen(request, timeout=3) as response:
+        return json.load(response)
 
 
 def ha_probe(base, token, nonce, entity):
     """Only read HA API; do not write device state or call services."""
     if not base or not token:
         return HAResult(None, False, False)
-    def get(path):
-        request = urllib.request.Request(base.rstrip("/") + path,
-                                         headers={"Authorization": "Bearer " + token})
-        with urllib.request.urlopen(request, timeout=3) as response:
-            return json.load(response)
     try:
-        cfg = get("/config")
+        cfg = ha_get(base, token, "/config")
         state = cfg.get("state") if isinstance(cfg, dict) else None
+        zone = cfg.get("time_zone") if isinstance(cfg, dict) else None
         if state != "RUNNING":
-            return HAResult(state, False, True)
+            return HAResult(state, False, True, zone)
         try:
-            obj = get("/states/" + entity)
+            obj = ha_get(base, token, "/states/" + entity)
         except (OSError, ValueError, TypeError):
-            return HAResult(state, False, True)
-        return HAResult(state, isinstance(obj, dict) and obj.get("state") == nonce, True)
+            return HAResult(state, False, True, zone)
+        return HAResult(state, isinstance(obj, dict) and obj.get("state") == nonce, True, zone)
     except (OSError, ValueError, TypeError, urllib.error.URLError):
         return HAResult(None, False, False)
