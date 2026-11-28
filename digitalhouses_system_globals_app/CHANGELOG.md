@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.1.6
+- Pilot DH Journal 1.0.0: full-screen RU/EN Ingress LOG, local SQLite history of the latest 3000 immutable events, restart markers, incremental updates, search, level filters, and localized .log export. Readiness, lifecycle and configuration transitions only; no added MQTT entities or polling.
+
 ## 0.1.5
 - Remove display and indicator brightness from profiles, storage, MQTT and HA Dashboard. Migrate existing settings without changing remaining values. Simplify Ingress RGB editing to a color picker and clear action, without a visible HEX text input.
 

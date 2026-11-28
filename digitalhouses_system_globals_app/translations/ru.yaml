@@ -5,3 +5,6 @@ configuration:
   require_z2m:
     name: Учитывать Zigbee2MQTT
     description: Требовать подтвержденную готовность всех автоматически обнаруженных экземпляров Zigbee2MQTT.
+  journal_debug:
+    name: Отладочный журнал
+    description: Включить дополнительные безопасные диагностические события в локальном LOG.

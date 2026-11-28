@@ -1,5 +1,5 @@
 FROM ghcr.io/home-assistant/base:latest
-ARG BUILD_VERSION="0.1.5"
+ARG BUILD_VERSION="0.1.6"
 ARG BUILD_ARCH
 ENV APP_VERSION="${BUILD_VERSION}" PYTHONUNBUFFERED="1"
 LABEL io.hass.version="${BUILD_VERSION}" \
@@ -11,5 +11,5 @@ RUN apk add --no-cache python3 py3-pip tzdata ca-certificates \
     && python3 -c "import paho.mqtt; from paho.mqtt.client import CallbackAPIVersion; assert paho.mqtt.__version__ == '2.1.0'" \
     && rm /tmp/system-globals-requirements.txt
 COPY rootfs/ /
-RUN chmod a+x /run.sh && python3 -m compileall -q /app
+RUN chmod a+x /run.sh && python3 -c "import sqlite3; assert sqlite3.sqlite_version" && python3 -m compileall -q /app
 CMD ["/run.sh"]

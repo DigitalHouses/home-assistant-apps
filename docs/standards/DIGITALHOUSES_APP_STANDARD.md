@@ -1582,3 +1582,7 @@ In particular:
 - product-specific implementations must not silently fork the shared release or telemetry contract.
 
 Repository validation and product acceptance tests should enforce these requirements as implementation proceeds.
+
+## Ingress operational journal
+
+New or migrated Ingress journals must follow [DH Journal Standard 1.0.0](DH_JOURNAL_STANDARD.md). Existing products migrate independently; machine event contracts remain unchanged.
