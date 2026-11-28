@@ -3,15 +3,68 @@ title: System Globals
 path: system-globals-user
 icon: mdi:theme-light-dark
 type: sections
-max_columns: 2
+max_columns: 3
+dense_section_placement: false
 sections:
 - type: grid
   cards:
   - type: heading
     heading_style: title
-    heading: Day / Night
+    heading: System
+  - type: custom:mushroom-template-card
+    entity: binary_sensor.dh_system_globals_app_system_ready
+    primary: >-
+      {{ 'System ready' if is_state(entity, 'on')
+         else 'System not ready' if is_state(entity, 'off')
+         else 'Readiness unknown' }}
+    secondary: >-
+      {{ 'Gate open' if is_state(entity, 'on')
+         else 'Gate closed' if is_state(entity, 'off')
+         else 'No data' }}
+    icon: mdi:shield-check-outline
+    color: >-
+      {{ 'green' if is_state(entity, 'on') else 'red' if is_state(entity, 'off') else 'disabled' }}
+    tap_action:
+      action: more-info
+    grid_options:
+      columns: full
+  - type: custom:mushroom-chips-card
+    alignment: center
+    chips:
+    - type: template
+      entity: binary_sensor.dh_system_globals_app_mqtt_ready
+      icon: mdi:check-network-outline
+      icon_color: >-
+        {{ 'green' if is_state(entity, 'on') else 'red' if is_state(entity, 'off') else 'grey' }}
+      content: >-
+        MQTT · {{ 'OK' if is_state(entity, 'on') else 'Not ready' if is_state(entity, 'off') else '?' }}
+      tap_action:
+        action: more-info
+    - type: template
+      entity: binary_sensor.dh_system_globals_app_ha_ready
+      icon: mdi:home-assistant
+      icon_color: >-
+        {{ 'green' if is_state(entity, 'on') else 'red' if is_state(entity, 'off') else 'grey' }}
+      content: >-
+        HA · {{ 'OK' if is_state(entity, 'on') else 'Not ready' if is_state(entity, 'off') else '?' }}
+      tap_action:
+        action: more-info
+    - type: template
+      entity: binary_sensor.dh_system_globals_app_zigbee_ready
+      icon: mdi:zigbee
+      icon_color: >-
+        {{ 'green' if is_state(entity, 'on') else 'red' if is_state(entity, 'off') else 'grey' }}
+      content: >-
+        Zigbee · {{ 'OK' if is_state(entity, 'on') else 'Not ready' if is_state(entity, 'off') else '?' }}
+      tap_action:
+        action: more-info
+    grid_options:
+      columns: full
   - type: grid
-    columns: 2
+    grid_options:
+      columns: full
+      rows: auto
+    columns: 1
     square: false
     cards:
     - type: custom:mushroom-entity-card
@@ -57,13 +110,21 @@ sections:
   - type: history-graph
     title: Night mode history
     hours_to_show: 24
+    grid_options:
+      columns: full
+      rows: auto
     entities:
     - entity: switch.dh_system_globals_app_night_mode
       name: Night mode
   - type: custom:mushroom-title-card
     title: Active settings
+    grid_options:
+      columns: full
   - type: grid
-    columns: 2
+    grid_options:
+      columns: full
+      rows: auto
+    columns: 1
     square: false
     cards:
     - type: custom:mushroom-entity-card
@@ -107,10 +168,6 @@ sections:
 - type: grid
   column_span: 2
   cards:
-  - type: custom:mushroom-title-card
-    title: Global profiles
-    grid_options:
-      columns: full
   - type: grid
     grid_options:
       columns: full

@@ -3,13 +3,14 @@ title: System Globals
 path: system-globals
 icon: mdi:state-machine
 type: sections
-max_columns: 2
+max_columns: 3
+dense_section_placement: false
 sections:
 - type: grid
   cards:
   - type: heading
     heading_style: title
-    heading: System Globals
+    heading: Система
   - type: vertical-stack
     cards:
     - type: custom:button-card
@@ -249,8 +250,60 @@ sections:
             text: Перезапустить System Globals? Глобальное расписание и контроль готовности временно прервутся.
     grid_options:
       columns: 12
+  - type: custom:mushroom-template-card
+    entity: binary_sensor.dh_system_globals_app_system_ready
+    primary: >-
+      {{ 'Система готова' if is_state(entity, 'on')
+         else 'Система не готова' if is_state(entity, 'off')
+         else 'Готовность неизвестна' }}
+    secondary: >-
+      {{ 'Gate открыт' if is_state(entity, 'on')
+         else 'Gate закрыт' if is_state(entity, 'off')
+         else 'Нет данных' }}
+    icon: mdi:shield-check-outline
+    color: >-
+      {{ 'green' if is_state(entity, 'on') else 'red' if is_state(entity, 'off') else 'disabled' }}
+    tap_action:
+      action: more-info
+    grid_options:
+      columns: full
+  - type: custom:mushroom-chips-card
+    alignment: center
+    chips:
+    - type: template
+      entity: binary_sensor.dh_system_globals_app_mqtt_ready
+      icon: mdi:check-network-outline
+      icon_color: >-
+        {{ 'green' if is_state(entity, 'on') else 'red' if is_state(entity, 'off') else 'grey' }}
+      content: >-
+        MQTT · {{ 'OK' if is_state(entity, 'on') else 'Нет' if is_state(entity, 'off') else '?' }}
+      tap_action:
+        action: more-info
+    - type: template
+      entity: binary_sensor.dh_system_globals_app_ha_ready
+      icon: mdi:home-assistant
+      icon_color: >-
+        {{ 'green' if is_state(entity, 'on') else 'red' if is_state(entity, 'off') else 'grey' }}
+      content: >-
+        HA · {{ 'OK' if is_state(entity, 'on') else 'Нет' if is_state(entity, 'off') else '?' }}
+      tap_action:
+        action: more-info
+    - type: template
+      entity: binary_sensor.dh_system_globals_app_zigbee_ready
+      icon: mdi:zigbee
+      icon_color: >-
+        {{ 'green' if is_state(entity, 'on') else 'red' if is_state(entity, 'off') else 'grey' }}
+      content: >-
+        Zigbee · {{ 'OK' if is_state(entity, 'on') else 'Нет' if is_state(entity, 'off') else '?' }}
+      tap_action:
+        action: more-info
+    grid_options:
+      columns: full
   - type: grid
-    columns: 2
+    grid_options:
+      columns: full
+      rows: auto
+    columns: 1
     square: false
     cards:
     - type: custom:mushroom-entity-card
@@ -296,13 +349,21 @@ sections:
   - type: history-graph
     title: История ночного режима
     hours_to_show: 24
+    grid_options:
+      columns: full
+      rows: auto
     entities:
     - entity: switch.dh_system_globals_app_night_mode
       name: Ночной режим
   - type: custom:mushroom-title-card
     title: Активные параметры
+    grid_options:
+      columns: full
   - type: grid
-    columns: 2
+    grid_options:
+      columns: full
+      rows: auto
+    columns: 1
     square: false
     cards:
     - type: custom:mushroom-entity-card
@@ -346,10 +407,6 @@ sections:
 - type: grid
   column_span: 2
   cards:
-  - type: custom:mushroom-title-card
-    title: Глобальные профили
-    grid_options:
-      columns: full
   - type: grid
     grid_options:
       columns: full
@@ -565,46 +622,3 @@ sections:
       fill_container: true
       tap_action:
         action: toggle
-  - type: custom:mushroom-title-card
-    title: Готовность системы
-    grid_options:
-      columns: full
-  - type: grid
-    grid_options:
-      columns: full
-      rows: auto
-    columns: 2
-    square: false
-    cards:
-    - type: custom:mushroom-entity-card
-      entity: binary_sensor.dh_system_globals_app_mqtt_ready
-      name: MQTT
-      icon: mdi:check-network-outline
-      layout: horizontal
-      fill_container: true
-      tap_action:
-        action: more-info
-    - type: custom:mushroom-entity-card
-      entity: binary_sensor.dh_system_globals_app_ha_ready
-      name: Home Assistant
-      icon: mdi:home-assistant
-      layout: horizontal
-      fill_container: true
-      tap_action:
-        action: more-info
-    - type: custom:mushroom-entity-card
-      entity: binary_sensor.dh_system_globals_app_zigbee_ready
-      name: Zigbee
-      icon: mdi:zigbee
-      layout: horizontal
-      fill_container: true
-      tap_action:
-        action: more-info
-    - type: custom:mushroom-entity-card
-      entity: binary_sensor.dh_system_globals_app_system_ready
-      name: Система
-      icon: mdi:shield-check-outline
-      layout: horizontal
-      fill_container: true
-      tap_action:
-        action: more-info
