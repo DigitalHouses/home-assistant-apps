@@ -40,6 +40,11 @@ class CoreAPI:
         except (urllib.error.HTTPError, urllib.error.URLError, OSError, ValueError) as exc:
             raise SyncError("Home Assistant Core REST API unavailable") from exc
 
+    def timezone(self):
+        """Authoritative IANA timezone of this Home Assistant Core."""
+        value = self._rest("config", timeout=5)
+        return value.get("time_zone") if isinstance(value, dict) else None
+
     def versions(self) -> dict[str, str]:
         results = {}
         for entity in ("sensor.dh_pve_agent_version", "sensor.dh_plex_agent_version"):

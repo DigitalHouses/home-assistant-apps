@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.9
+
+- Use Home Assistant Core configuration as the sole site timezone source. Refresh on startup and existing sync cycles; retain last valid IANA value in /data across restarts.
+- Unified local timestamps in Ingress, LOG, Toast and export with visible UTC fallback. Stored UTC history and machine timestamps unchanged.
+
 ## 0.6.8
 
 - Pin DH Journal 1.1.0 from dh-app-libraries; preserve existing SQLite history with native schema migration.
