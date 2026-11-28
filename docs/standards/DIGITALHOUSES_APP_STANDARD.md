@@ -347,6 +347,19 @@ Project-specific integration belongs in explicit local adapters, passports, conf
 
 ---
 
+## 11.1 Mandatory Home Assistant timezone contract
+
+Every DigitalHouses product, including Apps, Agents and server components, must use the timezone of the Home Assistant installation it serves for all site-local human-readable time and calendar semantics. Home Assistant is the sole authoritative source; this applies also to products maintained in separate repositories.
+
+- Resolve the IANA timezone from the associated Home Assistant instance (HA Core configuration `time_zone` or the Supervisor-provided equivalent for HAOS Apps, e.g. `bashio::supervisor.timezone`). Reuse the existing integration/configuration channel for Agents and external components. A multi-site component must use the timezone of the relevant HA instance, not assume all sites share one timezone. A central administrative UI uses its designated HA instance for local presentation; global machine aggregates explicitly defined in UTC remain UTC.
+- Do not hard-code a geographic timezone, infer it from IP/country, use browser or host timezone as an independent authority, or offer a separate user-editable timezone setting. Cache the last valid HA value; refresh on startup and on HA configuration changes or the existing configuration refresh/reconnect path. Do not add a dedicated high-frequency poll. If no valid HA value is available, use UTC temporarily and visibly identify the fallback; recover automatically once HA supplies its timezone. Do not overwrite a cached valid HA timezone on transient failure.
+- Store event timestamps, database timestamps and machine protocol timestamps in UTC with explicit timezone information. Convert at the presentation boundary using the authoritative IANA timezone and its historical DST rules. All human-readable timestamps, LOG, Toast Notifications, Ingress, exports (including filenames), reports and site-local scheduling/calendar boundaries must follow HA. Explicit UTC protocol/aggregate fields remain unchanged and clearly labeled.
+- Product tests must verify HA timezone resolution, a non-UTC zone, DST conversion where applicable, timezone change and unavailable/invalid HA configuration, with preservation of stored UTC timestamps. Existing products must converge through product-scoped updates without deleting history or breaking released machine interfaces. New products and new timezone-dependent functionality must comply before release.
+
+DH Journal consumers must pass this resolved timezone to the shared library; see the [canonical DH Journal Standard](https://github.com/DigitalHouses/dh-app-libraries/blob/main/dh_journal/STANDARD.md).
+
+---
+
 ## 12. Common source-of-truth rule
 
 GitHub is the source of truth.

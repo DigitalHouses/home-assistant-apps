@@ -17,6 +17,10 @@ Materialize the shared files into the product Docker context using `python scrip
 - Record meaningful transitions, actions and outcomes, not routine polling, uptime ticks or repeated unchanged results. No extra MQTT publications, HA entities, HA polls or telemetry.
 - Pass explicitly allowlisted safe facts, never raw request bodies, tokens, passwords or secrets. Escape untrusted display strings as text; strip embedded newlines in rendered log fields. Journal errors cannot stop the app. Invalid events are rejected without raising into the producer; count rejected events and rate-limit internal diagnostics. Bound nesting, total nodes and UTF-8 size of each new stored event to 8192 bytes (including envelope); preserve complete fitting fields and mark truncation. SQLite is the sole event store. On failure suspend logging until App restart, visibly indicate storage unavailability and discard new events without buffering or retry loops. Existing SQLite history is not deleted. Clear is acknowledged only after SQLite commits deletion and the clear marker in one FULL-synchronous transaction. When storage is unavailable, refuse clear (HTTP 409) and export (HTTP 503), disable both controls and show history as unavailable, not empty.
 
+## Mandatory timezone authority
+
+All consumers must follow the [common Home Assistant timezone contract](DIGITALHOUSES_APP_STANDARD.md#111-mandatory-home-assistant-timezone-contract). This document describes the legacy bundled 1.0.3 snapshot; the [external DH Journal standard](https://github.com/DigitalHouses/dh-app-libraries/blob/main/dh_journal/STANDARD.md) is authoritative for independently versioned releases. The product resolves the HA IANA timezone and passes it to LOG and export. Stored UTC timestamps remain unchanged.
+
 ## Full-screen Ingress
 
 - Consistent LOG button at top right opens a full-width page inside Ingress, with a back control. Oldest at top, newest at bottom. Scroll to bottom on entry and while following; disable follow when scrolling back. Filter/search all 3000 retained events; compact colored rows, emoji and distinct restart separators.
