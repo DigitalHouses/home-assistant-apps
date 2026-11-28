@@ -282,6 +282,10 @@ class Application:
         # Caller holds _mutex. Invalidate queued adaptations on a real flag
         # change without replaying the current mode or changing its value.
         changed = self.globals["auto_day_night"] != policy["auto_day_night"]
+        old_interval=self.globals.get("adaptive_interval_minutes",lights.DEFAULT_INTERVAL_MINUTES)
+        new_interval=policy.get("adaptive_interval_minutes",lights.DEFAULT_INTERVAL_MINUTES)
+        if old_interval!=new_interval and self._next_adaptive:
+            self._next_adaptive+=(new_interval-old_interval)*60
         self.globals = policy
         if changed:
             self._home_profile = deepcopy(self._home_profile)
@@ -298,6 +302,15 @@ class Application:
                 self._publish_auto_day_night()
             LOG.info("Automatic Day/Night application: %s", "enabled" if enabled else "disabled")
         return {"auto_day_night": enabled}
+
+    def set_adaptive_interval(self, minutes):
+        minutes=lights.interval_minutes(minutes)
+        with self._settings_lock:
+            self.options.set_adaptive_interval(minutes)
+            with self._mutex:
+                self._apply_global_policy({**self.globals,"adaptive_interval_minutes":minutes})
+            LOG.info("Adaptive CCT interval: %d minutes",minutes)
+        return {"adaptive_interval_minutes":minutes}
 
     def _publish_action(self, *, state, switch, action, target, error=None):
         self._last_action = {"state": state, "at": _iso_now(),
@@ -956,7 +969,7 @@ class Application:
             return
         try:
             self._jobs.put_nowait((None,None,"Lights","ADAPTIVE_CCT",[],None,self._home_profile))
-            self._next_adaptive=now+lights.INTERVAL
+            self._next_adaptive=now+self.globals.get("adaptive_interval_minutes",lights.DEFAULT_INTERVAL_MINUTES)*60
         except queue.Full:
             pass
 

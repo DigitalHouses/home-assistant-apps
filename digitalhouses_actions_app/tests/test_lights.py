@@ -130,6 +130,24 @@ class LightsTests(TestCase):
         self.assertEqual(app._jobs.get_nowait()[3],"ADAPTIVE_CCT")
         self.assertEqual(app._next_adaptive,1900)
 
+    def test_short_interval_takes_effect_without_restart(self):
+        helper=auto_tests.AutoProfileTests();app,_,_=helper.app(enabled=False)
+        app.light_settings={TV:row(False,True)}
+        app.sensor_engine.ready=True
+        app._home_profile=deepcopy(SNAP)
+        with patch.object(app.solar_clock,"factor",return_value=.5),patch("actions.runtime.time.monotonic",return_value=100) as clock:
+            app._tick_adaptive()
+            app._jobs.get_nowait();app._jobs.task_done()
+            clock.return_value=150
+            app.set_adaptive_interval(1)
+            self.assertEqual(app._next_adaptive,160)
+            app._tick_adaptive()
+            self.assertTrue(app._jobs.empty())
+            clock.return_value=160
+            app._tick_adaptive();app._tick_adaptive()
+            self.assertEqual(app._jobs.qsize(),1)
+            self.assertEqual(app._next_adaptive,220)
+
     def test_adaptive_mqtt_only_cct(self):
         import json
         from test_lab_rest_fallback import BASE, PHYSICAL, PHYSICAL_DEVICE, COORD, DEVICE, packet

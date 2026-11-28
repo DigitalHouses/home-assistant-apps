@@ -10,9 +10,15 @@ from .catalog import CatalogError
 from .binding_store import decode_json
 from . import profiles
 
-INTERVAL = 1800
+DEFAULT_INTERVAL_MINUTES = 30
 MAX_BYTES = 1048576
 FIELDS = ("next_rising", "next_noon", "next_setting")
+
+
+def interval_minutes(value):
+    if type(value) is not int or not 1 <= value <= 1440:
+        raise CatalogError("Adaptive CCT interval must be an integer from 1 to 1440 minutes")
+    return value
 
 
 def validate(rows):

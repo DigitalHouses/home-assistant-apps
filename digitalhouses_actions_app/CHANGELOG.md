@@ -2,6 +2,10 @@
 
 Historical releases below were published as DigitalHouses Aqara Switch App; their identifiers are retained.
 
+## 0.3.15
+
+- Make the Adaptive CCT correction interval configurable in Ingress Parameters and App options (1–1440 minutes, default 30). Apply live, persist across restart and reschedule from the last scheduled correction without touching bindings, Lights selections or Day/Night state.
+
 ## 0.3.14
 
 - Add a checked-by-default Lights toolbar filter for lights with brightness, CCT or RGB capabilities. Show visible/total counts; filtering never modifies saved settings.

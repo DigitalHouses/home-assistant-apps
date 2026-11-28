@@ -120,6 +120,24 @@ class LiveParametersTests(unittest.TestCase):
         with self.app._mutex:
             self.assertFalse(self.app._apply_global_policy(global_policy(self.store.read())))
 
+    def test_live_adaptive_interval_persists_and_reschedules(self):
+        original=deepcopy(self.settings)
+        bindings=self.store.path.read_bytes()
+        self.app._next_adaptive=1900
+        self.assertEqual(self.app.set_adaptive_interval(1),{"adaptive_interval_minutes":1})
+        self.assertEqual(self.settings,{**original,"adaptive_interval_minutes":1})
+        self.assertEqual(self.app._next_adaptive,160)
+        self.assertEqual(self.build().globals["adaptive_interval_minutes"],1)
+        self.assertEqual(self.store.path.read_bytes(),bindings)
+        self.app.set_adaptive_interval(60)
+        self.assertEqual(self.app._next_adaptive,3700)
+        for value in (0,1441,True,1.5,"5"):
+            with self.assertRaises(CatalogError):self.app.set_adaptive_interval(value)
+        self.supervisor.write.side_effect=OSError("offline")
+        with self.assertRaises(OSError):self.app.set_adaptive_interval(5)
+        self.assertEqual(self.app.globals["adaptive_interval_minutes"],60)
+        self.assertEqual(self.app._next_adaptive,3700)
+
     def test_ingress_ui_contract(self):
         web=Path(__file__).resolve().parents[1]/"rootfs/app/actions/web"
         js=(web/"app.js").read_text()

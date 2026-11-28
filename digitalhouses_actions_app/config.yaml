@@ -1,5 +1,5 @@
 name: DigitalHouses Actions App
-version: 0.3.14
+version: 0.3.15
 slug: digitalhouses_actions_app
 description: Device actions, Mode Keeper, direct Zigbee2MQTT and verified HA-native light control.
 url: https://github.com/DigitalHouses/home-assistant-apps/tree/main/digitalhouses_actions_app
@@ -28,6 +28,7 @@ options:
   log_level: info
   maintenance_mode: false
   auto_day_night: false
+  adaptive_interval_minutes: 30
   auto_scan_interval: 60
   restore_delay: 0.6
 schema:
@@ -35,5 +36,6 @@ schema:
   log_level: list(debug|info|warning|error)
   maintenance_mode: bool
   auto_day_night: bool
+  adaptive_interval_minutes: int(1,1440)
   auto_scan_interval: int(0,1440)
   restore_delay: float(0.1,30)
