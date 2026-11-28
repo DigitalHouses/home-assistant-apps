@@ -1,5 +1,6 @@
 """Materialize/check a deterministic journal snapshot inside each build context."""
 import argparse
+import re
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -14,6 +15,11 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--check", action="store_true")
     args = parser.parse_args()
+    if args.check:
+        version = re.search(r'^VERSION = "([^"]+)"$', (SOURCE / "__init__.py").read_text(), re.M).group(1)
+        title = (ROOT / "docs/standards/DH_JOURNAL_STANDARD.md").read_text().splitlines()[0]
+        if title != "# DH Journal Standard " + version:
+            raise SystemExit("DH Journal standard version differs from library")
     for target in TARGETS:
         if args.check:
             if files(target) != files(SOURCE):

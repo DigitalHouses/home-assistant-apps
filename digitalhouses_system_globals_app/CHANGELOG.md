@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.1.8
+- DH Journal 1.0.2: isolate malformed diagnostic events, bound event size and nesting, reject non-durable clear in RAM, atomically persist clear marker, optimize full-journal rendering and verify standard version in CI.
+
 ## 0.1.7
 - DH Journal 1.0.1: show product name and App version in startup markers and LOG header; library version remains in technical details. Localize historical readiness reasons and operation/state labels in RU/EN, remove duplicate emoji, and classify initial readiness probes as pending with a bounded 20-second grace period. Preserve existing history.
 

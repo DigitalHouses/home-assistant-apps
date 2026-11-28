@@ -61,6 +61,23 @@ class ContractTests(unittest.TestCase):
                 e.import_settings(value,NOW)
             self.assertEqual(e.state,before)
 
+    def test_journal_observer_failure_does_not_interrupt_commands(self):
+        with tempfile.TemporaryDirectory() as t:
+            journal=Journal(Path(t)/"journal.sqlite3",product="test",locales=LOCALES)
+            self.addCleanup(journal.close)
+            svc=Service(Engine(Store(Path(t)/"state.json")),"0.1.8",{"require_z2m":True},journal=journal)
+            self.addCleanup(svc.executor.shutdown)
+            def broken(view):
+                raise RuntimeError("observer fault")
+            svc.journal_observer.observe=broken
+            svc.command(GLOBAL+"/set","on")
+            svc.update_view()
+            self.assertEqual(svc.view()["state"]["night_mode"],"on")
+            self.assertEqual(journal.snapshot()["rejected"],1)
+            svc.command(GLOBAL+"/set","off")
+            svc.update_view()
+            self.assertEqual(svc.view()["state"]["night_mode"],"off")
+
     def test_lifecycle_disconnect_is_not_shutdown(self):
         l=Lifecycle()
         self.assertEqual(l.observe(HAResult("RUNNING",True,True),NOW),[])
