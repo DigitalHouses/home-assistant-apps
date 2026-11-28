@@ -2,6 +2,7 @@
 let model, editing=null, draft=null, dirty=false, busy=false, section="keys";
 let parametersBusy=false, parametersError="";
 let lightsDraft=null,lightsRevision=null,lightsBusy=false,lightsError="";
+const lightsFilter=document.querySelector("#lights-filter"), smartLightsOnly=document.querySelector("#smart-lights-only");
 const main=document.querySelector("#main"), notice=document.querySelector("#notice"), scan=document.querySelector("#scan");
 function el(tag,text,cls){const n=document.createElement(tag);if(text!==undefined)n.textContent=text;if(cls)n.className=cls;return n}
 function button(text,fn,cls){const n=el("button",text,cls);n.onclick=fn;return n}
@@ -42,7 +43,7 @@ function knownState(state){return typeof state==="string"&&!["unknown","unavaila
 function targetLabel(id,t){return t?.name&&t.name!==id?id+" - "+t.name:id}
 function targetNode(id){const t=model.targets.find(x=>x.entity_id===id);const n=el("span",undefined,"target");n.dataset.entity=id;n.append(targetIcon(t,id),el("span",targetLabel(id,t),"target-label"));if(!t||!knownState(t.state)){const w=el("span","⚠","problem");w.title=t?"Сущность недоступна":"Сущность не найдена";n.append(w)}return n}
 async function api(path,data,raw=false){const r=await fetch("api/"+path,data===undefined?{}:{method:"POST",headers:{"Content-Type":"application/json"},body:raw?data:JSON.stringify(data)});const v=await r.json();if(!r.ok)throw Error(v.error||"Ошибка");return v}
-async function load(){try{model=await api("state");document.querySelector("#app-version").textContent="v"+model.version;document.querySelector("#summary").textContent=section==="lights"?"Lights":section==="parameters"?"Параметры":section==="schedules"?"Расписания ("+(model.schedules||[]).length+")":section==="sensors"?"Датчики ("+(model.sensors||[]).length+")":"Клавиши · устройства ("+model.devices.length+") · Сети Z2M ("+new Set(model.devices.map(d=>d.network).filter(n=>n!=="—")).size+")";notice.classList.toggle("error",!!model.scan.error);scan.disabled=model.scan.state==="updating"||busy;scan.textContent=model.scan.state==="updating"?"Сканирование…":"⟳ Сканировать";if(!editing)renderList();if(!editing&&!busy){if(model.scan.error)notice.textContent=model.scan.error;else if(model.scan.state==="updating")notice.textContent="Сканирование…";else if(model.report){const p=model.report.problems||[];notice.textContent="Последний Scan: "+(model.report.scanned??0)+" устройств · "+p.length+" проблем";notice.title=p.map(x=>x.name+": "+x.reason).join("\n")}}}catch(e){notice.textContent=e.message}}
+async function load(){try{model=await api("state");document.querySelector("#app-version").textContent="v"+model.version;document.querySelector("#summary").textContent=section==="lights"?document.querySelector("#summary").textContent:section==="parameters"?"Параметры":section==="schedules"?"Расписания ("+(model.schedules||[]).length+")":section==="sensors"?"Датчики ("+(model.sensors||[]).length+")":"Клавиши · устройства ("+model.devices.length+") · Сети Z2M ("+new Set(model.devices.map(d=>d.network).filter(n=>n!=="—")).size+")";notice.classList.toggle("error",!!model.scan.error);scan.disabled=model.scan.state==="updating"||busy;scan.textContent=model.scan.state==="updating"?"Сканирование…":"⟳ Сканировать";if(!editing)renderList();if(!editing&&!busy){if(model.scan.error)notice.textContent=model.scan.error;else if(model.scan.state==="updating")notice.textContent="Сканирование…";else if(model.report){const p=model.report.problems||[];notice.textContent="Последний Scan: "+(model.report.scanned??0)+" устройств · "+p.length+" проблем";notice.title=p.map(x=>x.name+": "+x.reason).join("\n")}}}catch(e){notice.textContent=e.message}}
 const keyNames={main:"Основная",left:"Левая",right:"Правая",center:"Центральная"};
 const modeNames={"":"Не настроена",control_relay:"Физическая",decoupled:"Логическая","decoupled/ON":"Логическая · ON","decoupled/OFF":"Логическая · OFF"};
 const logicalPolicy=p=>["decoupled","decoupled/ON","decoupled/OFF"].includes(p);
@@ -128,11 +129,18 @@ function modeControls(){
   return panel;
 }
 function deviceTitle(d){return d.ha_name&&d.ha_name!==d.name?d.name+" - "+d.ha_name:d.name}
+function isSmartLight(t){
+  return Boolean(t.brightness||t.cct||t.rgb);
+}
+smartLightsOnly.onchange=()=>{if(section==="lights"&&model)renderLights()};
 function renderLights(){
   if(!lightsDraft){lightsDraft=structuredClone(model.lights||{});lightsRevision=model.lights_revision}
   const panel=el("article"),table=el("div",undefined,"lights-table");
-  const targets=model.targets.filter(t=>t.entity_id.startsWith("light."));
+  let targets=model.targets.filter(t=>t.entity_id.startsWith("light."));
   for(const eid of Object.keys(lightsDraft))if(!targets.some(t=>t.entity_id===eid))targets.push({entity_id:eid,name:eid,missing:true});
+  const total=targets.length;
+  if(smartLightsOnly.checked)targets=targets.filter(isSmartLight);
+  document.querySelector("#summary").textContent="Lights ("+targets.length+" / "+total+")";
   targets.sort((a,b)=>(a.area||"").localeCompare(b.area||"")||a.entity_id.localeCompare(b.entity_id));
   const header=el("div",undefined,"lights-row lights-header");
   for(const title of ["Светильник","Цвет","День/Ночь","Adaptive CCT"])header.append(el("strong",title));
@@ -164,6 +172,7 @@ function renderLights(){
       flag("adaptive",supported&&t.cct&&row.color_source==="cct"));
     table.append(item);
   }
+  if(!targets.length)table.append(el("p","Нет светильников, соответствующих фильтру.","muted"));
   panel.append(el("p","День/Ночь — глобальные параметры. Adaptive CCT — только цветовая температура по солнцу каждые 30 минут. Только включённые светильники.","muted"),table);
   if(model.lights_error)panel.append(el("p",model.lights_error,"problem"));
   if(lightsError)panel.append(el("p",lightsError,"problem"));
@@ -558,6 +567,7 @@ function selectSection(next){
   if(lightsBusy)return;
   if(dirty&&!confirm("Отменить несохранённые изменения?"))return;
   section=next;editing=null;draft=null;dirty=false;lightsDraft=null;lightsError="";
+  lightsFilter.hidden=next!=="lights";
   document.querySelector("#devices-nav").classList.toggle("active",next==="keys");
   document.querySelector("#sensors-nav").classList.toggle("active",next==="sensors");
   document.querySelector("#schedules-nav").classList.toggle("active",next==="schedules");

@@ -5,6 +5,26 @@ from unittest import TestCase
 WEB = Path(__file__).resolve().parents[1] / "rootfs/app/actions/web"
 
 class IngressStyleTests(TestCase):
+    def test_lights_smart_filter(self):
+        import shutil, subprocess
+        html=(WEB/"index.html").read_text()
+        js=(WEB/"app.js").read_text()
+        self.assertIn('id="lights-filter" hidden',html)
+        self.assertIn('id="smart-lights-only" type="checkbox" checked',html)
+        self.assertIn('targets=targets.filter(isSmartLight)',js)
+        self.assertIn('lightsFilter.hidden=next!=="lights"',js)
+        self.assertIn('lights:lightsDraft',js)
+        if shutil.which("node"):
+            source=js[js.index("function isSmartLight("):js.index("smartLightsOnly.onchange=")]
+            subprocess.run(["node","-e",source+"""
+const assert=require('node:assert/strict');
+assert.equal(isSmartLight({brightness:true}),true);
+assert.equal(isSmartLight({cct:true}),true);
+assert.equal(isSmartLight({rgb:true}),true);
+assert.equal(isSmartLight({brightness:false,cct:false,rgb:false}),false);
+assert.equal(isSmartLight({missing:true}),false);
+"""],check=True)
+
     def test_network_reference_palette_and_header(self):
         html=(WEB/"index.html").read_text()
         css=(WEB/"style.css").read_text()
