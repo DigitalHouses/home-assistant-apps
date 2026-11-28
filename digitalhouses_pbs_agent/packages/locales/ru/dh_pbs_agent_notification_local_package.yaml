@@ -101,120 +101,120 @@ dh_pbs_agent_notification_local_package:
         id: verify_failed
       actions:
         - choose:
-        - conditions:
-            - condition: trigger
-              id: backup_failed
-          sequence:
-            - action: persistent_notification.create
-              data:
-                title: "🔴 PBS: ошибка резервирования"
-                message: >-
-                  Ошибка резервного копирования. Задание: {{ trigger.to_state.attributes.task_id }}.
-        - conditions:
-            - condition: trigger
-              id: backup_overdue
-          sequence:
-            - action: persistent_notification.create
-              data:
-                title: "🔴 PBS: просроченная резервная копия"
-                message: >-
-                  Datastore {{ trigger.to_state.attributes.datastore }}, группа {{ trigger.to_state.attributes.backup_group }}, namespace {{ trigger.to_state.attributes.namespace }}. Порог {{ trigger.to_state.attributes.threshold_hours }} ч, причина: {{ trigger.to_state.attributes.reason_code }}.
-        - conditions:
-            - condition: trigger
-              id: backup_recovered
-          sequence:
-            - action: persistent_notification.create
-              data:
-                title: "✅ PBS: резервирование восстановлено"
-                message: >-
-                  Datastore {{ trigger.to_state.attributes.datastore }}, группа {{ trigger.to_state.attributes.backup_group }} — снова есть свежая резервная копия.
-        - conditions:
-            - condition: trigger
-              id: service_unavailable
-          sequence:
-            - action: persistent_notification.create
-              data:
-                title: "🔴 PBS: API недоступен"
-                message: >-
-                  Не удалось получить данные из {{ trigger.to_state.attributes.source }}.
-        - conditions:
-            - condition: trigger
-              id: service_recovered
-          sequence:
-            - action: persistent_notification.create
-              data:
-                title: "✅ PBS: API восстановлен"
-                message: >-
-                  Снова доступны данные из {{ trigger.to_state.attributes.source }}.
-        - conditions:
-            - condition: trigger
-              id: sync_failed
-          sequence:
-            - action: persistent_notification.create
-              data:
-                title: "🔴 PBS: Push Sync завершился с ошибкой"
-                message: >-
-                  Задание {{ trigger.to_state.attributes.job_id }}, UPID {{ trigger.to_state.attributes.task_id }}.
-        - conditions:
-            - condition: trigger
-              id: sync_overdue
-          sequence:
-            - action: persistent_notification.create
-              data:
-                title: "🔴 PBS: Push Sync просрочен"
-                message: >-
-                  Задание {{ trigger.to_state.attributes.job_id }}. Порог {{ trigger.to_state.attributes.threshold_hours }} ч, причина: {{ trigger.to_state.attributes.reason_code }}.
-        - conditions:
-            - condition: trigger
-              id: sync_recovered
-          sequence:
-            - action: persistent_notification.create
-              data:
-                title: "✅ PBS: Push Sync восстановлен"
-                message: >-
-                  Задание {{ trigger.to_state.attributes.job_id }} — восстановлено корректное выполнение.
-        - conditions:
-            - condition: trigger
-              id: disk_space_low
-          sequence:
-            - action: persistent_notification.create
-              data:
-                title: "🔴 PBS: datastore заполняется"
-                message: >-
-                  {{ trigger.to_state.attributes.datastore }}: заполнено {{ trigger.to_state.attributes.used_percent }}% (порог {{ trigger.to_state.attributes.threshold_percent }}%).
-        - conditions:
-            - condition: trigger
-              id: disk_space_recovered
-          sequence:
-            - action: persistent_notification.create
-              data:
-                title: "✅ PBS: место на datastore восстановлено"
-                message: >-
-                  {{ trigger.to_state.attributes.datastore }} снова ниже порога заполнения.
-        - conditions:
-            - condition: trigger
-              id: zfs_pool_degraded
-          sequence:
-            - action: persistent_notification.create
-              data:
-                title: "🔴 PBS: проблема ZFS"
-                message: >-
-                  Pool {{ trigger.to_state.attributes.pool }}: {{ trigger.to_state.attributes.zpool_state }}.
-        - conditions:
-            - condition: trigger
-              id: zfs_pool_recovered
-          sequence:
-            - action: persistent_notification.create
-              data:
-                title: "✅ PBS: ZFS восстановлен"
-                message: >-
-                  Pool {{ trigger.to_state.attributes.pool }} снова ONLINE.
-        - conditions:
-            - condition: trigger
-              id: verify_failed
-          sequence:
-            - action: persistent_notification.create
-              data:
-                title: "🔴 PBS: Verify завершился с ошибкой"
-                message: >-
-                  Verify Job {{ trigger.to_state.attributes.job_id }}, UPID {{ trigger.to_state.attributes.task_id }}.
+            - conditions:
+                - condition: trigger
+                  id: backup_failed
+              sequence:
+                - action: persistent_notification.create
+                  data:
+                    title: "🔴 PBS: ошибка резервирования"
+                    message: >-
+                      Ошибка резервного копирования. Задание: {{ trigger.to_state.attributes.task_id }}.
+            - conditions:
+                - condition: trigger
+                  id: backup_overdue
+              sequence:
+                - action: persistent_notification.create
+                  data:
+                    title: "🔴 PBS: просроченная резервная копия"
+                    message: >-
+                      Datastore {{ trigger.to_state.attributes.datastore }}, группа {{ trigger.to_state.attributes.backup_group }}, namespace {{ trigger.to_state.attributes.namespace }}. Порог {{ trigger.to_state.attributes.threshold_hours }} ч, причина: {{ trigger.to_state.attributes.reason_code }}.
+            - conditions:
+                - condition: trigger
+                  id: backup_recovered
+              sequence:
+                - action: persistent_notification.create
+                  data:
+                    title: "✅ PBS: резервирование восстановлено"
+                    message: >-
+                      Datastore {{ trigger.to_state.attributes.datastore }}, группа {{ trigger.to_state.attributes.backup_group }} — снова есть свежая резервная копия.
+            - conditions:
+                - condition: trigger
+                  id: service_unavailable
+              sequence:
+                - action: persistent_notification.create
+                  data:
+                    title: "🔴 PBS: API недоступен"
+                    message: >-
+                      Не удалось получить данные из {{ trigger.to_state.attributes.source }}.
+            - conditions:
+                - condition: trigger
+                  id: service_recovered
+              sequence:
+                - action: persistent_notification.create
+                  data:
+                    title: "✅ PBS: API восстановлен"
+                    message: >-
+                      Снова доступны данные из {{ trigger.to_state.attributes.source }}.
+            - conditions:
+                - condition: trigger
+                  id: sync_failed
+              sequence:
+                - action: persistent_notification.create
+                  data:
+                    title: "🔴 PBS: Push Sync завершился с ошибкой"
+                    message: >-
+                      Задание {{ trigger.to_state.attributes.job_id }}, UPID {{ trigger.to_state.attributes.task_id }}.
+            - conditions:
+                - condition: trigger
+                  id: sync_overdue
+              sequence:
+                - action: persistent_notification.create
+                  data:
+                    title: "🔴 PBS: Push Sync просрочен"
+                    message: >-
+                      Задание {{ trigger.to_state.attributes.job_id }}. Порог {{ trigger.to_state.attributes.threshold_hours }} ч, причина: {{ trigger.to_state.attributes.reason_code }}.
+            - conditions:
+                - condition: trigger
+                  id: sync_recovered
+              sequence:
+                - action: persistent_notification.create
+                  data:
+                    title: "✅ PBS: Push Sync восстановлен"
+                    message: >-
+                      Задание {{ trigger.to_state.attributes.job_id }} — восстановлено корректное выполнение.
+            - conditions:
+                - condition: trigger
+                  id: disk_space_low
+              sequence:
+                - action: persistent_notification.create
+                  data:
+                    title: "🔴 PBS: datastore заполняется"
+                    message: >-
+                      {{ trigger.to_state.attributes.datastore }}: заполнено {{ trigger.to_state.attributes.used_percent }}% (порог {{ trigger.to_state.attributes.threshold_percent }}%).
+            - conditions:
+                - condition: trigger
+                  id: disk_space_recovered
+              sequence:
+                - action: persistent_notification.create
+                  data:
+                    title: "✅ PBS: место на datastore восстановлено"
+                    message: >-
+                      {{ trigger.to_state.attributes.datastore }} снова ниже порога заполнения.
+            - conditions:
+                - condition: trigger
+                  id: zfs_pool_degraded
+              sequence:
+                - action: persistent_notification.create
+                  data:
+                    title: "🔴 PBS: проблема ZFS"
+                    message: >-
+                      Pool {{ trigger.to_state.attributes.pool }}: {{ trigger.to_state.attributes.zpool_state }}.
+            - conditions:
+                - condition: trigger
+                  id: zfs_pool_recovered
+              sequence:
+                - action: persistent_notification.create
+                  data:
+                    title: "✅ PBS: ZFS восстановлен"
+                    message: >-
+                      Pool {{ trigger.to_state.attributes.pool }} снова ONLINE.
+            - conditions:
+                - condition: trigger
+                  id: verify_failed
+              sequence:
+                - action: persistent_notification.create
+                  data:
+                    title: "🔴 PBS: Verify завершился с ошибкой"
+                    message: >-
+                      Verify Job {{ trigger.to_state.attributes.job_id }}, UPID {{ trigger.to_state.attributes.task_id }}.
