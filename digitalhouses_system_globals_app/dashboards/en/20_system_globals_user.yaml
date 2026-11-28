@@ -47,39 +47,155 @@ sections:
   - type: heading
     heading_style: title
     heading: Global profiles
-  - type: entities
-    show_header_toggle: false
-    title: Day
-    entities:
-    - entity: number.dh_system_globals_app_day_brightness
-      name: Brightness
-    - entity: number.dh_system_globals_app_day_volume
-      name: Volume
-    - entity: number.dh_system_globals_app_day_transition_seconds
-      name: Transition
-    - entity: text.dh_system_globals_app_day_color_temp_kelvin
-      name: Color temperature, K
-    - entity: text.dh_system_globals_app_day_rgb_color
-      name: RGB color
-    - entity: switch.dh_system_globals_app_day_voice_notifications_enabled
-      name: Voice notifications
-    - entity: switch.dh_system_globals_app_day_noncritical_sound_notifications_enabled
-      name: Noncritical sounds
-  - type: entities
-    show_header_toggle: false
-    title: Night
-    entities:
-    - entity: number.dh_system_globals_app_night_brightness
-      name: Brightness
-    - entity: number.dh_system_globals_app_night_volume
-      name: Volume
-    - entity: number.dh_system_globals_app_night_transition_seconds
-      name: Transition
-    - entity: text.dh_system_globals_app_night_color_temp_kelvin
-      name: Color temperature, K
-    - entity: text.dh_system_globals_app_night_rgb_color
-      name: RGB color
-    - entity: switch.dh_system_globals_app_night_voice_notifications_enabled
-      name: Voice notifications
-    - entity: switch.dh_system_globals_app_night_noncritical_sound_notifications_enabled
-      name: Noncritical sounds
+  - type: vertical-stack
+    cards:
+    - type: entities
+      show_header_toggle: false
+      title: Day
+      entities:
+      - entity: number.dh_system_globals_app_day_brightness
+        name: Brightness
+      - entity: number.dh_system_globals_app_day_volume
+        name: Volume
+      - entity: number.dh_system_globals_app_day_transition_seconds
+        name: Transition
+      - entity: text.dh_system_globals_app_day_color_temp_kelvin
+        name: Color temperature, K
+      - entity: switch.dh_system_globals_app_day_voice_notifications_enabled
+        name: Voice notifications
+      - entity: switch.dh_system_globals_app_day_noncritical_sound_notifications_enabled
+        name: Noncritical sounds
+    - type: custom:button-card
+      entity: text.dh_system_globals_app_day_rgb_color
+      show_icon: false
+      show_name: false
+      show_state: false
+      tap_action:
+        action: none
+      hold_action:
+        action: none
+      double_tap_action:
+        action: none
+      styles:
+        card:
+        - padding: 4px 16px
+        grid:
+        - grid-template-areas: '"picker"'
+        - grid-template-columns: 1fr
+        custom_fields:
+          picker:
+          - width: 100%
+      custom_fields:
+        picker: |
+          [[[
+            const id = 'text.dh_system_globals_app_day_rgb_color';
+            const state = states[id]?.state;
+            const configured = typeof state === 'string' && /^#[0-9a-f]{6}$/i.test(state);
+            const available = configured || state === '';
+            const value = configured ? state.toLowerCase() : '#ffffff';
+            const save = (next) => {
+              const current = hass.states[id]?.state;
+              if (current !== '' && !/^#[0-9a-f]{6}$/i.test(current || '')) return;
+              if (next !== '' && !/^#[0-9a-f]{6}$/i.test(next)) return;
+              if (current.toLowerCase() === next.toLowerCase()) return;
+              return hass.callService('text', 'set_value', {entity_id: id, value: next});
+            };
+            const stop = (event) => event.stopPropagation();
+            const change = (event) => {
+              stop(event);
+              const control = event.currentTarget;
+              save(control.value)?.catch(() => { control.value = value; });
+            };
+            const reset = (event) => {
+              stop(event);
+              save(configured ? '' : value)?.catch(() => {});
+            };
+            return html`
+              <div style="display:flex;align-items:center;gap:10px;min-height:40px">
+                <span style="flex:1;text-align:left;white-space:normal">RGB color</span>
+                <span style="color:var(--secondary-text-color);font-size:12px">${available ? (configured ? '' : 'Not set') : 'Unavailable'}</span>
+                <input type="color" aria-label="RGB color" title="RGB color"
+                  style="width:44px;height:36px;padding:2px;border:1px solid var(--divider-color);border-radius:6px;background:transparent;cursor:pointer"
+                  .value=${value} ?disabled=${!available} @click=${stop} @change=${change}>
+                <button type="button" ?disabled=${!available} @click=${reset}
+                  style="min-height:36px;padding:0 8px;border:1px solid var(--divider-color);border-radius:6px;background:transparent;color:var(--primary-text-color);font:inherit;cursor:pointer">
+                  ${configured ? 'Clear' : 'Set'}
+                </button>
+              </div>`;
+          ]]]
+  - type: vertical-stack
+    cards:
+    - type: entities
+      show_header_toggle: false
+      title: Night
+      entities:
+      - entity: number.dh_system_globals_app_night_brightness
+        name: Brightness
+      - entity: number.dh_system_globals_app_night_volume
+        name: Volume
+      - entity: number.dh_system_globals_app_night_transition_seconds
+        name: Transition
+      - entity: text.dh_system_globals_app_night_color_temp_kelvin
+        name: Color temperature, K
+      - entity: switch.dh_system_globals_app_night_voice_notifications_enabled
+        name: Voice notifications
+      - entity: switch.dh_system_globals_app_night_noncritical_sound_notifications_enabled
+        name: Noncritical sounds
+    - type: custom:button-card
+      entity: text.dh_system_globals_app_night_rgb_color
+      show_icon: false
+      show_name: false
+      show_state: false
+      tap_action:
+        action: none
+      hold_action:
+        action: none
+      double_tap_action:
+        action: none
+      styles:
+        card:
+        - padding: 4px 16px
+        grid:
+        - grid-template-areas: '"picker"'
+        - grid-template-columns: 1fr
+        custom_fields:
+          picker:
+          - width: 100%
+      custom_fields:
+        picker: |
+          [[[
+            const id = 'text.dh_system_globals_app_night_rgb_color';
+            const state = states[id]?.state;
+            const configured = typeof state === 'string' && /^#[0-9a-f]{6}$/i.test(state);
+            const available = configured || state === '';
+            const value = configured ? state.toLowerCase() : '#ffffff';
+            const save = (next) => {
+              const current = hass.states[id]?.state;
+              if (current !== '' && !/^#[0-9a-f]{6}$/i.test(current || '')) return;
+              if (next !== '' && !/^#[0-9a-f]{6}$/i.test(next)) return;
+              if (current.toLowerCase() === next.toLowerCase()) return;
+              return hass.callService('text', 'set_value', {entity_id: id, value: next});
+            };
+            const stop = (event) => event.stopPropagation();
+            const change = (event) => {
+              stop(event);
+              const control = event.currentTarget;
+              save(control.value)?.catch(() => { control.value = value; });
+            };
+            const reset = (event) => {
+              stop(event);
+              save(configured ? '' : value)?.catch(() => {});
+            };
+            return html`
+              <div style="display:flex;align-items:center;gap:10px;min-height:40px">
+                <span style="flex:1;text-align:left;white-space:normal">RGB color</span>
+                <span style="color:var(--secondary-text-color);font-size:12px">${available ? (configured ? '' : 'Not set') : 'Unavailable'}</span>
+                <input type="color" aria-label="RGB color" title="RGB color"
+                  style="width:44px;height:36px;padding:2px;border:1px solid var(--divider-color);border-radius:6px;background:transparent;cursor:pointer"
+                  .value=${value} ?disabled=${!available} @click=${stop} @change=${change}>
+                <button type="button" ?disabled=${!available} @click=${reset}
+                  style="min-height:36px;padding:0 8px;border:1px solid var(--divider-color);border-radius:6px;background:transparent;color:var(--primary-text-color);font:inherit;cursor:pointer">
+                  ${configured ? 'Clear' : 'Set'}
+                </button>
+              </div>`;
+          ]]]
