@@ -80,13 +80,13 @@ def test_all_six_discovery_components_share_cpu_topic():
         assert f"breakdown.{name}" in item["value_template"]
 
 
-def test_recorder_and_both_charts_cover_every_new_sensor():
+def test_recorder_covers_all_sensors_and_both_charts_show_active_cpu():
     view = (ROOT / "dashboards/ru/10_pve_proxmox.yaml").read_text()
     package = (ROOT / "packages/common/dh_pve_agent_package.yaml").read_text()
     for name in CPU_BREAKDOWN_FIELDS:
         entity = f"sensor.dh_pve_agent_cpu_{name}"
         assert f"        - {entity}\n" in package
-        assert view.count(f"- entity: {entity}\n") == 2
+        assert view.count(f"- entity: {entity}\n") == (0 if name == "idle" else 2)
     assert "chart_type: line-stack" in view
     assert "chart_type: line\n" in view
     for title in ("Структура CPU · 24 часа", "Детализация CPU · 24 часа"):
@@ -94,7 +94,10 @@ def test_recorder_and_both_charts_cover_every_new_sensor():
         card = view[start:].split("\n      - type:", 1)[0]
         assert "        entities:\n" in card
         assert "        visibility:\n          - condition: numeric_state\n" in card
-        assert "            entity: sensor.dh_pve_agent_cpu_idle\n            above: -1\n" in card
+        assert "            entity: sensor.dh_pve_agent_cpu_user\n            above: -1\n" in card
+        assert "cpu_idle" not in card
+        assert "max_y_axis:" not in card
+        assert "min_y_axis: 0\n" in card
         assert "custom:auto-entities" not in card
 
 

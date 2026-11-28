@@ -77,7 +77,10 @@ class DhSyncCanonicalPveResourcesTests(unittest.TestCase):
                     fragment = body[start:end]
                     self.assertEqual(fragment.count("type: statistics-graph"), 2)
                     self.assertEqual(fragment.count("condition: numeric_state"), 2)
-                    for name in ("user", "system", "guest", "iowait", "irq", "idle"):
+                    self.assertNotIn("cpu_idle", fragment)
+                    self.assertNotIn("max_y_axis:", fragment)
+                    self.assertEqual(fragment.count("min_y_axis: 0"), 2)
+                    for name in ("user", "system", "guest", "iowait", "irq"):
                         self.assertEqual(fragment.count(f"- entity: sensor.dh_pve_agent_cpu_{name}\n"), 2)
                     body = body[:start] + body[end:]
                     # Preserve the exact v3 CORE baseline except for the

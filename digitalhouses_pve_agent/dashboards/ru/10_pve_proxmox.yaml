@@ -2450,7 +2450,6 @@ sections:
         stat_types:
           - mean
         min_y_axis: 0
-        max_y_axis: 100
         entities:
           - entity: sensor.dh_pve_agent_cpu_user
             name: User
@@ -2467,12 +2466,9 @@ sections:
           - entity: sensor.dh_pve_agent_cpu_irq
             name: IRQ + SoftIRQ
             color: '#e53935'
-          - entity: sensor.dh_pve_agent_cpu_idle
-            name: Idle
-            color: '#9e9e9e'
         visibility:
           - condition: numeric_state
-            entity: sensor.dh_pve_agent_cpu_idle
+            entity: sensor.dh_pve_agent_cpu_user
             above: -1
         grid_options:
           columns: 12
@@ -2500,12 +2496,9 @@ sections:
           - entity: sensor.dh_pve_agent_cpu_irq
             name: IRQ + SoftIRQ
             color: '#e53935'
-          - entity: sensor.dh_pve_agent_cpu_idle
-            name: Idle
-            color: '#9e9e9e'
         visibility:
           - condition: numeric_state
-            entity: sensor.dh_pve_agent_cpu_idle
+            entity: sensor.dh_pve_agent_cpu_user
             above: -1
         grid_options:
           columns: 12
