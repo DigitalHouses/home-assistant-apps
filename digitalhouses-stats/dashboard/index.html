@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>DigitalHouses Stats</title>
-  <link rel="stylesheet" href="/assets/styles.css?v=compact-dark-20261128-v1">
+  <link rel="stylesheet" href="/assets/styles.css?v=compact-dark-20261128-v2">
 </head>
 <body>
   <main class="page">
@@ -69,7 +69,10 @@
       <div id="chart" class="chart chart-stacked" aria-label="Seven-day history of total and inactive registered installations"></div>
     </article>
     <article class="panel country-chart-panel">
-      <div class="panel-head"><div><h2>Installations by country</h2><p>Share of known installations</p></div></div>
+      <div class="panel-head">
+        <div><h2>Installations by country</h2><p>Share of known installations</p></div>
+        <div class="country-metric"><span>Countries</span><strong id="country-count">—</strong></div>
+      </div>
       <div class="country-chart-layout">
         <div id="country-donut" class="donut" role="img" aria-label="No country data">
           <div class="donut-center"><strong id="donut-total">—</strong><small>installations</small></div>
@@ -87,10 +90,6 @@
             <p>Expand a country to see its Apps and Agents</p>
           </div>
           <div class="country-metrics">
-            <div class="country-metric">
-              <span>Countries</span>
-              <strong id="country-count">—</strong>
-            </div>
             <div class="country-metric">
               <span>Newest country</span>
               <strong id="country-newest-name">—</strong>
@@ -128,6 +127,6 @@
       <button id="refresh" type="button">Refresh</button>
     </footer>
   </main>
-  <script src="/assets/app.js?v=compact-dark-20261128-v1"></script>
+  <script src="/assets/app.js?v=compact-dark-20261128-v2"></script>
 </body>
 </html>
