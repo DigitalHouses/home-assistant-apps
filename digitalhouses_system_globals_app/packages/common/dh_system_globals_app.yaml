@@ -13,3 +13,82 @@ dh_system_globals_app_package:
       - sensor.dh_system_globals_app_active_color_temp_kelvin
       - sensor.dh_system_globals_app_active_rgb_color
       - sensor.dh_system_globals_app_active_volume
+  script:
+    dh_system_globals_app_day_rgb_set:
+      alias: System Globals - Day RGB
+      icon: mdi:palette
+      mode: single
+      fields:
+        rgb:
+          name: RGB
+          required: true
+          selector:
+            color_rgb: {}
+      sequence:
+      - condition: template
+        value_template: >-
+          {{ states('text.dh_system_globals_app_day_rgb_color') == '' or states('text.dh_system_globals_app_day_rgb_color') | regex_match('^#[0-9a-fA-F]{6}$') }}
+      - condition: template
+        value_template: >-
+          {{ rgb is defined and rgb is sequence and rgb is not string and rgb is not mapping
+             and rgb | count == 3
+             and rgb[0] is integer and 0 <= rgb[0] <= 255
+             and rgb[1] is integer and 0 <= rgb[1] <= 255
+             and rgb[2] is integer and 0 <= rgb[2] <= 255 }}
+      - action: text.set_value
+        target:
+          entity_id: text.dh_system_globals_app_day_rgb_color
+        data:
+          value: "{{ '#%02X%02X%02X' | format(rgb[0], rgb[1], rgb[2]) }}"
+    dh_system_globals_app_day_rgb_clear:
+      alias: System Globals - Day RGB clear
+      icon: mdi:palette-outline
+      mode: single
+      sequence:
+      - condition: template
+        value_template: >-
+          {{ states('text.dh_system_globals_app_day_rgb_color') == '' or states('text.dh_system_globals_app_day_rgb_color') | regex_match('^#[0-9a-fA-F]{6}$') }}
+      - action: text.set_value
+        target:
+          entity_id: text.dh_system_globals_app_day_rgb_color
+        data:
+          value: ""
+    dh_system_globals_app_night_rgb_set:
+      alias: System Globals - Night RGB
+      icon: mdi:palette
+      mode: single
+      fields:
+        rgb:
+          name: RGB
+          required: true
+          selector:
+            color_rgb: {}
+      sequence:
+      - condition: template
+        value_template: >-
+          {{ states('text.dh_system_globals_app_night_rgb_color') == '' or states('text.dh_system_globals_app_night_rgb_color') | regex_match('^#[0-9a-fA-F]{6}$') }}
+      - condition: template
+        value_template: >-
+          {{ rgb is defined and rgb is sequence and rgb is not string and rgb is not mapping
+             and rgb | count == 3
+             and rgb[0] is integer and 0 <= rgb[0] <= 255
+             and rgb[1] is integer and 0 <= rgb[1] <= 255
+             and rgb[2] is integer and 0 <= rgb[2] <= 255 }}
+      - action: text.set_value
+        target:
+          entity_id: text.dh_system_globals_app_night_rgb_color
+        data:
+          value: "{{ '#%02X%02X%02X' | format(rgb[0], rgb[1], rgb[2]) }}"
+    dh_system_globals_app_night_rgb_clear:
+      alias: System Globals - Night RGB clear
+      icon: mdi:palette-outline
+      mode: single
+      sequence:
+      - condition: template
+        value_template: >-
+          {{ states('text.dh_system_globals_app_night_rgb_color') == '' or states('text.dh_system_globals_app_night_rgb_color') | regex_match('^#[0-9a-fA-F]{6}$') }}
+      - action: text.set_value
+        target:
+          entity_id: text.dh_system_globals_app_night_rgb_color
+        data:
+          value: ""
