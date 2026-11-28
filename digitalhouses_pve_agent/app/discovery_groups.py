@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 from collections.abc import Mapping
 
+from .collectors.cpu import CPU_BREAKDOWN_FIELDS
 from .discovery_identity import canonicalize_component_unique_ids
 from .topics import state_group_topic
 
@@ -45,6 +46,7 @@ def _component_groups(inventory: Mapping[str, object]) -> dict[str, str]:
         "previous_shutdown": "shutdown",
         "shutdown_history": "shutdown",
         "cpu_usage": "cpu",
+        **{f"cpu_{name}": "cpu" for name in CPU_BREAKDOWN_FIELDS},
         "cpu_temperature": "cpu",
         "cpu_frequency": "cpu",
         "cpu_throttling": "cpu",

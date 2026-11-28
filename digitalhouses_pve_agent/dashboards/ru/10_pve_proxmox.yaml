@@ -2442,6 +2442,87 @@ sections:
         card_param: entities
         grid_options:
           columns: 12
+      - type: custom:auto-entities
+        show_empty: false
+        card:
+          type: statistics-graph
+          title: Структура CPU · 24 часа
+          chart_type: line-stack
+          days_to_show: 1
+          period: 5minute
+          stat_types:
+            - mean
+          min_y_axis: 0
+          max_y_axis: 100
+        filter:
+          include:
+            - entity_id: sensor.dh_pve_agent_cpu_user
+              options:
+                name: User
+                color: '#43a047'
+            - entity_id: sensor.dh_pve_agent_cpu_system
+              options:
+                name: System
+                color: '#1e88e5'
+            - entity_id: sensor.dh_pve_agent_cpu_guest
+              options:
+                name: Guest (KVM)
+                color: '#8e24aa'
+            - entity_id: sensor.dh_pve_agent_cpu_iowait
+              options:
+                name: IOWait
+                color: '#fb8c00'
+            - entity_id: sensor.dh_pve_agent_cpu_irq
+              options:
+                name: IRQ + SoftIRQ
+                color: '#e53935'
+            - entity_id: sensor.dh_pve_agent_cpu_idle
+              options:
+                name: Idle
+                color: '#9e9e9e'
+        card_param: entities
+        grid_options:
+          columns: 12
+      - type: custom:auto-entities
+        show_empty: false
+        card:
+          type: statistics-graph
+          title: Детализация CPU · 24 часа
+          chart_type: line
+          days_to_show: 1
+          period: 5minute
+          stat_types:
+            - mean
+          min_y_axis: 0
+        filter:
+          include:
+            - entity_id: sensor.dh_pve_agent_cpu_user
+              options:
+                name: User
+                color: '#43a047'
+            - entity_id: sensor.dh_pve_agent_cpu_system
+              options:
+                name: System
+                color: '#1e88e5'
+            - entity_id: sensor.dh_pve_agent_cpu_guest
+              options:
+                name: Guest (KVM)
+                color: '#8e24aa'
+            - entity_id: sensor.dh_pve_agent_cpu_iowait
+              options:
+                name: IOWait
+                color: '#fb8c00'
+            - entity_id: sensor.dh_pve_agent_cpu_irq
+              options:
+                name: IRQ + SoftIRQ
+                color: '#e53935'
+            - entity_id: sensor.dh_pve_agent_cpu_idle
+              options:
+                name: Idle
+                color: '#9e9e9e'
+        card_param: entities
+        grid_options:
+          columns: 12
       - type: heading
         heading: Частота CPU · 24 часа
         heading_style: subtitle

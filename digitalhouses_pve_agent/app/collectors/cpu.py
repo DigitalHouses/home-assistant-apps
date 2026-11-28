@@ -10,6 +10,10 @@ from ..models import CpuFrequencySnapshot, CpuTopology, ThrottleCounters
 class CpuTimes:
     total: int
     idle: int
+    counters: tuple[int, ...] = ()
+
+
+CPU_BREAKDOWN_FIELDS = ("user", "system", "guest", "iowait", "irq", "idle")
 
 
 def parse_cpu_stat_line(line: str) -> CpuTimes:
@@ -19,11 +23,12 @@ def parse_cpu_stat_line(line: str) -> CpuTimes:
     values = [int(item) for item in parts[1:]]
     if len(values) < 4:
         raise ValueError("aggregate cpu line is incomplete")
-    values += [0] * (8 - len(values))
+    values += [0] * (10 - len(values))
     user, nice, system, idle, iowait, irq, softirq, steal = values[:8]
     return CpuTimes(
         total=user + nice + system + idle + iowait + irq + softirq + steal,
         idle=idle + iowait,
+        counters=tuple(values[:10]),
     )
 
 
@@ -38,6 +43,27 @@ def cpu_usage_percent(previous: CpuTimes, current: CpuTimes) -> float | None:
     if total <= 0:
         return None
     return round(max(0.0, min(100.0, (total - idle) * 100.0 / total)), 1)
+
+
+def cpu_breakdown_percent(previous: CpuTimes, current: CpuTimes) -> dict[str, float] | None:
+    """Mutually exclusive shares of total host CPU time; guest is already in user/nice.
+
+    Steal remains in the denominator, but is not assigned to an unrelated
+    category. Nested hosts with steal therefore have a gap below 100%.
+    Reject discontinuities (including Linux's occasionally decreasing iowait).
+    """
+    if len(previous.counters) != 10 or len(current.counters) != 10:
+        return None
+    deltas = tuple(new - old for old, new in zip(previous.counters, current.counters))
+    if any(delta < 0 for delta in deltas):
+        return None
+    user, nice, system, idle, iowait, irq, softirq, steal, guest, guest_nice = deltas
+    total = sum(deltas[:8])
+    if total <= 0 or guest > user or guest_nice > nice:
+        return None
+    shares = (user + nice - guest - guest_nice, system, guest + guest_nice,
+              iowait, irq + softirq, idle)
+    return {name: 100.0 * value / total for name, value in zip(CPU_BREAKDOWN_FIELDS, shares)}
 
 
 def _lscpu_fields(text: str) -> dict[str, str]:

@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from numbers import Real
 
 from .presentation import AdaptiveGroup, GroupDecision, ProfileWindows, PublicationProfile
+from .collectors.cpu import CPU_BREAKDOWN_FIELDS
 from .presentation_policy import (
     ResourceProfileSelector,
     cpu_profile_selector,
@@ -206,6 +207,9 @@ class PvePresentationRouter:
         raw = _mapping(state.data)
         frequency = _mapping(raw.get("frequency"))
         usage = _number(raw.get("usage_percent"))
+        breakdown = _mapping(raw.get("breakdown"))
+        shares = {name: _number(breakdown.get(name)) for name in CPU_BREAKDOWN_FIELDS}
+        shares_valid = state.available and all(value is not None for value in shares.values())
         temperature = _number(raw.get("temperature_c"))
         frequency_mhz = _number(frequency.get("average_mhz"))
         throttling = raw.get("throttling_active") is True
@@ -223,11 +227,13 @@ class PvePresentationRouter:
                 "usage_percent": usage,
                 "temperature_c": temperature,
                 "frequency_mhz": frequency_mhz,
+                **{f"breakdown_{name}": value if shares_valid else None for name, value in shares.items()},
             },
             discrete={
                 "available": state.available,
                 "error": state.error,
                 "throttling_active": throttling,
+                "breakdown_valid": shares_valid,
             },
             requested_profile=choice.profile,
             force=force,
@@ -240,6 +246,8 @@ class PvePresentationRouter:
             "usage_percent": values.get("usage_percent"),
             "temperature_c": values.get("temperature_c"),
             "throttling_active": values.get("throttling_active", throttling),
+            "breakdown": {name: values.get(f"breakdown_{name}") if shares_valid else None
+                          for name in CPU_BREAKDOWN_FIELDS},
         }
         if "frequency_mhz" in values:
             data["frequency"] = {"average_mhz": values["frequency_mhz"]}

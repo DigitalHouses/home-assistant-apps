@@ -4,6 +4,7 @@ import json
 import re
 from typing import Any, Mapping
 
+from .collectors.cpu import CPU_BREAKDOWN_FIELDS
 from .config import AppConfig
 from .discovery import build_discovery_payload
 from .identity import HostIdentity
@@ -254,6 +255,16 @@ def build_full_discovery_payload(
             icon="mdi:swap-horizontal",
         ),
     ]
+    for index, name in enumerate(CPU_BREAKDOWN_FIELDS):
+        label = {"iowait": "IOWait", "irq": "IRQ + SoftIRQ"}.get(name, name.title())
+        static.append(_sensor(
+            uid=uid, state_topic=topics.state, app_topic=topics.availability,
+            key=f"cpu_{name}", name=f"CPU {label}", entity_id=f"sensor.dh_pve_agent_cpu_{name}",
+            expression=_path("cpu", "breakdown", name) + " | default(none)",
+            subsystem="cpu", section="cpu", subject="cpu", metric=name,
+            object_id="cpu", display_name="CPU", sort_key=str(140 + index),
+            unit="%", state_class="measurement", icon="mdi:cpu-64-bit",
+        ))
     for key, item in static:
         components[key] = item
 
