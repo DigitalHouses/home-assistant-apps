@@ -40,6 +40,12 @@ path system-globals. The owner View is dashboards/ru/20_system_globals_user.yaml
 path system-globals-user; it contains only mode, schedule, active settings, history
 and profile controls. DH Sync places the owner View in the non-admin DH User panel.
 This is UI separation, not a replacement for Home Assistant permissions.
+Both Views use short, localized Lovelace row names rather than changing MQTT
+entity names. Matching Russian and English YAML files are maintained under
+dashboards/ru and dashboards/en, with the same View paths and entity IDs.
+Current DH Sync reads dashboards/ru only; selecting the English resources
+requires a separate DH Sync localization implementation. Do not publish both
+languages into the same panel at once.
 The Recorder package in packages/common/dh_system_globals_app.yaml includes
 the authoritative night-mode switch (off = day, on = night). The View displays
 its native 24-hour history graph; no additional sensor or automation is needed.

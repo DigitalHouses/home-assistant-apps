@@ -1,0 +1,336 @@
+# Canonical owner View. Placement belongs to DH Sync.
+title: System Globals
+path: system-globals
+icon: mdi:state-machine
+type: sections
+max_columns: 2
+sections:
+- type: grid
+  cards:
+  - type: heading
+    heading_style: title
+    heading: System Globals
+  - type: vertical-stack
+    cards:
+    - type: custom:button-card
+      entity: sensor.dh_system_globals_app_card
+      triggers_update:
+      - sensor.dh_system_globals_app_card
+      - sensor.dh_system_globals_app_version
+      - sensor.dh_system_globals_app_latest_version
+      - binary_sensor.dh_system_globals_app_update_available
+      - binary_sensor.dh_system_globals_app_system_ready
+      - update.digitalhouses_system_globals_app_update
+      update_timer: |
+        [[[
+          const s = states['sensor.dh_system_globals_app_card']?.state;
+          const updating =
+            states['update.digitalhouses_system_globals_app_update']?.attributes?.in_progress === true;
+          return s === 'running' || updating ? 1000 : 5000;
+        ]]]
+      show_icon: true
+      show_name: true
+      show_label: true
+      icon: |
+        [[[
+          const s = states['sensor.dh_system_globals_app_card']?.state;
+          const ready = states['binary_sensor.dh_system_globals_app_system_ready']?.state;
+          const upgrade =
+            states['binary_sensor.dh_system_globals_app_update_available']?.state === 'on';
+          const updating =
+            states['update.digitalhouses_system_globals_app_update']?.attributes?.in_progress === true;
+
+          if (updating || s === 'running') return 'mdi:progress-clock';
+          if (s === 'error') return 'mdi:alert-circle';
+          if (s === 'success') return 'mdi:check-circle';
+          if (!s || ['unknown','unavailable'].includes(s)) return 'mdi:alert-circle';
+          if (ready !== 'on') return 'mdi:shield-alert';
+          if (upgrade) return 'mdi:package-up';
+          return 'mdi:state-machine';
+        ]]]
+      name: |
+        [[[
+          const installed = states['sensor.dh_system_globals_app_version']?.state;
+          const latest = states['sensor.dh_system_globals_app_latest_version']?.state;
+          const available =
+            states['binary_sensor.dh_system_globals_app_update_available']?.state === 'on';
+          const valid = (v) =>
+            typeof v === 'string'
+            && !['unknown', 'unavailable', 'none', ''].includes(v);
+          const upgrade =
+            available && valid(installed) && valid(latest) && latest !== installed;
+
+          return 'System Globals' + (valid(installed)
+            ? ' · v' + installed + (upgrade ? ' → v' + latest : '')
+            : '');
+        ]]]
+      label: |
+        [[[
+          const item = states['sensor.dh_system_globals_app_card'];
+          const ready = states['binary_sensor.dh_system_globals_app_system_ready']?.state;
+          const supervisorUpdate = states['update.digitalhouses_system_globals_app_update'];
+
+          const elapsedText = (since) => {
+            const seconds = Math.max(
+              0,
+              Math.floor((performance.now() - since) / 1000)
+            );
+            const mm = String(Math.floor(seconds / 60)).padStart(2, '0');
+            const ss = String(seconds % 60).padStart(2, '0');
+            return mm + ':' + ss;
+          };
+          const duration = (value) => {
+            if (typeof value !== 'number') return '—';
+            const seconds = Math.round(Math.max(0, value));
+            const minutes = Math.floor(seconds / 60);
+            return minutes
+              ? minutes + ' min ' + String(seconds % 60).padStart(2, '0') + ' s'
+              : seconds + ' s';
+          };
+
+          if (supervisorUpdate?.attributes?.in_progress === true) {
+            if (this._dh_system_globals_timer?.operation !== 'install') {
+              this._dh_system_globals_timer = {
+                operation: 'install',
+                since: performance.now()
+              };
+            }
+            const pct = supervisorUpdate.attributes.update_percentage;
+            return 'Installing update… '
+              + (typeof pct === 'number' ? Math.round(pct) + '% · ' : '')
+              + elapsedText(this._dh_system_globals_timer.since);
+          }
+
+          if (!item || ['unknown', 'unavailable'].includes(item.state)) {
+            return 'App unavailable';
+          }
+
+          const a = item.attributes || {};
+          const operation = a.operation;
+          const names = {
+            refresh: 'Refreshing data',
+            check: 'Checking version'
+          };
+
+          if (item.state === 'running') {
+            const key = String(operation) + '|' + String(a.started_at || '');
+            if (this._dh_system_globals_timer?.key !== key) {
+              this._dh_system_globals_timer = {
+                key: key,
+                operation: operation,
+                since: performance.now()
+              };
+            }
+            return (names[operation] || 'Operation') + '… '
+              + elapsedText(this._dh_system_globals_timer.since);
+          }
+
+          this._dh_system_globals_timer = null;
+
+          if (item.state === 'error') {
+            return 'Error: ' + (a.error || 'operation failed');
+          }
+
+          if (item.state === 'success') {
+            let message = operation === 'refresh'
+              ? 'Data refreshed'
+              : operation === 'check'
+                ? (
+                    states['binary_sensor.dh_system_globals_app_update_available']?.state === 'on'
+                      ? 'Update available'
+                      : states['binary_sensor.dh_system_globals_app_update_available']?.state === 'off'
+                        ? 'Up to date'
+                        : 'Check completed'
+                  )
+                : 'Done';
+            return message + ' · ' + duration(a.duration_seconds);
+          }
+
+          if (states['binary_sensor.dh_system_globals_app_update_available']?.state === 'on') {
+            return 'Update available';
+          }
+          if (ready === 'off') return 'Gate closed';
+          if (ready === 'on') return 'System ready';
+          return 'Waiting for data';
+        ]]]
+      styles:
+        card:
+        - padding: 12px
+        - text-align: left
+        grid:
+        - grid-template-areas: '"i n" "i l"'
+        - grid-template-columns: 48px 1fr
+        - grid-template-rows: min-content min-content
+        img_cell:
+        - width: 40px
+        - justify-content: start
+        icon:
+        - width: 26px
+        - color: |
+            [[[
+              const s = states['sensor.dh_system_globals_app_card']?.state;
+              const ready = states['binary_sensor.dh_system_globals_app_system_ready']?.state;
+              const upgrade =
+                states['binary_sensor.dh_system_globals_app_update_available']?.state === 'on';
+              const updating =
+                states['update.digitalhouses_system_globals_app_update']?.attributes?.in_progress === true;
+
+              return s === 'error' || !s || ['unknown','unavailable'].includes(s)
+                ? 'var(--error-color)'
+                : s === 'running' || updating
+                  ? 'var(--info-color, var(--primary-color))'
+                  : s === 'success'
+                    ? 'var(--success-color, var(--primary-color))'
+                    : ready === 'off' || upgrade
+                      ? 'var(--warning-color, orange)'
+                      : ready === 'on'
+                        ? 'var(--success-color, var(--primary-color))'
+                        : 'var(--secondary-text-color)';
+            ]]]
+        name:
+        - justify-self: start
+        - font-size: 14px
+        - font-weight: 600
+        label:
+        - justify-self: start
+        - white-space: normal
+        - text-align: left
+        - font-size: 13px
+        - color: var(--secondary-text-color)
+      tap_action:
+        action: none
+    - type: custom:mushroom-chips-card
+      alignment: center
+      chips:
+      - type: template
+        icon: mdi:refresh
+        content: Refresh
+        tap_action:
+          action: perform-action
+          perform_action: button.press
+          target:
+            entity_id: button.dh_system_globals_app_refresh
+      - type: template
+        icon: mdi:cloud-search
+        content: Version
+        tap_action:
+          action: perform-action
+          perform_action: button.press
+          target:
+            entity_id: button.dh_system_globals_app_check_updates
+      - type: conditional
+        conditions:
+        - entity: update.digitalhouses_system_globals_app_update
+          state: 'on'
+        chip:
+          type: template
+          icon: mdi:package-down
+          icon_color: orange
+          content: Update
+          tap_action:
+            action: perform-action
+            perform_action: update.install
+            target:
+              entity_id: update.digitalhouses_system_globals_app_update
+            data:
+              backup: true
+            confirmation:
+              text: Install the new System Globals version? Home Assistant will back up the App first.
+                Global scheduling and readiness checks will be temporarily interrupted.
+      - type: template
+        icon: mdi:restart
+        content: Restart
+        tap_action:
+          action: perform-action
+          perform_action: hassio.app_restart
+          data:
+            app: 8133339d_digitalhouses_system_globals_app
+          confirmation:
+            text: Restart System Globals? Global scheduling and readiness checks will be temporarily interrupted.
+    grid_options:
+      columns: 12
+  - type: entities
+    show_header_toggle: false
+    title: Day / Night
+    entities:
+    - entity: switch.dh_system_globals_app_night_mode
+      name: Night mode
+    - entity: switch.dh_system_globals_app_auto_switch
+      name: Automatic switching
+    - entity: text.dh_system_globals_app_night_start
+      name: Night start
+    - entity: text.dh_system_globals_app_night_end
+      name: Night end
+    - entity: sensor.dh_system_globals_app_timezone
+      name: Time zone
+  - type: history-graph
+    title: Night mode history
+    hours_to_show: 24
+    entities:
+    - entity: switch.dh_system_globals_app_night_mode
+      name: Night mode
+  - type: entities
+    show_header_toggle: false
+    title: Active settings
+    entities:
+    - entity: sensor.dh_system_globals_app_active_brightness
+      name: Brightness
+    - entity: sensor.dh_system_globals_app_active_color_temp_kelvin
+      name: Color temperature
+    - entity: sensor.dh_system_globals_app_active_rgb_color
+      name: RGB color
+    - entity: sensor.dh_system_globals_app_active_volume
+      name: Volume
+- type: grid
+  cards:
+  - type: heading
+    heading_style: title
+    heading: Global profiles
+  - type: entities
+    show_header_toggle: false
+    title: Day
+    entities:
+    - entity: number.dh_system_globals_app_day_brightness
+      name: Brightness
+    - entity: number.dh_system_globals_app_day_volume
+      name: Volume
+    - entity: number.dh_system_globals_app_day_transition_seconds
+      name: Transition
+    - entity: text.dh_system_globals_app_day_color_temp_kelvin
+      name: Color temperature, K
+    - entity: text.dh_system_globals_app_day_rgb_color
+      name: RGB color
+    - entity: switch.dh_system_globals_app_day_voice_notifications_enabled
+      name: Voice notifications
+    - entity: switch.dh_system_globals_app_day_noncritical_sound_notifications_enabled
+      name: Noncritical sounds
+  - type: entities
+    show_header_toggle: false
+    title: Night
+    entities:
+    - entity: number.dh_system_globals_app_night_brightness
+      name: Brightness
+    - entity: number.dh_system_globals_app_night_volume
+      name: Volume
+    - entity: number.dh_system_globals_app_night_transition_seconds
+      name: Transition
+    - entity: text.dh_system_globals_app_night_color_temp_kelvin
+      name: Color temperature, K
+    - entity: text.dh_system_globals_app_night_rgb_color
+      name: RGB color
+    - entity: switch.dh_system_globals_app_night_voice_notifications_enabled
+      name: Voice notifications
+    - entity: switch.dh_system_globals_app_night_noncritical_sound_notifications_enabled
+      name: Noncritical sounds
+  - type: entities
+    show_header_toggle: false
+    title: System readiness
+    entities:
+    - entity: binary_sensor.dh_system_globals_app_mqtt_ready
+      name: MQTT ready
+    - entity: binary_sensor.dh_system_globals_app_ha_ready
+      name: Home Assistant ready
+    - entity: binary_sensor.dh_system_globals_app_zigbee_ready
+      name: Zigbee ready
+    - entity: binary_sensor.dh_system_globals_app_system_ready
+      name: System ready
