@@ -97,7 +97,8 @@ def render(records, report, *, running=False, failure="", timezone_info=("UTC", 
         state = panel.get("state", "")
         panels += f'<tr><td>{title}</td><td class="num">{h(panel.get("views",0))}</td><td class="num {css_status(state)}">{h(result_text(state))}</td></tr>'
     if not panels:
-        panels = '<tr><td colspan="3" class="muted">Нет данных</td></tr>'
+        message = "Панели сохранены без изменений: неполные данные Git" if dashboard.get("state") == "Deferred" else "Нет данных"
+        panels = f'<tr><td colspan="3" class="muted">{h(message)}</td></tr>'
     packages = report.get("packages") or {}
     loader = {"Configured":"Подключение создано","Current":"Подключены","Unavailable":"Ошибка подключения"}.get(packages.get("loader"), "Нет данных")
     reload = {"Requested":" · YAML-перезагрузка запрошена","Unavailable":" · YAML-перезагрузка недоступна","Not available":" · YAML-перезагрузка недоступна"}.get(packages.get("reload"), "")

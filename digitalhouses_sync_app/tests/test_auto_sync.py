@@ -234,7 +234,40 @@ class AutomaticSyncTests(unittest.TestCase):
                  "repository": "https://github.com/OtherOwner/repo"}}
         report = self.app.sync(claim)
         self.assertTrue(report["issues"])
-        self.assertEqual(self.publisher.calls[-1][1], {})
+        self.assertEqual(self.publisher.calls, [])
+
+    def test_incomplete_git_scan_never_removes_live_views_even_after_restart(self):
+        from dashboard_runtime import DashboardPublisher
+        from test_dashboard_runtime import FakeWS
+        ws = FakeWS()
+        self.app.publisher = DashboardPublisher(self.root, self.data, transport=ws)
+        self.app.sync(CLAIMS)
+        before = json.loads(json.dumps(ws.configs))
+        original = self.backend.resolve_revision
+        def fail(repo):
+            if repo == REPO:
+                raise ValueError("Git transport unavailable or timed out")
+            return original(repo)
+        self.backend.resolve_revision = fail
+        # Fresh process has no cached previous report or resources.
+        app = AutoSync(self.root, self.data, backend=self.backend,
+                       publisher=self.app.publisher)
+        ws.calls.clear()
+        failed = app.sync(CLAIMS, refresh=True)
+        self.assertEqual(failed["dashboard"]["state"], "Deferred")
+        self.assertTrue(failed["issues"])
+        self.assertEqual(ws.configs, before)
+        self.assertEqual(ws.calls, [])
+        self.assertFalse(any(r["status"] == "Removed" for r in failed["resources"]))
+        self.backend.resolve_revision = original
+        recovered = app.sync(CLAIMS)
+        self.assertEqual(recovered["state"], "OK")
+        self.assertEqual(ws.configs, before)
+        del self.backend.raw["example/dashboards/ru/10_first.yaml"]
+        removed = app.sync(CLAIMS)
+        self.assertEqual(removed["state"], "OK")
+        self.assertTrue(any(r["status"] == "Removed" for r in removed["resources"]))
+        self.assertEqual(ws.configs["dh-system"]["views"], [])
 
     def test_other_package_and_local_file_is_preserved(self):
         own = self.root / "packages/private.yaml"

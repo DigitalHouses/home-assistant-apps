@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.10
+
+- Preserve existing dashboards when Git resource discovery is incomplete. Never treat a transport or resource error as an intentional View removal. Retry on the existing sync cycle; valid removals still apply after a successful complete scan.
+
 ## 0.6.9
 
 - Use Home Assistant Core configuration as the sole site timezone source. Refresh on startup and existing sync cycles; retain last valid IANA value in /data across restarts.
