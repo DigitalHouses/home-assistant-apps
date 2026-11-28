@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.1.7
+- DH Journal 1.0.1: show product name and App version in startup markers and LOG header; library version remains in technical details. Localize historical readiness reasons and operation/state labels in RU/EN, remove duplicate emoji, and classify initial readiness probes as pending with a bounded 20-second grace period. Preserve existing history.
+
 ## 0.1.6
 - Pilot DH Journal 1.0.0: full-screen RU/EN Ingress LOG, local SQLite history of the latest 3000 immutable events, restart markers, incremental updates, search, level filters, and localized .log export. Readiness, lifecycle and configuration transitions only; no added MQTT entities or polling.
 

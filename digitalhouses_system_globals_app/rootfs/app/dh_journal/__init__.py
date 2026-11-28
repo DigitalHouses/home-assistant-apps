@@ -1,4 +1,4 @@
-"""DH Journal 1.0.0: bounded local, append-only diagnostic events."""
+"""DH Journal 1.0.1: bounded local, append-only diagnostic events."""
 from collections import deque
 from datetime import datetime, timezone
 from pathlib import Path
@@ -10,7 +10,7 @@ import re
 import sqlite3
 import uuid
 
-VERSION = "1.0.0"
+VERSION = "1.0.1"
 LIMIT = 3000
 LEVELS = ("debug", "info", "success", "pending", "warning", "error", "lifecycle")
 ICONS = dict(zip(LEVELS, ("🔍", "ℹ️", "✅", "⏳", "⚠️", "❌", "🔄")))
@@ -35,10 +35,14 @@ def clean(value):
 
 
 class Journal:
-    def __init__(self, path, *, product, locales=None, debug=False, clock=None):
+    def __init__(self, path, *, product, product_name=None, locales=None, value_locales=None, icons=None, debug=False, clock=None):
         if not CODE.fullmatch(product):
             raise ValueError("Invalid product")
         self.product = product
+        self.product_name = clean(product_name or product)
+        self.app_version = None
+        self.value_locales = value_locales or {}
+        self.icons = icons or {}
         self.debug_enabled = debug
         self.clock = clock or (lambda: datetime.now(timezone.utc))
         self.lock = RLock()
@@ -109,7 +113,8 @@ class Journal:
             self.ram.append({"id": self.seq, "ts": ts, "level": level, "code": code, "params": params})
 
     def start(self, version):
-        self.record("lifecycle", "app_started", version=version, journal=VERSION)
+        self.app_version = version
+        self.record("lifecycle", "app_started", product_name=self.product_name, version=version, journal=VERSION)
 
     def stop(self):
         self.record("lifecycle", "app_stopped")
@@ -149,10 +154,19 @@ class Journal:
         template = self.messages.get(lang, self.messages["en"]).get(row["code"])
         if template:
             try:
-                return template.format(**row["params"])
+                params = dict(row["params"])
+                if row["code"] == "app_started":
+                    params.setdefault("product_name", self.product_name)
+                for key, values in self.value_locales.get(lang, {}).items():
+                    if isinstance(params.get(key), str):
+                        params[key] = values.get(params[key], params[key])
+                return template.format(**params)
             except (KeyError, ValueError):
                 pass
         return row["code"] + " " + json.dumps(row["params"], ensure_ascii=False)
+
+    def icon(self, row):
+        return self.icons.get(row["code"], ICONS[row["level"]])
 
     @staticmethod
     def zone(name):
@@ -167,7 +181,7 @@ class Journal:
         for row in self.snapshot()["rows"]:
             dt = datetime.fromisoformat(row["ts"]).astimezone(zone).isoformat(timespec="milliseconds")
             detail = " | " + json.dumps(row["params"], ensure_ascii=False, separators=(",", ":")) if row["params"] else ""
-            lines.append(f"{dt} [{row['level'].upper()}] {ICONS[row['level']]} {self.message(row, lang)}{detail}")
+            lines.append(f"{dt} [{row['level'].upper()}] {self.icon(row)} {self.message(row, lang)}{detail}")
         stamp = self.clock().astimezone(zone).strftime("%Y-%m-%d_%H-%M-%S")
         return self.product + "_" + stamp + ".log", ("\n".join(lines) + "\n").encode("utf-8")
 

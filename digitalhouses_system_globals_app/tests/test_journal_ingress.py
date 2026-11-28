@@ -7,14 +7,14 @@ from urllib.request import urlopen, Request
 from urllib.error import HTTPError
 
 from dh_journal import Journal
-from journal_events import GlobalsJournal, LOCALES
+from journal_events import GlobalsJournal, LOCALES, PRODUCT_NAME, VALUE_LOCALES, ICONS
 from ingress import serve
 
 class TestJournalIntegration(unittest.TestCase):
     def setUp(self):
         tmp=tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
-        self.j=Journal(Path(tmp.name)/"journal.sqlite3",product="digitalhouses_system_globals_app",locales=LOCALES)
+        self.j=Journal(Path(tmp.name)/"journal.sqlite3",product="digitalhouses_system_globals_app",product_name=PRODUCT_NAME,locales=LOCALES,value_locales=VALUE_LOCALES,icons=ICONS)
         self.addCleanup(self.j.close)
         self.j.start("0.1.6")
 
@@ -67,7 +67,9 @@ class TestJournalIntegration(unittest.TestCase):
         with urlopen(base+"/api/log?lang=en") as res:
             data=json.load(res)
         self.assertEqual(data["rows"][0]["code"],"app_started")
-        self.assertIn("APPLICATION START",data["rows"][0]["message"])
+        self.assertEqual(data["product_name"],PRODUCT_NAME)
+        self.assertEqual(data["app_version"],"0.1.6")
+        self.assertEqual(data["rows"][0]["message"],"APPLICATION START · DigitalHouses System Globals v0.1.6")
         with urlopen(base+"/api/log/export?lang=ru") as res:
             self.assertIn("digitalhouses_system_globals_app_",res.headers["Content-Disposition"])
             self.assertIn(".log",res.headers["Content-Disposition"])
@@ -78,6 +80,54 @@ class TestJournalIntegration(unittest.TestCase):
         with urlopen(Request(base+"/api/log/clear",data=b'{"confirm":true}',headers={"Content-Type":"application/json"})) as res:
             self.assertTrue(json.load(res)["ok"])
         self.assertEqual(self.j.snapshot()["rows"][0]["code"],"journal_cleared")
+
+    def test_initialization_pending_then_warning(self):
+        t=[0]
+        observer=GlobalsJournal(self.j,clock=lambda:t[0])
+        view={"mqtt_connected":True,"gates":{"zigbee_ready":False},
+              "diagnostics":{"zigbee_ready":{"reason":"awaiting_probe"}},
+              "zigbee_bridges":{}, "state":{"night_mode":"off","config":{},"profiles":{}},
+              "lifecycle":{"ha_core_state":None},"card":{"state":"idle"}}
+        observer.observe(deepcopy(view))
+        view["diagnostics"]["zigbee_ready"]["reason"]="bridge_not_ready"
+        view["zigbee_bridges"]["zigbee2mqtt"]={"ready":False}
+        observer.observe(deepcopy(view))
+        self.assertEqual([r["level"] for r in self.j.snapshot()["rows"][-2:]],["pending","pending"])
+        t[0]=21
+        observer.observe(deepcopy(view))
+        self.assertEqual([r["level"] for r in self.j.snapshot()["rows"][-2:]],["warning","warning"])
+        count=self.j.snapshot()["count"]
+        observer.observe(deepcopy(view))
+        self.assertEqual(self.j.snapshot()["count"],count)
+        view["gates"]["zigbee_ready"]=True
+        view["zigbee_bridges"]["zigbee2mqtt"]["ready"]=True
+        observer.observe(deepcopy(view))
+        self.assertEqual([r["level"] for r in self.j.snapshot()["rows"][-2:]],["success","success"])
+
+    def test_historical_translation_and_icons(self):
+        from dh_journal.http import get
+        # Historic 1.0.0 rows lack product_name: render without rewriting SQLite.
+        self.j.record("lifecycle","app_started",version="0.1.6",journal="1.0.0")
+        self.j.warning("gate_not_ready",gate="HA Ready",reason="ha_probe_not_confirmed")
+        self.j.info("night_mode_off")
+        self.j.info("ha_core_state",state="RUNNING")
+        raw=self.j.snapshot()
+        ru=get(self.j,"/api/log?lang=ru","Asia/Almaty")[0]
+        en=get(self.j,"/api/log?lang=en","Asia/Almaty")[0]
+        self.assertEqual(ru["rows"][1]["message"],"ЗАПУСК ПРИЛОЖЕНИЯ · DigitalHouses System Globals v0.1.6")
+        self.assertEqual(en["rows"][1]["message"],"APPLICATION START · DigitalHouses System Globals v0.1.6")
+        self.assertEqual(ru["rows"][2]["message"],"HA Ready → OFF · проверка HA не подтверждена")
+        self.assertEqual(en["rows"][2]["message"],"HA Ready → OFF · HA probe not confirmed")
+        self.assertEqual(ru["rows"][3]["icon"],"☀️")
+        self.assertEqual(ru["rows"][3]["message"],"Дневной режим включён")
+        self.assertEqual(en["rows"][3]["message"],"Day mode enabled")
+        self.assertEqual(ru["rows"][4]["message"],"HA Core · работает")
+        self.assertEqual(en["rows"][4]["message"],"HA Core · running")
+        self.assertEqual(self.j.snapshot(),raw)
+        text=self.j.export("ru","Asia/Almaty")[1].decode()
+        self.assertIn("☀️ Дневной режим включён",text)
+        self.assertNotIn("ℹ️ ☀️",text)
+        self.assertIn('"journal":"1.0.0"',text)
 
     def test_unauthorized_ingress(self):
         class Service:

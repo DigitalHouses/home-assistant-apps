@@ -1,5 +1,5 @@
 {
-  "app_started": "ЗАПУСК ПРИЛОЖЕНИЯ · v{version} · DH Journal {journal}",
+  "app_started": "ЗАПУСК ПРИЛОЖЕНИЯ · {product_name} v{version}",
   "app_stopped": "ОСТАНОВКА ПРИЛОЖЕНИЯ",
   "journal_cleared": "Журнал очищен администратором",
   "app_failed": "Приложение завершилось с ошибкой"
