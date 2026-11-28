@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.1.9
+- DH Journal 1.0.3: SQLite is the only event store. Remove RAM fallback. On database failure stop journal writes until App restart, show storage unavailable, and disable export/clear; do not delete existing history.
+
 ## 0.1.8
 - DH Journal 1.0.2: isolate malformed diagnostic events, bound event size and nesting, reject non-durable clear in RAM, atomically persist clear marker, optimize full-journal rendering and verify standard version in CI.
 

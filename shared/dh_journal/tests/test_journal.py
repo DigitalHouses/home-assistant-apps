@@ -6,7 +6,7 @@ import unittest
 from datetime import datetime, timezone
 from pathlib import Path
 
-from dh_journal import Journal, LIMIT, MAX_RECORD_BYTES
+from dh_journal import Journal, LIMIT, MAX_RECORD_BYTES, StorageUnavailable
 from dh_journal.http import get
 
 NOW = datetime(2026,11,28,12,15,32,123000,tzinfo=timezone.utc)
@@ -83,26 +83,28 @@ class JournalTests(unittest.TestCase):
         j.debug("example",value=2)
         self.assertEqual(j.snapshot()["rows"][-1]["level"],"debug")
 
-    def test_ram_fallback_and_bounds(self):
+    def test_unavailable_storage_drops_events(self):
         j=Journal(Path(self.tmp.name)/"missing"/"db",product="test")
         self.addCleanup(j.close)
         for n in range(LIMIT+2):
-            j.info("example",value=n)
+            self.assertFalse(j.info("example",value=n))
         s=j.snapshot()
-        self.assertEqual(s["storage"],"ram")
-        self.assertEqual(s["count"],LIMIT)
-        self.assertEqual(s["rows"][0]["params"]["value"],2)
-        get(j,"/api/log?lang=en","UTC")
-        self.assertNotIn("message",j.snapshot()["rows"][0])
+        self.assertEqual(s["storage"],"unavailable")
+        self.assertIsNone(s["count"])
+        self.assertEqual(s["rows"],[])
         self.assertFalse(j.clear())
-        self.assertEqual(j.snapshot()["count"],LIMIT)
+        with self.assertRaises(StorageUnavailable):
+            j.export("en","UTC")
 
     def test_runtime_database_failure(self):
         self.j.info("example",value=1)
         self.j.db.close()
-        self.j.info("example",value=2)
-        self.assertEqual(self.j.snapshot()["storage"],"ram")
-        self.assertEqual(self.j.snapshot()["rows"][-1]["params"]["value"],2)
+        self.assertFalse(self.j.info("example",value=2))
+        self.assertEqual(self.j.snapshot()["storage"],"unavailable")
+        self.assertEqual(self.j.snapshot()["rows"],[])
+        j=self.open()
+        self.addCleanup(j.close)
+        self.assertEqual([r["params"]["value"] for r in j.snapshot()["rows"]],[1])
 
     def test_api_assets_and_bad_cursor(self):
         self.assertIn(b'id="rows"',get(self.j,"/log","UTC")[0])
@@ -141,10 +143,10 @@ class JournalTests(unittest.TestCase):
         with closing(sqlite3.connect(self.path)) as blocker, blocker:
             blocker.execute("BEGIN IMMEDIATE")
             self.assertFalse(self.j.clear())
-            self.assertEqual(self.j.snapshot()["storage"],"ram")
+            self.assertEqual(self.j.snapshot()["storage"],"unavailable")
             self.assertFalse(self.j.snapshot()["can_clear"])
             self.assertFalse(self.j.clear())
-            self.assertEqual(self.j.snapshot()["rows"][0]["params"]["value"],"old")
+            self.assertEqual(self.j.snapshot()["rows"],[])
         self.j.close()
         j=self.open()
         self.addCleanup(j.close)
@@ -160,6 +162,6 @@ class JournalTests(unittest.TestCase):
         with self.j.db:
             self.j.db.execute("CREATE TRIGGER fail_clear BEFORE INSERT ON events WHEN NEW.code='journal_cleared' BEGIN SELECT RAISE(ABORT,'failure'); END")
         self.assertFalse(self.j.clear())
-        self.assertEqual(self.j.snapshot()["rows"][0]["params"]["value"],"old")
+        self.assertEqual(self.j.snapshot()["rows"],[])
         with closing(sqlite3.connect(self.path)) as db, db:
             self.assertEqual(db.execute("SELECT code FROM events").fetchall(),[("example",)])

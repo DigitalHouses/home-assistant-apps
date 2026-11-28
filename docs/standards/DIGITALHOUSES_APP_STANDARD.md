@@ -1585,4 +1585,4 @@ Repository validation and product acceptance tests should enforce these requirem
 
 ## Ingress operational journal
 
-New or migrated Ingress journals must follow [DH Journal Standard 1.0.0](DH_JOURNAL_STANDARD.md). Existing products migrate independently; machine event contracts remain unchanged.
+New or migrated Ingress journals must follow [DH Journal Standard](DH_JOURNAL_STANDARD.md). Existing products migrate independently; machine event contracts remain unchanged.
