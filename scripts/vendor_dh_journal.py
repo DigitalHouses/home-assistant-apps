@@ -6,7 +6,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / "shared/dh_journal/dh_journal"
 TARGETS = [ROOT / "digitalhouses_system_globals_app/rootfs/app/dh_journal",
-           ROOT / "digitalhouses-stats/digitalhouses_stats/dh_journal"]
+           ROOT / "digitalhouses-stats/digitalhouses_stats/dh_journal",
+           ROOT / "digitalhouses_sync_app/rootfs/app/dh_journal"]
 STATS_WEB = ROOT / "digitalhouses-stats/dashboard"
 WEB_FILES = {"index.html": "log.html", "journal.css": "journal.css", "journal.js": "journal.js"}
 

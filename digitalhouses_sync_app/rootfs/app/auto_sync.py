@@ -376,7 +376,7 @@ class AutoSync:
 
     def sync(self, claims: dict, *, refresh: bool = False) -> dict:
         with self.lock:
-            self._event('sync_started', 'manual' if refresh else 'automatic')
+            self._event('sync_started', 'manual' if refresh else 'automatic', level='info' if refresh else 'debug')
             if refresh:
                 invalidate = getattr(self.backend, "invalidate", None)
                 if callable(invalidate):
@@ -431,7 +431,7 @@ class AutoSync:
                     except Exception as exc:
                         outcome = "Skipped: " + str(exc)[:150]
                         report["issues"].append(label + ": " + str(exc)[:150])
-                        self._event("package_error", label + ": " + str(exc), product=source["product"], level="error")
+                        self._event("package_error", label + ": " + type(exc).__name__, product=source["product"], level="error")
                     report["resources"].append({"name": label, "status": outcome})
                 if changed_packages or (report["packages"] and
                                         report["packages"]["loader"] == "Configured"):
@@ -460,10 +460,12 @@ class AutoSync:
                 report["state"] = "Error"
                 report["issues"].append(str(exc)[:200])
                 LOG.exception("Automatic sync failed")
-            for issue in report["issues"]:
-                self._event("sync_issue", issue, level="warning")
+            if refresh or report["issues"] != self.report["issues"]:
+                if report["issues"]:
+                    self._event("sync_issue", f"issues={len(report['issues'])}", level="warning")
             self._event("sync_finished", f"{report['state']} · updated={report['updated']} · current={report['unchanged']} · issues={len(report['issues'])}",
-                        level="info" if report["state"] == "OK" else "warning")
+                        level=("success" if report["state"] == "OK" else "warning")
+                        if refresh or report["updated"] or report["state"] != self.report["state"] or report["issues"] != self.report["issues"] else "debug")
             self.report = report
             LOG.info("Auto-sync %s: updated=%s current=%s issues=%s",
                      report["state"], report["updated"], report["unchanged"],

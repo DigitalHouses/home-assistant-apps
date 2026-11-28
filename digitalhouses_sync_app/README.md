@@ -41,4 +41,4 @@ review of mandatory public rollout remains a separate responsibility.
 
 ### Operational journal
 
-The admin Ingress shows the local SQLite history (`/data/dh_sync.db`). Defaults: 30 days, 10,000 records, 100 visible; configurable in the journal. Old entries are removed automatically. Filter by product/event, export JSONL, or explicitly clear history. UTC timestamps are stored and rendered in the container system timezone. The journal is diagnostic only and never a registry or sync prerequisite.
+The admin Ingress LOG uses shared DH Journal 1.0.3 (local SQLite at /data/dh_sync.db, latest 3000 records). Search, severity filter, RU/EN, full text export and confirmed clear. Legacy history is migrated on startup; unsafe legacy details are omitted. Debug is enabled by the App log_level setting. The journal is diagnostic only, never a registry or sync prerequisite.

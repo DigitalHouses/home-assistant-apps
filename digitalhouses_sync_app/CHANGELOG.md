@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.6
+
+- Adopt shared DH Journal 1.0.3 and full-screen Ingress LOG with RU/EN, search, export and clear.
+- Migrate the latest 3000 legacy SQLite records; keep original history on migration failure.
+- Suppress unchanged automatic sync summaries unless debug is enabled. No sync behavior changes.
+
 ## 0.6.5
 
 - Persistent local SQLite operational journal in admin Ingress with product/event filters, JSONL export and explicit clear.

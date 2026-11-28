@@ -5,11 +5,13 @@ import html
 import json
 import hmac
 import secrets
+import os
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlsplit, parse_qs, quote
 
 from discovery_contract import ProductSources
-from journal_web import section as journal_section, filters as journal_filters
+from dh_journal.http import get as journal_get, ASSETS
+from dh_journal import StorageUnavailable
 
 STYLE = """body{background:#121619;color:#e5e9eb;font:15px system-ui,sans-serif;
 margin:0;line-height:1.5}a{color:#8dcaf1}header{padding:22px;border-bottom:1px solid #343d43}
@@ -151,36 +153,43 @@ def make_server(sources: ProductSources, inventory=None, *, version: str = 'deve
             )
             self._action_shell("Подтверждение Rollback", content)
 
+        def _journal_output(self, status, body, mime="application/json", filename=None):
+            if mime == "application/json":
+                body = json.dumps(body, ensure_ascii=False, allow_nan=False).encode()
+            self.send_response(status)
+            self.send_header("Content-Type", mime + "; charset=utf-8")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("X-Content-Type-Options", "nosniff")
+            self.send_header("Content-Security-Policy", "default-src 'self'; object-src 'none'; base-uri 'none'")
+            if filename:
+                self.send_header("Content-Disposition", 'attachment; filename="' + filename + '"')
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
         def do_GET(self) -> None:
             path = urlsplit(self.path).path
             if path == "/health":
                 self._send(200, "<html><body>ok</body></html>")
                 return
+            journal_allowed = (self.client_address[0] == "172.30.32.2"
+                               or (port == 0 and self.client_address[0] == "127.0.0.1"))
+            if journal is not None and path in (*ASSETS, "/api/log", "/api/log/export"):
+                if not journal_allowed:
+                    self.send_error(403)
+                    return
+                try:
+                    body, mime, filename = journal_get(journal.backend, self.path, os.environ.get("TZ") or "UTC")
+                    self._journal_output(200, body, mime, filename)
+                except StorageUnavailable:
+                    self._journal_output(503, {"error": "journal_storage_unavailable"})
+                except (ValueError, OverflowError):
+                    self._journal_output(400, {"error": "Invalid journal request"})
+                return
             if path not in ("/", ""):
                 self._send(404, "<html><body>Not found</body></html>")
                 return
             params = parse_qs(urlsplit(self.path).query)
-            journal_allowed = (self.client_address[0] == "172.30.32.2"
-                               or (port == 0 and self.client_address[0] == "127.0.0.1"))
-            if journal is not None and params.get("journal_export") == ["1"]:
-                if not journal_allowed:
-                    self._action_shell("Access denied", "Supervisor Ingress required", 403)
-                    return
-                try:
-                    body = ("".join(json.dumps(row, ensure_ascii=False) + "\n"
-                                    for row in journal.rows(*journal_filters(params), all_rows=True))).encode("utf-8")
-                except Exception:
-                    self._action_shell("Журнал недоступен", "SQLite error", 503)
-                    return
-                self.send_response(200)
-                self.send_header("Content-Type", "application/x-ndjson; charset=utf-8")
-                self.send_header("Content-Disposition", 'attachment; filename="dh-sync-events.jsonl"')
-                self.send_header("Content-Length", str(len(body)))
-                self.send_header("Cache-Control", "no-store")
-                self.send_header("X-Content-Type-Options", "nosniff")
-                self.end_headers()
-                self.wfile.write(body)
-                return
             if "plan" in params:
                 identity = params["plan"][0][:200]
                 self._plan_page(identity)
@@ -276,7 +285,9 @@ def make_server(sources: ProductSources, inventory=None, *, version: str = 'deve
                     "<meta name='viewport' content='width=device-width,initial-scale=1'>"
                     "<title>DigitalHouses Sync</title><style>" + STYLE +
                     "</style></head><body><header><h1>DigitalHouses Sync · v" +
-                    _h(version) + "</h1><small>Автоматически · GitHub DigitalHouses"
+                    _h(version) + "</h1>" +
+                    ("<a href='./log' style='float:right;background:#2382b7;color:white;padding:9px 15px;border-radius:7px;text-decoration:none'>LOG</a>" if journal is not None and journal_allowed else "") +
+                    "<small>Автоматически · GitHub DigitalHouses"
                     "</small></header><main><section><h2>Продукты (" +
                     str(len(records)) + ")</h2>"
                     "<p class='muted'>Источник реестра: MQTT /sync. "
@@ -285,7 +296,6 @@ def make_server(sources: ProductSources, inventory=None, *, version: str = 'deve
                     "<th>Продукт / Instance</th><th>Версия</th>"
                     "<th>Источник</th></tr></thead><tbody>" +
                     rows + "</tbody></table></section>" + summary +
-                    (journal_section(journal, sync_token, params) if journal is not None and journal_allowed else "") +
                     "</main></body></html>"
                 )
                 self._send(200, page)
@@ -454,6 +464,22 @@ def make_server(sources: ProductSources, inventory=None, *, version: str = 'deve
             if not allowed:
                 self._action_shell("Access denied", "Supervisor Ingress required", 403)
                 return
+            if self.path == "/api/log/clear" and journal is not None:
+                try:
+                    size = int(self.headers.get("Content-Length", "0"))
+                    if self.headers.get_content_type() != "application/json" or not 0 < size <= 128:
+                        raise ValueError()
+                    self.connection.settimeout(5)
+                    data = json.loads(self.rfile.read(size))
+                    if not isinstance(data, dict) or set(data) != {"confirm"} or data["confirm"] is not True:
+                        raise ValueError()
+                    if journal.backend.clear():
+                        self._journal_output(200, {"ok": True})
+                    else:
+                        self._journal_output(409, {"error": "journal_clear_unavailable"})
+                except (ValueError, OSError):
+                    self._journal_output(400, {"error": "Invalid clear request"})
+                return
             if urlsplit(self.path).path not in ("", "/"):
                 self._action_shell("Invalid request", "Unknown URL", 404)
                 return
@@ -472,20 +498,6 @@ def make_server(sources: ProductSources, inventory=None, *, version: str = 'deve
                 )
                 if len(token) > 80:
                     raise ValueError("invalid request")
-                if op in ("journal_clear", "journal_settings") and journal is not None:
-                    if not hmac.compare_digest(token, sync_token):
-                        raise ValueError("invalid request token")
-                    if op == "journal_clear":
-                        if confirm != "YES":
-                            raise ValueError("Confirmation required")
-                        journal.clear()
-                    else:
-                        journal.configure(*(int(fields[key][0]) for key in ("days", "max_rows", "visible")))
-                    self.send_response(303)
-                    self.send_header("Location", "./#journal")
-                    self.send_header("Content-Length", "0")
-                    self.end_headers()
-                    return
                 if op == "sync" and auto_sync is not None:
                     if not hmac.compare_digest(token, sync_token):
                         raise ValueError("invalid request token")
