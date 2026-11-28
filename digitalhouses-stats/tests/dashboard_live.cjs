@@ -23,14 +23,14 @@ test("notification batch refreshes data, not toast nodes or timers; disabled mod
   const get=id=>{if(!elements.has(id))elements.set(id,new Element());return elements.get(id)};
   const document={body,hidden:false,documentElement:{lang:"en"},baseURI:"http://test.local/",getElementById:get,createElement:()=>new Element(),addEventListener(){},removeEventListener(){}};
   const window={scrollX:0,scrollY:240,scrollTo({left,top}){this.scrollX=left;this.scrollY=top}};
-  let count=50, seq=0, hold=null;
+  let count=50, seq=0, hold=null, zone="Europe/Berlin";
   const context={document,window,Intl,console,URL,URLSearchParams,Date,localStorage:{getItem:k=>storage.get(k),setItem:(k,v)=>storage.set(k,v)},setInterval:fn=>{intervals.push(fn);return ++seq},clearInterval(){},setTimeout:(fn,ms)=>{timers.set(++seq,{fn,ms});return seq},clearTimeout:id=>timers.delete(id),fetch:async url=>{
     const p=new URL(String(url),"http://test.local/").pathname;calls.push(p);
     let data;
     if(p==="/api/log/toasts")data=responses.shift();
     else {
       if(hold)await hold;
-      if(p==="/api/summary")data={observed_installations:count,active_24h:count,active_7d:count,active_30d:count,heartbeats:count+300};
+      if(p==="/api/summary")data={observed_installations:count,active_24h:count,active_7d:count,active_30d:count,heartbeats:count+300,timezone:zone,timezone_fallback:false,last_heartbeat:"2026-07-01T12:00:00Z"};
       else if(p==="/api/countries")data=[{country:"KZ",observed_installations:count,products:[{name:"PVE",observed_installations:count}]}];
       else if(p==="/api/versions")data=[{product:"pve",name:"PVE",version:"1.0.0",observed_installations:count,active_7d:count}];
       else data=[{day:"2026-11-28",total_installations:count,active_installations:count}];
@@ -44,7 +44,7 @@ test("notification batch refreshes data, not toast nodes or timers; disabled mod
   const row=id=>({id,level:"success",icon:"✅",message:"new "+id,ts:"2026-11-28T00:00:00Z",local_time:"00:00"});
   responses.push({cursor:10,rows:[]});
   run("assets/app.js");run("toast.js");run("assets/toast-init.js");
-  await flush();assert.equal(get("known").textContent,50);assert.equal(intervals.length,1);
+  await flush();assert.equal(get("known").textContent,50);assert.equal(get("timezone").textContent,"Europe/Berlin");assert.match(get("last-heartbeat-exact").textContent,/14:00:00/);assert.equal(intervals.length,1);
   const stack=body.children[0];assert.equal(stack.children.length,0);
   get("countries").children[0].children[0].children[0].events.click();
   assert.equal(get("countries").children[1].hidden,false);
@@ -74,4 +74,9 @@ test("notification batch refreshes data, not toast nodes or timers; disabled mod
   count=55;responses.push({cursor:15,rows:[row(15)]});await intervals[0]();await flush();
   assert.equal(get("known").textContent,55);assert.equal(stack.children.length,0);
   assert.equal(intervals.length,1);
+  zone="Asia/Almaty";
+  responses.push({cursor:15,rows:[],timezone:zone,timezone_fallback:false});
+  await intervals[0]();await flush();
+  assert.equal(get("timezone").textContent,zone);
+  assert.match(get("last-heartbeat-exact").textContent,/17:00:00/);
 });

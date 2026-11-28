@@ -12,6 +12,7 @@
     if(typeof product!=="string"||!product)throw new Error("DH Journal Toast: product is required");
     const endpoint=options.endpoint||"./api/log/toasts";
     const onEvents=typeof options.onEvents==="function"?options.onEvents:null;
+    const onTimezone=typeof options.onTimezone==="function"?options.onTimezone:null;
     const language=()=>((typeof options.language==="function"?options.language():options.language)||doc.documentElement.lang)==="ru"?"ru":"en";
     const t=()=>labels[language()];
     const key="dh-journal-toasts:"+product;
@@ -39,6 +40,18 @@
       if(remaining<=0)dismiss(id);
       else item.timer=global.setTimeout(()=>dismiss(id),remaining);
     }
+    let timeZone=null, fallback=false;
+    function renderTime(time, ts, initial){
+      let local=initial;
+      if(timeZone){
+        try {
+          const parts=new Intl.DateTimeFormat("en-GB",{timeZone,year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",second:"2-digit",hourCycle:"h23"}).formatToParts(new Date(ts));
+          const p=Object.fromEntries(parts.map(x=>[x.type,x.value]));
+          local=p.year+"-"+p.month+"-"+p.day+" "+p.hour+":"+p.minute+":"+p.second;
+        }catch{}
+      }
+      time.textContent=local+(fallback?(language()==="ru"?" · UTC (временно)":" · UTC (temporary)"):"");
+    }
     function show(row){
       if(active.has(row.id))return;
       const node=doc.createElement("article");
@@ -46,13 +59,13 @@
       const icon=doc.createElement("span");icon.textContent=row.icon||"ℹ️";icon.setAttribute("aria-hidden","true");
       const body=doc.createElement("div");
       const msg=doc.createElement("div");msg.className="dh-toast-message";msg.textContent=row.message;
-      const time=doc.createElement("time");time.className="dh-toast-time";time.dateTime=row.ts;time.textContent=row.local_time;
+      const time=doc.createElement("time");time.className="dh-toast-time";time.dateTime=row.ts;time.textContent=row.local_time+(fallback?(language()==="ru"?" · UTC (временно)":" · UTC (temporary)"):"");
       body.append(msg,time);
       const close=doc.createElement("button");close.type="button";close.className="dh-toast-close";close.textContent="×";close.setAttribute("aria-label",t().close);close.onclick=()=>dismiss(row.id);
       node.append(icon,body,close);
       // DOM and visual order: latest on top, oldest anchored at bottom.
       stack.prepend(node);
-      active.set(row.id,{node,shown:Date.now(),timer:null});
+      active.set(row.id,{node,time,ts:row.ts,localTime:row.local_time,shown:Date.now(),timer:null});
       schedule(row.id);
     }
     async function poll(){
@@ -67,6 +80,11 @@
         const data=await r.json();
         if(disposed||current!==epoch||(!settings.enabled&&!onEvents))return;
         if(!Number.isSafeInteger(data.cursor)||data.cursor<0||!Array.isArray(data.rows))return;
+        if(typeof data.timezone==="string"&&(timeZone!==data.timezone||fallback!==Boolean(data.timezone_fallback))){
+          timeZone=data.timezone;fallback=Boolean(data.timezone_fallback);
+          for(const item of active.values())renderTime(item.time,item.ts,item.localTime);
+          if(onTimezone)try{Promise.resolve(onTimezone({timezone:timeZone,timezone_fallback:fallback})).catch(()=>{})}catch{}
+        }
         const previous=cursor;
         if(previous!==null&&data.cursor<previous){for(const id of active.keys())dismiss(id)}
         cursor=data.cursor;

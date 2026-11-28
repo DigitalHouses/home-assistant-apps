@@ -1,5 +1,6 @@
 """Framework-neutral same-origin GET API and static resources for Ingress."""
 from datetime import datetime
+from zoneinfo import ZoneInfo
 from urllib.parse import parse_qs, urlsplit
 
 from . import ROOT
@@ -20,8 +21,14 @@ def get(journal, url, tz):
     lang = params.get("lang", ["ru"])[0]
     if lang not in ("ru", "en"):
         raise ValueError("Invalid journal language")
+    try:
+        zone = ZoneInfo(tz)
+        fallback = False
+    except (TypeError, ValueError, KeyError):
+        zone = ZoneInfo("UTC")
+        fallback = True
     if parsed.path == "/api/log/export":
-        name, content = journal.export(lang, tz)
+        name, content = journal.export(lang, zone.key)
         return content, "text/plain", name
     if parsed.path == "/api/log/toasts":
         raw_after = params.get("after", [None])[0]
@@ -32,15 +39,21 @@ def get(journal, url, tz):
         for row in data["rows"]:
             row["message"] = journal.message(row, lang)
             row["icon"] = journal.icon(row)
-            row["local_time"] = datetime.fromisoformat(row["ts"]).astimezone(journal.zone(tz)).strftime("%Y-%m-%d %H:%M:%S")
+            row["local_time"] = datetime.fromisoformat(row["ts"]).astimezone(zone).strftime("%Y-%m-%d %H:%M:%S")
         # The browser needs only display facts, not the technical parameters.
         data["rows"] = [{key: row[key] for key in ("id", "ts", "level", "message", "icon", "local_time")} for row in data["rows"]]
+        data["timezone"] = zone.key
+        data["timezone_fallback"] = fallback
         return data, "application/json", None
     after = int(params.get("after", ["0"])[0])
     if not 0 <= after < 2**63:
         raise ValueError("Invalid journal cursor")
-    data = journal.snapshot(after, params.get("generation", [None])[0])
-    zone = journal.zone(tz)
+    # Zone is part of the presentation generation, not of stored history.
+    suffix = "|" + zone.key + ("|fallback" if fallback else "")
+    generation = params.get("generation", [""])[0]
+    raw_generation = generation[:-len(suffix)] if generation.endswith(suffix) else None
+    data = journal.snapshot(after, raw_generation)
+    data["generation"] += suffix
     for row in data["rows"]:
         row["message"] = journal.message(row, lang)
         row["icon"] = journal.icon(row)
@@ -48,5 +61,6 @@ def get(journal, url, tz):
     data["product"] = journal.product
     data["product_name"] = journal.product_name
     data["app_version"] = journal.app_version
-    data["timezone"] = str(zone)
+    data["timezone"] = zone.key
+    data["timezone_fallback"] = fallback
     return data, "application/json", None
