@@ -3,75 +3,99 @@
 [![CI](https://github.com/DigitalHouses/home-assistant-apps/actions/workflows/validate.yml/badge.svg)](https://github.com/DigitalHouses/home-assistant-apps/actions/workflows/validate.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-Open-source applications and Linux agents by **DigitalHouses**, built to extend Home Assistant with infrastructure, media, database, and connectivity observability.
+Open-source Home Assistant apps and Linux agents for smart-home infrastructure, local network discovery, presence, device control, databases, connectivity, media and backup monitoring.
 
-## Products
+DigitalHouses products are designed to work with Home Assistant while keeping their individual configuration, runtime and release lifecycle independent.
 
-| Product | Type | Purpose |
+## Home Assistant Apps
+
+Install these apps through Home Assistant Supervisor. Select a product to read its documentation, configuration requirements and limitations.
+
+| Product | Stage | What it does |
 | --- | --- | --- |
-| [DigitalHouses PVE Agent](digitalhouses_pve_agent/README.md) | Linux agent | Proxmox VE monitoring, hardware diagnostics, VM/LXC state, SMART, fan RPM, and optional NUT/UPS monitoring |
-| [DigitalHouses Plex Agent](digitalhouses_plex_agent/README.md) | Linux agent | Plex workload, playback, transcoding, and library monitoring |
-| [DigitalHouses Recorder App](digitalhouses_recorder_app/README.md) | Home Assistant App | Home Assistant Recorder database size, depth, write activity, and database diagnostics |
-| [DigitalHouses Backblaze App](digitalhouses_backblaze_app/README.md) | Home Assistant App | Backblaze B2 account totals and per-bucket storage usage through MQTT Discovery |
-| [DigitalHouses Internet App](digitalhouses_internet_app/README.md) | Home Assistant App | Internet availability, outage history, and automatic ONT/router recovery |
-| [DigitalHouses Actions App](digitalhouses_actions_app/README.md) | Home Assistant App · **Experimental** | Device actions, motion/presence, schedules and verified device control |
-| [DigitalHouses Speedtest App](digitalhouses_speedtest_app/README.md) | Home Assistant App · **Deprecated** | Legacy Internet/Speedtest monitoring; superseded by DigitalHouses Internet App |
+| [Internet App](digitalhouses_internet_app/README.md) | Stable | Internet availability, outage history, Ookla Speedtest, traffic accounting and automatic ONT/router recovery. |
+| [Network App](digitalhouses_network_app/README.md) · [Screenshot](digitalhouses_network_app/README.md#screenshots) | Stable | Local device inventory, ARP and router discovery, mDNS/SSDP enrichment, persistent notes, discovery history and source-verified device availability. English and Russian Ingress UI. |
+| [Recorder App](digitalhouses_recorder_app/README.md) | Stable | Recorder database health, size, history depth, disk usage, write activity and the entities producing the most records. |
+| [Backblaze App](digitalhouses_backblaze_app/README.md) | Stable | Backblaze B2 account and per-bucket storage monitoring through MQTT Discovery. |
+| [Presence App](digitalhouses_presence_app/README.md) | Experimental | Resident presence using GPS and registered Wi-Fi device trackers from Home Assistant router integrations, with conservative hybrid presence logic. |
+| [Actions App](digitalhouses_actions_app/README.md) | Experimental | Configurable Zigbee2MQTT device actions, logical key bindings, Mode Keeper and verified device control. |
+| [System Globals App](digitalhouses_system_globals_app/README.md) | Experimental | Shared day/night modes, profiles and system-readiness gates for other applications. |
+| [Zigbee Monitor App](digitalhouses_zigbee_monitor_app/README.md) | Experimental | Automatic Zigbee2MQTT discovery, read-only device inventory, availability and MQTT activity monitoring. |
+| [Sync App](digitalhouses_sync_app/README.md) | Experimental | Discovers DigitalHouses products through retained MQTT announcements and synchronizes Home Assistant dashboards and YAML packages from GitHub. |
 
-DigitalHouses uses two delivery models:
+Stage labels follow each app's Supervisor package metadata. Experimental apps are available for testing but may require additional field acceptance.
 
-- **Home Assistant Apps** run under Home Assistant Supervisor and are installed from this repository.
-- **Linux agents** run on the target Linux host and publish their state to Home Assistant through MQTT Discovery.
+## Linux agents
 
-## Install Home Assistant Apps
+Install these agents directly on the monitored Linux host. They publish monitoring data to Home Assistant through MQTT Discovery.
 
-Add this repository in Home Assistant:
+| Product | What it does |
+| --- | --- |
+| [PVE Agent](digitalhouses_pve_agent/README.md) | Proxmox VE host and VM/LXC monitoring, CPU, memory, storage, SMART, GPU, fan and optional NUT/UPS diagnostics. |
+| [PBS Agent](digitalhouses_pbs_agent/README.md) | Read-only Proxmox Backup Server monitoring: datastores, backup snapshots, push sync, verify, prune and garbage collection jobs. |
+| [Plex Agent](digitalhouses_plex_agent/README.md) | Plex Media Server workload, playback, transcoding, library activity and media storage monitoring. |
+
+See each agent's README for installation, permissions, supported platforms, native CLI commands and update instructions.
+
+## Getting started
+
+### Install Home Assistant Apps
+
+In Home Assistant, open **Settings → Apps → App store → Repositories** and add:
 
 ```text
 https://github.com/DigitalHouses/home-assistant-apps
 ```
 
-Then open **Settings → Apps → App store → Repositories**, add the URL above, and install the required DigitalHouses App.
+Choose an app, install it, configure the required options and start it. Apps with a web interface can be opened through Supervisor Ingress.
 
-## Install Linux agents
+### Dashboards and integration
 
-Linux agents are installed directly on the target host:
+MQTT Discovery creates Home Assistant entities for products that provide MQTT integration. [DH Sync](digitalhouses_sync_app/README.md) manages compatible dashboard Views and packages from the repository using retained product announcements. Follow the individual product instructions for MQTT, dashboard and package requirements; not every app requires MQTT.
 
-- [DigitalHouses PVE Agent](digitalhouses_pve_agent/README.md)
-- [DigitalHouses Plex Agent](digitalhouses_plex_agent/README.md)
+### Updates and releases
 
-Installation, configuration, supported platforms, and product-specific operational procedures are documented in each product README.
+See [GitHub Releases](https://github.com/DigitalHouses/home-assistant-apps/releases) for published versions. Each product has an independent version and changelog. Home Assistant apps with immutable container delivery use versioned GHCR images; Linux agents have their own installation and update mechanisms.
 
-## Documentation
+The current version and stage are defined in each app's `config.yaml` or agent's `VERSION` file. The catalog above intentionally does not duplicate version numbers.
 
-Engineering documentation is separated into shared standards and product-specific design records:
+## Project infrastructure
+
+- [DigitalHouses Stats](digitalhouses-stats/README.md) — backend for product installation statistics and telemetry.
+- [Canonical product registry](digitalhouses-stats/digitalhouses_stats/product_registry.json) — product identities, telemetry catalog and release metadata.
+
+Telemetry requirements and consent behavior depend on the product and its current policy. Consult its README and the [Product Telemetry Policy](docs/standards/PRODUCT_TELEMETRY_POLICY.md). Review and redact diagnostic exports before sharing them publicly.
+
+## Legacy products
+
+[Speedtest App](digitalhouses_speedtest_app/README.md) is deprecated and superseded by Internet App. The former Aqara Switch App identity is deprecated; current development continues in Actions App. Existing legacy release artifacts remain available according to the release policy.
+
+## Engineering documentation
 
 - [Documentation index](docs/README.md)
-- [DigitalHouses Application Standard](docs/standards/DIGITALHOUSES_APP_STANDARD.md)
-- [DigitalHouses Product Naming Standard](docs/standards/PRODUCT_NAMING_STANDARD.md)
-- [DigitalHouses Contract Data Policy](docs/standards/CONTRACT_DATA_POLICY.md)
-- [DH Sync Developer Standard — публикация MQTT /sync, Views и Packages](docs/standards/DH_SYNC_DEVELOPER_STANDARD.md)
-- [DigitalHouses Events & Notifications Standard](docs/standards/EVENTS_AND_NOTIFICATIONS_STANDARD.md)
-- [DigitalHouses Linux Agent Management Standard — PVE CLI is the mandatory operational reference](docs/standards/DH_LINUX_AGENT_MANAGEMENT_STANDARD.md)
-- [DigitalHouses Unified Product Status Card Standard](docs/standards/UNIFIED_PRODUCT_STATUS_CARD_STANDARD.md)
-- [DigitalHouses Release Policy](docs/standards/RELEASE_POLICY.md)
+- [Application Standard](docs/standards/DIGITALHOUSES_APP_STANDARD.md)
+- [Product Naming Standard](docs/standards/PRODUCT_NAMING_STANDARD.md)
+- [Contract Data Policy](docs/standards/CONTRACT_DATA_POLICY.md)
+- [DH Sync Developer Standard](docs/standards/DH_SYNC_DEVELOPER_STANDARD.md) — retained MQTT /sync, canonical Views and packages
+- [Events & Notifications Standard](docs/standards/EVENTS_AND_NOTIFICATIONS_STANDARD.md)
+- [Linux Agent Management Standard](docs/standards/DH_LINUX_AGENT_MANAGEMENT_STANDARD.md) — PVE Agent as the operational reference
+- [Unified Product Status Card Standard](docs/standards/UNIFIED_PRODUCT_STATUS_CARD_STANDARD.md)
+- [Operation UI Standard](docs/standards/OPERATION_UI_STANDARD.md)
+- [Manual Refresh Standard](docs/standards/MANUAL_REFRESH_STANDARD.md)
+- [Repository Governance](docs/standards/REPOSITORY_GOVERNANCE.md)
+- [Release Policy](docs/standards/RELEASE_POLICY.md)
 - [Immutable Delivery, Compact Backup and Telemetry Standard](docs/standards/IMMUTABLE_DELIVERY_AND_TELEMETRY_STANDARD.md)
 - [Product Telemetry Policy](docs/standards/PRODUCT_TELEMETRY_POLICY.md)
 - [Telemetry Protocol v1](docs/standards/TELEMETRY_PROTOCOL_V1.md)
 - [Telemetry Implementation Guide](docs/standards/TELEMETRY_IMPLEMENTATION_GUIDE.md)
 
-GitHub is the source of truth for reusable DigitalHouses application code and release provenance.
+GitHub is the source of truth for reusable DigitalHouses product code, canonical configuration resources and release provenance.
 
-## Work in progress
+## Development and feedback
 
-- [DigitalHouses Network App](digitalhouses_network_app/README.md) — **Experimental Ingress/SQLite foundation** for an eventual LAN device registry, router-backed discovery and presence events. Install through the HA App Store; scanning not yet active.
+Each product owns its implementation, tests, compatibility contract and release version. Repository validation enforces common standards and product-specific checks. See [CONTRIBUTING.md](.github/CONTRIBUTING.md) and [SECURITY.md](.github/SECURITY.md).
 
-- [DigitalHouses Presence App](digitalhouses_presence_app/README.md) — **Experimental GPS pilot** for resident presence with MQTT Discovery. Installable through Home Assistant App Store from source; Wi-Fi detection and mobile registration are not yet operational.
-
-## Development
-
-Each product owns its implementation, tests, compatibility contract, and release version. Repository-level validation enforces the common DigitalHouses application contract and dispatches type-specific and product-specific checks.
-
-See [CONTRIBUTING.md](.github/CONTRIBUTING.md) for contribution workflow and [SECURITY.md](.github/SECURITY.md) for responsible vulnerability reporting.
+For questions, bug reports and feature requests, use [GitHub Issues](https://github.com/DigitalHouses/home-assistant-apps/issues). Include the product name and version, relevant logs and anonymized diagnostics.
 
 ## Support
 
