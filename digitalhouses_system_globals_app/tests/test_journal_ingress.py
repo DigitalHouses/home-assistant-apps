@@ -129,7 +129,7 @@ class TestJournalIntegration(unittest.TestCase):
         self.assertNotIn("ℹ️ ☀️",text)
         self.assertIn('"journal":"1.0.0"',text)
 
-    def test_ram_clear_http_conflict(self):
+    def test_unavailable_storage_http(self):
         self.j.db.close()
         self.j.info("night_mode_off")
         class Service:
@@ -145,7 +145,10 @@ class TestJournalIntegration(unittest.TestCase):
         with self.assertRaises(HTTPError) as raised:
             urlopen(Request(base+"/api/log/clear",data=b'{"confirm":true}',headers={"Content-Type":"application/json"}))
         self.assertEqual(raised.exception.code,409)
-        self.assertEqual(self.j.snapshot()["rows"][-1]["code"],"night_mode_off")
+        self.assertEqual(self.j.snapshot()["rows"],[])
+        with self.assertRaises(HTTPError) as export:
+            urlopen(base+"/api/log/export")
+        self.assertEqual(export.exception.code,503)
 
     def test_unauthorized_ingress(self):
         class Service:

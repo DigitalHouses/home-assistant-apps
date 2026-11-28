@@ -1,8 +1,8 @@
 "use strict";
 const $=id=>document.getElementById(id), rows=$("rows");
 const labels={
- ru:{back:"← Приложение",export:"Выгрузить .log",clear:"Очистить",search:"Поиск по журналу",follow:"Автопрокрутка",all:"Все уровни",confirm:"Очистить весь журнал?",ram:"SQLite недоступна — временный журнал RAM; очистка недоступна",rejected:"Отклонено записей",clearUnavailable:"Очистка невозможна без SQLite. История сохранена.",lost:"Нет связи с приложением",copy:"Копировать",details:"Подробности",empty:"Нет записей",copied:"Скопировано",failed:"Не удалось выполнить операцию"},
- en:{back:"← App",export:"Download .log",clear:"Clear",search:"Search journal",follow:"Auto-scroll",all:"All levels",confirm:"Clear the entire journal?",ram:"SQLite unavailable — temporary RAM journal; clear disabled",rejected:"Rejected entries",clearUnavailable:"Cannot clear without SQLite. History retained.",lost:"App connection lost",copy:"Copy",details:"Details",empty:"No entries",copied:"Copied",failed:"Operation failed"}
+ ru:{back:"← Приложение",export:"Выгрузить .log",clear:"Очистить",search:"Поиск по журналу",follow:"Автопрокрутка",all:"Все уровни",confirm:"Очистить весь журнал?",unavailable:"SQLite недоступна. Журналирование остановлено до перезапуска приложения.",rejected:"Отклонено записей",clearUnavailable:"Очистка невозможна без SQLite. История сохранена.",lost:"Нет связи с приложением",copy:"Копировать",details:"Подробности",empty:"Нет записей",copied:"Скопировано",failed:"Не удалось выполнить операцию"},
+ en:{back:"← App",export:"Download .log",clear:"Clear",search:"Search journal",follow:"Auto-scroll",all:"All levels",confirm:"Clear the entire journal?",unavailable:"SQLite unavailable. Logging suspended until App restart.",rejected:"Rejected entries",clearUnavailable:"Cannot clear without SQLite. History retained.",lost:"App connection lost",copy:"Copy",details:"Details",empty:"No entries",copied:"Copied",failed:"Operation failed"}
 };
 const levels=["debug","info","success","pending","warning","error","lifecycle"];
 let lang="ru",generation=null,cursor=0,epoch=0,busy=false,entries=new Map(),status="",storage="sqlite",product="";
@@ -44,9 +44,9 @@ async function poll(){
  for(const [id,e] of entries)if(id<d.oldest||!d.count){e.node.remove();entries.delete(id);changed=true}
  if(d.rows.length){const fragment=document.createDocumentFragment();for(const row of d.rows)if(!entries.has(row.id)){add(row,fragment);changed=true}rows.append(fragment)}
  cursor=d.newest;storage=d.storage;product=d.product_name||d.product;
- $("product").textContent=product+(d.app_version?" v"+d.app_version:"");document.title=product+" · LOG";$("count").textContent=d.count+" / "+d.limit;
- status=[storage==="ram"?tr().ram:"",d.rejected?tr().rejected+": "+d.rejected:""].filter(Boolean).join(" · ");$("status").textContent=status;$("clear").disabled=!d.can_clear;
- if(changed)filter();if(follow&&changed){rows.scrollTop=rows.scrollHeight;$("follow").checked=true}
+ $("product").textContent=product+(d.app_version?" v"+d.app_version:"");document.title=product+" · LOG";$("count").textContent=(d.count??"—")+" / "+d.limit;
+ status=[storage==="unavailable"?tr().unavailable:"",d.rejected?tr().rejected+": "+d.rejected:""].filter(Boolean).join(" · ");$("status").textContent=status;$("clear").disabled=!d.can_clear;$("export").disabled=storage!=="sqlite";
+ if(changed)filter();if(storage!=="sqlite")$("footer").textContent=tr().unavailable;if(follow&&changed){rows.scrollTop=rows.scrollHeight;$("follow").checked=true}
  }catch{$("status").textContent=tr().lost}finally{busy=false;if(current!==epoch)poll()}
 }
 $("language").onchange=()=>{lang=$("language").value;try{localStorage.setItem("dh-journal-language",lang)}catch{}epoch++;localize();reset();poll()};

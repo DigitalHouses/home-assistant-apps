@@ -11,7 +11,7 @@ def main():
     with tempfile.TemporaryDirectory() as tmp:
         journal=Journal(Path(tmp)/"journal.sqlite3",product="digitalhouses_system_globals_app",
                         product_name=PRODUCT_NAME,locales=LOCALES,value_locales=VALUE_LOCALES,icons=ICONS)
-        journal.start("0.1.8")
+        journal.start("0.1.9")
         for i in range(1,LIMIT):
             journal.record("warning" if i%10==0 else "info","gate_not_ready",
                            gate=f"TEST-{i:04d}",reason="awaiting_probe",
@@ -31,7 +31,7 @@ def main():
                 elif cmd=="fail":
                     with journal.db:
                         journal.db.execute("CREATE TRIGGER fail_insert BEFORE INSERT ON events BEGIN SELECT RAISE(ABORT,'failure'); END")
-                    journal.warning("gate_not_ready",gate="RAM-ROW",reason="awaiting_probe")
+                    journal.warning("gate_not_ready",gate="DROPPED-ROW",reason="awaiting_probe")
                 elif cmd=="exit":
                     break
                 print("ok",flush=True)

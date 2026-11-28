@@ -4,6 +4,7 @@ from pathlib import Path
 import json
 import os
 from dh_journal.http import get as journal_get
+from dh_journal import StorageUnavailable
 import threading
 from core import ContractError, GLOBAL, PRODUCT
 from discovery import CTRL, OPS
@@ -49,6 +50,8 @@ def serve(service,*,host,port,allowed):
                     else:
                         body,mime,filename=result
                         self.output(200,body,mime,filename)
+                except StorageUnavailable:
+                    self.output(503,{"error":"journal_storage_unavailable"})
                 except (ValueError,OverflowError):
                     self.output(400,{"error":"Invalid journal request"})
             else:

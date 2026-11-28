@@ -23,7 +23,7 @@ async function main(){
   await page.goto("http://127.0.0.1:"+port+"/log");
   await page.waitForFunction(()=>document.querySelectorAll(".entry").length===3000);
   console.log("Initial 3000 rows, large detail payloads:",Date.now()-start,"ms");
-  assert.match(await page.locator(".entry").first().innerText(),/v0\.1\.8/);
+  assert.match(await page.locator(".entry").first().innerText(),/v0\.1\.9/);
   assert.match(await page.locator(".entry").last().innerText(),/TEST-2999/);
   assert.equal(await page.locator("#count").innerText(),"3000 / 3000");
   await page.locator("#follow").uncheck();
@@ -53,11 +53,11 @@ async function main(){
   await page.locator("#language").selectOption("ru");
   await page.waitForFunction(()=>document.querySelectorAll(".entry").length===3000&&document.querySelector(".entry").textContent.includes("ожидание проверки"));
   await command("fail");
-  await page.waitForFunction(()=>document.querySelector("#clear").disabled&&document.querySelector(".entry:last-child").textContent.includes("RAM-ROW"));
-  assert.equal(await page.locator(".entry").count(),3000);
+  await page.waitForFunction(()=>document.querySelector("#clear").disabled&&document.querySelector("#export").disabled&&document.querySelectorAll(".entry").length===0);
+  assert.equal(await page.locator(".entry").count(),0);
   assert.match(await page.locator("#status").innerText(),/SQLite недоступна/);
   assert.deepEqual(errors,[]);
-  console.log("PASS: full 3000 rows, search, severity, lazy details, RU/EN, full .log, eviction, RAM refusal");
+  console.log("PASS: full 3000 rows, search, severity, lazy details, RU/EN, full .log, eviction, SQLite failure");
  }finally{
   if(browser)await browser.close();
   child.stdin.end("exit\n");
