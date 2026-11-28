@@ -38,6 +38,8 @@ The MQTT Stop button suppresses further attempts for the current incident, inclu
 
 The App runs the official Ookla CLI. Periodic execution is controlled by App configuration with a 5..720 minute interval and may be disabled. The MQTT Discovery Run speed test button uses the same backend path.
 
+The schedule is configured in App options, not an MQTT Number entity.
+
 Graphable entities are Download, Upload, Ping, Jitter and Packet loss. Provider, external IP, selected server, result URL, last successful timestamp, last result and the last error are attributes of the compact Speedtest status entity rather than separate entities.
 
 The Speedtest status is an execution-state sensor: it is normally `idle`, becomes `running` while Ookla is executing, then returns to `idle`. The `last_result` attribute records `success`, `error` or `no_connectivity`. A failed or skipped test does not overwrite the last successful measurements, which remain persisted under `/data/runtime`.
@@ -62,22 +64,15 @@ speedtest:
 ```
 
 
-```yaml
-speedtest:
-  periodic_enabled: true
-  interval_minutes: 30
-  timeout_seconds: 240
-  server_ids:
-    - 68000
-    - 38516
-  automatic_server_fallback: true
-```
+
 
 **Supervisor configuration editor:** `server_ids` must remain a YAML list, even with a single ID (`server_ids: [68000]`). Some frontend forms can submit a scalar (`server_ids: 68000`), which Supervisor rejects with `Invalid list for option 'server_ids'`. In that case use the App Configuration tab's **Edit in YAML** action and enter the list as above. Do not replace the list schema with a scalar or comma-separated string: multiple preferred servers and their order are part of the supported contract. App/runtime updates cannot change the built-in Home Assistant configuration form.
 
 The server catalog is on-demand: `button.dh_internet_app_refresh_servers` updates one diagnostic `sensor.dh_internet_app_available_servers`. There is no background server-catalog polling.
 
 ## Quality thresholds
+
+The latest successful result does not expire automatically in 0.1.28; check its `tested_at` timestamp before using it in time-sensitive automations.
 
 The three user-editable MQTT Number entities are Minimum download speed, Minimum upload speed and Maximum ping. Their values are persisted under `/data/runtime` and immediately recalculate the last successful Speedtest result.
 
@@ -186,3 +181,7 @@ DH Sync читает канонические YAML из GitHub `main`:
 Состав Dashboard, место View, порядок вкладок, иконки и права доступа задаются исключительно в `digitalhouses_sync_app/dashboards/*.yaml`; одна View может присутствовать в нескольких панелях. Для включения Internet View в панель передайте в DH Sync `product_id=digitalhouses_internet_app` и `path=internet`. Internet App не создаёт панели и не изменяет файлы DH Sync. `examples/` — только примеры; новые редакции канонических YAML не требуют release App.
 
 **Совместимость:** прежние `DigitalHouses/Global/dh_internet_app/*`, MQTT Discovery, `entity_id`, история Recorder и настройки App не изменены. Статус `availability` отдельно от `/sync` и не влияет на обнаружение DH Sync; при отключении приложения retained `/sync` не очищается. При `telemetry_enabled=false` App не запускается по текущему контракту и не публикует новый `/sync`, но ранее сохранённое объявление может оставаться у брокера.
+
+## English resources
+
+The standalone English View and notification package are under `dashboards/en/` and `packages/locales/en/`. Both use the existing entity IDs and package keys. DH Sync currently selects Russian; import English manually as an alternative, not alongside Russian. See [implementation details](docs/IMPLEMENTATION.md).

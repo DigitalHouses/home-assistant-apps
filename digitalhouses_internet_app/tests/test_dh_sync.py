@@ -78,5 +78,24 @@ class DhSyncTests(unittest.TestCase):
         self.assertEqual(list((APP / "packages" / "locales" / "ru").glob("*.yaml")).__len__(), 1)
 
 
+    def test_english_resources_preserve_canonical_contract(self):
+        import re
+
+        ru = (APP / "dashboards/ru/13_internet.yaml").read_text(encoding="utf-8")
+        en = (APP / "dashboards/en/13_internet.yaml").read_text(encoding="utf-8")
+        self.assertNotRegex(en, r"[А-Яа-яЁё]")
+        self.assertIn("title: Internet\npath: internet\nicon: mdi:web\ntype: sections", en)
+        for pattern in (
+            r"\b(?:sensor|binary_sensor|button|number|event|update)\.[a-z0-9_]+",
+            r"(?m)^\s*(?:- )?type: [^\n]+",
+            r"(?m)^\s*perform_action: [^\n]+",
+        ):
+            self.assertEqual(re.findall(pattern, ru), re.findall(pattern, en))
+        en_notify = (APP / "packages/locales/en/dh_internet_app_notification_local_package.yaml").read_text(encoding="utf-8")
+        en_example = (APP / "examples/packages/dh_internet_app_notification_local_package.yaml").read_text(encoding="utf-8")
+        self.assertEqual(en_notify, en_example)
+        self.assertNotIn("speedtest_failed", en_notify)
+
+
 if __name__ == "__main__":
     unittest.main()
