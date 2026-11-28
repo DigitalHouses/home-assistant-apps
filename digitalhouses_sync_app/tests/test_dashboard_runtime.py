@@ -92,6 +92,27 @@ class DeclarativeDashboardTests(unittest.TestCase):
         self.assertTrue(self.ws.entries[0]["require_admin"])
         self.assertEqual(self.publisher.sync([p], sources)["state"], "Current")
 
+    def test_resource_report_counts_confirmed_views_and_panel_metadata(self):
+        p = panel()
+        first = self.publisher.sync([p], source())
+        self.assertEqual([(r["kind"], r["status"]) for r in first["resources"]],
+                         [("View", "Updated"), ("Dashboard", "Updated")])
+        second = self.publisher.sync([p], source())
+        self.assertEqual([r["status"] for r in second["resources"]], ["Current", "Current"])
+        changed = self.publisher.sync([p], source(title="New"))
+        self.assertEqual([r["status"] for r in changed["resources"]], ["Updated", "Current"])
+        renamed = self.publisher.sync([panel(title="New title")], source(title="New"))
+        self.assertEqual([r["status"] for r in renamed["resources"]], ["Current", "Updated"])
+        removed = self.publisher.sync([panel(title="New title", refs=[])], source())
+        self.assertEqual([r["status"] for r in removed["resources"]], ["Removed", "Current"])
+
+    def test_failed_save_does_not_count_view_as_updated(self):
+        self.publisher.sync([panel()], source())
+        self.ws.fail_save = True
+        report = self.publisher.sync([panel()], source(title="New"))
+        self.assertEqual(report["resources"], [])
+        self.assertTrue(report["issues"])
+
     def test_same_view_can_be_reused_in_two_panels(self):
         src = source("internet", "internet")
         refs = [{"product": "internet", "path": "internet",

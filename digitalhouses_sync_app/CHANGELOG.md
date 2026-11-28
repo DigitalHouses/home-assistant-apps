@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.7
+
+- Compact full-width Ingress with manual synchronization and LOG in the header.
+- In-place status updates, visible errors and confirmed resource changes; products, resource list and technical details collapsed by default.
+- Count confirmed packages, individual Views and Dashboard metadata/order as separate resources, including removed Views. No extra HA API calls and no change to sync admission or restart behavior.
+
 ## 0.6.6
 
 - Adopt shared DH Journal 1.0.3 and full-screen Ingress LOG with RU/EN, search, export and clear.

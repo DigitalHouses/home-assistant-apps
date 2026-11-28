@@ -6,12 +6,16 @@ import json
 import hmac
 import secrets
 import os
+import logging
+import threading
+from pathlib import Path
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlsplit, parse_qs, quote
 
 from discovery_contract import ProductSources
 from dh_journal.http import get as journal_get, ASSETS
 from dh_journal import StorageUnavailable
+import compact_web
 
 STYLE = """body{background:#121619;color:#e5e9eb;font:15px system-ui,sans-serif;
 margin:0;line-height:1.5}a{color:#8dcaf1}header{padding:22px;border-bottom:1px solid #343d43}
@@ -42,6 +46,29 @@ def _h(value: object) -> str:
 
 def make_server(sources: ProductSources, inventory=None, *, version: str = 'development', port: int = 8099, inspect=None, audit=None, apply_manager=None, auto_status=None, auto_sync=None, journal=None):
     sync_token = secrets.token_urlsafe(24) if auto_sync is not None or journal is not None else None
+
+    manual_lock = threading.Lock()
+    manual_failure = None
+
+    def status_payload():
+        report = auto_status()
+        running = manual_lock.locked() or report.get("running", False)
+        failure = ""
+        failed = manual_failure
+        if failed is not None and failed[0] == report.get("last_run"):
+            failure = failed[1]
+        return {"running": bool(running), "fragments": compact_web.render(
+            sources.snapshot(), report, running=running, failure=failure)}
+
+    def manual_worker():
+        nonlocal manual_failure
+        try:
+            auto_sync()
+        except Exception:
+            logging.getLogger("dh_sync").exception("Manual synchronization failed")
+            manual_failure = (auto_status().get("last_run"), "Не удалось завершить ручную проверку. Подробности в журнале приложения.")
+        finally:
+            manual_lock.release()
 
     class Handler(BaseHTTPRequestHandler):
         server_version = "DHSync/" + version
@@ -186,6 +213,20 @@ def make_server(sources: ProductSources, inventory=None, *, version: str = 'deve
                 except (ValueError, OverflowError):
                     self._journal_output(400, {"error": "Invalid journal request"})
                 return
+            if auto_status is not None and path in ("/sync-ui.css", "/sync-ui.js", "/api/sync/status"):
+                if not journal_allowed:
+                    self.send_error(403)
+                    return
+                if path == "/sync-ui.css":
+                    self._journal_output(200, compact_web.STYLE.encode(), "text/css")
+                elif path == "/sync-ui.js":
+                    self._journal_output(200, Path(__file__).with_name("sync_ui.js").read_bytes(), "text/javascript")
+                else:
+                    try:
+                        self._journal_output(200, status_payload())
+                    except Exception:
+                        self._journal_output(503, {"error": "status_unavailable"})
+                return
             if path not in ("/", ""):
                 self._send(404, "<html><body>Not found</body></html>")
                 return
@@ -196,6 +237,18 @@ def make_server(sources: ProductSources, inventory=None, *, version: str = 'deve
                 return
             if params.get("rollback") == ["1"]:
                 self._rollback_page()
+                return
+            if auto_status is not None:
+                if not journal_allowed:
+                    self.send_error(403)
+                    return
+                try:
+                    payload = status_payload()
+                    body = compact_web.page(version, sync_token, payload["fragments"],
+                                            can_sync=auto_sync is not None, can_log=journal is not None, running=payload["running"])
+                    self._journal_output(200, body.encode(), "text/html")
+                except Exception:
+                    self._action_shell("DH Sync", "Не удалось получить состояние синхронизации", 503)
                 return
             records = sources.snapshot()
             rows = ""
@@ -213,93 +266,6 @@ def make_server(sources: ProductSources, inventory=None, *, version: str = 'deve
                 rows = ("<tr><td colspan='3' class='muted'>"
                         "MQTT metadata пока не обнаружены. Ожидаются retained /sync."
                         "</td></tr>")
-            if auto_status is not None:
-                status = auto_status()
-                issues = status.get("issues", [])
-                summary = (
-                    "<section><h2>Автоматическая синхронизация</h2>"
-                    "<p>GitHub DigitalHouses → Dashboard и Packages. "
-                    "Обновление автоматическое и по кнопке, без подтверждений. "
-                    "Home Assistant не перезапускается.</p>"
-                    + (
-                        "<form class='sync-now' action='./' method='post'>"
-                        "<input type='hidden' name='op' value='sync'>"
-                        "<input type='hidden' name='token' value='" +
-                        _h(sync_token) + "'>"
-                        "<button type='submit'>Проверить и обновить</button></form>"
-                        if auto_sync is not None else ""
-                    ) +
-                    "<p>Состояние: <b>" + _h(status.get("state", "—")) +
-                    "</b> · Обновлено: " + str(status.get("updated", 0)) +
-                    " · Без изменений: " + str(status.get("unchanged", 0)) +
-                    "</p><p><small>Последняя проверка: " +
-                    _h(status.get("last_run") or "ожидание первого запуска") +
-                    "</small></p>"
-                )
-                packages = status.get("packages")
-                if isinstance(packages, dict):
-                    loader = {"Configured": "подключение создано", "Current": "подключены",
-                              "Unavailable": "ошибка подключения"}.get(
-                                  packages.get("loader"), "—")
-                    reload = {"Requested": "YAML-перезагрузка запрошена",
-                              "Unavailable": "YAML-перезагрузка недоступна",
-                              "Not available": "YAML-перезагрузка недоступна",
-                              "Not needed": "изменений нет"}.get(
-                                  packages.get("reload"), "—")
-                    summary += ("<p>Packages: <b>" + _h(loader) +
-                                "</b> · " + _h(reload) + "</p>")
-                    if packages.get("reload") != "Not needed":
-                        summary += ("<p class='muted'>Новые интеграции в пакетах "
-                                    "могут потребовать обычного перезапуска HA. "
-                                    "DH Sync не перезапускает Home Assistant.</p>")
-                dashboard = status.get("dashboard")
-                if isinstance(dashboard, dict) and dashboard.get("dashboards"):
-                    summary += "<p><b>Панели Dashboard</b></p><ul>"
-                    for panel in dashboard["dashboards"]:
-                        slug = str(panel.get("slug", ""))
-                        summary += ("<li><a href='" + _h(panel.get("url", "#")) +
-                                    "' target='_top'>" + _h(slug) + "</a> · " +
-                                    _h(panel.get("state", "—")) + " · " +
-                                    str(int(panel.get("views", 0))) + " view</li>")
-                    summary += "</ul>"
-                elif isinstance(dashboard, dict) and dashboard.get("url"):
-                    summary += ("<p>Панель DigitalHouses: <b>" +
-                                _h(dashboard.get("state", "")) +
-                                "</b> · <a href='" + _h(dashboard["url"]) +
-                                "' target='_top'>Открыть Dashboard</a></p>")
-                elif isinstance(dashboard, dict):
-                    summary += "<p>Панель DigitalHouses: " + _h(dashboard.get("state", "")) + "</p>"
-                if issues:
-                    summary += "<details><summary class='warn'>Пропущенные ресурсы (" + str(
-                        len(issues)) + ")</summary><ul>" + "".join(
-                        "<li>" + _h(issue) + "</li>" for issue in issues[:40]
-                    ) + "</ul></details>"
-                summary += "<table><thead><tr><th>Ресурс</th><th>Состояние</th>" \
-                           "</tr></thead><tbody>"
-                for entry in status.get("resources", []):
-                    summary += ("<tr><td>" + _h(entry["name"]) +
-                                "</td><td>" + _h(entry["status"]) + "</td></tr>")
-                summary += "</tbody></table></section>"
-                page = (
-                    "<!doctype html><html lang='ru'><head><meta charset='utf-8'>"
-                    "<meta name='viewport' content='width=device-width,initial-scale=1'>"
-                    "<title>DigitalHouses Sync</title><style>" + STYLE +
-                    "</style></head><body><header><h1>DigitalHouses Sync · v" +
-                    _h(version) + "</h1>" +
-                    ("<a href='./log' style='float:right;background:#2382b7;color:white;padding:9px 15px;border-radius:7px;text-decoration:none'>LOG</a>" if journal is not None and journal_allowed else "") +
-                    "<small>Автоматически · GitHub DigitalHouses"
-                    "</small></header><main><section><h2>Продукты (" +
-                    str(len(records)) + ")</h2>"
-                    "<p class='muted'>Источник реестра: MQTT /sync. "
-                    "Никаких проверок online или версии.</p>"
-                    "<table><thead><tr>"
-                    "<th>Продукт / Instance</th><th>Версия</th>"
-                    "<th>Источник</th></tr></thead><tbody>" +
-                    rows + "</tbody></table></section>" + summary +
-                    "</main></body></html>"
-                )
-                self._send(200, page)
-                return
             # GitHub is read only; Apply requires separate plan + explicit POST.
             preview_html = (
                 "<section><h2>Канонические dashboards · RU</h2>"
@@ -464,6 +430,33 @@ def make_server(sources: ProductSources, inventory=None, *, version: str = 'deve
             if not allowed:
                 self._action_shell("Access denied", "Supervisor Ingress required", 403)
                 return
+            if self.path == "/api/sync" and auto_sync is not None and auto_status is not None:
+                nonlocal manual_failure
+                try:
+                    size = int(self.headers.get("Content-Length", "0"))
+                    if self.headers.get_content_type() != "application/json" or not 0 < size <= 256:
+                        raise ValueError()
+                    self.connection.settimeout(5)
+                    data = json.loads(self.rfile.read(size))
+                    if (not isinstance(data, dict) or set(data) != {"token"}
+                            or not isinstance(data["token"], str) or len(data["token"]) > 80
+                            or not hmac.compare_digest(data["token"], sync_token)):
+                        raise ValueError()
+                except (ValueError, TypeError, OSError):
+                    self._journal_output(400, {"error": "invalid_request"})
+                    return
+                if not manual_lock.acquire(blocking=False):
+                    self._journal_output(409, {"running": True})
+                    return
+                manual_failure = None
+                try:
+                    threading.Thread(target=manual_worker, name="dh-sync-manual", daemon=True).start()
+                except Exception:
+                    manual_lock.release()
+                    self._journal_output(503, {"error": "sync_unavailable"})
+                    return
+                self._journal_output(202, {"accepted": True})
+                return
             if self.path == "/api/log/clear" and journal is not None:
                 try:
                     size = int(self.headers.get("Content-Length", "0"))
@@ -498,26 +491,6 @@ def make_server(sources: ProductSources, inventory=None, *, version: str = 'deve
                 )
                 if len(token) > 80:
                     raise ValueError("invalid request")
-                if op == "sync" and auto_sync is not None:
-                    if not hmac.compare_digest(token, sync_token):
-                        raise ValueError("invalid request token")
-                    result = auto_sync()
-                    summary = (
-                        "<p>Состояние: <b>" + _h(result.get("state", "—")) +
-                        "</b> · Обновлено: " + str(int(result.get("updated", 0))) +
-                        " · Без изменений: " + str(int(result.get("unchanged", 0))) +
-                        "</p>"
-                    )
-                    panel = result.get("dashboard")
-                    if isinstance(panel, dict):
-                        summary += "<p>Панели: " + _h(panel.get("state", "—")) + "</p>"
-                    issues = result.get("issues") or []
-                    if issues:
-                        summary += ("<p class='warn'>Замечания:</p><ul>" +
-                                    "".join("<li>" + _h(x) + "</li>" for x in issues[:20]) +
-                                    "</ul>")
-                    self._action_shell("Проверка GitHub завершена", summary)
-                    return
                 if apply_manager is None or op not in ("apply", "rollback"):
                     raise ValueError("invalid request")
                 if op == "apply":

@@ -81,6 +81,23 @@ class AutomaticSyncTests(unittest.TestCase):
         self.assertEqual(second["updated"], 0)
         self.assertEqual(second["unchanged"], 1)
 
+    def test_report_includes_packages_views_and_panels(self):
+        from dashboard_runtime import DashboardPublisher
+        from test_dashboard_runtime import FakeWS
+        self.app.publisher = DashboardPublisher(self.root, self.data, transport=FakeWS())
+        first = self.app.sync(CLAIMS)
+        self.assertEqual(first["updated"], 3, first["issues"])
+        self.assertEqual({r["kind"] for r in first["resources"]}, {"Package", "View", "Dashboard"})
+        second = self.app.sync(CLAIMS)
+        self.assertEqual(second["updated"], 0)
+        self.assertEqual(second["unchanged"], 3)
+        self.backend.raw["example/dashboards/ru/10_first.yaml"] = VIEW.replace(b"First", b"Second")
+        third = self.app.sync(CLAIMS, refresh=True)
+        self.assertEqual(third["updated"], 1)
+        self.assertEqual(third["unchanged"], 2)
+        self.assertEqual(third["trigger"], "manual")
+        self.assertTrue(third["last_run"])
+
     def test_manual_refresh_runs_same_autosync_and_invalidates_git(self):
         automatic = self.app.sync(CLAIMS)
         self.assertEqual(automatic["updated"], 1)
