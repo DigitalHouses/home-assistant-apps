@@ -181,3 +181,6 @@ label{display:inline-flex;align-items:center;gap:7px;flex-wrap:wrap;color:#ccd8e
 .lights-row .device-info strong{overflow-wrap:anywhere}
 .lights-table{margin-bottom:12px;overflow-x:auto}
 @media(max-width:560px){.lights-row{min-width:430px;gap:6px}}
+
+#lights-filter[hidden]{display:none}
+#lights-filter{margin-left:4px;font-size:13px}
