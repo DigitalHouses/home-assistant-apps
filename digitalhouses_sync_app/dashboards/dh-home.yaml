@@ -1,0 +1,12 @@
+# Home management panel; view-list order is HA tab order.
+title: DH Home
+icon: mdi:home
+show_in_sidebar: true
+require_admin: true
+
+views:
+  - product: digitalhouses_system_globals_app
+    path: system-globals
+    title: System Globals
+    icon: mdi:state-machine
+    show_icon_and_title: true
