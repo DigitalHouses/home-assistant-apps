@@ -45,7 +45,7 @@ async function poll(){
  if(d.rows.length){const fragment=document.createDocumentFragment();for(const row of d.rows)if(!entries.has(row.id)){add(row,fragment);changed=true}rows.append(fragment)}
  cursor=d.newest;storage=d.storage;product=d.product_name||d.product;
  $("product").textContent=product+(d.app_version?" v"+d.app_version:"");document.title=product+" · LOG";$("count").textContent=(d.count??"—")+" / "+d.limit;
- status=[storage==="unavailable"?tr().unavailable:"",d.rejected?tr().rejected+": "+d.rejected:""].filter(Boolean).join(" · ");$("status").textContent=status;$("clear").disabled=!d.can_clear;$("export").disabled=storage!=="sqlite";
+ status=[d.timezone?(d.timezone_fallback?(lang==="ru"?"UTC (временно: часовой пояс HA неизвестен)":"UTC (temporary: HA timezone unavailable)"):d.timezone):"",storage==="unavailable"?tr().unavailable:"",d.rejected?tr().rejected+": "+d.rejected:""].filter(Boolean).join(" · ");$("status").textContent=status;$("clear").disabled=!d.can_clear;$("export").disabled=storage!=="sqlite";
  if(changed)filter();if(storage!=="sqlite")$("footer").textContent=tr().unavailable;if(follow&&changed){rows.scrollTop=rows.scrollHeight;$("follow").checked=true}
  }catch{$("status").textContent=tr().lost}finally{busy=false;if(current!==epoch)poll()}
 }

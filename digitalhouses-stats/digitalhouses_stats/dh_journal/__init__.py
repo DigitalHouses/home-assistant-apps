@@ -1,4 +1,4 @@
-"""DH Journal 1.1.1: bounded local, append-only diagnostic events."""
+"""DH Journal 1.1.2: bounded local, append-only diagnostic events."""
 from datetime import datetime, timezone
 from pathlib import Path
 from threading import RLock
@@ -10,7 +10,7 @@ import sqlite3
 import time
 import uuid
 
-VERSION = "1.1.1"
+VERSION = "1.1.2"
 LIMIT = 3000
 MAX_RECORD_BYTES = 8192
 MAX_PARAMS_BYTES = MAX_RECORD_BYTES - 256

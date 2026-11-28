@@ -40,7 +40,8 @@ def test_journal_observations_and_retention(tmp_path):
 
 def test_accepted_heartbeat_journal_and_private_routes(tmp_path, monkeypatch):
     monkeypatch.setattr(settings, "journal_path", str(tmp_path / "journal.sqlite3"))
-    monkeypatch.setattr(settings, "journal_timezone", "UTC")
+    from digitalhouses_stats.ha_timezone import cache_zone
+    assert cache_zone(settings, "UTC")
     # Like test_api, run against the disposable CI PostgreSQL database.
     with engine.begin() as connection:
         connection.execute(text("DELETE FROM heartbeats"))
@@ -70,7 +71,7 @@ def test_accepted_heartbeat_journal_and_private_routes(tmp_path, monkeypatch):
         response = client.get("/internal/journal/log?lang=en", headers=internal)
         assert response.status_code == 200
         data = response.json()
-        assert data["app_version"] == "0.4.7"
+        assert data["app_version"] == "0.4.8"
         assert [r["code"] for r in data["rows"]] == [
             "app_started", "installation_new", "country_new_installation", "version_upgraded", "telemetry_rejected"]
         toasts = client.get("/internal/journal/log/toasts?lang=en&after=1", headers=internal).json()

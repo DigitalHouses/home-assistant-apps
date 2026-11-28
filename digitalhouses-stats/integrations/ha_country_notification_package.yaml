@@ -19,6 +19,6 @@ dh_stats_country_notification_package:
             message: |-
               {{ trigger.payload_json.country_name }} ({{ trigger.payload_json.country }})
               Всего стран: {{ trigger.payload_json.country_count }}
-              Первое появление: {{ as_timestamp(trigger.payload_json.first_seen) | timestamp_custom('%d.%m.%Y %H:%M', true) }} (Алматы)
+              Первое появление: {{ as_timestamp(trigger.payload_json.first_seen) | timestamp_custom('%d.%m.%Y %H:%M', true) }} ({{ now().tzinfo }})
             source: digitalhouses_stats
             severity: info

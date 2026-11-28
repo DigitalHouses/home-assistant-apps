@@ -16,6 +16,8 @@ import paho.mqtt.client as mqtt
 from sqlalchemy import text
 
 from .db import engine
+from .config import get_settings
+from .ha_timezone import refresh_zone
 
 LOG = logging.getLogger("digitalhouses_stats.country_notifier")
 TOPIC = "DigitalHouses/Global/digitalhouses_stats/event/new_country"
@@ -130,6 +132,7 @@ def notify_rows(rows, state_file: Path, publish=publish_country) -> int:
 
 
 def run() -> None:
+    refresh_zone(get_settings())
     state_file = Path(os.getenv(
         "COUNTRY_STATE_FILE",
         "/var/lib/digitalhouses-stats/notified_countries.json",

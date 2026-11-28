@@ -47,6 +47,26 @@ function compareVersions(a,b) {
 }
 
 const expandedCountries = new Set();
+let siteTimezone = "UTC", timezoneFallback = true;
+
+function formatSiteTime(value) {
+  if (!value) return "—";
+  return new Intl.DateTimeFormat("en-GB", {
+    timeZone:siteTimezone, day:"2-digit", month:"short", year:"numeric",
+    hour:"2-digit", minute:"2-digit", second:"2-digit", hourCycle:"h23"
+  }).format(new Date(value));
+}
+function timezoneLabel() {
+  return siteTimezone + (timezoneFallback ? " (temporary: HA timezone unavailable)" : "");
+}
+function updateTimezone(data) {
+  const changed = siteTimezone !== data.timezone || timezoneFallback !== Boolean(data.timezone_fallback);
+  if (typeof data.timezone !== "string") return false;
+  siteTimezone = data.timezone;
+  timezoneFallback = Boolean(data.timezone_fallback);
+  $("timezone").textContent = timezoneLabel();
+  return changed;
+}
 const countryPalette = ["#699bd4", "#50bba7", "#e0ae72", "#a58bd4", "#d67f91", "#80c6e1", "#9ebc76", "#a0a8bd", "#7889a0"];
 
 function renderCountryChart(rows) {
@@ -97,10 +117,7 @@ function renderCountries(rows) {
       null);
   $("country-newest-name").textContent = newest ? countryName(newest.country) : "—";
   $("country-newest-first-seen").textContent = newest
-    ? new Date(newest.first_seen).toLocaleString("en-GB", {
-        timeZone: "Asia/Almaty", day: "2-digit", month: "short",
-        year: "numeric", hour: "2-digit", minute: "2-digit", hour12: false
-      }).replace(",", " ·") + " (Almaty)"
+    ? formatSiteTime(newest.first_seen)
     : "—";
 
   if (!rows.length) {
@@ -170,7 +187,7 @@ function formatLastHeartbeat(value) {
 
   return {
     relative,
-    exact: date.toLocaleString()
+    exact: formatSiteTime(date)
   };
 }
 
@@ -262,6 +279,7 @@ async function loadData() {
 
     // Capture immediately before updating, not before the asynchronous requests.
     const scrollX = window.scrollX, scrollY = window.scrollY;
+    updateTimezone(summary);
     $("known").textContent = summary.observed_installations;
     $("active24").textContent = summary.active_24h;
     $("active7").textContent = summary.active_7d;
@@ -291,7 +309,7 @@ async function loadData() {
     if (window.scrollX !== scrollX || window.scrollY !== scrollY) {
       window.scrollTo({left: scrollX, top: scrollY, behavior: "instant"});
     }
-    $("updated").textContent = "Updated " + new Date().toLocaleString();
+    $("updated").textContent = "Updated " + formatSiteTime(new Date());
     setStatus(true, "Online");
   } catch (error) {
     console.error(error);

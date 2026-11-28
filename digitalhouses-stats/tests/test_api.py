@@ -38,6 +38,8 @@ def test_empty_dashboard_summary() -> None:
         "active_30d": 0,
         "heartbeats": 0,
         "last_heartbeat": None,
+        "timezone": "UTC",
+        "timezone_fallback": True,
     }
 
 

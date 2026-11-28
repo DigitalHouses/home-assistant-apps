@@ -24,9 +24,10 @@ from fastapi.responses import JSONResponse
 from .dh_journal import Journal, StorageUnavailable
 from .dh_journal.http import get as journal_get
 from .products import product_name
+from .ha_timezone import cached_zone
 
 LOG = logging.getLogger(__name__)
-APP_VERSION = "0.4.7"
+APP_VERSION = "0.4.8"
 RETURN_AFTER = timedelta(days=7)
 LOCALES = {
     "ru": {
@@ -185,7 +186,7 @@ def require_internal(request):
 def internal_get(request, settings, path):
     journal = require_internal(request)
     try:
-        body, mime, filename = journal_get(journal, path + "?" + request.url.query, settings.journal_timezone)
+        body, mime, filename = journal_get(journal, path + "?" + request.url.query, cached_zone(settings))
     except (ValueError, OverflowError):
         raise HTTPException(400, "Invalid journal request")
     except StorageUnavailable:

@@ -86,7 +86,7 @@ Actions App supersedes Aqara Switch App. Both IDs remain in the catalog and tele
 
 ## Local event journal (0.4.5)
 
-The dashboard's **LOG** opens DH Journal 1.1.1 (RU/EN, search, level filter,
+The dashboard's **LOG** opens DH Journal 1.1.2 (RU/EN, search, level filter,
 export and confirmed journal-only clear). It starts collecting on deployment;
 historical heartbeats are not replayed. A routine unchanged heartbeat produces
 no journal row. New registrations, upgrades/downgrades, country changes,
@@ -101,8 +101,7 @@ The ingestion process owns the journal; the dashboard uses a fixed loopback
 bridge authenticated by a rotating service-account-only key file. No journal
 access is available through the public telemetry protocol. The LAN dashboard
 is the trusted administrative surface; do not expose it publicly.
-JOURNAL_PATH and JOURNAL_TIMEZONE may be set in the service environment
-(default Asia/Almaty). Journal failures do not stop telemetry ingestion.
+JOURNAL_PATH may be set in the service environment. Journal failures do not stop telemetry ingestion.
 
 
 ### Toast notifications (0.4.6)
@@ -128,3 +127,16 @@ DH Journal onEvents, even when toast presentation is disabled. Requests are
 serialized and concurrent refresh requests coalesce into one follow-up.
 Existing toast nodes, dismissal state, expiry timers, settings and expanded
 country rows are independent of dashboard rendering. No new poll or service.
+
+### CORE HA timezone
+
+The designated CORE Home Assistant is the only timezone authority. Install
+integrations/ha_timezone_package.yaml on CORE HA and run its automation once.
+HA publishes its own IANA timezone on the existing authenticated CORE MQTT
+broker (retained, QoS 1) at startup, configuration changes and MQTT birth.
+The existing minute country-notifier cycle reads this retained state and
+atomically caches the last valid HA value alongside the journal. No new
+service or timer is required. LOG, exports, toast and dashboard display use
+this value; unavailable/invalid messages preserve the cache. Until the first
+valid value, UI explicitly displays temporary UTC. Historical UTC data and
+UTC aggregate boundaries remain unchanged. No independent timezone setting.
