@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.1.12
+- Pilot DH Lib UI 0.1.0: stable Ingress shell, real readiness and telemetry status, common settings, local theme preference, and existing LOG/Toast. Preserve schedule/profile drafts, MQTT contracts and HA-owned journal timezone. DH Sync receipt remains unknown until an authoritative acknowledgement exists.
+
 ## 0.1.11
 - Update pinned DH Lib Journal to 2.0.1: add a top-right close link in LOG returning to the App root. Existing back link, SQLite history, timezone and Toast behavior are unchanged.
 

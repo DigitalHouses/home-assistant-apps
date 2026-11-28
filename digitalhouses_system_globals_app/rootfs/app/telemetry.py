@@ -109,6 +109,7 @@ class TelemetryClient:
         now_epoch: Callable[[], float] = time.time,
     ) -> None:
         self.enabled = bool(enabled)
+        self.delivery_status = "unknown" if self.enabled else "disabled"
         self.version = version
         self.state_file = state_file
         self.transport = transport or UrllibTelemetryTransport()
@@ -279,6 +280,7 @@ class TelemetryClient:
                     "Telemetry heartbeat failed; will retry later: %s",
                     exc,
                 )
+                self.delivery_status = "warning"
                 return False
 
             if not 200 <= int(status) < 300:
@@ -286,12 +288,14 @@ class TelemetryClient:
                     "Telemetry heartbeat failed with HTTP %s; will retry later",
                     status,
                 )
+                self.delivery_status = "warning"
                 return False
 
             self._retry_after = None
             self._state["last_success_epoch"] = now
             self._state["last_reported_version"] = self.version
             self._save_state()
+            self.delivery_status = "ok"
             self.log.info(
                 "Telemetry heartbeat sent: product=%s version=%s",
                 PRODUCT,

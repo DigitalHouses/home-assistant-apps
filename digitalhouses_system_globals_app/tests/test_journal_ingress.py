@@ -85,6 +85,25 @@ class TestJournalIntegration(unittest.TestCase):
             self.assertTrue(json.load(res)["ok"])
         self.assertEqual(self.j.snapshot()["rows"][0]["code"],"journal_cleared")
 
+    def test_ui_assets_without_journal_and_pinned_hashes(self):
+        import hashlib
+        app=Path(__file__).resolve().parents[1]
+        lock=json.loads((app/"dh-lib-ui.lock.json").read_text())
+        self.assertEqual(lock["version"],"0.1.0")
+        for name,digest in lock["files"].items():
+            self.assertEqual(hashlib.sha256((app/"rootfs/app/dh_lib_ui"/name).read_bytes()).hexdigest(),digest)
+        server=serve(SimpleNamespace(journal=None),host="127.0.0.1",port=0,allowed={"127.0.0.1"})
+        self.addCleanup(server.server_close)
+        self.addCleanup(server.shutdown)
+        base="http://127.0.0.1:"+str(server.server_address[1])
+        for name,mime in (("dh-lib-ui.css","text/css"),("dh-lib-ui.js","application/javascript"),
+                          ("globals-ui.css","text/css"),("globals-ui.js","application/javascript")):
+            with urlopen(base+"/"+name) as res:
+                self.assertIn(mime,res.headers["Content-Type"])
+                self.assertTrue(res.read())
+        with self.assertRaises(HTTPError):
+            urlopen(base+"/dh_lib_ui/dh-lib-ui.js")
+
     def test_initialization_pending_then_warning(self):
         t=[0]
         observer=GlobalsJournal(self.j,clock=lambda:t[0])

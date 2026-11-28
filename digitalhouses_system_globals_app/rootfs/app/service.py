@@ -77,6 +77,7 @@ class Service:
     def __init__(self, engine, version, opts, *, clock=time.monotonic, ha_fn=ha_probe, release_fn=latest_release, journal=None, ha_timezone=None):
         self.journal=journal
         self.ha_timezone=ha_timezone
+        self.telemetry_client=None
         self.journal_observer=GlobalsJournal(journal, clock=clock) if journal else None
         self.mqtt_failure_logged=False
         self.engine=engine
@@ -129,7 +130,10 @@ class Service:
             self._view={"state":self.engine.state,"gates":self.gates.states(self.clock()),
                         "diagnostics":self.gates.diagnostics(self.clock()),"zigbee_bridges":self.z.diagnostics(self.clock()),"lifecycle":self.life.values(utcnow()),
                         "card":deepcopy(self.card),"version":self.version,"latest_version":self.latest,
-                        "mqtt_connected":self.session is not None}
+                        "mqtt_connected":self.session is not None,
+                        "ha_timezone":self.ha_timezone.snapshot() if self.ha_timezone is not None else None,
+                        "telemetry_status":self.telemetry_client.delivery_status if self.telemetry_client else ("unknown" if self.opts.get("telemetry_enabled") else "disabled"),
+                        "journal_debug":bool(self.opts.get("journal_debug",False))}
             view=self._view if self.journal_observer else None
         if self.journal_observer and observe_journal:
             try:
@@ -493,6 +497,7 @@ def main():
     if opts["telemetry_enabled"]:
         from telemetry import TelemetryClient, TelemetryRunner
         telemetry=TelemetryRunner(TelemetryClient(enabled=True,version=svc.version))
+        svc.telemetry_client=telemetry.client
         telemetry.start()
     try:
         svc.run(os.environ["MQTT_HOST"],int(os.environ["MQTT_PORT"]),os.environ.get("MQTT_USERNAME"),os.environ.get("MQTT_PASSWORD"),stop.is_set)

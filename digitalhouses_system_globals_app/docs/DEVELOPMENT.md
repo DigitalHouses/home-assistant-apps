@@ -58,3 +58,19 @@ On reconnect a fresh client is used; missed transient events are not replayed.
 - The repository's telemetry policy requires affirmative activation and has an
   explicit outstanding mandatory public-rollout legal gate. Do not treat this
   technical candidate as confirmation of legal clearance.
+
+
+## DH Lib UI pilot (0.1.12)
+
+The pinned 0.1.0 CSS/JS are bundled under rootfs/app/dh_lib_ui; hashes and source
+commit are in dh-lib-ui.lock.json. UI assets use the existing authorized Ingress
+server. HA/MQTT status comes from readiness evidence; Telemetry reports the last
+completed heartbeat of this process, not mere consent. DH Sync receipt is
+unknown (the existing retained announcement has no acknowledgement contract).
+The HA timezone row is read-only; the existing schedule timezone remains an
+independent, unchanged setting. Theme is a browser-local preference. DEBUG and
+telemetry consent are read-only here (configured through HA App options).
+Restart/install actions are omitted because this App does not expose them.
+The main workspace and settings are mounted once; Journal/Toast remain independent.
+Run the existing Chromium test on DEV; production Ingress/theme validation is
+still required before accepting the shared library's pilot.

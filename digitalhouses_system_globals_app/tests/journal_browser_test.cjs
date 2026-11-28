@@ -68,6 +68,24 @@ async function main(){
   await home.goto("http://127.0.0.1:"+port+"/");
   await home.waitForFunction(()=>document.querySelector("#mode").textContent==="День");
   await home.locator('input[name="night_start"]').fill("21:30");
+  await home.evaluate(()=>{window.originalShell=document.querySelector("#chrome header");window.originalForm=document.querySelector("#config");window.originalToast=document.querySelector("#toast-settings")});
+  assert.match(await home.locator(".dh-lib-ui-status-list").innerText(),/HA\s*OK/);
+  assert.match(await home.locator(".dh-lib-ui-status-list").innerText(),/MQTT\s*OK/);
+  assert.match(await home.locator(".dh-lib-ui-status-list").innerText(),/DH Sync\s*Неизвестно/);
+  await home.getByRole("button",{name:"Настройки",exact:true}).click();
+  await home.getByLabel("Тема",{exact:true}).selectOption("dark");
+  assert.equal(await home.locator("html").getAttribute("data-dh-lib-ui-theme"),"dark");
+  const dark=await home.locator("body").evaluate(e=>getComputedStyle(e).backgroundColor);
+  await home.getByLabel("Тема",{exact:true}).selectOption("light");
+  const light=await home.locator("body").evaluate(e=>getComputedStyle(e).backgroundColor);
+  assert.notEqual(dark,light);
+  assert.match(await home.locator("#app-settings").innerText(),/Asia\/Almaty/);
+  await home.getByRole("button",{name:"Главная",exact:true}).click();
+  assert.equal(await home.locator('input[name="night_start"]').inputValue(),"21:30");
+  await home.setViewportSize({width:390,height:844});
+  assert.equal(await home.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
+  await home.setViewportSize({width:1440,height:900});
+
   // Wait until the initial notification baseline has been established.
   await home.waitForTimeout(500);
   await command("mode");
@@ -76,6 +94,15 @@ async function main(){
   await home.waitForTimeout(3500);
   assert.equal(await home.locator('input[name="night_start"]').inputValue(),"21:30");
   assert.match(await home.locator(".dh-toast-stack").innerText(),/Ночной режим включён/);
+  await command("offline");
+  await home.waitForFunction(()=>[...document.querySelectorAll(".dh-lib-ui-service")].some(n=>n.textContent.includes("MQTT")&&n.dataset.dhLibUiState==="error"));
+  assert.equal(await home.evaluate(()=>window.originalShell===document.querySelector("#chrome header")&&window.originalForm===document.querySelector("#config")&&window.originalToast===document.querySelector("#toast-settings")),true);
+  assert.equal(await home.locator('input[name="night_start"]').inputValue(),"21:30");
+  await home.getByRole("button",{name:"Настройки",exact:true}).click();
+  assert.match(await home.locator("#app-settings").innerText(),/Ошибка последней отправки/);
+  assert.equal(await home.getByRole("button",{name:"Проверить версию"}).isDisabled(),true);
+  assert.match(await home.locator(".dh-toast-stack").innerText(),/Ночной режим включён/);
+
   assert.deepEqual(homeErrors,[]);
   await home.close();
   console.log("PASS: toast survives live refresh; dirty form retained");

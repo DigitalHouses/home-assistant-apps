@@ -54,6 +54,18 @@ class TelemetryTests(unittest.TestCase):
             "token": c.installation_token, "timeout_seconds": 5.0,
         }])
 
+    def test_delivery_status_tracks_completed_attempts(self):
+        c=self.client()
+        self.assertEqual(c.delivery_status,"unknown")
+        self.transport.status=503
+        self.assertFalse(c.tick())
+        self.assertEqual(c.delivery_status,"warning")
+        self.transport.status=204
+        self.now+=FAILURE_BACKOFF_SECONDS+1
+        self.assertTrue(c.tick())
+        self.assertEqual(c.delivery_status,"ok")
+        self.assertEqual(self.client(enabled=False).delivery_status,"disabled")
+
     def test_restart_upgrade_and_cadence(self):
         c = self.client()
         self.assertTrue(c.tick())
