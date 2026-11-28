@@ -1,0 +1,85 @@
+# Owner controls; no administrative operations.
+title: System Globals
+path: system-globals-user
+icon: mdi:theme-light-dark
+type: sections
+max_columns: 2
+sections:
+- type: grid
+  cards:
+  - type: heading
+    heading_style: title
+    heading: Day / Night
+  - type: entities
+    show_header_toggle: false
+    title: Day / Night
+    entities:
+    - entity: switch.dh_system_globals_app_night_mode
+      name: Night mode
+    - entity: switch.dh_system_globals_app_auto_switch
+      name: Automatic switching
+    - entity: text.dh_system_globals_app_night_start
+      name: Night start
+    - entity: text.dh_system_globals_app_night_end
+      name: Night end
+    - entity: sensor.dh_system_globals_app_timezone
+      name: Time zone
+  - type: history-graph
+    title: Night mode history
+    hours_to_show: 24
+    entities:
+    - entity: switch.dh_system_globals_app_night_mode
+      name: Night mode
+  - type: entities
+    show_header_toggle: false
+    title: Active settings
+    entities:
+    - entity: sensor.dh_system_globals_app_active_brightness
+      name: Brightness
+    - entity: sensor.dh_system_globals_app_active_color_temp_kelvin
+      name: Color temperature
+    - entity: sensor.dh_system_globals_app_active_rgb_color
+      name: RGB color
+    - entity: sensor.dh_system_globals_app_active_volume
+      name: Volume
+- type: grid
+  cards:
+  - type: heading
+    heading_style: title
+    heading: Global profiles
+  - type: entities
+    show_header_toggle: false
+    title: Day
+    entities:
+    - entity: number.dh_system_globals_app_day_brightness
+      name: Brightness
+    - entity: number.dh_system_globals_app_day_volume
+      name: Volume
+    - entity: number.dh_system_globals_app_day_transition_seconds
+      name: Transition
+    - entity: text.dh_system_globals_app_day_color_temp_kelvin
+      name: Color temperature, K
+    - entity: text.dh_system_globals_app_day_rgb_color
+      name: RGB color
+    - entity: switch.dh_system_globals_app_day_voice_notifications_enabled
+      name: Voice notifications
+    - entity: switch.dh_system_globals_app_day_noncritical_sound_notifications_enabled
+      name: Noncritical sounds
+  - type: entities
+    show_header_toggle: false
+    title: Night
+    entities:
+    - entity: number.dh_system_globals_app_night_brightness
+      name: Brightness
+    - entity: number.dh_system_globals_app_night_volume
+      name: Volume
+    - entity: number.dh_system_globals_app_night_transition_seconds
+      name: Transition
+    - entity: text.dh_system_globals_app_night_color_temp_kelvin
+      name: Color temperature, K
+    - entity: text.dh_system_globals_app_night_rgb_color
+      name: RGB color
+    - entity: switch.dh_system_globals_app_night_voice_notifications_enabled
+      name: Voice notifications
+    - entity: switch.dh_system_globals_app_night_noncritical_sound_notifications_enabled
+      name: Noncritical sounds
